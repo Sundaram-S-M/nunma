@@ -1,0 +1,25 @@
+/* LiveKit Branded Overrides */
+.lk-theme-navy {
+  --lk-bg: #1A1A4E;
+  --lk-active-speaker-border: #c1e60d;
+  --lk-control-bar-bg: #1A1A4E;
+}
+
+.lk-button.lk-button-primary {
+  background-color: #c1e60d !important;
+  color: #1A1A4E !important;
+}
+
+.lk-button.lk-button-active {
+  background-color: #c1e60d !important;
+}
+
+.lk-control-bar {
+  background-color: #1A1A4E !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.lk-chat {
+  background-color: transparent !important;
+  border: none !important;
+}

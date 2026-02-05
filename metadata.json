@@ -1,0 +1,8 @@
+{
+  "name": "Nunma Learning Hub",
+  "description": "A comprehensive Learning Management System with distinct Student and Tutor dashboards, classroom management, messaging, and detailed progress tracking.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
