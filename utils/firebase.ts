@@ -1,6 +1,7 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -12,10 +13,24 @@ const firebaseConfig = {
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-const app = initializeApp(firebaseConfig);
+// Defensive check to ensure we have at least the minimum required config
+const isConfigValid = !!firebaseConfig.apiKey && !!firebaseConfig.projectId && !!firebaseConfig.appId;
+
+let app;
+if (!getApps().length) {
+    if (isConfigValid) {
+        app = initializeApp(firebaseConfig);
+    } else {
+        console.warn("Firebase configuration is missing or incomplete. Some features may not work.");
+        // Initialize with dummy values to prevent crashes if possible, or just export nulls
+        app = null;
+    }
+} else {
+    app = getApp();
+}
 
 let analytics = null;
-if (typeof window !== 'undefined') {
+if (app && typeof window !== 'undefined') {
     import('firebase/analytics').then(({ getAnalytics, isSupported }) => {
         isSupported().then(supported => {
             if (supported) analytics = getAnalytics(app);
@@ -23,10 +38,8 @@ if (typeof window !== 'undefined') {
     }).catch(err => console.error('Analytics failed to load:', err));
 }
 
-import { getFunctions } from "firebase/functions";
-
-const auth = getAuth(app);
-const db = getFirestore(app);
-const functions = getFunctions(app);
+const auth = app ? getAuth(app) : null;
+const db = app ? getFirestore(app) : null;
+const functions = app ? getFunctions(app) : null;
 
 export { app, analytics, auth, db, functions };
