@@ -4,8 +4,6 @@ import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
   MonitorPlay,
-  Bell,
-  Search,
   Mail,
   Briefcase,
   Layers,
@@ -41,10 +39,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
       id: 'classroom',
       icon: role === UserRole.STUDENT ? <MonitorPlay size={20} /> : <Briefcase size={20} />,
       path: role === UserRole.STUDENT ? '/classroom' : '/workplace',
+      path: role === UserRole.STUDENT ? '/classroom' : '/workplace',
       label: role === UserRole.STUDENT ? 'My Classroom' : 'My Workplace'
     },
-    { id: 'notifications', icon: <Bell size={20} />, path: '/notifications', label: 'Notifications' },
-    { id: 'search', icon: <Search size={20} />, path: '/search', label: 'Search' },
     { id: 'explore', icon: <Layers size={20} />, path: '/explore', label: 'Explore' },
     { id: 'inbox', icon: <Mail size={20} />, path: '/inbox', label: 'Inbox' },
   ];
@@ -80,7 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
               className={({ isActive }) => `
                 flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group relative
                 ${isActive
-                  ? 'bg-[#c1e60d] text-[#1A1A4E] shadow-sm font-bold'
+                  ? 'bg-[#c2f575] text-[#1A1A4E] shadow-sm font-bold'
                   : 'text-gray-500 hover:bg-gray-50'
                 }
               `}
@@ -103,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
             <Link
               to="/u/sundaram"
               target="_blank"
-              className="flex items-center gap-4 px-4 py-3 rounded-xl text-indigo-900 bg-indigo-50/50 hover:bg-[#c1e60d]/20 transition-all duration-300 group relative"
+              className="flex items-center gap-4 px-4 py-3 rounded-xl text-indigo-900 bg-indigo-50/50 hover:bg-[#c2f575]/20 transition-all duration-300 group relative"
             >
               <span className={`shrink-0 transition-all duration-300 ${!isOpen && 'mx-auto'}`}><Share2 size={20} className="text-[#1A1A4E]" /></span>
               <span className={`truncate text-[10px] font-black uppercase tracking-widest transition-all duration-500 origin-left ${isOpen ? 'opacity-100 scale-100 w-auto' : 'opacity-0 scale-90 w-0 pointer-events-none'}`}>
@@ -126,13 +123,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
               <div className="relative z-10">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-[10px] font-black uppercase tracking-widest text-gray-200">Storage</span>
-                  <span className="text-xs font-bold text-[#c1e60d]">0%</span>
+                  <span className="text-xs font-bold text-[#c2f575]">0%</span>
                 </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full mb-4">
-                  <div className="w-0 h-full bg-[#c1e60d] rounded-full transition-all duration-500"></div>
+                  <div className="w-0 h-full bg-[#c2f575] rounded-full transition-all duration-500"></div>
                 </div>
                 <p className="text-[10px] text-gray-400 font-medium mb-3">0 Bytes of 100 MB used</p>
-                <button className="text-[10px] text-[#c1e60d] font-black uppercase tracking-widest hover:brightness-110 transition-all border-b border-transparent hover:border-[#c1e60d]">
+                <button className="text-[10px] text-[#c2f575] font-black uppercase tracking-widest hover:brightness-110 transition-all border-b border-transparent hover:border-[#c2f575]">
                   Buy Storage
                 </button>
               </div>

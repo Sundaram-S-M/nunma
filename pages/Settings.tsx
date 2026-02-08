@@ -1,23 +1,23 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { 
-  Edit2, 
-  ShieldCheck, 
-  CreditCard, 
-  User as UserIcon, 
-  Sliders, 
-  RotateCw, 
-  ChevronLeft, 
-  Camera, 
-  Save, 
-  LogOut, 
-  Receipt, 
-  Download, 
-  Wallet, 
-  TrendingUp, 
-  Zap, 
-  Check, 
+import {
+  Edit2,
+  ShieldCheck,
+  CreditCard,
+  User as UserIcon,
+  Sliders,
+  RotateCw,
+  ChevronLeft,
+  Camera,
+  Save,
+  LogOut,
+  Receipt,
+  Download,
+  Wallet,
+  TrendingUp,
+  Zap,
+  Check,
   Building,
   Building2,
   CreditCard as CardIcon,
@@ -95,35 +95,35 @@ const ProfileSettings = () => {
           <div className="space-y-8">
             <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">Personal Details</h5>
             <div className="grid grid-cols-1 gap-6">
-               <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Display Name</p>
-                  {isEditing ? (
-                    <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                  ) : <p className="font-bold text-indigo-900">{user.name}</p>}
-               </div>
-               <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Email</p>
-                  {isEditing ? (
-                    <input type="email" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                  ) : <p className="font-bold text-indigo-900">{user.email}</p>}
-               </div>
-               <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Bio</p>
-                  {isEditing ? (
-                    <textarea className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-medium text-indigo-900 focus:outline-none" rows={3} value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} />
-                  ) : <p className="text-gray-500 font-medium italic">{user.bio || 'No bio provided'}</p>}
-               </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Display Name</p>
+                {isEditing ? (
+                  <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                ) : <p className="font-bold text-indigo-900">{user.name}</p>}
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Email</p>
+                {isEditing ? (
+                  <input type="email" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                ) : <p className="font-bold text-indigo-900">{user.email}</p>}
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Bio</p>
+                {isEditing ? (
+                  <textarea className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-medium text-indigo-900 focus:outline-none" rows={3} value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} />
+                ) : <p className="text-gray-500 font-medium italic">{user.bio || 'No bio provided'}</p>}
+              </div>
             </div>
           </div>
           <div className="space-y-8">
             <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">Professional</h5>
             <div className="grid grid-cols-1 gap-6">
               <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Location</p>
-                  {isEditing ? (
-                    <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
-                  ) : <p className="font-bold text-indigo-900">{user.location || 'Not set'}</p>}
-               </div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Location</p>
+                {isEditing ? (
+                  <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
+                ) : <p className="font-bold text-indigo-900">{user.location || 'Not set'}</p>}
+              </div>
             </div>
           </div>
         </div>
@@ -230,7 +230,7 @@ const PricingPlans = () => {
                 </div>
               ))}
             </div>
-            <button 
+            <button
               onClick={() => setCurrentPlan(plan.name)}
               className={`w-full py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${plan.name === currentPlan ? 'bg-gray-100 text-gray-400 cursor-default' : plan.recommended ? 'bg-[#c1e60d] text-[#1A1A4E] hover:scale-105' : 'bg-[#1A1A4E] text-white hover:bg-black'}`}
             >
@@ -245,18 +245,18 @@ const PricingPlans = () => {
 
 const Billings = () => {
   const { user } = useAuth();
-  
+
   // State for form fields to ensure they are fully clearable
   const [accountHolder, setAccountHolder] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [ifsc, setIfsc] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  
+
   // Country search and selection
   const [countrySearch, setCountrySearch] = useState('');
   const [selectedCountry, setSelectedCountry] = useState<typeof COUNTRIES[0] | null>(null);
   const [showCountryResults, setShowCountryResults] = useState(false);
-  
+
   // Bank search and selection
   const [bankSearch, setBankSearch] = useState('');
   const [showBankResults, setShowBankResults] = useState(false);
@@ -349,24 +349,24 @@ const Billings = () => {
             {/* Account Holder Name */}
             <div className="space-y-3">
               <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">ACCOUNT HOLDER NAME</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={accountHolder}
                 onChange={(e) => setAccountHolder(e.target.value)}
-                className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all" 
-                placeholder="Full name as per bank" 
+                className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all"
+                placeholder="Full name as per bank"
               />
             </div>
 
             {/* Account Number */}
             <div className="space-y-3">
               <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">ACCOUNT NUMBER</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
-                className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all" 
-                placeholder="••••••••••••" 
+                className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all"
+                placeholder="••••••••••••"
               />
             </div>
 
@@ -374,24 +374,24 @@ const Billings = () => {
             <div className="space-y-3 relative" ref={countryRef}>
               <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">COUNTRY</label>
               <div className="relative group">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={countrySearch}
-                  onChange={(e) => { 
-                    setCountrySearch(e.target.value); 
-                    setShowCountryResults(true); 
-                    if (selectedCountry) setSelectedCountry(null); 
+                  onChange={(e) => {
+                    setCountrySearch(e.target.value);
+                    setShowCountryResults(true);
+                    if (selectedCountry) setSelectedCountry(null);
                   }}
                   onFocus={() => setShowCountryResults(true)}
-                  className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all" 
-                  placeholder="Search country..." 
+                  className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all"
+                  placeholder="Search country..."
                 />
                 <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={20} />
-                
+
                 {showCountryResults && (
                   <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-gray-100 rounded-3xl shadow-2xl z-50 p-2 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-top-2">
                     {filteredCountries.map(country => (
-                      <button 
+                      <button
                         key={country.name}
                         onClick={() => handleCountrySelect(country)}
                         className="w-full text-left px-6 py-4 rounded-2xl hover:bg-gray-50 text-indigo-900 font-bold text-sm flex items-center justify-between group transition-all"
@@ -412,12 +412,12 @@ const Billings = () => {
             <div className="space-y-3">
               <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">PHONE NUMBER</label>
               <div className="relative">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={phoneNumber}
                   onChange={(e) => handlePhoneChange(e.target.value)}
-                  className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all" 
-                  placeholder="+1 ..." 
+                  className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all"
+                  placeholder="+1 ..."
                 />
               </div>
             </div>
@@ -426,21 +426,21 @@ const Billings = () => {
             <div className="space-y-3 relative" ref={bankRef}>
               <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">BANK NAME</label>
               <div className="relative">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={bankSearch}
                   onChange={(e) => { setBankSearch(e.target.value); setShowBankResults(true); }}
                   onFocus={() => setShowBankResults(true)}
                   disabled={!selectedCountry}
-                  className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all disabled:opacity-40" 
-                  placeholder={selectedCountry ? `Search banks in ${selectedCountry.name}` : "Select country first..."} 
+                  className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all disabled:opacity-40"
+                  placeholder={selectedCountry ? `Search banks in ${selectedCountry.name}` : "Select country first..."}
                 />
                 <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={20} />
-                
+
                 {showBankResults && selectedCountry && (
                   <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-gray-100 rounded-3xl shadow-2xl z-50 p-2 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-top-2">
                     {filteredBanks.map(bank => (
-                      <button 
+                      <button
                         key={bank}
                         onClick={() => { setBankSearch(bank); setShowBankResults(false); }}
                         className="w-full text-left px-6 py-4 rounded-2xl hover:bg-gray-50 text-indigo-900 font-bold text-sm flex items-center justify-between group transition-all"
@@ -460,18 +460,18 @@ const Billings = () => {
             {/* IFSC / SWIFT CODE */}
             <div className="space-y-3">
               <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">IFSC / SWIFT CODE</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={ifsc}
                 onChange={(e) => setIfsc(e.target.value)}
-                className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all uppercase" 
-                placeholder="HDFC0001234" 
+                className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all uppercase"
+                placeholder="HDFC0001234"
               />
             </div>
           </div>
 
           <div className="mt-14 flex flex-col sm:flex-row justify-between items-center gap-6">
-            <button 
+            <button
               onClick={() => {
                 setAccountHolder(''); setAccountNumber(''); setIfsc(''); setPhoneNumber(''); setCountrySearch(''); setBankSearch(''); setSelectedCountry(null);
               }}
@@ -507,20 +507,20 @@ const Billings = () => {
               <button className="text-[10px] font-black text-indigo-900 uppercase tracking-widest hover:text-indigo-600 active:scale-95 transition-all">UPDATE</button>
             </div>
             <button className="w-full py-5 border-2 border-dashed border-gray-200 rounded-[2.5rem] text-gray-400 font-black uppercase text-[10px] tracking-widest hover:border-indigo-900 hover:text-indigo-900 transition-all flex items-center justify-center gap-2">
-               <Plus size={16} /> ADD BACKUP PAYMENT METHOD
+              <Plus size={16} /> ADD BACKUP PAYMENT METHOD
             </button>
           </div>
           <div className="bg-indigo-50/50 p-10 rounded-[3rem] border border-indigo-100 flex flex-col justify-center relative overflow-hidden">
-             <div className="flex items-center gap-4 mb-4 relative z-10">
-                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-900 shadow-sm">
-                   <Receipt size={20} />
-                </div>
-                <p className="text-lg font-black text-indigo-900">Next billing cycle</p>
-             </div>
-             <p className="text-indigo-900/60 font-medium leading-relaxed relative z-10">
-               Your next payment of <span className="font-black text-indigo-900">$29.00</span> will be automatically charged on <span className="font-black text-indigo-900">Nov 01, 2025</span>.
-             </p>
-             <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-900/5 rounded-full blur-3xl"></div>
+            <div className="flex items-center gap-4 mb-4 relative z-10">
+              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-900 shadow-sm">
+                <Receipt size={20} />
+              </div>
+              <p className="text-lg font-black text-indigo-900">Next billing cycle</p>
+            </div>
+            <p className="text-indigo-900/60 font-medium leading-relaxed relative z-10">
+              Your next payment of <span className="font-black text-indigo-900">$29.00</span> will be automatically charged on <span className="font-black text-indigo-900">Nov 01, 2025</span>.
+            </p>
+            <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-900/5 rounded-full blur-3xl"></div>
           </div>
         </div>
       </div>
@@ -564,15 +564,17 @@ const Settings: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   if (!user) return <Navigate to="/auth" />;
 
   const tabs = [
-    { label: 'MY PROFILE', path: '/settings/profile', icon: <UserIcon size={14}/> },
-    { label: 'PREFERENCES', path: '/settings/preferences', icon: <Sliders size={14}/> },
-    { label: 'SECURITY OPTIONS', path: '/settings/security', icon: <ShieldCheck size={14}/> },
-    { label: 'BILLINGS', path: '/settings/billing', icon: <CreditCard size={14}/> },
-    { label: 'PRICING', path: '/settings/pricing', icon: <Gem size={14}/> },
+    { label: 'MY PROFILE', path: '/settings/profile', icon: <UserIcon size={14} /> },
+    { label: 'PREFERENCES', path: '/settings/preferences', icon: <Sliders size={14} /> },
+    { label: 'SECURITY OPTIONS', path: '/settings/security', icon: <ShieldCheck size={14} /> },
+    ...(user.role === UserRole.TUTOR ? [
+      { label: 'BILLINGS', path: '/settings/billing', icon: <CreditCard size={14} /> },
+      { label: 'PRICING', path: '/settings/pricing', icon: <Gem size={14} /> },
+    ] : [])
   ];
 
   return (
@@ -583,7 +585,7 @@ const Settings: React.FC = () => {
             <h1 className="text-6xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-6">
               <button onClick={() => navigate('/dashboard')} className="p-4 bg-white border border-gray-100 rounded-2xl text-indigo-900 hover:shadow-xl transition-all shadow-sm active:scale-90">
                 <ChevronLeft size={28} />
-              </button> 
+              </button>
               Settings
             </h1>
             <p className="text-gray-400 font-medium text-lg pl-2">Configure your personal and professional identity on Nunma.</p>
@@ -594,12 +596,12 @@ const Settings: React.FC = () => {
         <div className="flex justify-center md:justify-start">
           <div className="bg-[#f2f4f7] p-2 rounded-[2.5rem] border border-gray-200/50 shadow-inner flex overflow-x-auto no-scrollbar whitespace-nowrap gap-2">
             {tabs.map(tab => (
-              <Link 
-                key={tab.path} 
-                to={tab.path} 
+              <Link
+                key={tab.path}
+                to={tab.path}
                 className={`flex items-center gap-3 py-4 px-10 text-[10px] font-black uppercase tracking-[0.25em] rounded-[1.75rem] transition-all
-                  ${location.pathname === tab.path 
-                    ? 'bg-white text-indigo-900 shadow-lg border border-gray-100 translate-y-[-1px]' 
+                  ${location.pathname === tab.path
+                    ? 'bg-white text-indigo-900 shadow-lg border border-gray-100 translate-y-[-1px]'
                     : 'text-gray-400 hover:text-indigo-900'
                   }`}
               >

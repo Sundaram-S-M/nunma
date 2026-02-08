@@ -23,7 +23,7 @@ const VerificationPortal: React.FC = () => {
       <div className="w-full max-w-4xl bg-white rounded-[5rem] border border-gray-100 shadow-[0_60px_150px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col lg:flex-row animate-in fade-in slide-in-from-bottom-12 duration-1000">
 
         {/* Verification Status Banner */}
-        <div className={`w-full lg:w-2/5 p-16 flex flex-col justify-between relative overflow-hidden transition-colors duration-1000 ${isVerifying ? 'bg-indigo-900' : isVerified ? 'bg-[#c1e60d]' : 'bg-red-500'}`}>
+        <div className={`w-full lg:w-2/5 p-16 flex flex-col justify-between relative overflow-hidden transition-colors duration-1000 ${isVerifying ? 'bg-indigo-900' : isVerified ? 'bg-[#c2f575]' : 'bg-red-500'}`}>
           <div className="relative z-10">
             <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center mb-10 shadow-2xl transition-all duration-700 ${isVerifying ? 'bg-white/10 text-white animate-pulse' : 'bg-indigo-900 text-white scale-110'}`}>
               {isVerifying ? <ShieldCheck size={40} /> : isVerified ? <ShieldCheck size={40} /> : <ShieldAlert size={40} />}
@@ -56,7 +56,7 @@ const VerificationPortal: React.FC = () => {
             <div className="flex items-center gap-4 text-gray-300 font-bold text-[10px] uppercase tracking-[0.4em]">
               <Award size={18} /> Verifiable Credential
             </div>
-            <h2 className="text-5xl font-black text-indigo-900 tracking-tighter leading-tight"> Precision Logistics <br /><span className="text-[#c1e60d] drop-shadow-sm">& Supply Chain Mastery</span></h2>
+            <h2 className="text-5xl font-black text-indigo-900 tracking-tighter leading-tight"> Precision Logistics <br /><span className="text-[#c2f575] drop-shadow-sm">& Supply Chain Mastery</span></h2>
           </div>
 
           <div className="grid grid-cols-2 gap-8">
@@ -78,12 +78,12 @@ const VerificationPortal: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-10 bg-[#faffdf] rounded-[3rem] border border-[#c1e60d]/20 flex items-center justify-between">
+          <div className="p-10 bg-[#faffdf] rounded-[3rem] border border-[#c2f575]/20 flex items-center justify-between">
             <div>
               <p className="text-indigo-900 font-black text-xl tracking-tight">Status: MASTERY GRANTED</p>
               <p className="text-indigo-900/40 text-[10px] font-bold uppercase tracking-widest mt-1">Proof: selective-disclosure-v1</p>
             </div>
-            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-900 shadow-xl border border-[#c1e60d]/20">
+            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-900 shadow-xl border border-[#c2f575]/20">
               <ShieldCheck size={32} />
             </div>
           </div>

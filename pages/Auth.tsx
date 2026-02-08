@@ -27,6 +27,7 @@ const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,20 +45,37 @@ const Auth: React.FC = () => {
   };
 
   const handleCompleteSignUp = async () => {
-    await signup({
-      name,
-      email,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name || 'default'}`,
-      role,
-      location: citySearch,
-    }, password);
-    navigate('/dashboard');
+    try {
+      setIsLoading(true);
+      await signup({
+        name,
+        email,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name || 'default'}`,
+        role,
+        location: citySearch,
+        dob,
+      }, password);
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      alert(`Initialization Failed: ${error.message || "Please check your network and configuration."}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    await login(email, password);
-    navigate('/dashboard');
+    try {
+      setIsLoading(true);
+      await login(email, password);
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error("Login error:", error);
+      alert(`Access Denied: ${error.message || "Please verify your credentials and configuration."}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const branding = {
@@ -167,8 +185,12 @@ const Auth: React.FC = () => {
                     </div>
                   </div>
 
-                  <button type="submit" className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl shadow-[#040457]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8">
-                    Sign In <ArrowRight size={20} className="text-[#c2f575]" />
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl shadow-[#040457]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? "Validating..." : "Sign In"} <ArrowRight size={20} className="text-[#c2f575]" />
                   </button>
                 </form>
               </div>
@@ -191,6 +213,37 @@ const Auth: React.FC = () => {
                           className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
                           value={name} onChange={(e) => setName(e.target.value)}
                         />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Identity (Email)</label>
+                      <div className="relative group">
+                        <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <input
+                          type="email" required placeholder="name@domain.com"
+                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                          value={email} onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Access Key</label>
+                      <div className="relative group">
+                        <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <input
+                          type={showPassword ? "text" : "password"} required placeholder="••••••••"
+                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-5 font-bold text-[#040457] outline-none transition-all"
+                          value={password} onChange={(e) => setPassword(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 hover:text-[#040457]"
+                        >
+                          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
                       </div>
                     </div>
 
@@ -235,8 +288,12 @@ const Auth: React.FC = () => {
                     </div>
                     <div className="flex gap-4">
                       <button onClick={() => setOnboardingStep(0)} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest hover:bg-gray-100">Back</button>
-                      <button onClick={handleCompleteSignUp} className="flex-[2.5] py-5 bg-[#040457] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-4">
-                        Initialize Dashboard <Sparkles size={18} className="text-[#c2f575]" />
+                      <button
+                        onClick={handleCompleteSignUp}
+                        disabled={isLoading}
+                        className="flex-[2.5] py-5 bg-[#040457] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isLoading ? "Syncing..." : "Initialize Dashboard"} <Sparkles size={18} className="text-[#c2f575]" />
                       </button>
                     </div>
                   </div>

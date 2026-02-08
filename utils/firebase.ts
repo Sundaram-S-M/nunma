@@ -21,8 +21,8 @@ if (!getApps().length) {
     if (isConfigValid) {
         app = initializeApp(firebaseConfig);
     } else {
-        console.warn("Firebase configuration is missing or incomplete. Some features may not work.");
-        // Initialize with dummy values to prevent crashes if possible, or just export nulls
+        console.warn("Firebase configuration is missing or incomplete. ⚡ Switching to MOCK MODE for local development.");
+        console.log("To enable real Firebase features, create a .env.local file with your API keys.");
         app = null;
     }
 } else {

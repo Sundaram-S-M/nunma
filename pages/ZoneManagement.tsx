@@ -51,10 +51,16 @@ import {
   Search
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { collection, query, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 
 const ZONES_STORAGE_KEY = 'nunma_zones_data';
+
+interface AttendanceHistory {
+  sessionId: string;
+  status: 'Present' | 'Absent' | 'Late' | 'Pending';
+  date: string;
+}
 
 interface Student {
   id: string;
@@ -67,6 +73,7 @@ interface Student {
   engagementScore: number;
   email?: string;
   phone?: string;
+  attendanceHistory?: AttendanceHistory[];
 }
 
 interface MCQ {
@@ -131,6 +138,13 @@ interface AnswerCluster {
   score?: number;
 }
 
+interface AttendanceSession {
+  id: string;
+  date: string;
+  time: string;
+  className?: string;
+}
+
 const ZoneManagement: React.FC = () => {
   const { zoneId } = useParams();
   const navigate = useNavigate();
@@ -143,11 +157,45 @@ const ZoneManagement: React.FC = () => {
   const [showAddExamModal, setShowAddExamModal] = useState(false);
   const [showAiGeneratorModal, setShowAiGeneratorModal] = useState(false);
   const [showStartExamModal, setShowStartExamModal] = useState(false);
+  const [showTakeAttendanceModal, setShowTakeAttendanceModal] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   // Input States
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentEmail, setNewStudentEmail] = useState('');
   const [examToStart, setExamToStart] = useState<Exam | null>(null);
+  const [newAttendanceClassName, setNewAttendanceClassName] = useState('');
+  const [attendanceTime, setAttendanceTime] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  // Custom Time Picker State
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [tpHour, setTpHour] = useState('12');
+  const [tpMinute, setTpMinute] = useState('00');
+  const [tpPeriod, setTpPeriod] = useState<'AM' | 'PM'>('PM');
+
+  useEffect(() => {
+    // Initialize picker with current time
+    const now = new Date();
+    let h = now.getHours();
+    const m = now.getMinutes();
+    const p = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12; // the hour '0' should be '12'
+    setTpHour(h < 10 ? '0' + h : h.toString());
+    setTpMinute(m < 10 ? '0' + m : m.toString());
+    setTpPeriod(p);
+  }, [showTakeAttendanceModal]);
+
+  const updateTimeFromPicker = (h: string, m: string, p: string) => {
+    setTpHour(h);
+    setTpMinute(m);
+    setTpPeriod(p as any);
+    setAttendanceTime(`${h}:${m} ${p}`);
+  };
+
+  // User Search State
+  const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [showUserSuggestions, setShowUserSuggestions] = useState(false);
   const [examStartDate, setExamStartDate] = useState('');
   const [examStartTime, setExamStartTime] = useState('');
 
@@ -172,14 +220,9 @@ const ZoneManagement: React.FC = () => {
   const [activeSession, setActiveSession] = useState<any>(null);
 
   // Data States
-  const [chapters, setChapters] = useState<Chapter[]>([
-    { id: 'c1', title: 'Foundation & Principles', segments: [{ id: 's1', title: 'The Core Concepts', type: 'video', duration: '15:20' }] }
-  ]);
-
-  const [exams, setExams] = useState<Exam[]>([
-    { id: 'e1', title: 'Product Lifecycle Fundamentals', date: '2026-02-25', time: '10:00', status: 'UPCOMING', type: 'online', maxMark: 100, minMark: 40 },
-    { id: 'e2', title: 'Calculus: Derivative Rules', date: '2026-01-15', time: '14:00', status: 'CONDUCTED', participants: 5, avgScore: '82%', type: 'offline', maxMark: 100, minMark: 45 },
-  ]);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSession[]>([]);
 
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [examSearchQuery, setExamSearchQuery] = useState('');
@@ -229,8 +272,10 @@ const ZoneManagement: React.FC = () => {
     alert(`Exam "${newExamTitle}" created! Notifications sent.`);
   };
 
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>, examId: string) => {
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>, examId: string) => {
     // Mock excel processing
+    if (!zoneId) return;
+
     alert('Processing Excel sheet: Students detected, marks imported.');
     const mockResults: ExamResult[] = students.map(s => ({
       id: Math.random().toString(),
@@ -241,18 +286,36 @@ const ZoneManagement: React.FC = () => {
       status: 'passed',
       warnings: 0
     }));
-    setExamResults(prev => [...prev.filter(r => r.examId !== examId), ...mockResults]);
+
+    // Persist to Firestore
+    if (db) {
+      try {
+        for (const result of mockResults) {
+          await setDoc(doc(db, `zones/${zoneId}/exams/${examId}/results`, result.studentId), {
+            ...result,
+            updatedAt: new Date().toISOString()
+          });
+        }
+        setExamResults(prev => [...prev.filter(r => r.examId !== examId), ...mockResults]);
+      } catch (err) {
+        console.error("Error saving exam results:", err);
+      }
+    } else {
+      console.log("ZoneManagement: Mock Mode - Saving results to LocalStorage only");
+      const updatedResults = [...examResults.filter(r => r.examId !== examId), ...mockResults];
+      setExamResults(updatedResults);
+      localStorage.setItem(`nunma_results_${zoneId}`, JSON.stringify(updatedResults));
+    }
   };
 
-  const [students, setStudents] = useState<Student[]>([
-    { id: '1', name: 'Sachin Sundar', avatar: 'https://picsum.photos/seed/sachin/40/40', joinedAt: '02/01/2026', status: 'Present', durationInSession: 45, engagementScore: 85, email: 'sachin@example.com' },
-    { id: '2', name: 'Arjun Reddy', avatar: 'https://picsum.photos/seed/arjun/40/40', joinedAt: '02/01/2026', status: 'Present', durationInSession: 58, engagementScore: 98, email: 'arjun@example.com' },
-  ]);
+  const [students, setStudents] = useState<Student[]>([]);
 
   const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
   const [bulkEmails, setBulkEmails] = useState('');
 
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [downloadStartDate, setDownloadStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [downloadEndDate, setDownloadEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [manualAttendanceState, setManualAttendanceState] = useState<Record<string, 'Present' | 'Absent' | 'Late' | 'Pending'>>({});
 
   useEffect(() => {
@@ -263,6 +326,22 @@ const ZoneManagement: React.FC = () => {
         const found = zones.find((z: any) => z.id === zoneId);
         setZone(found);
       }
+
+      // Load zone-specific data
+      const savedChapters = localStorage.getItem(`nunma_chapters_${zoneId}`);
+      if (savedChapters) setChapters(JSON.parse(savedChapters));
+
+      const savedExams = localStorage.getItem(`nunma_exams_${zoneId}`);
+      if (savedExams) setExams(JSON.parse(savedExams));
+
+      const savedStudents = localStorage.getItem(`nunma_students_${zoneId}`);
+      if (savedStudents) setStudents(JSON.parse(savedStudents));
+
+      const savedResults = localStorage.getItem(`nunma_results_${zoneId}`);
+      if (savedResults) setExamResults(JSON.parse(savedResults));
+
+      const savedAttendanceSessions = localStorage.getItem(`nunma_attendance_sessions_${zoneId}`);
+      if (savedAttendanceSessions) setAttendanceSessions(JSON.parse(savedAttendanceSessions));
     };
     loadData();
 
@@ -272,27 +351,107 @@ const ZoneManagement: React.FC = () => {
     if (active) setActiveSession(active);
   }, [zoneId]);
 
-  // Real-time Attendance Listener
+  // Auto-save effects
+  useEffect(() => {
+    if (zoneId && chapters.length > 0) {
+      localStorage.setItem(`nunma_chapters_${zoneId}`, JSON.stringify(chapters));
+    }
+  }, [chapters, zoneId]);
+
+  useEffect(() => {
+    if (zoneId && exams.length > 0) {
+      localStorage.setItem(`nunma_exams_${zoneId}`, JSON.stringify(exams));
+    }
+  }, [exams, zoneId]);
+
+  useEffect(() => {
+    if (zoneId && students.length > 0) {
+      localStorage.setItem(`nunma_students_${zoneId}`, JSON.stringify(students));
+    }
+  }, [students, zoneId]);
+
+  useEffect(() => {
+    if (zoneId && examResults.length > 0) {
+      localStorage.setItem(`nunma_results_${zoneId}`, JSON.stringify(examResults));
+    }
+  }, [examResults, zoneId]);
+
+  useEffect(() => {
+    if (zoneId && attendanceSessions.length > 0) {
+      localStorage.setItem(`nunma_attendance_sessions_${zoneId}`, JSON.stringify(attendanceSessions));
+    }
+  }, [attendanceSessions, zoneId]);
+
   useEffect(() => {
     if (!zoneId || !activeSession) return;
+    let unsubscribe = () => { };
 
-    const attendanceRef = collection(db, `zones/${zoneId}/sessions/${activeSession.id}/attendance`);
-    const q = query(attendanceRef);
+    if (db) {
+      const attendanceRef = collection(db, `zones/${zoneId}/sessions/${activeSession.id}/attendance`);
+      const q = query(attendanceRef);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const attendees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const attendees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      setStudents(prev => prev.map(student => {
-        const attendanceMatch = attendees.find((a: any) => a.id === student.id || a.email === student.email);
-        if (attendanceMatch) {
-          return { ...student, status: 'Present' };
-        }
-        return student;
-      }));
-    });
+        setStudents(prev => prev.map(student => {
+          const attendanceMatch = attendees.find((a: any) => a.id === student.id || a.email === student.email);
+          if (attendanceMatch) {
+            return { ...student, status: 'Present' };
+          }
+          return student;
+        }));
+      });
+    } else {
+      console.log("ZoneManagement: Mock Attendance in effect (No Firebase)");
+    }
 
     return () => unsubscribe();
   }, [zoneId, activeSession]);
+
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (newStudentEmail.length < 3) {
+        setUserSearchResults([]);
+        setShowUserSuggestions(false);
+        return;
+      }
+
+      setIsSearchingUsers(true);
+      setShowUserSuggestions(true);
+
+      if (db) {
+        try {
+          const q = query(
+            collection(db, 'users'),
+            where('email', '>=', newStudentEmail),
+            where('email', '<=', newStudentEmail + '\uf8ff'),
+            limit(5)
+          );
+          const querySnapshot = await getDocs(q);
+          const results = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setUserSearchResults(results);
+        } catch (err) {
+          console.error("Error searching users:", err);
+        } finally {
+          setIsSearchingUsers(false);
+        }
+      } else {
+        // Mock Search Results
+        setTimeout(() => {
+          const mockUsers = [
+            { id: '1', name: 'Sundaram S M', email: 'sundaramsm55@gmail.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sundaram' },
+            { id: '2', name: 'John Doe', email: 'john.doe@example.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john' },
+            { id: '3', name: 'Jane Smith', email: 'jane.smith@test.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=jane' }
+          ].filter(u => u.email.toLowerCase().includes(newStudentEmail.toLowerCase()));
+          setUserSearchResults(mockUsers);
+          setIsSearchingUsers(false);
+        }, 300);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchUsers, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [newStudentEmail]);
 
   // --- Canvas Logic ---
   useEffect(() => {
@@ -378,6 +537,15 @@ const ZoneManagement: React.FC = () => {
   const handleClear = () => setStrokes([]);
 
   // --- Handlers ---
+  const handleAddSegment = (chapterId: string, type: 'video' | 'pdf' | 'reading' | 'quiz') => {
+    const newSeg: Segment = {
+      id: `s${Date.now()}`,
+      title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+      type
+    };
+    setChapters(chapters.map(c => c.id === chapterId ? { ...c, segments: [...c.segments, newSeg] } : c));
+  };
+
   const initSmartMarking = () => {
     setIsSmartMarking(true);
     setIsAnalyzing(true);
@@ -455,6 +623,72 @@ const ZoneManagement: React.FC = () => {
     localStorage.setItem('nunma_live_sessions', JSON.stringify(updated));
     setActiveSession(null);
     window.dispatchEvent(new Event('storage'));
+  };
+
+  const handleDeleteZone = async () => {
+    if (!zoneId) return;
+
+    if (confirm('Are you sure you want to delete this zone? This action cannot be undone.')) {
+      if (db) {
+        try {
+          await deleteDoc(doc(db, 'zones', zoneId));
+        } catch (error) {
+          console.error("Error deleting zone from Firebase:", error);
+          alert("Failed to delete zone from cloud.");
+        }
+      }
+
+      // Local Storage Cleanup
+      const savedZones = localStorage.getItem(ZONES_STORAGE_KEY);
+      if (savedZones) {
+        const zones = JSON.parse(savedZones);
+        const updatedZones = zones.filter((z: any) => z.id !== zoneId);
+        localStorage.setItem(ZONES_STORAGE_KEY, JSON.stringify(updatedZones));
+      }
+
+      // Cleanup tutor's zone list if applicable
+      const user = JSON.parse(localStorage.getItem('nunma_user') || '{}');
+      if (user.uid) {
+        const tutorZones = JSON.parse(localStorage.getItem(`nunma_tutor_zones_${user.uid}`) || '[]');
+        const updatedTutorZones = tutorZones.filter((z: any) => z.id !== zoneId);
+        localStorage.setItem(`nunma_tutor_zones_${user.uid}`, JSON.stringify(updatedTutorZones));
+      }
+
+      navigate('/workplace');
+    }
+  };
+
+  const handleTakeAttendance = () => {
+    const sessionId = Date.now().toString();
+    const newSession: AttendanceSession = {
+      id: sessionId,
+      date: attendanceDate,
+      time: attendanceTime,
+      className: newAttendanceClassName
+    };
+
+    const updatedStudents = students.map(student => {
+      const status = manualAttendanceState[student.id] || 'Absent';
+      const history = student.attendanceHistory || [];
+      return {
+        ...student,
+        status,
+        attendanceHistory: [...history, { sessionId, status, date: attendanceDate }]
+      };
+    });
+
+    setStudents(updatedStudents);
+    setAttendanceSessions([...attendanceSessions, newSession]);
+    setShowTakeAttendanceModal(false);
+    setNewAttendanceClassName('');
+    setManualAttendanceState({});
+    alert(`Attendance for "${newAttendanceClassName || attendanceDate}" recorded!`);
+  };
+
+  const calculateAttendancePercentage = (student: Student) => {
+    if (!student.attendanceHistory || student.attendanceHistory.length === 0) return 0;
+    const presentCount = student.attendanceHistory.filter(h => h.status === 'Present').length;
+    return Math.round((presentCount / student.attendanceHistory.length) * 100);
   };
 
   const handleCopyLink = () => {
@@ -710,13 +944,46 @@ const ZoneManagement: React.FC = () => {
               <div className="space-y-4">
                 <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Individual Invite</label>
                 <div className="flex gap-4">
-                  <input
-                    type="email"
-                    placeholder="student@example.com"
-                    value={newStudentEmail}
-                    onChange={e => setNewStudentEmail(e.target.value)}
-                    className="flex-1 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 font-bold text-[#040457] outline-none transition-all"
-                  />
+                  <div className="flex-1 relative">
+                    <input
+                      type="email"
+                      placeholder="student@example.com"
+                      value={newStudentEmail}
+                      onChange={e => setNewStudentEmail(e.target.value)}
+                      onFocus={() => setShowUserSuggestions(true)}
+                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 font-bold text-[#040457] outline-none transition-all"
+                    />
+
+                    {showUserSuggestions && (userSearchResults.length > 0 || isSearchingUsers) && (
+                      <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[130] animate-in slide-in-from-top-2 duration-200">
+                        {isSearchingUsers ? (
+                          <div className="p-4 flex items-center justify-center gap-3 text-gray-400 text-xs font-bold uppercase tracking-widest">
+                            <div className="w-4 h-4 border-2 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
+                            Searching...
+                          </div>
+                        ) : (
+                          <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                            {userSearchResults.map(u => (
+                              <button
+                                key={u.id}
+                                onClick={() => {
+                                  setNewStudentEmail(u.email);
+                                  setShowUserSuggestions(false);
+                                }}
+                                className="w-full p-4 flex items-center gap-4 hover:bg-[#c2f575]/10 transition-colors text-left group"
+                              >
+                                <img src={u.avatar} className="w-10 h-10 rounded-xl" alt="" />
+                                <div>
+                                  <p className="font-black text-[#040457] text-sm group-hover:text-indigo-600 transition-colors">{u.name}</p>
+                                  <p className="text-xs text-gray-400 font-medium">{u.email}</p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <button
                     onClick={() => {
                       if (!newStudentEmail) return;
@@ -758,8 +1025,10 @@ const ZoneManagement: React.FC = () => {
                 ></textarea>
                 <p className="text-[10px] text-gray-300 font-bold px-2 italic">Tip: You can copy-paste a list from Excel or Google Sheets directly.</p>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const emails = bulkEmails.split(/[,\n\s]+/).filter(e => e.includes('@'));
+                    if (!zoneId) return;
+
                     const newStudents = emails.map(email => ({
                       id: Math.random().toString(36).substr(2, 9),
                       name: email.split('@')[0],
@@ -769,15 +1038,172 @@ const ZoneManagement: React.FC = () => {
                       engagementScore: 0,
                       email: email
                     }));
-                    setStudents([...students, ...newStudents]);
-                    setBulkEmails('');
-                    alert(`${newStudents.length} emails whitelisted!`);
+
+                    try {
+                      for (const student of newStudents) {
+                        await setDoc(doc(db, `zones/${zoneId}/whitelist`, student.email.replace(/\./g, '_')), {
+                          ...student,
+                          addedAt: new Date().toISOString()
+                        });
+                      }
+                      setStudents([...students, ...newStudents]);
+                      setBulkEmails('');
+                      alert(`${newStudents.length} emails whitelisted!`);
+                    } catch (err) {
+                      console.error("Error whitelisting students:", err);
+                    }
                   }}
                   className="w-full py-6 bg-[#c2f575] text-[#040457] rounded-3xl font-black uppercase text-xs tracking-[0.25em] hover:brightness-110 active:scale-[0.98] transition-all shadow-xl"
                 >
                   Confirm Bulk Whitelist
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAKE ATTENDANCE MODAL */}
+      {showTakeAttendanceModal && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500 max-h-[90vh] flex flex-col">
+            <h3 className="text-3xl font-black text-[#040457] mb-4">Take Attendance</h3>
+            <p className="text-sm text-gray-400 mb-8 leading-relaxed font-medium">Record attendance for the current class session.</p>
+
+            <div className="space-y-6 mb-8">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Date</label>
+                  <input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                </div>
+                <div className="space-y-2 relative">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Time</label>
+                  <div
+                    onClick={() => setShowTimePicker(!showTimePicker)}
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] cursor-pointer flex items-center justify-between hover:bg-gray-100 transition-all"
+                  >
+                    <span>{attendanceTime}</span>
+                    <Clock size={18} className="text-gray-400" />
+                  </div>
+
+                  {/* Time Picker Popover */}
+                  {showTimePicker && (
+                    <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-[2rem] shadow-2xl border border-gray-100 p-6 z-50 animate-in slide-in-from-top-2">
+                      <div className="flex justify-between items-start mb-4">
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Select Time</h4>
+                        <button onClick={() => setShowTimePicker(false)} className="text-gray-300 hover:text-red-500"><X size={14} /></button>
+                      </div>
+
+                      <div className="flex gap-2 h-40">
+                        {/* Hours */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 rounded-xl p-2 text-center">
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(h => {
+                            const val = h < 10 ? `0${h}` : `${h}`;
+                            return (
+                              <div
+                                key={h}
+                                onClick={() => updateTimeFromPicker(val, tpMinute, tpPeriod)}
+                                className={`py-2 rounded-lg text-sm font-bold cursor-pointer transition-colors ${tpHour === val ? 'bg-[#040457] text-white' : 'text-gray-400 hover:bg-gray-200'}`}
+                              >
+                                {val}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Minutes */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 rounded-xl p-2 text-center">
+                          {Array.from({ length: 60 }, (_, i) => i).map(m => {
+                            const val = m < 10 ? `0${m}` : `${m}`;
+                            return (
+                              <div
+                                key={m}
+                                onClick={() => updateTimeFromPicker(tpHour, val, tpPeriod)}
+                                className={`py-2 rounded-lg text-sm font-bold cursor-pointer transition-colors ${tpMinute === val ? 'bg-[#040457] text-white' : 'text-gray-400 hover:bg-gray-200'}`}
+                              >
+                                {val}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Period */}
+                        <div className="flex flex-col gap-2 w-16">
+                          {['AM', 'PM'].map(p => (
+                            <button
+                              key={p}
+                              onClick={() => updateTimeFromPicker(tpHour, tpMinute, p)}
+                              className={`flex-1 rounded-xl text-xs font-black transition-colors ${tpPeriod === p ? 'bg-[#c2f575] text-[#040457]' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          const now = new Date();
+                          let h = now.getHours();
+                          const m = now.getMinutes();
+                          const p = h >= 12 ? 'PM' : 'AM';
+                          h = h % 12;
+                          h = h ? h : 12;
+                          const hStr = h < 10 ? `0${h}` : `${h}`;
+                          const mStr = m < 10 ? `0${m}` : `${m}`;
+                          updateTimeFromPicker(hStr, mStr, p);
+                        }}
+                        className="w-full mt-4 py-3 bg-gray-50 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#040457] hover:text-white transition-all"
+                      >
+                        Set to Now
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Class Name (Optional)</label>
+                  <input type="text" placeholder="e.g. Morning Theory" value={newAttendanceClassName} onChange={e => setNewAttendanceClassName(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto mb-8 pr-2 custom-scrollbar">
+              <table className="w-full text-left">
+                <thead className="sticky top-0 bg-white z-10">
+                  <tr className="border-b border-gray-100">
+                    <th className="py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Student</th>
+                    <th className="py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {students.map(student => (
+                    <tr key={student.id}>
+                      <td className="py-4 font-bold text-[#040457]">{student.name}</td>
+                      <td className="py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => setManualAttendanceState(prev => ({ ...prev, [student.id]: 'Present' }))}
+                            className={`p-2 rounded-lg transition-all ${manualAttendanceState[student.id] === 'Present' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-600'}`}
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            onClick={() => setManualAttendanceState(prev => ({ ...prev, [student.id]: 'Absent' }))}
+                            className={`p-2 rounded-lg transition-all ${manualAttendanceState[student.id] === 'Absent' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600'}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex gap-4">
+              <button onClick={() => setShowTakeAttendanceModal(false)} className="flex-1 py-4 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
+              <button onClick={handleTakeAttendance} className="flex-[2] py-4 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Save Session</button>
             </div>
           </div>
         </div>
@@ -792,9 +1218,14 @@ const ZoneManagement: React.FC = () => {
             <p className="text-[11px] font-bold text-gray-300 uppercase tracking-[0.4em]">{zone.level} LEVEL FACILITY</p>
           </div>
         </div>
-        <button onClick={() => setShowAddStudentModal(true)} className="px-10 py-5 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-[#040457]/20">
-          <UserPlus size={20} /> Whitelist
-        </button>
+        <div className="flex gap-4">
+          <button onClick={() => setShowAddStudentModal(true)} className="px-10 py-5 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-[#040457]/20">
+            <UserPlus size={20} /> Whitelist
+          </button>
+          <button onClick={handleDeleteZone} className="px-6 py-5 bg-red-50 text-red-500 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:bg-red-500 hover:text-white transition-all shadow-xl">
+            <Trash2 size={20} />
+          </button>
+        </div>
       </div>
 
       {view === 'management' ? (
@@ -835,66 +1266,133 @@ const ZoneManagement: React.FC = () => {
                       className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
                     />
                   </div>
-                  <button
-                    onClick={() => {
-                      const csvContent = "Name,Email,Status,Joined At\n" + students.map(s => `${s.name},${s.email},${s.status},${s.joinedAt}`).join("\n");
-                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                      const link = document.createElement("a");
-                      link.href = URL.createObjectURL(blob);
-                      link.download = `attendance_${attendanceDate}.csv`;
-                      link.click();
-                    }}
-                    className="px-8 py-5 bg-[#040457] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
-                  >
-                    <Download size={18} /> Download List
-                  </button>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setShowTakeAttendanceModal(true)}
+                      className="px-8 py-5 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
+                    >
+                      <CheckCircle2 size={18} /> Take Attendance
+                    </button>
+                    <button
+                      onClick={() => setShowDownloadModal(true)}
+                      className="px-8 py-5 bg-[#040457] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
+                    >
+                      <Download size={18} /> Download List
+                    </button>
+                  </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-[3rem] overflow-hidden shadow-sm">
+                {/* DOWNLOAD MODAL */}
+                {showDownloadModal && (
+                  <div className="fixed inset-0 z-[140] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl p-10 animate-in zoom-in-95 duration-500">
+                      <h3 className="text-2xl font-black text-[#040457] mb-6">Download Report</h3>
+                      <div className="space-y-4 mb-8">
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1 mb-2">Start Date</label>
+                          <input type="date" value={downloadStartDate} onChange={e => setDownloadStartDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1 mb-2">End Date</label>
+                          <input type="date" value={downloadEndDate} onChange={e => setDownloadEndDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none" />
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <button onClick={() => setShowDownloadModal(false)} className="flex-1 py-4 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
+                        <button
+                          onClick={() => {
+                            const filteredSessions = attendanceSessions.filter(s => s.date >= downloadStartDate && s.date <= downloadEndDate);
+                            // Header
+                            let csvContent = "Name,Email,Attendance %,";
+                            csvContent += filteredSessions.map(s => `${s.date} ${s.time}${s.className ? ` (${s.className})` : ''}`).join(",") + "\n";
+
+                            // Rows
+                            students.forEach(student => {
+                              const row = [student.name, student.email, `${calculateAttendancePercentage(student)}%`];
+                              filteredSessions.forEach(session => {
+                                const record = student.attendanceHistory?.find(h => h.sessionId === session.id);
+                                row.push(record ? record.status : 'N/A');
+                              });
+                              csvContent += row.join(",") + "\n";
+                            });
+
+                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const link = document.createElement("a");
+                            link.href = URL.createObjectURL(blob);
+                            link.download = `attendance_report_${downloadStartDate}_to_${downloadEndDate}.csv`;
+                            link.click();
+                            setShowDownloadModal(false);
+                          }}
+                          className="flex-[2] py-4 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl"
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-white border border-gray-100 rounded-[3rem] overflow-hidden shadow-sm overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50/50">
-                        <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Student</th>
-                        <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
-                        <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Registry Status</th>
-                        <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                        <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest sticky left-0 bg-gray-50/50 z-10">Student</th>
+                        <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Attendance %</th>
+                        {/* Dynamic Session Columns (Last 5 or Searched) */}
+                        {attendanceSessions
+                          .filter(s =>
+                            !attendanceSearchQuery ||
+                            s.className?.toLowerCase().includes(attendanceSearchQuery.toLowerCase()) ||
+                            s.date.includes(attendanceSearchQuery)
+                          )
+                          .slice(-5)
+                          .map(session => (
+                            <th key={session.id} className="px-6 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
+                              {session.date}<br />
+                              <span className="text-[9px] opacity-70">{session.time}</span>
+                            </th>
+                          ))
+                        }
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {students.filter(s => s.name.toLowerCase().includes(attendanceSearchQuery.toLowerCase()) || (s.email || '').toLowerCase().includes(attendanceSearchQuery.toLowerCase())).map(student => (
                         <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
-                          <td className="px-10 py-6">
+                          <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50/30">
                             <div className="flex items-center gap-4">
                               <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" alt="" />
-                              <span className="font-bold text-[#040457]">{student.name}</span>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-[#040457]">{student.name}</span>
+                                <span className="text-xs text-gray-400 font-medium">{student.email}</span>
+                              </div>
                             </div>
                           </td>
                           <td className="px-10 py-6">
-                            <span className="text-sm text-gray-400 font-medium">{student.email}</span>
+                            <span className="font-black text-[#040457] text-lg">{calculateAttendancePercentage(student)}%</span>
                           </td>
-                          <td className="px-10 py-6">
-                            <span className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${student.status === 'Present' ? 'bg-green-50 text-green-600' :
-                              student.status === 'Absent' ? 'bg-red-50 text-red-600' : 'bg-yellow-50 text-yellow-600'
-                              }`}>
-                              {student.status}
-                            </span>
-                          </td>
-                          <td className="px-10 py-6 text-right">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => setStudents(students.map(s => s.id === student.id ? { ...s, status: 'Present' } : s))}
-                                className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all"
-                              >
-                                <Check size={16} />
-                              </button>
-                              <button
-                                onClick={() => setStudents(students.map(s => s.id === student.id ? { ...s, status: 'Absent' } : s))}
-                                className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          </td>
+                          {/* Dynamic Session Status */}
+                          {attendanceSessions
+                            .filter(s =>
+                              !attendanceSearchQuery ||
+                              s.className?.toLowerCase().includes(attendanceSearchQuery.toLowerCase()) ||
+                              s.date.includes(attendanceSearchQuery)
+                            )
+                            .slice(-5)
+                            .map(session => {
+                              const status = student.attendanceHistory?.find(h => h.sessionId === session.id)?.status || 'Pending';
+                              return (
+                                <td key={session.id} className="px-6 py-6 text-center">
+                                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${status === 'Present' ? 'bg-green-50 text-green-600' :
+                                    status === 'Absent' ? 'bg-red-50 text-red-600' :
+                                      status === 'Late' ? 'bg-yellow-50 text-yellow-600' :
+                                        'bg-gray-50 text-gray-400'
+                                    }`}>
+                                    {status === 'Pending' ? '-' : status.charAt(0)}
+                                  </span>
+                                </td>
+                              );
+                            })
+                          }
                         </tr>
                       ))}
                     </tbody>
@@ -932,15 +1430,22 @@ const ZoneManagement: React.FC = () => {
                           />
                         </div>
                         <div className="flex gap-4">
-                          <button
-                            onClick={() => {
-                              const newSeg: Segment = { id: `s${Date.now()}`, title: 'New Segment', type: 'video' };
-                              setChapters(chapters.map(c => c.id === chapter.id ? { ...c, segments: [...c.segments, newSeg] } : c));
-                            }}
-                            className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-[#040457] hover:text-white transition-all"
-                          >
-                            <Plus size={20} />
-                          </button>
+                          <div className="flex gap-2">
+                            {(['video', 'pdf', 'reading', 'quiz'] as const).map(type => (
+                              <button
+                                key={type}
+                                onClick={() => handleAddSegment(chapter.id, type)}
+                                className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:bg-[#c2f575] hover:text-[#040457] transition-all flex flex-col items-center gap-1 group/btn"
+                                title={`Add ${type}`}
+                              >
+                                {type === 'video' && <FileVideo size={16} />}
+                                {type === 'pdf' && <FileText size={16} />}
+                                {type === 'reading' && <FileText size={16} />}
+                                {type === 'quiz' && <Radio size={16} />}
+                                <span className="text-[8px] font-black uppercase opacity-0 group-hover/btn:opacity-100 transition-opacity">{type}</span>
+                              </button>
+                            ))}
+                          </div>
                           <button
                             onClick={() => setChapters(chapters.filter(c => c.id !== chapter.id))}
                             className="p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
@@ -969,7 +1474,13 @@ const ZoneManagement: React.FC = () => {
                                   }}
                                   className="bg-transparent font-bold text-[#040457] outline-none border-b-2 border-transparent focus:border-[#c2f575]/20 block mb-1"
                                 />
-                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{seg.type} {seg.duration ? `• ${seg.duration}` : ''}</span>
+                                <div className="flex gap-2">
+                                  <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{seg.type} {seg.duration ? `• ${seg.duration}` : ''}</span>
+                                  <input
+                                    placeholder="Enter URL or content..."
+                                    className="bg-transparent text-[10px] text-indigo-400 border-none outline-none focus:ring-0 w-32"
+                                  />
+                                </div>
                               </div>
                             </div>
                             <div className="flex gap-2 opacity-0 group-hover/seg:opacity-100 transition-opacity">
@@ -1025,6 +1536,10 @@ const ZoneManagement: React.FC = () => {
                         <div className="text-center">
                           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Score</p>
                           <p className="font-bold text-[#040457]">{student.engagementScore}%</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Attendance</p>
+                          <p className="font-bold text-[#040457]">{calculateAttendancePercentage(student)}%</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Time</p>

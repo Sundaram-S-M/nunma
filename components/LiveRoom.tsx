@@ -3,38 +3,27 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   LiveKitRoom,
   VideoConference,
-  ControlBar,
-  useTracks,
   RoomAudioRenderer,
-  LayoutContextProvider
+  useLocalParticipant,
+  useParticipants,
 } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import { Track, LocalAudioTrack } from 'livekit-client';
 import { httpsCallable } from 'firebase/functions';
-import { doc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { db, functions, auth } from '../utils/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 import ChatSidebar from './ChatSidebar';
 import { useGeminiQuiz } from '../utils/useGeminiQuiz';
 import {
   Sparkles,
   MessageSquare,
-  LogOut,
   Hand,
   Smile,
   Users as UsersIcon,
-  Mic,
-  MicOff,
   Video as VideoIcon,
-  VideoOff,
-  Monitor,
+  Mic,
   X
 } from 'lucide-react';
-import {
-  useLocalParticipant,
-  useParticipants,
-  useRemoteParticipants,
-  useRoomContext
-} from '@livekit/components-react';
 import '@livekit/components-styles';
 
 const LiveRoom: React.FC = () => {
@@ -97,30 +86,7 @@ const LiveRoom: React.FC = () => {
         video={user?.role === 'TUTOR'}
         connect={true}
         className="flex-1 flex flex-col relative"
-        onConnected={(room) => {
-          if (user?.role === 'TUTOR') {
-            const audioTrack = room.localParticipant.getTrack(Track.Source.Microphone);
-            if (audioTrack?.track?.mediaStream) {
-              startCapture(audioTrack.track.mediaStream);
-            }
-          }
-
-          // Sync attendance on join
-          if (user && zoneId && sessionId) {
-            setDoc(doc(db, `zones/${zoneId}/sessions/${sessionId}/attendance`, user.uid), {
-              name: user.name,
-              avatar: user.avatar,
-              role: user.role,
-              joinedAt: serverTimestamp(),
-              status: 'Present'
-            });
-          }
-        }}
         onDisconnected={() => {
-          if (user && zoneId && sessionId) {
-            // Optional: keep record but mark as left
-            // deleteDoc(doc(db, `zones/${zoneId}/sessions/${sessionId}/attendance`, user.uid));
-          }
           navigate(-1);
         }}
       >
@@ -130,6 +96,7 @@ const LiveRoom: React.FC = () => {
           isChatOpen={isChatOpen}
           setIsChatOpen={setIsChatOpen}
           isGenerating={isGenerating}
+          startCapture={startCapture}
           stopAndGenerate={stopAndGenerate}
         />
         <RoomAudioRenderer />
@@ -144,6 +111,7 @@ interface RoomContentProps {
   isChatOpen: boolean;
   setIsChatOpen: (open: boolean) => void;
   isGenerating: boolean;
+  startCapture: (stream: MediaStream) => void;
   stopAndGenerate: () => void;
 }
 
@@ -153,6 +121,7 @@ const RoomContent: React.FC<RoomContentProps> = ({
   isChatOpen,
   setIsChatOpen,
   isGenerating,
+  startCapture,
   stopAndGenerate
 }) => {
   const { localParticipant } = useLocalParticipant();
@@ -168,6 +137,26 @@ const RoomContent: React.FC<RoomContentProps> = ({
     const active = sessions.find((s: any) => s.id === sessionId);
     if (active) setActiveSession(active);
   }, [sessionId]);
+
+  // Sync Attendance & Start Capture
+  useEffect(() => {
+    if (user && zoneId && sessionId) {
+      setDoc(doc(db, `zones/${zoneId}/sessions/${sessionId}/attendance`, user.uid), {
+        name: user.name,
+        avatar: user.avatar,
+        role: user.role,
+        joinedAt: serverTimestamp(),
+        status: 'Present'
+      });
+
+      if (user.role === 'TUTOR' && localParticipant) {
+        const audioTrack = localParticipant.getTrackPublication(Track.Source.Microphone);
+        if (audioTrack?.track instanceof LocalAudioTrack && audioTrack.track.mediaStream) {
+          startCapture(audioTrack.track.mediaStream);
+        }
+      }
+    }
+  }, [user, localParticipant, zoneId, sessionId, startCapture]);
 
   // Sync Hand Raise to Attributes
   const toggleHandRaise = async () => {
@@ -236,8 +225,6 @@ const RoomContent: React.FC<RoomContentProps> = ({
 
           {/* CUSTOM FLOATING CONTROL BAR */}
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 bg-[#040457]/80 backdrop-blur-3xl px-8 py-5 rounded-[2.5rem] border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.5)]">
-            {/* Standard Audio/Video toggles are inside VideoConference, but let's add the requested ones */}
-
             <button className="p-4 bg-white/5 text-white hover:bg-white/10 rounded-2xl transition-all group relative">
               <Mic size={20} />
             </button>

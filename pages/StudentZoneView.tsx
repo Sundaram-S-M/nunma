@@ -4,7 +4,6 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   ChevronRight,
-  CheckCircle2,
   Play,
   FileText,
   FileDown,
@@ -21,10 +20,12 @@ import {
   AlertTriangle,
   Camera,
   Search,
-  CheckCircle,
+  CircleCheck as CheckCircle,
   X,
   Target,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Share2,
+  LogOut
 } from 'lucide-react';
 import ClassroomStream from '../components/ClassroomStream';
 import { generateOpenBadgeVC, downloadVCAsJSON } from '../utils/vcUtils';
@@ -52,6 +53,8 @@ const StudentZoneView: React.FC = () => {
   const [isExamTerminated, setIsExamTerminated] = useState(false);
   const [showExamRules, setShowExamRules] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'off' | 'on' | 'denied'>('off');
+  const [curriculum, setCurriculum] = useState<any[]>([]);
+  const [studentData, setStudentData] = useState<any>(null);
 
   const { user: authUser } = useAuth();
 
@@ -60,25 +63,6 @@ const StudentZoneView: React.FC = () => {
   const [isGeneratingCert, setIsGeneratingCert] = useState(false);
   const [generatedVC, setGeneratedVC] = useState<any>(null);
 
-  // Mock Curriculum
-  const curriculum = [
-    {
-      id: 'c1',
-      title: 'Foundation & Principles',
-      segments: [
-        { id: 's1', title: 'The Core Concepts', type: 'video', duration: '15:20' },
-        { id: 's2', title: 'Reading: Frameworks 101', type: 'pdf' },
-      ]
-    },
-    {
-      id: 'c2',
-      title: 'Practical Application',
-      segments: [
-        { id: 's3', title: 'Case Study Analysis', type: 'video', duration: '22:45' },
-        { id: 's4', title: 'Module 2 Quiz', type: 'quiz' },
-      ]
-    }
-  ];
 
   useEffect(() => {
     const loadData = () => {
@@ -130,25 +114,22 @@ const StudentZoneView: React.FC = () => {
     }
 
     // Load Exams
-    const savedExams = localStorage.getItem('nunma_exams');
+    const savedExams = localStorage.getItem(`nunma_exams_${zoneId}`);
     if (savedExams) setExams(JSON.parse(savedExams));
-    else {
-      // Mock some if not found
-      const mock = [
-        {
-          id: 'e1', title: 'Product Lifecycle Fundamentals', date: '2026-02-25', time: '10:00', status: 'UPCOMING', type: 'online', maxMark: 100, minMark: 40, questions: [
-            { id: 'q1', question: 'What is the first stage of PLC?', options: ['Growth', 'Maturity', 'Introduction', 'Decline'], correctAnswer: 2 },
-            { id: 'q2', question: 'Which stage focuses on cost reduction?', options: ['Growth', 'Maturity', 'Introduction', 'Decline'], correctAnswer: 1 }
-          ]
-        },
-        { id: 'e2', title: 'Calculus: Derivative Rules', date: '2026-01-15', time: '14:00', status: 'CONDUCTED', type: 'offline', maxMark: 100, minMark: 45 }
-      ];
-      setExams(mock);
-      localStorage.setItem('nunma_exams', JSON.stringify(mock));
-    }
 
-    const savedResults = localStorage.getItem('nunma_exam_results');
+    // Load Curriculum
+    const savedCurriculum = localStorage.getItem(`nunma_chapters_${zoneId}`);
+    if (savedCurriculum) setCurriculum(JSON.parse(savedCurriculum));
+
+    const savedResults = localStorage.getItem(`nunma_results_${zoneId}`);
     if (savedResults) setExamResults(JSON.parse(savedResults));
+
+    const savedStudents = localStorage.getItem(`nunma_students_${zoneId}`);
+    if (savedStudents && authUser) {
+      const students = JSON.parse(savedStudents);
+      const currentStudent = students.find((s: any) => s.email === authUser.email || s.id === authUser.uid);
+      setStudentData(currentStudent);
+    }
 
     return () => {
       window.removeEventListener('storage', loadData);
@@ -189,7 +170,7 @@ const StudentZoneView: React.FC = () => {
     const result = {
       id: Date.now().toString(),
       examId: activeExam.id,
-      studentId: authUser?.id || 'anon',
+      studentId: authUser?.uid || 'anon',
       studentName: authUser?.name || 'Anonymous',
       marks: status === 'passed' ? Math.floor(activeExam.maxMark * 0.8) : 0, // Mock scoring
       status: status,
@@ -234,7 +215,28 @@ const StudentZoneView: React.FC = () => {
 
   const currentZoneLive = liveSessions.find(s => s.zoneId === zoneId && s.status === 'live');
 
-  if (!zone) return <div className="p-20 text-center text-gray-400 font-black uppercase tracking-widest animate-pulse">Loading Zone Content...</div>;
+  const handleLeaveZone = () => {
+    if (!zoneId || !authUser) return;
+
+    if (confirm('Are you sure you want to leave this zone? All your progress and attendance data will be lost.')) {
+      // 1. Remove from enrolled zones (if kept in a user list - here we check all zones)
+      // 2. Remove student from the zone's student list
+      const savedStudents = localStorage.getItem(`nunma_students_${zoneId}`);
+      if (savedStudents) {
+        let students = JSON.parse(savedStudents);
+        students = students.filter((s: any) => s.email !== authUser.email && s.id !== authUser.uid);
+        localStorage.setItem(`nunma_students_${zoneId}`, JSON.stringify(students));
+      }
+
+      // 3. Remove from whitelist if applicable (optional, usually whitelist decides access, but here we just remove enrollment)
+      // (Skipping whitelist removal to allow re-join if still whitelisted)
+
+      // 4. Redirect
+      navigate('/workplace');
+    }
+  };
+
+  if (!zone) return <div>Loading Zone...</div>;
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-12 animate-in fade-in duration-500 pb-20 pr-10">
@@ -255,7 +257,7 @@ const StudentZoneView: React.FC = () => {
           <div>
             <h1 className="text-5xl font-black text-[#1A1A4E] tracking-tighter leading-tight mb-2">{zone.title}</h1>
             <div className="flex items-center gap-3">
-              <span className="text-[10px] font-black bg-[#c1e60d] text-indigo-900 px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm">
+              <span className="text-[10px] font-black bg-[#c2f575] text-indigo-900 px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm">
                 {zone.level} Level
               </span>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{zone.domain}</span>
@@ -277,10 +279,18 @@ const StudentZoneView: React.FC = () => {
               onClick={handleClaimCertificate}
               className="bg-[#1A1A4E] px-8 py-4 rounded-[1.75rem] border border-white/10 flex items-center gap-4 shadow-2xl shadow-indigo-900/20 cursor-pointer hover:brightness-110 active:scale-95 transition-all"
             >
-              <Award size={24} className="text-[#c1e60d]" />
+              <Award size={24} className="text-[#c2f575]" />
               <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Certification Zone</span>
             </div>
           )}
+          <div className="flex gap-4">
+            <button className="flex-1 bg-white/10 backdrop-blur-md p-4 rounded-3xl flex items-center justify-center gap-2 font-bold hover:bg-white/20 transition-all border border-white/10">
+              <Share2 size={20} /> Share Zone
+            </button>
+            <button onClick={handleLeaveZone} className="flex-1 bg-red-500/10 backdrop-blur-md p-4 rounded-3xl flex items-center justify-center gap-2 font-bold text-red-200 hover:bg-red-500/20 transition-all border border-red-500/10">
+              <LogOut size={20} /> Leave Zone
+            </button>
+          </div>
         </div>
       </div>
 
@@ -294,7 +304,7 @@ const StudentZoneView: React.FC = () => {
           {activeTab === 'content' ? (
             activeContent ? (
               <div className="bg-white rounded-[4rem] p-16 border border-gray-100 shadow-2xl min-h-[600px] flex flex-col items-center justify-center text-center relative overflow-hidden group">
-                <div className="w-32 h-32 bg-gray-50 rounded-[3rem] flex items-center justify-center text-indigo-900 mb-10 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c1e60d] transition-all duration-700">
+                <div className="w-32 h-32 bg-gray-50 rounded-[3rem] flex items-center justify-center text-indigo-900 mb-10 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-700">
                   {activeContent.type === 'video' ? <Video size={64} strokeWidth={1.5} /> : <FileText size={64} strokeWidth={1.5} />}
                 </div>
                 <h2 className="text-4xl font-black text-indigo-900 mb-6 tracking-tight">{activeContent.title}</h2>
@@ -303,23 +313,23 @@ const StudentZoneView: React.FC = () => {
                 </p>
                 <div className="mt-14 flex gap-6">
                   <button onClick={() => setActiveContent(null)} className="px-12 py-5 bg-gray-50 text-gray-400 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-white hover:shadow-md transition-all">Close Player</button>
-                  <button className="px-14 py-5 bg-[#c1e60d] text-indigo-900 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl shadow-[#c1e60d]/30 hover:brightness-110 active:scale-95 transition-all">Mark as Completed</button>
+                  <button className="px-14 py-5 bg-[#c2f575] text-indigo-900 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl shadow-[#c2f575]/30 hover:brightness-110 active:scale-95 transition-all">Mark as Completed</button>
                 </div>
               </div>
             ) : (
               <div className="bg-indigo-900 rounded-[4rem] p-16 text-white relative overflow-hidden h-[450px] flex flex-col justify-center shadow-2xl border border-white/5">
                 <div className="relative z-10 max-w-xl">
-                  <h2 className="text-6xl font-black tracking-tighter mb-6 leading-[1.1]">Welcome to your <br /><span className="text-[#c1e60d]">Learning Journey</span></h2>
+                  <h2 className="text-6xl font-black tracking-tighter mb-6 leading-[1.1]">Welcome to your <br /><span className="text-[#c2f575]">Learning Journey</span></h2>
                   <p className="text-indigo-100/70 text-xl font-medium leading-relaxed">Select a professional module from the curriculum sidebar to begin your knowledge stream. </p>
                 </div>
-                <div className="absolute -bottom-20 -right-20 w-[450px] h-[450px] bg-[#c1e60d]/5 rounded-full blur-[120px] animate-pulse"></div>
+                <div className="absolute -bottom-20 -right-20 w-[450px] h-[450px] bg-[#c2f575]/5 rounded-full blur-[120px] animate-pulse"></div>
               </div>
             )
           ) : (
             <div className="space-y-8 animate-in fade-in duration-500">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {exams.map(exam => {
-                  const result = examResults.find(r => r.examId === exam.id && r.studentId === (authUser?.id || 'anon'));
+                  const result = examResults.find(r => r.examId === exam.id && r.studentId === (authUser?.uid || 'anon'));
                   return (
                     <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-8 shadow-sm hover:shadow-2xl transition-all group">
                       <div className="flex justify-between items-start">
@@ -355,7 +365,7 @@ const StudentZoneView: React.FC = () => {
                           </div>
                           <div className="text-right">
                             <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Points Awarded</p>
-                            <p className="font-black text-xl text-[#c1e60d]">{result.status === 'passed' ? result.marks * 10 : 0} XP</p>
+                            <p className="font-black text-xl text-[#c2f575]">{result.status === 'passed' ? result.marks * 10 : 0} XP</p>
                           </div>
                         </div>
                       ) : (
@@ -372,11 +382,36 @@ const StudentZoneView: React.FC = () => {
 
           <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
             <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
-              <div className="w-2 h-8 bg-[#c1e60d] rounded-full"></div>
+              <div className="w-2 h-8 bg-[#c2f575] rounded-full"></div>
               Zone Description
             </h3>
             <p className="text-gray-500 leading-relaxed text-lg font-medium">{zone.description || 'Elevate your skills through Sundaram\'s expert-led curriculum designed for industry precision.'}</p>
           </div>
+
+          {studentData && (
+            <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
+              <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
+                <div className="w-2 h-8 bg-indigo-900 rounded-full"></div>
+                Your Progress
+              </h3>
+              <div className="grid grid-cols-2 gap-8">
+                <div className="bg-gray-50 p-8 rounded-[2rem] text-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Attendance %</p>
+                  <p className="text-4xl font-black text-indigo-900">
+                    {(() => {
+                      if (!studentData.attendanceHistory || studentData.attendanceHistory.length === 0) return 0;
+                      const presentCount = studentData.attendanceHistory.filter((h: any) => h.status === 'Present').length;
+                      return Math.round((presentCount / studentData.attendanceHistory.length) * 100);
+                    })()}%
+                  </p>
+                </div>
+                <div className="bg-gray-50 p-8 rounded-[2rem] text-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">XP Earned</p>
+                  <p className="text-4xl font-black text-indigo-900">{studentData.engagementScore || 0}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="xl:col-span-4 space-y-8">
@@ -413,7 +448,7 @@ const StudentZoneView: React.FC = () => {
                             </div>
                             <div className="text-left">
                               <p className="text-sm font-bold leading-none mb-2">{segment.title}</p>
-                              <p className={`text-[9px] font-black uppercase tracking-widest ${activeContent?.id === segment.id ? 'text-[#c1e60d]' : 'text-gray-300'}`}>
+                              <p className={`text-[9px] font-black uppercase tracking-widest ${activeContent?.id === segment.id ? 'text-[#c2f575]' : 'text-gray-300'}`}>
                                 {segment.type} {segment.duration && `• ${segment.duration}`}
                               </p>
                             </div>
@@ -427,7 +462,7 @@ const StudentZoneView: React.FC = () => {
               ))}
             </div>
           </div>
-          <div className="bg-[#c1e60d] p-12 rounded-[4rem] text-indigo-900 relative overflow-hidden group shadow-2xl border-4 border-white">
+          <div className="bg-[#c2f575] p-12 rounded-[4rem] text-indigo-900 relative overflow-hidden group shadow-2xl border-4 border-white">
             <div className="relative z-10">
               <Zap size={40} fill="currentColor" className="mb-8" />
               <h4 className="text-3xl font-black mb-3 tracking-tighter">Live Support</h4>
@@ -444,7 +479,7 @@ const StudentZoneView: React.FC = () => {
           <div className="bg-white rounded-[4rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-500">
             <div className="w-full md:w-1/2 bg-indigo-900 p-12 text-white flex flex-col justify-between relative overflow-hidden">
               <div className="relative z-10">
-                <div className="w-16 h-16 bg-[#c1e60d] rounded-2xl flex items-center justify-center text-indigo-900 mb-8 shadow-xl">
+                <div className="w-16 h-16 bg-[#c2f575] rounded-2xl flex items-center justify-center text-indigo-900 mb-8 shadow-xl">
                   <Award size={32} />
                 </div>
                 <h3 className="text-4xl font-black tracking-tighter mb-4 leading-tight">Verifiable <br />Achievement</h3>
@@ -457,14 +492,14 @@ const StudentZoneView: React.FC = () => {
 
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">
-                    <CheckCircle2 size={24} className="text-[#c1e60d]" />
+                    <CheckCircle size={24} className="text-[#c2f575]" />
                     <div className="text-left">
                       <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Issuer</p>
                       <p className="text-xs font-bold">Nunma Academy (did:web:nunma.io)</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">
-                    <Zap size={24} className="text-[#c1e60d]" />
+                    <Zap size={24} className="text-[#c2f575]" />
                     <div className="text-left">
                       <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Subject DID</p>
                       <p className="text-[9px] font-mono opacity-60 truncate max-w-[150px]">{generatedVC?.credentialSubject?.id}</p>
@@ -472,7 +507,7 @@ const StudentZoneView: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-[#c1e60d]/10 rounded-full blur-[80px]"></div>
+              <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-[#c2f575]/10 rounded-full blur-[80px]"></div>
             </div>
             <div className="w-full md:w-1/2 p-12 space-y-10 flex flex-col justify-center">
               <div className="space-y-4">
@@ -502,7 +537,7 @@ const StudentZoneView: React.FC = () => {
 
       {isGeneratingCert && (
         <div className="fixed inset-0 z-[310] bg-[#040457]/90 backdrop-blur-sm flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300">
-          <div className="w-24 h-24 border-8 border-[#c1e60d] border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-24 h-24 border-8 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
           <div className="text-center">
             <h2 className="text-white text-3xl font-black tracking-tighter mb-2">Compiling Verifiable Proof</h2>
             <p className="text-indigo-200/60 font-black uppercase tracking-[0.3em] text-[10px]">Assembling JSON-LD & OpenBadges 3.0 Meta-Data</p>
@@ -589,7 +624,7 @@ const StudentZoneView: React.FC = () => {
                         </span>
                         <span className="text-xl font-bold tracking-tight">{opt}</span>
                       </div>
-                      {examAnswers[activeExam.questions[examCurrentQuestion].id] === idx && <CheckCircle size={28} className="text-[#c1e60d]" />}
+                      {examAnswers[activeExam.questions[examCurrentQuestion].id] === idx && <CheckCircle size={28} className="text-[#c2f575]" />}
                     </button>
                   ))}
                 </div>
@@ -603,7 +638,7 @@ const StudentZoneView: React.FC = () => {
                     Previous
                   </button>
                   {examCurrentQuestion === activeExam.questions.length - 1 ? (
-                    <button onClick={handleSubmitExam} className="px-14 py-5 bg-[#c1e60d] text-indigo-900 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-[#c1e60d]/20 hover:brightness-110 active:scale-95 transition-all">Submit Assessment</button>
+                    <button onClick={handleSubmitExam} className="px-14 py-5 bg-[#c2f575] text-indigo-900 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-[#c2f575]/20 hover:brightness-110 active:scale-95 transition-all">Submit Assessment</button>
                   ) : (
                     <button onClick={() => setExamCurrentQuestion(prev => prev + 1)} className="px-14 py-5 bg-[#1A1A4E] text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all">Next Question</button>
                   )}

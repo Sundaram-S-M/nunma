@@ -16,9 +16,12 @@ import {
   ShoppingBag,
   CreditCard,
   Sparkles,
-  Maximize2
+  Maximize2,
+  Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../utils/firebase';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 import PhotoAdjustModal from '../components/PhotoAdjustModal';
 
@@ -29,7 +32,7 @@ const ENROLLED_STORAGE_KEY = 'nunma_enrolled_zones';
 const AVAILABILITY_KEY = 'nunma_tutor_availability';
 
 const ProfileView: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'materials' | 'services' | 'mentorship'>('mentorship');
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
@@ -40,6 +43,7 @@ const ProfileView: React.FC = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [checkoutItem, setCheckoutItem] = useState<any>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [realTimeUser, setRealTimeUser] = useState<any>(null);
 
   // Photo Adjustment State
   const [adjustingImage, setAdjustingImage] = useState<string | null>(null);
@@ -48,6 +52,23 @@ const ProfileView: React.FC = () => {
   const mentorshipRef = useRef<HTMLDivElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    let unsubscribe = () => { };
+
+    if (db) {
+      unsubscribe = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+        if (doc.exists()) {
+          setRealTimeUser(doc.data());
+        }
+      });
+    } else {
+      console.log("ProfileView: Using Auth Context fallback (No Firebase)");
+    }
+
+    return () => unsubscribe();
+  }, [user]);
 
   useEffect(() => {
     const loadData = () => {
@@ -70,6 +91,8 @@ const ProfileView: React.FC = () => {
 
   if (!user) return null;
 
+  const displayUser = realTimeUser || user;
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner') => {
     const file = e.target.files?.[0];
     if (file) {
@@ -82,23 +105,35 @@ const ProfileView: React.FC = () => {
     }
   };
 
-  const handleSavePhoto = (croppedImage: string) => {
-    // In actual app, we would update the user object in FireStore/Context
-    // For now, we update the local stored user if it exists
-    const users = JSON.parse(localStorage.getItem('nunma_users') || '[]');
-    const updatedUsers = users.map((u: any) => {
-      if (u.id === user.id) {
-        return { ...u, [adjustType === 'avatar' ? 'avatar' : 'banner']: croppedImage };
+  const handleSavePhoto = async (croppedImage: string) => {
+    if (!user || !adjustType) return;
+
+    try {
+      // 1. Update formatted for AuthContext/Local state
+      const updates: any = {};
+      if (adjustType === 'avatar') updates.avatar = croppedImage;
+      // If we had a banner field in User interface, we'd update it here too. 
+      // Assuming 'banner' might be stored in Firestore but not main Auth User object for now, 
+      // or we just update the user metadata.
+
+      // Update Auth Context
+      await updateProfile(updates);
+
+      // 2. Update Firestore explicitly if needed (though updateProfile might handle it depending on implementation)
+      if (db && user.uid) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          [adjustType === 'avatar' ? 'avatar' : 'banner']: croppedImage
+        });
+        setRealTimeUser(prev => ({ ...prev, [adjustType === 'avatar' ? 'avatar' : 'banner']: croppedImage }));
       }
-      return u;
-    });
-    localStorage.setItem('nunma_users', JSON.stringify(updatedUsers));
 
-    // Also trigger local state update if needed, normally useAuth would handle this
-    window.location.reload();
-
-    setAdjustingImage(null);
-    setAdjustType(null);
+      // 3. Close modal
+      setAdjustingImage(null);
+      setAdjustType(null);
+    } catch (error) {
+      console.error("Failed to save photo:", error);
+      alert("Failed to save photo. Please try again.");
+    }
   };
 
   const handleBookConsultation = (slot: any, dayName: string) => {
@@ -150,16 +185,16 @@ const ProfileView: React.FC = () => {
       )}
 
       {/* Hero Section */}
-      <div className="bg-[#1A1A4E] h-[480px] relative overflow-hidden flex flex-col justify-end pb-20">
+      <div className="bg-[#1A1A4E] h-[520px] relative overflow-hidden flex flex-col justify-end pb-24">
         <div className="absolute inset-0 opacity-15">
-          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,#c1e60d_0,transparent_60%)]"></div>
+          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,#c2f575_0,transparent_60%)]"></div>
         </div>
 
         {/* Banner Upload Button */}
         <div className="absolute top-10 right-10 z-30">
           <button
             onClick={() => bannerInputRef.current?.click()}
-            className="p-4 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl text-white hover:bg-[#c1e60d] hover:text-indigo-900 transition-all shadow-2xl flex items-center gap-3"
+            className="p-4 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl text-white hover:bg-[#c2f575] hover:text-indigo-900 transition-all shadow-2xl flex items-center gap-3"
           >
             <Camera size={20} />
             <span className="text-[10px] font-black uppercase tracking-widest">Update Banner</span>
@@ -176,19 +211,19 @@ const ProfileView: React.FC = () => {
         <div className="max-w-7xl mx-auto w-full px-10 relative z-10">
           <div className="flex flex-col md:flex-row items-center md:items-end gap-12">
             <div className="relative group shrink-0">
-              <div className="w-56 h-56 rounded-full border-8 border-white/10 p-1.5 bg-white/5 backdrop-blur-md relative">
-                <img src={user.avatar} alt="Profile" className="w-full h-full rounded-full object-cover border-4 border-white shadow-2xl" />
+              <div className="w-64 h-64 rounded-[3.5rem] border-8 border-white/10 p-1.5 bg-white/5 backdrop-blur-md relative overflow-hidden">
+                <img src={displayUser.avatar || 'https://picsum.photos/seed/user/200/200'} alt="Profile" className="w-full h-full rounded-[3rem] object-cover border-4 border-white shadow-2xl" />
 
                 {/* Avatar Action Buttons */}
                 <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
                   <button
                     onClick={() => avatarInputRef.current?.click()}
-                    className="w-12 h-12 bg-white text-indigo-900 rounded-2xl shadow-xl flex items-center justify-center hover:bg-[#c1e60d] transition-all"
+                    className="w-12 h-12 bg-white text-indigo-900 rounded-2xl shadow-xl flex items-center justify-center hover:bg-[#c2f575] transition-all"
                   >
                     <Camera size={20} />
                   </button>
                   <button
-                    className="w-12 h-12 bg-white text-indigo-900 rounded-2xl shadow-xl flex items-center justify-center hover:bg-[#c1e60d] transition-all"
+                    className="w-12 h-12 bg-white text-indigo-900 rounded-2xl shadow-xl flex items-center justify-center hover:bg-[#c2f575] transition-all"
                   >
                     <Maximize2 size={20} />
                   </button>
@@ -203,18 +238,33 @@ const ProfileView: React.FC = () => {
               </div>
             </div>
             <div className="flex-1 pb-4 text-center md:text-left text-white">
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-5">
-                <h1 className="text-5xl font-black tracking-tighter drop-shadow-lg">{user.name}</h1>
-                <div className="bg-[#c1e60d] text-indigo-900 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl">
-                  <ShieldCheck size={14} strokeWidth={3} className="inline mr-1" /> Verified Expert
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-5 mb-6">
+                <h1 className="text-6xl font-black tracking-tighter drop-shadow-lg leading-tight">{displayUser.name}</h1>
+                <div className="bg-[#c2f575] text-indigo-900 px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl">
+                  <ShieldCheck size={16} strokeWidth={3} className="inline mr-2" /> Verified Expert
                 </div>
               </div>
-              <p className="text-indigo-100/80 text-xl font-medium max-w-2xl mb-10 leading-relaxed italic">{user.bio}</p>
-              <div className="flex flex-wrap justify-center md:justify-start gap-12">
-                <div className="flex items-center gap-3"><MapPin size={22} className="text-[#c1e60d]" /><span className="text-base font-bold">{user.location}</span></div>
-                <div className="flex items-center gap-3">
-                  <div className="flex">{[1, 2, 3, 4, 5].map(i => <Star key={i} size={18} fill={i < 5 ? "#c1e60d" : "none"} className="text-[#c1e60d]" />)}</div>
-                  <span className="text-base font-bold">4.9 (128 Reviews)</span>
+              <p className="text-indigo-100/80 text-2xl font-medium max-w-2xl mb-12 leading-relaxed italic">{displayUser.bio || 'Sharing knowledge, building the future.'}</p>
+
+              <div className="flex flex-wrap justify-center md:justify-start gap-12 items-center">
+                <div className="flex items-center gap-3 bg-white/5 px-6 py-3 rounded-2xl backdrop-blur-sm border border-white/10"><MapPin size={22} className="text-[#c2f575]" /><span className="text-base font-bold">{displayUser.location || 'Global'}</span></div>
+
+                <div className="flex gap-12 border-l border-white/10 pl-12">
+                  <div className="flex flex-col items-center md:items-start">
+                    <p className="text-4xl font-black text-[#c2f575] leading-none mb-1">{displayUser.followersCount || 0}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200/50">Followers</p>
+                  </div>
+                  <div className="flex flex-col items-center md:items-start">
+                    <p className="text-4xl font-black text-white leading-none mb-1">{displayUser.followingCount || 0}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200/50">Following</p>
+                  </div>
+                  <div className="flex flex-col items-center md:items-start">
+                    <div className="flex items-center gap-1 mb-1">
+                      <Star size={18} fill="#c2f575" className="text-[#c2f575]" />
+                      <p className="text-4xl font-black text-white leading-none">4.9</p>
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200/50">Expert Rating</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -222,9 +272,9 @@ const ProfileView: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto -mt-12 px-10 relative z-20">
+      <div className="max-w-7xl mx-auto -mt-16 px-10 relative z-20">
         <div className="bg-white rounded-[4rem] shadow-[0_60px_120px_rgba(26,26,78,0.12)] border border-gray-100 overflow-hidden">
-          <div className="flex bg-gray-50/50 p-4 border-b border-gray-100">
+          <div className="flex bg-gray-50/50 p-5 border-b border-gray-100 gap-2">
             {[
               { id: 'mentorship', label: 'Mentorship', icon: <Video size={20} /> },
               { id: 'services', label: 'Services', icon: <ShoppingBag size={20} /> },
@@ -232,8 +282,8 @@ const ProfileView: React.FC = () => {
             ].map(tab => (
               <button
                 key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-                className={`flex-1 flex items-center justify-center gap-5 py-6 rounded-[2.5rem] text-xs font-black uppercase tracking-[0.25em] transition-all
-                  ${activeTab === tab.id ? 'bg-white text-indigo-900 shadow-2xl scale-[1.02] border border-gray-100' : 'text-gray-400 hover:text-indigo-900'}
+                className={`flex-1 flex items-center justify-center gap-5 py-7 rounded-[3rem] text-xs font-black uppercase tracking-[0.25em] transition-all
+                  ${activeTab === tab.id ? 'bg-white text-indigo-900 shadow-2xl scale-[1.02] border border-gray-100' : 'text-gray-400 hover:text-indigo-900 hover:bg-white/50'}
                 `}
               >
                 {tab.icon} {tab.label}
@@ -247,7 +297,7 @@ const ProfileView: React.FC = () => {
                 <div className="space-y-12">
                   <div className="bg-gray-50 rounded-[3.5rem] p-12 border border-gray-100">
                     <h3 className="text-2xl font-black text-indigo-900 mb-10 flex items-center gap-4">
-                      <div className="p-3 bg-white rounded-2xl text-[#c1e60d] shadow-sm"><CalendarIcon size={24} /></div>
+                      <div className="p-3 bg-white rounded-2xl text-[#c2f575] shadow-sm"><CalendarIcon size={24} /></div>
                       Choose Your Session
                     </h3>
                     <div className="space-y-8 max-h-[500px] overflow-y-auto custom-scrollbar pr-4">
@@ -260,7 +310,7 @@ const ProfileView: React.FC = () => {
                                 key={slot.id}
                                 onClick={() => setSelectedSlot({ ...slot, dayName: day.day })}
                                 className={`p-6 rounded-3xl border transition-all flex items-center justify-between group
-                                    ${selectedSlot?.id === slot.id ? 'bg-[#c1e60d] border-[#c1e60d] text-indigo-900 shadow-xl scale-[1.02]' : 'bg-white border-gray-100 text-gray-400 hover:border-indigo-900 hover:text-indigo-900 shadow-sm'}
+                                    ${selectedSlot?.id === slot.id ? 'bg-[#c2f575] border-[#c2f575] text-indigo-900 shadow-xl scale-[1.02]' : 'bg-white border-gray-100 text-gray-400 hover:border-indigo-900 hover:text-indigo-900 shadow-sm'}
                                   `}
                               >
                                 <div className="flex items-center gap-4">
@@ -285,7 +335,7 @@ const ProfileView: React.FC = () => {
                   {selectedSlot ? (
                     <div className="bg-indigo-900 p-16 rounded-[4rem] text-white shadow-[0_40px_100px_rgba(26,26,78,0.3)] relative overflow-hidden animate-in zoom-in duration-300">
                       <div className="relative z-10">
-                        <div className="inline-flex items-center gap-3 bg-[#c1e60d] text-indigo-900 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest mb-8">
+                        <div className="inline-flex items-center gap-3 bg-[#c2f575] text-indigo-900 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest mb-8">
                           <Sparkles size={14} fill="currentColor" /> One-on-One Selected
                         </div>
                         <h3 className="text-4xl font-black mb-3 tracking-tighter">{selectedSlot.dayName} Mentorship</h3>
@@ -293,7 +343,7 @@ const ProfileView: React.FC = () => {
                         <div className="flex items-center justify-between border-t border-white/10 pt-12 mt-12">
                           <div className="flex flex-col">
                             <p className="text-[11px] font-black uppercase tracking-widest text-indigo-200/50 mb-1">Session Fee</p>
-                            <p className="text-5xl font-black text-[#c1e60d]">$150</p>
+                            <p className="text-5xl font-black text-[#c2f575]">$150</p>
                           </div>
                           <button onClick={() => handleBookConsultation(selectedSlot, selectedSlot.dayName)} className="px-12 py-6 bg-white text-indigo-900 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 hover:scale-105 active:scale-95 transition-all">Proceed to Pay</button>
                         </div>
@@ -313,7 +363,7 @@ const ProfileView: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                     {mentorshipProds.map(prod => (
                       <div key={prod.id} onClick={scrollToMentorship} className="bg-white border-2 border-dashed border-gray-100 p-12 rounded-[3.5rem] cursor-pointer hover:border-indigo-900 hover:shadow-2xl transition-all group relative overflow-hidden">
-                        <div className="w-16 h-16 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-900 mb-8 group-hover:bg-[#c1e60d] transition-all"><Video size={32} /></div>
+                        <div className="w-16 h-16 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-900 mb-8 group-hover:bg-[#c2f575] transition-all"><Video size={32} /></div>
                         <h4 className="text-2xl font-black text-indigo-900 mb-2 leading-tight">{prod.title}</h4>
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-10 italic">Personalized 1:1 Stream</p>
                         <div className="flex items-center justify-between pt-8 border-t border-gray-50">
@@ -331,7 +381,7 @@ const ProfileView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 animate-in fade-in duration-500">
                 {servs.length > 0 ? servs.map(prod => (
                   <div key={prod.id} className="bg-white border border-gray-100 p-12 rounded-[3.5rem] hover:shadow-2xl transition-all duration-700 group flex flex-col relative overflow-hidden">
-                    <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mb-10 group-hover:bg-[#c1e60d] transition-all"><ShoppingBag size={40} /></div>
+                    <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mb-10 group-hover:bg-[#c2f575] transition-all"><ShoppingBag size={40} /></div>
                     <h4 className="text-3xl font-black text-indigo-900 mb-3 tracking-tighter">{prod.title}</h4>
                     <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-12">Professional Service</p>
                     <div className="mt-auto flex justify-between items-center pt-10 border-t border-gray-50">
@@ -347,7 +397,7 @@ const ProfileView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 animate-in fade-in duration-500">
                 {materials.length > 0 ? materials.map(prod => (
                   <div key={prod.id} className="bg-white border border-gray-100 p-12 rounded-[3.5rem] hover:shadow-2xl transition-all duration-700 group flex flex-col relative overflow-hidden">
-                    <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mb-10 group-hover:bg-[#c1e60d] transition-all"><FileText size={40} /></div>
+                    <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mb-10 group-hover:bg-[#c2f575] transition-all"><FileText size={40} /></div>
                     <h4 className="text-3xl font-black text-indigo-900 mb-3 tracking-tighter">{prod.title}</h4>
                     <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-12">Downloadable Material</p>
                     <div className="mt-auto flex justify-between items-center pt-10 border-t border-gray-50">
@@ -373,7 +423,7 @@ const ProfileView: React.FC = () => {
               </div>
               <div className="space-y-10">
                 <div className="p-10 bg-gray-50 rounded-[3rem] border border-gray-100 flex items-center gap-8">
-                  <div className="w-28 h-28 rounded-3xl bg-indigo-900 flex items-center justify-center text-[#c1e60d] shadow-2xl">
+                  <div className="w-28 h-28 rounded-3xl bg-indigo-900 flex items-center justify-center text-[#c2f575] shadow-2xl">
                     {checkoutItem.purchaseType === 'consultation' ? <CalendarIcon size={48} /> : <ShoppingBag size={48} />}
                   </div>
                   <div className="flex-1">
@@ -382,12 +432,12 @@ const ProfileView: React.FC = () => {
                     <p className="text-3xl font-black text-[#7cc142]">${checkoutItem.price}</p>
                   </div>
                 </div>
-                <div className="p-8 bg-white border-2 border-[#c1e60d] rounded-[2.5rem] flex items-center justify-between shadow-sm">
+                <div className="p-8 bg-white border-2 border-[#c2f575] rounded-[2.5rem] flex items-center justify-between shadow-sm">
                   <div className="flex items-center gap-5"><CreditCard size={28} className="text-indigo-900" /><p className="text-base font-black text-indigo-900">One-Time Payment</p></div>
                   <Check className="text-[#7cc142]" size={32} strokeWidth={4} />
                 </div>
                 <button onClick={processPayment} disabled={isProcessingPayment} className="w-full py-7 bg-indigo-900 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl flex items-center justify-center gap-5 disabled:opacity-70 transition-all hover:scale-[1.02] active:scale-95">
-                  {isProcessingPayment ? <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div> : <>Pay & Confirm Booking <ArrowRight size={24} className="text-[#c1e60d]" /></>}
+                  {isProcessingPayment ? <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div> : <>Pay & Confirm Booking <ArrowRight size={24} className="text-[#c2f575]" /></>}
                 </button>
               </div>
             </div>
