@@ -1,20 +1,68 @@
 
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard, ShieldCheck, Zap, Check } from 'lucide-react';
+import { ArrowLeft, CreditCard, ShieldCheck, Zap, Check, Globe } from 'lucide-react';
+import { usePPPPrice } from '../hooks/usePPPPrice';
+import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion } from 'firebase/firestore';
+import { db } from '../utils/firebase';
+import { useAuth } from '../context/AuthContext';
 
 const Payment: React.FC = () => {
+    const { user } = useAuth();
     const { zoneId } = useParams();
     const navigate = useNavigate();
     const [isProcessing, setIsProcessing] = useState(false);
 
-    const handlePayment = () => {
+    // Fetch zone details from local storage or context (mock implementation)
+    // In a real app, this would come from an API or context
+    const getZonePrice = () => {
+        const savedZones = localStorage.getItem('nunma_zones_data');
+        if (savedZones) {
+            const zones = JSON.parse(savedZones);
+            const zone = zones.find((z: any) => z.id === zoneId);
+            return zone ? zone.price : '49.00';
+        }
+        return '49.00';
+    };
+
+    const basePrice = getZonePrice();
+    const { price, currency, isPPPApplied, originalPrice, countryCode, isLoading } = usePPPPrice(basePrice);
+
+    const handlePayment = async () => {
+        if (!user) return;
         setIsProcessing(true);
-        setTimeout(() => {
+
+        try {
+            // In a real app, this would be a server-side confirmation
+            if (db) {
+                const q = query(collection(db, 'conversations'), where('zoneId', '==', zoneId), limit(1));
+                const snapshot = await getDocs(q);
+                if (!snapshot.empty) {
+                    const convId = snapshot.docs[0].id;
+                    await updateDoc(doc(db, 'conversations', convId), {
+                        participants: arrayUnion(user.uid)
+                    });
+                }
+            } else {
+                // Mock Mode: Update local storage
+                const savedConversations = JSON.parse(localStorage.getItem('nunma_conversations') || '[]');
+                const convIndex = savedConversations.findIndex((c: any) => c.zoneId === zoneId);
+                if (convIndex !== -1) {
+                    if (!savedConversations[convIndex].participants.includes(user.uid)) {
+                        savedConversations[convIndex].participants.push(user.uid);
+                        localStorage.setItem('nunma_conversations', JSON.stringify(savedConversations));
+                    }
+                }
+            }
+
             localStorage.setItem(`nunma_paid_${zoneId}`, 'true');
             setIsProcessing(false);
             navigate(`/classroom/zone/${zoneId}`);
-        }, 2000);
+        } catch (error) {
+            console.error("Payment failed:", error);
+            setIsProcessing(false);
+            alert("Payment confirmation failed. Please try again.");
+        }
     };
 
     return (
@@ -42,7 +90,28 @@ const Payment: React.FC = () => {
                             </div>
                             <div className="flex justify-between items-center p-5">
                                 <span className="text-indigo-200 font-bold">Total Amount</span>
-                                <span className="text-3xl font-black text-[#c1e60d]">$49.00</span>
+                                <div className="text-right">
+                                    {isLoading ? (
+                                        <span className="text-white/50 text-sm">Calculating regional price...</span>
+                                    ) : (
+                                        <>
+                                            {isPPPApplied && (
+                                                <span className="block text-sm text-gray-400 line-through font-bold">
+                                                    ${originalPrice}
+                                                </span>
+                                            )}
+                                            <span className="text-3xl font-black text-[#c1e60d]">
+                                                {currency === 'USD' ? '$' : currency === 'INR' ? '₹' : currency} {price}
+                                            </span>
+                                            {isPPPApplied && (
+                                                <div className="flex items-center gap-1 justify-end mt-1 text-[#c1e60d] text-[10px] uppercase font-black tracking-widest">
+                                                    <Globe size={12} />
+                                                    <span>PPP Applied ({countryCode})</span>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

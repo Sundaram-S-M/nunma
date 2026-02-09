@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
@@ -12,39 +12,24 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  ChevronRight,
-  MapPin,
-  Calendar,
-  Sparkles,
-  Check
+  Sparkles
 } from 'lucide-react';
-
-const COMMON_CITIES = [
-  "London", "New York", "San Francisco", "Mumbai", "Berlin", "Paris", "Tokyo", "Singapore", "Toronto", "Sydney", "Dubai", "Amsterdam", "Austin", "Seattle", "Bengaluru", "Chennai", "Delhi", "Hyderabad"
-];
 
 const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [onboardingStep, setOnboardingStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [dob, setDob] = useState('');
-  const [citySearch, setCitySearch] = useState('');
   const [role, setRole] = useState<UserRole>(UserRole.STUDENT);
 
   const { login, signup } = useAuth();
   const navigate = useNavigate();
 
-  const handleInitialSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setOnboardingStep(1);
-  };
-
-  const handleCompleteSignUp = async () => {
     try {
       setIsLoading(true);
       await signup({
@@ -52,8 +37,7 @@ const Auth: React.FC = () => {
         email,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name || 'default'}`,
         role,
-        location: citySearch,
-        dob,
+        // Location and DOB are now optional and set in Profile Settings later
       }, password);
       navigate('/dashboard');
     } catch (error: any) {
@@ -196,116 +180,86 @@ const Auth: React.FC = () => {
               </div>
             ) : (
               /* SIGNUP FLOW */
-              onboardingStep === 0 ? (
-                <div className="animate-in fade-in slide-in-from-right-8 duration-700">
-                  <div className="mb-14">
-                    <h2 className="text-5xl font-black text-[#040457] tracking-tighter mb-4">Join Ecosystem</h2>
-                    <p className="text-gray-400 font-medium text-lg">Initialize your professional profile.</p>
-                  </div>
-
-                  <form onSubmit={handleInitialSignUp} className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Full Name</label>
-                      <div className="relative group">
-                        <User className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
-                        <input
-                          type="text" required placeholder="Legal full name"
-                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
-                          value={name} onChange={(e) => setName(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Identity (Email)</label>
-                      <div className="relative group">
-                        <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
-                        <input
-                          type="email" required placeholder="name@domain.com"
-                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
-                          value={email} onChange={(e) => setEmail(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Access Key</label>
-                      <div className="relative group">
-                        <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
-                        <input
-                          type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-5 font-bold text-[#040457] outline-none transition-all"
-                          value={password} onChange={(e) => setPassword(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 hover:text-[#040457]"
-                        >
-                          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Operational Mode</label>
-                      <div className="flex p-2 bg-gray-50 rounded-[1.5rem] border border-gray-100 gap-2">
-                        <button
-                          type="button" onClick={() => setRole(UserRole.STUDENT)}
-                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.STUDENT ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
-                        >
-                          Learner
-                        </button>
-                        <button
-                          type="button" onClick={() => setRole(UserRole.TUTOR)}
-                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.TUTOR ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
-                        >
-                          Expert
-                        </button>
-                      </div>
-                    </div>
-
-                    <button type="submit" className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8">
-                      Continue <ArrowRight size={20} className="text-[#c2f575]" />
-                    </button>
-                  </form>
+              <div className="animate-in fade-in slide-in-from-right-8 duration-700">
+                <div className="mb-14">
+                  <h2 className="text-5xl font-black text-[#040457] tracking-tighter mb-4">Join Ecosystem</h2>
+                  <p className="text-gray-400 font-medium text-lg">Initialize your professional profile.</p>
                 </div>
-              ) : (
-                <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
-                  <div className="mb-14">
-                    <p className="text-[#c2f575] text-[11px] font-black uppercase tracking-[0.4em] mb-4">Finalizing</p>
-                    <h2 className="text-5xl font-black text-[#040457] tracking-tighter mb-4">The Last Wave</h2>
-                    <p className="text-gray-400 font-medium text-lg">Establish your presence in the network.</p>
-                  </div>
-                  <div className="space-y-8">
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Date of Origin (DOB)</label>
+
+                <form onSubmit={handleSignUp} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Full Name</label>
+                    <div className="relative group">
+                      <User className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
                       <input
-                        type="date"
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] px-8 py-5 font-black text-xl text-[#040457] outline-none transition-all shadow-inner"
-                        value={dob} onChange={(e) => setDob(e.target.value)}
+                        type="text" required placeholder="Legal full name"
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                        value={name} onChange={(e) => setName(e.target.value)}
                       />
                     </div>
-                    <div className="flex gap-4">
-                      <button onClick={() => setOnboardingStep(0)} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest hover:bg-gray-100">Back</button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Identity (Email)</label>
+                    <div className="relative group">
+                      <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                      <input
+                        type="email" required placeholder="name@domain.com"
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                        value={email} onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Access Key</label>
+                    <div className="relative group">
+                      <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                      <input
+                        type={showPassword ? "text" : "password"} required placeholder="••••••••"
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-5 font-bold text-[#040457] outline-none transition-all"
+                        value={password} onChange={(e) => setPassword(e.target.value)}
+                      />
                       <button
-                        onClick={handleCompleteSignUp}
-                        disabled={isLoading}
-                        className="flex-[2.5] py-5 bg-[#040457] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 hover:text-[#040457]"
                       >
-                        {isLoading ? "Syncing..." : "Initialize Dashboard"} <Sparkles size={18} className="text-[#c2f575]" />
+                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                       </button>
                     </div>
                   </div>
-                </div>
-              )
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Operational Mode</label>
+                    <div className="flex p-2 bg-gray-50 rounded-[1.5rem] border border-gray-100 gap-2">
+                      <button
+                        type="button" onClick={() => setRole(UserRole.STUDENT)}
+                        className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.STUDENT ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
+                      >
+                        Learner
+                      </button>
+                      <button
+                        type="button" onClick={() => setRole(UserRole.TUTOR)}
+                        className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.TUTOR ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
+                      >
+                        Expert
+                      </button>
+                    </div>
+                  </div>
+
+                  <button type="submit" className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8">
+                    {isLoading ? "Syncing..." : "Initialize Dashboard"} <Sparkles size={18} className="text-[#c2f575]" />
+                  </button>
+                </form>
+              </div>
             )}
 
             <div className="mt-16 pt-10 border-t border-gray-100 text-center">
               <p className="text-sm font-medium text-gray-400">
                 {isLogin ? "New to the ecosystem?" : "Identity already verified?"}{' '}
                 <button
-                  onClick={() => { setIsLogin(!isLogin); setOnboardingStep(0); }}
+                  onClick={() => setIsLogin(!isLogin)}
                   className="text-[#040457] font-black uppercase text-[10px] tracking-[0.25em] hover:text-[#c2f575] transition-colors ml-2"
                 >
                   {isLogin ? 'Create Profile' : 'Sign In'}

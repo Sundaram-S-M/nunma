@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import ClassroomStream from '../components/ClassroomStream';
 
+import { Link } from 'react-router-dom';
+
 const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -48,44 +50,57 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventIsImportant, setNewEventIsImportant] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
+  // Clock Picker State
+  const [showClockPicker, setShowClockPicker] = useState(false);
+  const [selectedHour, setSelectedHour] = useState(12);
+  const [selectedMinute, setSelectedMinute] = useState(0);
+  const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('PM');
+  const [clockMode, setClockMode] = useState<'hour' | 'minute'>('hour');
 
-    let unsubscribeLive = () => { };
+  // Profile Completion Logic
+  const calculateProfileCompletion = () => {
+    if (!user) return 0;
+    const fields = ['name', 'email', 'location', 'bio', 'dob'];
+    let filledCount = fields.filter(field => (user as any)[field] && (user as any)[field].length > 0).length;
 
-    if (db) {
-      // Fetch Live Sessions
-      const qLive = query(collection(db, 'live_sessions'), orderBy('startTime', 'asc'));
-      unsubscribeLive = onSnapshot(qLive, (snapshot) => {
-        setLiveSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      });
-    } else {
-      console.log("Dashboard: Skipping Firebase fetch (Mock Mode active)");
-      // Optionally set some mock live sessions here if desired
+    // Check if avatar is custom (not the default DiceBear URL)
+    if (user.avatar && !user.avatar.includes('dicebear.com')) {
+      filledCount++;
     }
 
-    // Fetch User Stats
-    const fetchStats = async () => {
-      if (role === UserRole.STUDENT) {
-        // In a real app, query enrolled_zones collection
-        setStats([
-          { label: 'TOTAL ZONES', value: '0' },
-          { label: 'UPCOMING LIVE', value: '0' },
-          { label: 'COMPLETED', value: '0' },
-          { label: 'IN PROGRESS', value: '0' },
-        ]);
-      } else {
-        setStats([
-          { label: 'TOTAL EARNINGS', value: `$${user.earnings || 0}` },
-          { label: 'ACTIVE STUDENTS', value: user.studentsCount || 0 },
-          { label: 'FOLLOWERS', value: user.followersCount || 0 },
-          { label: 'ZONES CREATED', value: '0' }, // Would fetch count from zones collection
-        ]);
-      }
-    };
-    fetchStats();
+    const totalFields = fields.length + 1; // +1 for avatar
+    return Math.round((filledCount / totalFields) * 100);
+  };
 
-    return () => unsubscribeLive();
+  const completionPercentage = calculateProfileCompletion();
+
+  useEffect(() => {
+    const fetchSessions = () => {
+      // Fetch active live sessions
+      const allLiveSessions = JSON.parse(localStorage.getItem('nunma_live_sessions') || '[]');
+
+      // Fetch scheduled sessions for all zones
+      const scheduled: any[] = [];
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith('nunma_scheduled_sessions_')) {
+          const sessions = JSON.parse(localStorage.getItem(key) || '[]');
+          scheduled.push(...sessions.map((s: any) => ({ ...s, zoneId: key.replace('nunma_scheduled_sessions_', '') })));
+        }
+      });
+
+      setLiveSessions([...allLiveSessions, ...scheduled]);
+    };
+
+    fetchSessions();
+    window.addEventListener('storage', fetchSessions);
+    // Poll for changes in case storage event doesn't fire (same tab)
+    const interval = setInterval(fetchSessions, 2000);
+
+    return () => {
+      window.removeEventListener('storage', fetchSessions);
+      clearInterval(interval);
+    };
   }, [user, role]);
 
   const monthName = currentMonth.toLocaleString('default', { month: 'long' }).toUpperCase();
@@ -105,10 +120,11 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
   const handleSaveEvent = () => {
     if (!newEvenTitle || !modalDate) return;
+    const timeString = newEventTime || `${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`;
     const newEvent = {
       id: Date.now(),
       title: newEvenTitle,
-      time: newEventTime || '12:00 PM',
+      time: timeString,
       type: newEventIsImportant ? 'meeting' : 'task',
       color: newEventIsImportant ? 'indigo' : 'gray',
       important: newEventIsImportant
@@ -118,6 +134,10 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
     setNewEventTime('');
     setNewEventIsImportant(false);
     setIsCreatingEvent(false);
+    setShowClockPicker(false);
+    setSelectedHour(12);
+    setSelectedMinute(0);
+    setSelectedPeriod('PM');
   };
 
   const eventsForModal = modalDate ? (meetingsData[modalDate] || []) : [];
@@ -126,20 +146,21 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-20 relative">
-      {/* Live Room Overlay */}
+      {/* ... Live Room Overlay ... */}
       {activeLiveRoom && (
         <ClassroomStream
           sessionId={activeLiveRoom.id}
+          zoneId={activeLiveRoom.zoneId}
           role={role === UserRole.TUTOR ? 'TUTOR' : 'STUDENT'}
           title={activeLiveRoom.title}
           onClose={() => setActiveLiveRoom(null)}
         />
       )}
 
-      {/* Event Modal */}
+      {/* ... Event Modal ... */}
       {showEventModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-gray-50 flex justify-between items-start bg-gray-50/30">
               <div>
                 <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-[0.2em] mb-1">Agenda for</p>
@@ -149,7 +170,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                 <X size={20} />
               </button>
             </div>
-            <div className="p-8 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar">
+            <div className="p-8 space-y-4 min-h-[600px] max-h-[80vh] overflow-y-auto custom-scrollbar">
               {isCreatingEvent ? (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                   <input
@@ -157,11 +178,122 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                     className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold text-[#1A1A4E]"
                     value={newEvenTitle} onChange={(e) => setNewEventTitle(e.target.value)}
                   />
-                  <input
-                    type="text" placeholder="Time (e.g. 10:00 AM)"
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold text-[#1A1A4E]"
-                    value={newEventTime} onChange={(e) => setNewEventTime(e.target.value)}
-                  />
+
+                  {/* Interactive Clock Picker */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowClockPicker(!showClockPicker)}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold text-[#1A1A4E] text-left flex items-center justify-between hover:bg-gray-100 transition-all"
+                    >
+                      <span className={newEventTime || (selectedHour !== 12 || selectedMinute !== 0) ? 'text-[#1A1A4E]' : 'text-gray-400'}>
+                        {newEventTime || `${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`}
+                      </span>
+                      <Clock size={20} className="text-[#c2f575]" />
+                    </button>
+
+                    {showClockPicker && (
+                      <div className="absolute top-full left-0 right-0 mt-4 bg-white rounded-[3rem] shadow-2xl border border-gray-100 p-12 z-50 animate-in slide-in-from-top-4 duration-300">
+                        {/* Clock Display */}
+                        <div className="flex flex-col items-center mb-20 mt-6 relative">
+                          <div className="relative w-80 h-80 bg-gradient-to-br from-[#1A1A4E] to-indigo-900 rounded-full shadow-2xl p-5">
+                            {/* Clock Face */}
+                            <div className="absolute inset-5 bg-white rounded-full flex items-center justify-center">
+                              {/* Hour Markers */}
+                              {Array.from({ length: 12 }, (_, i) => {
+                                const angle = (i * 30 - 90) * (Math.PI / 180);
+                                const radius = 85;
+                                const x = 50 + radius * Math.cos(angle);
+                                const y = 50 + radius * Math.sin(angle);
+                                const number = clockMode === 'hour' ? (i === 0 ? 12 : i) : i * 5;
+                                const isSelected = clockMode === 'hour' ? selectedHour === (i === 0 ? 12 : i) : selectedMinute === i * 5;
+
+                                return (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (clockMode === 'hour') {
+                                        const newHour = i === 0 ? 12 : i;
+                                        setSelectedHour(newHour);
+                                        setClockMode('minute');
+                                        // Optional: Update time string immediately if you want real-time feedback in input
+                                        // setNewEventTime(`${newHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
+                                      } else {
+                                        const newMinute = i * 5;
+                                        setSelectedMinute(newMinute);
+                                        // Update time string immediately
+                                        setNewEventTime(`${selectedHour}:${newMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
+                                      }
+                                    }}
+                                    className={`absolute w-12 h-12 rounded-full font-black text-base transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
+                                      ? 'bg-[#c2f575] text-[#1A1A4E] scale-110 shadow-lg'
+                                      : 'bg-gray-50 text-gray-600 hover:bg-[#c2f575]/20 hover:scale-105'
+                                      }`}
+                                    style={{ left: `${x}%`, top: `${y}%` }}
+                                  >
+                                    {number}
+                                  </button>
+                                );
+                              })}
+
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="text-center">
+                                  <div className="text-4xl font-black text-[#1A1A4E] tracking-tight">
+                                    {selectedHour}:{selectedMinute.toString().padStart(2, '0')}
+                                  </div>
+                                  <div className="text-sm font-black text-gray-400 uppercase tracking-widest mt-2">
+                                    {clockMode === 'hour' ? 'Select Hour' : 'Select Minute'}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* AM/PM Toggle & Actions */}
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 flex gap-2 bg-gray-50 rounded-2xl p-2">
+                            <button
+                              onClick={() => {
+                                setSelectedPeriod('AM');
+                                setNewEventTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} AM`);
+                              }}
+                              className={`flex-1 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all ${selectedPeriod === 'AM'
+                                ? 'bg-[#1A1A4E] text-white shadow-lg'
+                                : 'text-gray-400 hover:text-[#1A1A4E]'
+                                }`}
+                            >
+                              AM
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedPeriod('PM');
+                                setNewEventTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} PM`);
+                              }}
+                              className={`flex-1 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all ${selectedPeriod === 'PM'
+                                ? 'bg-[#1A1A4E] text-white shadow-lg'
+                                : 'text-gray-400 hover:text-[#1A1A4E]'
+                                }`}
+                            >
+                              PM
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setNewEventTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
+                              setShowClockPicker(false);
+                            }}
+                            className="px-8 py-4 bg-[#c2f575] text-[#1A1A4E] rounded-xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 eventsForModal.length > 0 ? eventsForModal.map((event) => (
@@ -195,6 +327,29 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         </p>
       </div>
 
+      {completionPercentage < 100 && (
+        <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row items-center gap-8 animate-in fade-in slide-in-from-top-4 duration-700">
+          <div className="flex-1 w-full space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-black text-[#1A1A4E]">Profile Completion</h3>
+              <span className="text-2xl font-black text-[#c2f575]">{completionPercentage}%</span>
+            </div>
+            <div className="h-4 w-full bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#1A1A4E] rounded-full transition-all duration-1000 ease-out"
+                style={{ width: `${completionPercentage}%` }}
+              />
+            </div>
+            <p className="text-gray-400 text-sm font-medium">
+              Complete your profile to unlock full network access and verify your identity.
+            </p>
+          </div>
+          <Link to="/settings/profile" className="px-8 py-4 bg-[#c2f575] text-[#1A1A4E] rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap">
+            Complete Profile
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, idx) => (
           <div key={idx} className="bg-[#e9ecef]/60 p-6 rounded-[3rem] flex flex-col justify-center min-h-[180px] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 group">
@@ -205,31 +360,6 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
           </div>
         ))}
       </div>
-
-      {activeSessions.length > 0 && (
-        <div className="bg-[#1A1A4E] rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
-            <div className="flex items-center gap-8">
-              <div className="w-20 h-20 bg-[#c2f575] rounded-[2rem] flex items-center justify-center animate-pulse shadow-[0_0_40px_rgba(194,245,117,0.3)]">
-                <Radio size={36} className="text-[#1A1A4E]" />
-              </div>
-              <div>
-                <h3 className="text-3xl font-black uppercase tracking-tighter mb-1">Live Broadcast Active</h3>
-                <p className="text-white/60 font-medium text-lg italic">
-                  {activeSessions[0].title} is streaming now. Join the elite.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setActiveLiveRoom(activeSessions[0])}
-              className="px-12 py-6 bg-[#c2f575] text-[#1A1A4E] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
-            >
-              Enter Room
-            </button>
-          </div>
-          <div className="absolute top-0 right-0 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
         <div className="xl:col-span-8 space-y-8">
@@ -269,13 +399,40 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
             </div>
           ) : (
             <div className="bg-white rounded-[4rem] p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
-              <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mb-10 text-gray-200">
-                <CalendarIcon size={48} />
-              </div>
-              <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter mb-4">A Quiet Horizon</h3>
-              <p className="text-gray-400 font-medium max-w-sm mx-auto leading-relaxed text-lg italic">
-                No scheduled sessions found. Use this time to sharpen your skills or explore new zones.
-              </p>
+              {activeSessions.length > 0 ? (
+                <div className="w-full">
+                  <div className="bg-[#1A1A4E] rounded-[3rem] p-12 text-white shadow-2xl relative overflow-hidden">
+                    <div className="relative z-10 flex flex-col items-center justify-center gap-8 text-center">
+                      <div className="w-20 h-20 bg-[#c2f575] rounded-[2rem] flex items-center justify-center animate-pulse shadow-[0_0_40px_rgba(194,245,117,0.3)]">
+                        <Radio size={36} className="text-[#1A1A4E]" />
+                      </div>
+                      <div>
+                        <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">Live Broadcast Active</h3>
+                        <p className="text-white/60 font-medium text-lg italic">
+                          {activeSessions[0].title} is streaming now. Join the elite.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setActiveLiveRoom(activeSessions[0])}
+                        className="px-12 py-6 bg-[#c2f575] text-[#1A1A4E] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                      >
+                        Enter Room
+                      </button>
+                    </div>
+                    <div className="absolute top-0 right-0 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mb-10 text-gray-200">
+                    <CalendarIcon size={48} />
+                  </div>
+                  <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter mb-4">A Quiet Horizon</h3>
+                  <p className="text-gray-400 font-medium max-w-sm mx-auto leading-relaxed text-lg italic">
+                    No scheduled sessions found. Use this time to sharpen your skills or explore new zones.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>

@@ -39,7 +39,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
       id: 'classroom',
       icon: role === UserRole.STUDENT ? <MonitorPlay size={20} /> : <Briefcase size={20} />,
       path: role === UserRole.STUDENT ? '/classroom' : '/workplace',
-      path: role === UserRole.STUDENT ? '/classroom' : '/workplace',
       label: role === UserRole.STUDENT ? 'My Classroom' : 'My Workplace'
     },
     { id: 'explore', icon: <Layers size={20} />, path: '/explore', label: 'Explore' },

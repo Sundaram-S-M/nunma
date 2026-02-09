@@ -209,6 +209,14 @@ const ZoneManagement: React.FC = () => {
   const [scriptScore, setScriptScore] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scriptImageRef = useRef<HTMLImageElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Curriculum Upload State
+  const [activeChapterForUpload, setActiveChapterForUpload] = useState<string | null>(null);
+  const [activeTypeForUpload, setActiveTypeForUpload] = useState<'video' | 'pdf' | 'reading' | null>(null);
+
+  // Drag and Drop State
+  const [draggedChapterIndex, setDraggedChapterIndex] = useState<number | null>(null);
 
   // Smart Marker State
   const [isSmartMarking, setIsSmartMarking] = useState(false);
@@ -223,6 +231,22 @@ const ZoneManagement: React.FC = () => {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSession[]>([]);
+  const [scheduledSessions, setScheduledSessions] = useState<any[]>([]);
+
+  // Schedule Modal State
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [editingSession, setEditingSession] = useState<any>(null);
+  const [scheduleTitle, setScheduleTitle] = useState('');
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleDuration, setScheduleDuration] = useState('60');
+
+  // Clock Picker State
+  const [showClockPicker, setShowClockPicker] = useState(false);
+  const [selectedHour, setSelectedHour] = useState(12);
+  const [selectedMinute, setSelectedMinute] = useState(0);
+  const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('PM');
+  const [clockMode, setClockMode] = useState<'hour' | 'minute'>('hour');
 
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [examSearchQuery, setExamSearchQuery] = useState('');
@@ -342,6 +366,9 @@ const ZoneManagement: React.FC = () => {
 
       const savedAttendanceSessions = localStorage.getItem(`nunma_attendance_sessions_${zoneId}`);
       if (savedAttendanceSessions) setAttendanceSessions(JSON.parse(savedAttendanceSessions));
+
+      const savedScheduledSessions = localStorage.getItem(`nunma_scheduled_sessions_${zoneId}`);
+      if (savedScheduledSessions) setScheduledSessions(JSON.parse(savedScheduledSessions));
     };
     loadData();
 
@@ -381,6 +408,12 @@ const ZoneManagement: React.FC = () => {
       localStorage.setItem(`nunma_attendance_sessions_${zoneId}`, JSON.stringify(attendanceSessions));
     }
   }, [attendanceSessions, zoneId]);
+
+  useEffect(() => {
+    if (zoneId) {
+      localStorage.setItem(`nunma_scheduled_sessions_${zoneId}`, JSON.stringify(scheduledSessions));
+    }
+  }, [scheduledSessions, zoneId]);
 
   useEffect(() => {
     if (!zoneId || !activeSession) return;
@@ -538,12 +571,70 @@ const ZoneManagement: React.FC = () => {
 
   // --- Handlers ---
   const handleAddSegment = (chapterId: string, type: 'video' | 'pdf' | 'reading' | 'quiz') => {
+    if (type === 'video' || type === 'pdf' || type === 'reading') {
+      setActiveChapterForUpload(chapterId);
+      setActiveTypeForUpload(type);
+      fileInputRef.current?.click();
+      return;
+    }
+
     const newSeg: Segment = {
       id: `s${Date.now()}`,
       title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
       type
     };
     setChapters(chapters.map(c => c.id === chapterId ? { ...c, segments: [...c.segments, newSeg] } : c));
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeChapterForUpload || !activeTypeForUpload) return;
+
+    const newSeg: Segment = {
+      id: `s${Date.now()}`,
+      title: file.name,
+      type: activeTypeForUpload,
+      duration: activeTypeForUpload === 'video' ? '0:00' : undefined
+    };
+
+    setChapters(chapters.map(c => c.id === activeChapterForUpload ? { ...c, segments: [...c.segments, newSeg] } : c));
+
+    // Reset upload state
+    setActiveChapterForUpload(null);
+    setActiveTypeForUpload(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    alert(`Item "${file.name}" uploaded and added to chapter!`);
+  };
+
+  // Drag & Drop Handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedChapterIndex(index);
+    // Visual feedback
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4';
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    setDraggedChapterIndex(null);
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedChapterIndex === null || draggedChapterIndex === dropIndex) return;
+
+    const newChapters = [...chapters];
+    const [movedChapter] = newChapters.splice(draggedChapterIndex, 1);
+    newChapters.splice(dropIndex, 0, movedChapter);
+    setChapters(newChapters);
   };
 
   const initSmartMarking = () => {
@@ -725,6 +816,195 @@ const ZoneManagement: React.FC = () => {
             <div className="flex gap-4">
               <button onClick={() => setShowStartExamModal(false)} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
               <button onClick={() => { setExams(exams.map(e => e.id === examToStart?.id ? { ...e, status: 'CONDUCTED' } : e)); setShowStartExamModal(false); }} className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95">Confirm Launch</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SCHEDULE SESSION MODAL */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-3xl font-black text-[#040457]">{editingSession ? 'Edit' : 'Schedule'} Session</h3>
+              <button
+                onClick={() => { setShowScheduleModal(false); setEditingSession(null); }}
+                className="p-2 hover:bg-gray-100 rounded-xl text-gray-400"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-6 mb-10">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Session Title</label>
+                <input
+                  type="text"
+                  value={scheduleTitle}
+                  onChange={e => setScheduleTitle(e.target.value)}
+                  placeholder="e.g. Masterclass on Logic"
+                  className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Date</label>
+                  <input
+                    type="date"
+                    value={scheduleDate}
+                    onChange={e => setScheduleDate(e.target.value)}
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                  />
+                </div>
+                {/* Interactive Clock Picker */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowClockPicker(!showClockPicker)}
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] text-left flex items-center justify-between hover:bg-gray-100 transition-all"
+                  >
+                    <span className={scheduleTime || (selectedHour !== 12 || selectedMinute !== 0) ? 'text-[#040457]' : 'text-gray-400'}>
+                      {scheduleTime || `${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`}
+                    </span>
+                    <Clock size={20} className="text-[#c2f575]" />
+                  </button>
+
+                  {showClockPicker && (
+                    <div className="absolute top-full left-0 right-0 mt-4 bg-white rounded-[3rem] shadow-2xl border border-gray-100 p-8 z-50 animate-in slide-in-from-top-4 duration-300 w-[max-content] min-w-full">
+                      {/* Clock Display */}
+                      <div className="flex flex-col items-center mb-10 mt-2 relative">
+                        <div className="relative w-64 h-64 bg-gradient-to-br from-[#040457] to-indigo-900 rounded-full shadow-2xl p-4">
+                          <div className="absolute inset-4 bg-white rounded-full flex items-center justify-center">
+                            {/* Hour Markers */}
+                            {Array.from({ length: 12 }, (_, i) => {
+                              const angle = (i * 30 - 90) * (Math.PI / 180);
+                              const radius = 80;
+                              const x = 50 + radius * Math.cos(angle);
+                              const y = 50 + radius * Math.sin(angle);
+                              const number = clockMode === 'hour' ? (i === 0 ? 12 : i) : i * 5;
+                              const isSelected = clockMode === 'hour' ? selectedHour === (i === 0 ? 12 : i) : selectedMinute === i * 5;
+
+                              return (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (clockMode === 'hour') {
+                                      const newHour = i === 0 ? 12 : i;
+                                      setSelectedHour(newHour);
+                                      setClockMode('minute');
+                                    } else {
+                                      const newMinute = i * 5;
+                                      setSelectedMinute(newMinute);
+                                      setScheduleTime(`${selectedHour}:${newMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
+                                    }
+                                  }}
+                                  className={`absolute w-10 h-10 rounded-full font-black text-sm transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
+                                    ? 'bg-[#c2f575] text-[#040457] scale-110 shadow-lg'
+                                    : 'bg-gray-50 text-gray-600 hover:bg-[#c2f575]/20 hover:scale-105'
+                                    }`}
+                                  style={{ left: `${x}%`, top: `${y}%` }}
+                                >
+                                  {number}
+                                </button>
+                              );
+                            })}
+
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="text-center">
+                                <div className="text-2xl font-black text-[#040457] tracking-tight">
+                                  {selectedHour}:{selectedMinute.toString().padStart(2, '0')}
+                                </div>
+                                <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                                  {clockMode === 'hour' ? 'Select Hour' : 'Select Minute'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* AM/PM Toggle */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 flex gap-2 bg-gray-50 rounded-2xl p-2">
+                          {['AM', 'PM'].map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => {
+                                setSelectedPeriod(p as any);
+                                setScheduleTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${p}`);
+                              }}
+                              className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${selectedPeriod === p
+                                ? 'bg-[#040457] text-white shadow-lg'
+                                : 'text-gray-400 hover:text-[#040457]'
+                                }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setScheduleTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
+                            setShowClockPicker(false);
+                          }}
+                          className="px-6 py-3 bg-[#c2f575] text-[#040457] rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Duration (Mins)</label>
+                <input
+                  type="number"
+                  value={scheduleDuration}
+                  onChange={e => setScheduleDuration(e.target.value)}
+                  className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => { setShowScheduleModal(false); setEditingSession(null); }}
+                className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!scheduleTitle || !scheduleDate || !scheduleTime) return;
+                  const sessionData = {
+                    id: editingSession?.id || Date.now().toString(),
+                    title: scheduleTitle,
+                    date: scheduleDate,
+                    time: scheduleTime,
+                    duration: scheduleDuration,
+                    status: 'scheduled'
+                  };
+
+                  if (editingSession) {
+                    setScheduledSessions(scheduledSessions.map(s => s.id === editingSession.id ? sessionData : s));
+                  } else {
+                    setScheduledSessions([...scheduledSessions, sessionData]);
+                  }
+
+                  setShowScheduleModal(false);
+                  setEditingSession(null);
+                  setScheduleTitle('');
+                  setScheduleDate('');
+                  setScheduleTime('');
+                }}
+                className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all"
+              >
+                {editingSession ? 'Update' : 'Schedule'} Session
+              </button>
             </div>
           </div>
         </div>
@@ -1086,77 +1366,79 @@ const ZoneManagement: React.FC = () => {
                     <Clock size={18} className="text-gray-400" />
                   </div>
 
-                  {/* Time Picker Popover */}
+                  {/* Use the unified Clock Picker for Attendance too */}
                   {showTimePicker && (
-                    <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-[2rem] shadow-2xl border border-gray-100 p-6 z-50 animate-in slide-in-from-top-2">
-                      <div className="flex justify-between items-start mb-4">
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Select Time</h4>
-                        <button onClick={() => setShowTimePicker(false)} className="text-gray-300 hover:text-red-500"><X size={14} /></button>
+                    <div className="absolute top-full left-0 mt-2 bg-white rounded-[2rem] shadow-2xl border border-gray-100 p-8 z-50 animate-in slide-in-from-top-2 w-[320px]">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Time</h4>
+                        <button onClick={() => setShowTimePicker(false)} className="text-gray-300 hover:text-red-500"><X size={16} /></button>
                       </div>
 
-                      <div className="flex gap-2 h-40">
-                        {/* Hours */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 rounded-xl p-2 text-center">
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map(h => {
-                            const val = h < 10 ? `0${h}` : `${h}`;
-                            return (
-                              <div
-                                key={h}
-                                onClick={() => updateTimeFromPicker(val, tpMinute, tpPeriod)}
-                                className={`py-2 rounded-lg text-sm font-bold cursor-pointer transition-colors ${tpHour === val ? 'bg-[#040457] text-white' : 'text-gray-400 hover:bg-gray-200'}`}
-                              >
-                                {val}
-                              </div>
-                            );
-                          })}
-                        </div>
+                      <div className="flex flex-col items-center mb-6 relative">
+                        <div className="relative w-48 h-48 bg-gradient-to-br from-[#040457] to-indigo-900 rounded-full shadow-xl p-3">
+                          <div className="absolute inset-3 bg-white rounded-full flex items-center justify-center">
+                            {Array.from({ length: 12 }, (_, i) => {
+                              const angle = (i * 30 - 90) * (Math.PI / 180);
+                              const radius = 75;
+                              const x = 50 + radius * Math.cos(angle);
+                              const y = 50 + radius * Math.sin(angle);
+                              const number = clockMode === 'hour' ? (i === 0 ? 12 : i) : i * 5;
+                              const isSelected = clockMode === 'hour' ? parseInt(tpHour) === (i === 0 ? 12 : i) : parseInt(tpMinute) === i * 5;
 
-                        {/* Minutes */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 rounded-xl p-2 text-center">
-                          {Array.from({ length: 60 }, (_, i) => i).map(m => {
-                            const val = m < 10 ? `0${m}` : `${m}`;
-                            return (
-                              <div
-                                key={m}
-                                onClick={() => updateTimeFromPicker(tpHour, val, tpPeriod)}
-                                className={`py-2 rounded-lg text-sm font-bold cursor-pointer transition-colors ${tpMinute === val ? 'bg-[#040457] text-white' : 'text-gray-400 hover:bg-gray-200'}`}
-                              >
-                                {val}
-                              </div>
-                            );
-                          })}
-                        </div>
+                              return (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (clockMode === 'hour') {
+                                      const h = i === 0 ? 12 : i;
+                                      updateTimeFromPicker(h < 10 ? `0${h}` : `${h}`, tpMinute, tpPeriod);
+                                      setClockMode('minute');
+                                    } else {
+                                      const m = i * 5;
+                                      updateTimeFromPicker(tpHour, m < 10 ? `0${m}` : `${m}`, tpPeriod);
+                                    }
+                                  }}
+                                  className={`absolute w-8 h-8 rounded-full font-black text-[10px] transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
+                                    ? 'bg-[#c2f575] text-[#040457] scale-110 shadow-lg'
+                                    : 'bg-gray-50 text-gray-600 hover:bg-[#c2f575]/20 hover:scale-105'
+                                    }`}
+                                  style={{ left: `${x}%`, top: `${y}%` }}
+                                >
+                                  {number}
+                                </button>
+                              );
+                            })}
 
-                        {/* Period */}
-                        <div className="flex flex-col gap-2 w-16">
+                            <div className="text-center pointer-events-none">
+                              <div className="text-lg font-black text-[#040457]">{tpHour}:{tpMinute}</div>
+                              <div className="text-[6px] font-black text-gray-400 uppercase tracking-widest">{clockMode === 'hour' ? 'Hour' : 'Min'}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <div className="flex-1 flex gap-1 bg-gray-50 rounded-xl p-1">
                           {['AM', 'PM'].map(p => (
                             <button
                               key={p}
                               onClick={() => updateTimeFromPicker(tpHour, tpMinute, p)}
-                              className={`flex-1 rounded-xl text-xs font-black transition-colors ${tpPeriod === p ? 'bg-[#c2f575] text-[#040457]' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                              className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all ${tpPeriod === p ? 'bg-[#040457] text-white shadow-md' : 'text-gray-400'}`}
                             >
                               {p}
                             </button>
                           ))}
                         </div>
+                        <button
+                          onClick={() => setShowTimePicker(false)}
+                          className="px-4 py-2 bg-[#c2f575] text-[#040457] rounded-xl font-black text-[9px] uppercase tracking-widest hover:scale-105 transition-all shadow-md"
+                        >
+                          Done
+                        </button>
                       </div>
-
-                      <button
-                        onClick={() => {
-                          const now = new Date();
-                          let h = now.getHours();
-                          const m = now.getMinutes();
-                          const p = h >= 12 ? 'PM' : 'AM';
-                          h = h % 12;
-                          h = h ? h : 12;
-                          const hStr = h < 10 ? `0${h}` : `${h}`;
-                          const mStr = m < 10 ? `0${m}` : `${m}`;
-                          updateTimeFromPicker(hStr, mStr, p);
-                        }}
-                        className="w-full mt-4 py-3 bg-gray-50 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#040457] hover:text-white transition-all"
-                      >
-                        Set to Now
-                      </button>
                     </div>
                   )}
                 </div>
@@ -1405,23 +1687,45 @@ const ZoneManagement: React.FC = () => {
               <div className="space-y-12 animate-in fade-in duration-500">
                 <div className="flex justify-between items-center">
                   <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Course Blueprint</h3>
-                  <button
-                    onClick={() => {
-                      const newChapter: Chapter = { id: `c${Date.now()}`, title: 'New Chapter', segments: [] };
-                      setChapters([...chapters, newChapter]);
-                    }}
-                    className="px-8 py-5 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
-                  >
-                    <Plus size={18} /> Add Chapter
-                  </button>
+                  <div className="flex gap-4">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      accept={
+                        activeTypeForUpload === 'video' ? 'video/*' :
+                          activeTypeForUpload === 'pdf' ? '.pdf' :
+                            activeTypeForUpload === 'reading' ? '.txt,.doc,.docx' :
+                              '*'
+                      }
+                    />
+                    <button
+                      onClick={() => {
+                        const newChapter: Chapter = { id: `c${Date.now()}`, title: 'New Chapter', segments: [] };
+                        setChapters([...chapters, newChapter]);
+                      }}
+                      className="px-8 py-5 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
+                    >
+                      <Plus size={18} /> Add Chapter
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-8">
-                  {chapters.map((chapter) => (
-                    <div key={chapter.id} className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm group">
+                  {chapters.map((chapter, index) => (
+                    <div
+                      key={chapter.id}
+                      draggable={true}
+                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, index)}
+                      className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm group cursor-default"
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-6 flex-1">
-                          <GripVertical className="text-gray-200 cursor-move" size={24} />
+                          <GripVertical className="text-gray-200 cursor-grab active:cursor-grabbing" size={24} />
                           <input
                             type="text"
                             value={chapter.title}
@@ -1563,12 +1867,20 @@ const ZoneManagement: React.FC = () => {
                       <Radio size={20} className="animate-pulse" /> GO LIVE NOW
                     </button>
                   ) : (
-                    <button
-                      onClick={handleEndLive}
-                      className="bg-black text-white px-10 py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] flex items-center gap-4 shadow-2xl hover:bg-gray-900 active:scale-95 transition-all"
-                    >
-                      <X size={20} /> END SESSION
-                    </button>
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => navigate(`/live/${zoneId}/${activeSession.id}`)}
+                        className="bg-[#c2f575] text-[#040457] px-10 py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] flex items-center gap-4 shadow-2xl hover:brightness-110 active:scale-95 transition-all"
+                      >
+                        <ExternalLink size={20} /> JOIN ROOM
+                      </button>
+                      <button
+                        onClick={handleEndLive}
+                        className="bg-black text-white px-10 py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] flex items-center gap-4 shadow-2xl hover:bg-gray-900 active:scale-95 transition-all"
+                      >
+                        <X size={20} /> END SESSION
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -1615,28 +1927,73 @@ const ZoneManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Upcoming Broadcasts Section */}
                 <div className="space-y-8">
                   <h4 className="text-2xl font-black text-[#040457] tracking-tight">Upcoming Broadcasts</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {[
-                      { title: 'Advanced Product Logic', time: 'Tomorrow, 10:00 AM', duration: '60 mins' },
-                      { title: 'User Psychology Session', time: 'Feb 12, 11:30 AM', duration: '45 mins' }
-                    ].map((session, idx) => (
-                      <div key={idx} className="p-8 bg-gray-50/50 border border-gray-100 rounded-[2.5rem] space-y-6 hover:bg-white hover:shadow-xl transition-all duration-500 group">
+                    {scheduledSessions.map((session, idx) => (
+                      <div key={idx} className="p-8 bg-gray-50/50 border border-gray-100 rounded-[2.5rem] space-y-6 hover:bg-white hover:shadow-xl transition-all duration-500 group relative">
                         <div className="flex justify-between items-start">
                           <div className="p-4 bg-white rounded-2xl shadow-sm text-gray-400 group-hover:text-[#040457] transition-all">
                             <Clock size={20} />
                           </div>
-                          <button className="text-[10px] font-black text-[#040457] bg-[#c2f575] px-4 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all">EDIT</button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingSession(session);
+                                setScheduleTitle(session.title);
+                                setScheduleDate(session.date);
+                                setScheduleTime(session.time);
+                                setScheduleDuration(session.duration);
+
+                                // Parse time string (e.g. "10:30 AM")
+                                const parts = session.time.split(/[:\s]/);
+                                if (parts.length === 3) {
+                                  setSelectedHour(parseInt(parts[0]));
+                                  setSelectedMinute(parseInt(parts[1]));
+                                  setSelectedPeriod(parts[2] as 'AM' | 'PM');
+                                }
+
+                                setShowScheduleModal(true);
+                              }}
+                              className="text-[10px] font-black text-[#040457] bg-[#c2f575] px-4 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              EDIT
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('Delete this scheduled session?')) {
+                                  setScheduledSessions(scheduledSessions.filter(s => s.id !== session.id));
+                                }
+                              }}
+                              className="text-[10px] font-black text-white bg-red-500 px-4 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <h5 className="text-lg font-black text-[#040457] mb-1">{session.title}</h5>
-                          <p className="text-xs text-gray-400 font-medium">{session.time} • {session.duration}</p>
+                          <p className="text-xs text-gray-400 font-medium">
+                            {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, {session.time} • {session.duration} mins
+                          </p>
                         </div>
                       </div>
                     ))}
-                    <button className="p-8 border-2 border-dashed border-gray-100 rounded-[2.5rem] flex flex-col items-center justify-center gap-4 text-gray-300 hover:border-[#c2f575] hover:text-[#c2f575] transition-all group">
+                    <button
+                      onClick={() => {
+                        setEditingSession(null);
+                        setScheduleTitle('');
+                        setScheduleDate('');
+                        setScheduleTime('');
+                        setScheduleDuration('60');
+                        setSelectedHour(12);
+                        setSelectedMinute(0);
+                        setSelectedPeriod('PM');
+                        setClockMode('hour');
+                        setShowScheduleModal(true);
+                      }}
+                      className="p-8 border-2 border-dashed border-gray-100 rounded-[2.5rem] flex flex-col items-center justify-center gap-4 text-gray-300 hover:border-[#c2f575] hover:text-[#c2f575] transition-all group min-h-[180px]"
+                    >
                       <div className="p-4 rounded-2xl bg-gray-50 group-hover:bg-[#c2f575]/10 transition-all">
                         <Plus size={24} />
                       </div>

@@ -42,9 +42,10 @@ const Inbox: React.FC = () => {
   const navigate = useNavigate();
   const params = new URLSearchParams(location.search);
   const initialTab = (params.get('tab') as any) || 'chat';
+  const initialChatId = params.get('chatId');
 
   const [activeCategory, setActiveCategory] = useState<'chat' | 'community' | 'collaboration'>(initialTab);
-  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(initialChatId);
   const [messageText, setMessageText] = useState('');
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -81,25 +82,28 @@ const Inbox: React.FC = () => {
           id: doc.id,
           ...doc.data()
         })) as Chat[];
+
+        // Also fetch community chats if user is a student in them (optional but here we assume participants are enough)
         setChats(chatData);
         setLoading(false);
       });
     } else {
       console.log("Inbox: Using Mock Data (Firebase not initialized)");
-      // Mock data for initial exploration
-      setChats([
-        {
-          id: 'mock-chat-1',
-          name: 'Nunma Support',
-          avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=nunma',
-          lastMessage: 'Welcome to your professional workspace!',
-          lastMessageTime: { toDate: () => new Date() },
-          unreadCount: 1,
-          online: true,
-          type: 'chat',
-          participants: [user.uid, 'support-bot']
-        }
-      ]);
+      const localConversations = JSON.parse(localStorage.getItem('nunma_conversations') || '[]');
+
+      const supportChat: Chat = {
+        id: 'mock-chat-1',
+        name: 'Nunma Support',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=nunma',
+        lastMessage: 'Welcome to your professional workspace!',
+        lastMessageTime: { toDate: () => new Date() },
+        unreadCount: 1,
+        online: true,
+        type: 'chat',
+        participants: [user.uid, 'support-bot']
+      };
+
+      setChats([supportChat, ...localConversations]);
       setLoading(false);
     }
 

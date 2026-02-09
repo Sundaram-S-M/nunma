@@ -48,7 +48,8 @@ const ProfileSettings = () => {
     name: user?.name || '',
     email: user?.email || '',
     bio: user?.bio || '',
-    location: user?.location || ''
+    location: user?.location || '',
+    dob: user?.dob || ''
   });
 
   const handleSave = () => {
@@ -108,6 +109,12 @@ const ProfileSettings = () => {
                 ) : <p className="font-bold text-indigo-900">{user.email}</p>}
               </div>
               <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Date of Birth</p>
+                {isEditing ? (
+                  <input type="date" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value })} />
+                ) : <p className="font-bold text-indigo-900">{user.dob || 'Not set'}</p>}
+              </div>
+              <div>
                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Bio</p>
                 {isEditing ? (
                   <textarea className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-medium text-indigo-900 focus:outline-none" rows={3} value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} />
@@ -131,6 +138,7 @@ const ProfileSettings = () => {
     </div>
   );
 };
+
 
 const Preferences = () => (
   <div className="bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-sm animate-in fade-in duration-500">

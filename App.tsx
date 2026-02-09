@@ -25,6 +25,7 @@ import { UserRole } from './types';
 
 import LiveRoom from './components/LiveRoom';
 import Payment from './pages/Payment';
+import LiveNotification from './components/LiveNotification';
 
 const AppContent: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -87,6 +88,7 @@ const AppContent: React.FC = () => {
           </Routes>
         </main>
       </div>
+      <LiveNotification />
     </div>
   );
 };

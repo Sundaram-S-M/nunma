@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion } from 'firebase/firestore';
+import { db } from '../utils/firebase';
 import {
   ArrowLeft,
   ChevronRight,
@@ -243,6 +245,7 @@ const StudentZoneView: React.FC = () => {
       {activeLiveRoom && (
         <ClassroomStream
           sessionId={activeLiveRoom.id}
+          zoneId={zoneId || ''}
           role="STUDENT"
           title={activeLiveRoom.title}
           onClose={() => setActiveLiveRoom(null)}
@@ -467,7 +470,31 @@ const StudentZoneView: React.FC = () => {
               <Zap size={40} fill="currentColor" className="mb-8" />
               <h4 className="text-3xl font-black mb-3 tracking-tighter">Live Support</h4>
               <p className="text-indigo-900/60 text-xs font-bold uppercase tracking-[0.2em] mb-12">Direct Channel to Mentor</p>
-              <button onClick={() => navigate('/inbox?tab=community')} className="w-full py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.25em] shadow-2xl shadow-indigo-900/20 hover:bg-[#1A1A4E] transition-all active:scale-95">Open Zone Chat</button>
+              <button
+                onClick={() => {
+                  if (db) {
+                    const q = query(collection(db, 'conversations'), where('zoneId', '==', zoneId), limit(1));
+                    getDocs(q).then(snapshot => {
+                      if (!snapshot.empty) {
+                        navigate(`/inbox?tab=community&chatId=${snapshot.docs[0].id}`);
+                      } else {
+                        navigate('/inbox?tab=community');
+                      }
+                    });
+                  } else {
+                    const savedConversations = JSON.parse(localStorage.getItem('nunma_conversations') || '[]');
+                    const conv = savedConversations.find((c: any) => c.zoneId === zoneId);
+                    if (conv) {
+                      navigate(`/inbox?tab=community&chatId=${conv.id}`);
+                    } else {
+                      navigate('/inbox?tab=community');
+                    }
+                  }
+                }}
+                className="w-full py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.25em] shadow-2xl shadow-indigo-900/20 hover:bg-[#1A1A4E] transition-all active:scale-95"
+              >
+                Open Zone Chat
+              </button>
             </div>
             <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-white/20 rounded-full blur-[60px] group-hover:scale-150 transition-transform duration-1000"></div>
           </div>
