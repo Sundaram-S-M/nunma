@@ -68,44 +68,19 @@ const Inbox: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    let unsubscribeChats = () => { };
+    const q = query(
+      collection(db, 'conversations'),
+      where('participants', 'array-contains', user.uid)
+    );
 
-    if (db) {
-      // Fetch Conversations
-      const q = query(
-        collection(db, 'conversations'),
-        where('participants', 'array-contains', user.uid)
-      );
-
-      unsubscribeChats = onSnapshot(q, (snapshot) => {
-        const chatData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Chat[];
-
-        // Also fetch community chats if user is a student in them (optional but here we assume participants are enough)
-        setChats(chatData);
-        setLoading(false);
-      });
-    } else {
-      console.log("Inbox: Using Mock Data (Firebase not initialized)");
-      const localConversations = JSON.parse(localStorage.getItem('nunma_conversations') || '[]');
-
-      const supportChat: Chat = {
-        id: 'mock-chat-1',
-        name: 'Nunma Support',
-        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=nunma',
-        lastMessage: 'Welcome to your professional workspace!',
-        lastMessageTime: { toDate: () => new Date() },
-        unreadCount: 1,
-        online: true,
-        type: 'chat',
-        participants: [user.uid, 'support-bot']
-      };
-
-      setChats([supportChat, ...localConversations]);
+    const unsubscribeChats = onSnapshot(q, (snapshot) => {
+      const chatData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Chat[];
+      setChats(chatData);
       setLoading(false);
-    }
+    });
 
     return () => unsubscribeChats();
   }, [user]);
@@ -116,32 +91,17 @@ const Inbox: React.FC = () => {
       return;
     }
 
-    let unsubscribeMessages = () => { };
+    const q = query(
+      collection(db, 'conversations', selectedChatId, 'messages'),
+      orderBy('createdAt', 'asc')
+    );
 
-    if (db) {
-      const q = query(
-        collection(db, 'conversations', selectedChatId, 'messages'),
-        orderBy('createdAt', 'asc')
-      );
-
-      unsubscribeMessages = onSnapshot(q, (snapshot) => {
-        setMessages(snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Message[]);
-      });
-    } else {
-      // Mock messages for the mock chat
-      setMessages([
-        {
-          id: 'm1',
-          text: 'Hello! Welcome to Nunma. How can we help your learning journey today?',
-          senderId: 'support-bot',
-          createdAt: { toDate: () => new Date() },
-          status: 'read'
-        }
-      ]);
-    }
+    const unsubscribeMessages = onSnapshot(q, (snapshot) => {
+      setMessages(snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Message[]);
+    });
 
     return () => unsubscribeMessages();
   }, [selectedChatId]);
@@ -151,19 +111,6 @@ const Inbox: React.FC = () => {
 
     const msgText = messageText;
     setMessageText('');
-
-    if (!db) {
-      // Mock Send Logic
-      const newMsg: Message = {
-        id: 'mock-msg-' + Date.now(),
-        text: msgText,
-        senderId: user.uid,
-        createdAt: { toDate: () => new Date() },
-        status: 'sent'
-      };
-      setMessages(prev => [...prev, newMsg]);
-      return;
-    }
 
     try {
       await addDoc(collection(db, 'conversations', selectedChatId, 'messages'), {

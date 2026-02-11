@@ -44,6 +44,8 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
   const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
   const [stats, setStats] = useState<any[]>([]);
+  const [myZones, setMyZones] = useState<any[]>([]);
+  const [sessionsMap, setSessionsMap] = useState<Record<string, any[]>>({});
 
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [newEvenTitle, setNewEventTitle] = useState('');
@@ -74,34 +76,103 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
   const completionPercentage = calculateProfileCompletion();
 
+  // 1. Fetch My Zones
   useEffect(() => {
-    const fetchSessions = () => {
-      // Fetch active live sessions
-      const allLiveSessions = JSON.parse(localStorage.getItem('nunma_live_sessions') || '[]');
+    if (!user) return;
+    const fetchZones = async () => {
+      try {
+        const zonesList: any[] = [];
 
-      // Fetch scheduled sessions for all zones
-      const scheduled: any[] = [];
-      const keys = Object.keys(localStorage);
-      keys.forEach(key => {
-        if (key.startsWith('nunma_scheduled_sessions_')) {
-          const sessions = JSON.parse(localStorage.getItem(key) || '[]');
-          scheduled.push(...sessions.map((s: any) => ({ ...s, zoneId: key.replace('nunma_scheduled_sessions_', '') })));
+        // A. Created Zones (Tutor)
+        // Note: Use simple query without compound index requirements if possible
+        // A. Created Zones (Tutor)
+        if (role === UserRole.TUTOR) {
+          const q = query(collection(db, 'zones'), where('createdBy', '==', user.uid));
+          const snap = await getDocs(q);
+          snap.forEach(d => zonesList.push({ id: d.id, ...d.data(), role: 'tutor' }));
         }
-      });
 
-      setLiveSessions([...allLiveSessions, ...scheduled]);
+        // B. Enrolled Zones (Student)
+        const enrollSnap = await getDocs(collection(db, `users/${user.uid}/enrollments`));
+        const enrolledIds = enrollSnap.docs.map(d => d.data().zoneId);
+
+        for (const zId of enrolledIds) {
+          // Avoid duplicates if I created it and enrolled in it (unlikely but safe)
+          if (!zonesList.find(z => z.id === zId)) {
+            const zDoc = await getDoc(doc(db, 'zones', zId));
+            if (zDoc.exists()) {
+              zonesList.push({ id: zDoc.id, ...zDoc.data(), role: 'student' });
+            }
+          }
+        }
+        setMyZones(zonesList);
+
+        // C. Calculate Basic Stats based on Zones
+        let totalStudents = 0;
+        let totalEarnings = 0; // Mock calculation or real if fields exist
+        zonesList.forEach(z => {
+          if (z.role === 'tutor') {
+            // If we have a 'studentCount' field or similar. 
+            // For now, allow 0 or mock.
+            totalStudents += (z.studentCount || 0);
+            totalEarnings += (parseFloat(z.price || '0') * (z.studentCount || 0));
+          }
+        });
+
+        setStats([
+          { label: 'Active Zones', value: zonesList.length },
+          { label: 'Total Students', value: totalStudents },
+          { label: 'Hours Streamed', value: '124' }, // Placeholder
+          { label: 'Earnings', value: `$${totalEarnings}` }
+        ]);
+
+      } catch (e) {
+        console.error("Error fetching my zones:", e);
+      }
     };
+    fetchZones();
+  }, [user, role]);
 
-    fetchSessions();
-    window.addEventListener('storage', fetchSessions);
-    // Poll for changes in case storage event doesn't fire (same tab)
-    const interval = setInterval(fetchSessions, 2000);
+  // 2. Listen to Sessions in My Zones
+  useEffect(() => {
+    if (myZones.length === 0) return;
+
+    const unsubs: (() => void)[] = [];
+
+    myZones.forEach(zone => {
+      const q = query(collection(db, 'zones', zone.id, 'sessions'));
+      const unsub = onSnapshot(q, (snap) => {
+        const zoneSessions = snap.docs.map(d => ({
+          id: d.id,
+          zoneId: zone.id,
+          zoneTitle: zone.title,
+          ...d.data()
+        }));
+
+        setSessionsMap(prev => {
+          const newMap = { ...prev, [zone.id]: zoneSessions };
+          return newMap;
+        });
+      });
+      unsubs.push(unsub);
+    });
 
     return () => {
-      window.removeEventListener('storage', fetchSessions);
-      clearInterval(interval);
+      unsubs.forEach(u => u());
     };
-  }, [user, role]);
+  }, [myZones]);
+
+  // 3. Flatten Sessions Map to Live/Scheduled
+  useEffect(() => {
+    const all = Object.values(sessionsMap).flat();
+    // Filter?
+    setLiveSessions(all);
+
+    const active = all.find(s => s.status === 'live');
+    if (active && !activeLiveRoom) {
+      // Optional: Auto-prompt? Or just let UI show "Live Broadcast Active"
+    }
+  }, [sessionsMap]);
 
   const monthName = currentMonth.toLocaleString('default', { month: 'long' }).toUpperCase();
   const year = currentMonth.getFullYear();
@@ -361,6 +432,51 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         ))}
       </div>
 
+      {/* MY ACTIVE ZONES (Student View) */}
+      {role === UserRole.STUDENT && myZones.length > 0 && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <div className="flex items-center justify-between">
+            <h2 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-4">
+              <BookOpen className="text-[#c2f575]" /> My Active Zones
+            </h2>
+            <Link to="/classroom" className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-900 transition-colors flex items-center gap-2">
+              Explore All <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {myZones.map((zone) => (
+              <div key={zone.id} className="bg-white rounded-[3.5rem] p-10 border border-gray-100 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
+                <div className="flex justify-between items-start mb-8">
+                  <div className="w-16 h-16 bg-gray-50 rounded-[1.75rem] flex items-center justify-center text-indigo-900 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-500 overflow-hidden">
+                    {zone.avatar ? <img src={zone.avatar} alt="" className="w-full h-full object-cover" /> : <Zap size={32} />}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] font-black bg-[#c2f575] text-indigo-900 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">
+                      {zone.level}
+                    </span>
+                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2">{zone.domain}</p>
+                  </div>
+                </div>
+
+                <h3 className="text-2xl font-black text-[#1A1A4E] mb-6 tracking-tight line-clamp-1 group-hover:text-indigo-600 transition-colors">
+                  {zone.title}
+                </h3>
+
+                <Link
+                  to={`/zone/${zone.id}`}
+                  className="w-full py-5 bg-indigo-900 text-white rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-indigo-900/10"
+                >
+                  Resume Stream <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                </Link>
+
+                <div className="absolute top-0 right-0 w-24 h-24 bg-[#c2f575]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
         <div className="xl:col-span-8 space-y-8">
           {upcomingLiveSessions.length > 0 ? (
@@ -482,7 +598,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

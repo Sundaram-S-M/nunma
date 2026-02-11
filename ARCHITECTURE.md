@@ -11,16 +11,19 @@ The project follows a standard React application structure, organized by feature
 │   ├── Header.tsx      # Global navigation header
 │   ├── Sidebar.tsx     # Collapsible side navigation
 │   ├── LiveRoom.tsx    # LiveKit streaming interface
+│   ├── ChatSidebar.tsx # Real-time Firestore chat
 │   └── ...
 ├── context/
 │   └── AuthContext.tsx # Global authentication state management
+├── hooks/              # Custom React hooks
+│   └── usePPPPrice.ts  # Regional pricing logic
 ├── pages/              # Main route views
 │   ├── Auth.tsx        # Login/Signup logic
 │   ├── Dashboard.tsx   # Main landing for authenticated users
 │   ├── ZoneManagement.tsx # Course/Exam/Certificate administration
 │   ├── Classroom.tsx   # Student learning hub
-│   ├── CertificateEngine.tsx # Branding & issuance (NEW)
-│   ├── VerificationPortal.tsx # ZK Proof generation (NEW)
+│   ├── CertificateEngine.tsx # Branding & issuance
+│   ├── VerificationPortal.tsx # ZK Proof generation
 │   └── ...
 ├── types.ts            # TypeScript definitions
 ├── App.tsx             # Main routing configuration
@@ -42,13 +45,24 @@ The application strictly separates **Student** and **Tutor** capabilities via th
 ### 3. Data Persistence
 Transitioning from `localStorage` mock to **Firebase** for persistence.
 - **Auth:** Firebase Authentication.
-- **Database:** Firestore (planned) for Zones, Exams, and Results.
-- **Keys:** `nunma_user`, `nunma_zones_data`, `nunma_exams`, etc.
+- **Database:** Firestore for `zones`, `sessions` (chat messages), and `users`.
+- **Keys:** `nunma_user`, `nunma_zones_data` (fallback), `nunma_exams`, etc.
 
-### 4. AI Integration (Gemini)
+### 4. Monetization & PPP
+Implemented in `Payment.tsx` and `usePPPPrice.ts`:
+- **Smart Pricing:** Automatically detects user country via IP.
+- **PPP Adjustment:** Applies purchasing power parity discounts for eligible regions (e.g., India).
+- **Transparency:** Displays original and adjusted prices to the user.
+
+### 5. AI Integration (Gemini)
 Leveraging the `@google/genai` SDK:
 - **MCQ Generation:** `ZoneManagement` uses Gemini 1.5 Pro to generate structured JSON quizzes from document context.
 - **Live Co-host:** `LiveRoom` utilizes Gemini Multimodal Live API for real-time AI interaction (audio/video).
+
+### 6. Real-time Communication
+- **Chat System:** Firestore-backed real-time messaging in `ChatSidebar`.
+- **Scope:** Zone-specific and Session-specific chat rooms.
+- **Persistence:** Messages flow into Firestore `zones/{zoneId}/sessions/{sessionId}/messages`.
 
 ## Design System
 - **Visual Style:** "Deep Professional" (Glassmorphism & High Contrast).
@@ -82,8 +96,9 @@ Supports **Online** (automated) and **Offline** (manual) assessments.
 
 ### 2. Digital Proctoring Engine
 Active in `StudentZoneView`:
-- **Tab Tracking:** Focus/Blur detection.
-- **3-Strike Policy:** Automatic termination upon the 3rd violation.
+- **Tab Tracking:** Focus/Blur detection triggers warnings.
+- **Biometric Mock:** UI simulation of webcam monitoring ("Face Detected: YES").
+- **3-Strike Policy:** Automatic termination upon the 3rd violation (window blur).
 
 ### 3. Grading Loops
 - **Automated MCQ:** Real-time grading and XP commitment.

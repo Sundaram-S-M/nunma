@@ -92,46 +92,23 @@ const LaunchZone: React.FC = () => {
         isPublic: true
       };
 
-      if (db) {
-        const zoneRef = await addDoc(collection(db, 'zones'), newZone);
-
-        // Create community conversation for the zone
-        await addDoc(collection(db, 'conversations'), {
-          name: zoneTitle,
-          avatar: zoneImage,
-          type: 'community',
-          zoneId: zoneRef.id,
-          participants: [user.uid],
-          lastMessage: 'Welcome to the community!',
-          lastMessageTime: serverTimestamp(),
-          createdAt: serverTimestamp()
-        });
-      } else {
-        console.log("LaunchZone: Saving to LocalStorage (Mock Mode)");
-        const savedZones = JSON.parse(localStorage.getItem('nunma_zones_data') || '[]');
-        const zoneId = 'mock-zone-' + Date.now();
-        const zoneWithId = { ...newZone, id: zoneId, createdAt: new Date().toISOString() };
-        localStorage.setItem('nunma_zones_data', JSON.stringify([...savedZones, zoneWithId]));
-
-        // Mock conversation creation
-        const savedConversations = JSON.parse(localStorage.getItem('nunma_conversations') || '[]');
-        const newConv = {
-          id: 'mock-conv-' + Date.now(),
-          name: zoneTitle,
-          avatar: zoneImage,
-          type: 'community',
-          zoneId: zoneId,
-          participants: [user.uid],
-          lastMessage: 'Welcome to the community!',
-          lastMessageTime: new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        };
-        localStorage.setItem('nunma_conversations', JSON.stringify([...savedConversations, newConv]));
-
-        // Also add to tutor's zones in local storage if needed
-        const tutorZones = JSON.parse(localStorage.getItem(`nunma_tutor_zones_${user.uid}`) || '[]');
-        localStorage.setItem(`nunma_tutor_zones_${user.uid}`, JSON.stringify([...tutorZones, zoneWithId]));
+      if (!db) {
+        throw new Error("Database connection execution failed. Cloud sync unavailable.");
       }
+
+      const zoneRef = await addDoc(collection(db, 'zones'), newZone);
+
+      // Create community conversation for the zone
+      await addDoc(collection(db, 'conversations'), {
+        name: zoneTitle,
+        avatar: zoneImage,
+        type: 'community',
+        zoneId: zoneRef.id,
+        participants: [user.uid],
+        lastMessage: 'Welcome to the community!',
+        lastMessageTime: serverTimestamp(),
+        createdAt: serverTimestamp()
+      });
 
       navigate('/workplace');
     } catch (err) {

@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard, ShieldCheck, Zap, Check, Globe } from 'lucide-react';
 import { usePPPPrice } from '../hooks/usePPPPrice';
-import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,28 +13,57 @@ const Payment: React.FC = () => {
     const navigate = useNavigate();
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // Fetch zone details from local storage or context (mock implementation)
-    // In a real app, this would come from an API or context
-    const getZonePrice = () => {
-        const savedZones = localStorage.getItem('nunma_zones_data');
-        if (savedZones) {
-            const zones = JSON.parse(savedZones);
-            const zone = zones.find((z: any) => z.id === zoneId);
-            return zone ? zone.price : '49.00';
-        }
-        return '49.00';
-    };
+    const [zone, setZone] = useState<any>(null);
+    const [loadingZone, setLoadingZone] = useState(true);
 
-    const basePrice = getZonePrice();
+    useEffect(() => {
+        const fetchZone = async () => {
+            if (!zoneId || !db) return;
+            try {
+                const docRef = doc(db, 'zones', zoneId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setZone({ id: docSnap.id, ...docSnap.data() });
+                }
+            } catch (e) {
+                console.error("Error fetching zone:", e);
+            } finally {
+                setLoadingZone(false);
+            }
+        };
+        fetchZone();
+    }, [zoneId]);
+
+    const basePrice = zone ? zone.price : '0';
     const { price, currency, isPPPApplied, originalPrice, countryCode, isLoading } = usePPPPrice(basePrice);
 
     const handlePayment = async () => {
-        if (!user) return;
+        if (!user || !zoneId || !zone) return;
         setIsProcessing(true);
 
         try {
-            // In a real app, this would be a server-side confirmation
             if (db) {
+                // 1. Add to Zone Students
+                const studentData = {
+                    id: user.uid,
+                    name: user.name || 'Student',
+                    email: user.email,
+                    avatar: user.avatar || '',
+                    joinedAt: new Date().toISOString(),
+                    status: 'Active',
+                    engagementScore: 0,
+                    attendanceHistory: []
+                };
+                await setDoc(doc(db, 'zones', zoneId, 'students', user.uid), studentData);
+
+                // 2. Add to User Enrollments (for quick access)
+                await setDoc(doc(db, 'users', user.uid, 'enrollments', zoneId), {
+                    zoneId: zoneId,
+                    enrolledAt: new Date().toISOString(),
+                    role: 'student'
+                });
+
+                // 3. Add to Conversation
                 const q = query(collection(db, 'conversations'), where('zoneId', '==', zoneId), limit(1));
                 const snapshot = await getDocs(q);
                 if (!snapshot.empty) {
@@ -42,20 +71,13 @@ const Payment: React.FC = () => {
                     await updateDoc(doc(db, 'conversations', convId), {
                         participants: arrayUnion(user.uid)
                     });
+                } else {
+                    // Create conversation if missing? (Zone creation handles this usually)
                 }
             } else {
-                // Mock Mode: Update local storage
-                const savedConversations = JSON.parse(localStorage.getItem('nunma_conversations') || '[]');
-                const convIndex = savedConversations.findIndex((c: any) => c.zoneId === zoneId);
-                if (convIndex !== -1) {
-                    if (!savedConversations[convIndex].participants.includes(user.uid)) {
-                        savedConversations[convIndex].participants.push(user.uid);
-                        localStorage.setItem('nunma_conversations', JSON.stringify(savedConversations));
-                    }
-                }
+                console.warn("Database not initialized");
             }
 
-            localStorage.setItem(`nunma_paid_${zoneId}`, 'true');
             setIsProcessing(false);
             navigate(`/classroom/zone/${zoneId}`);
         } catch (error) {
@@ -85,7 +107,7 @@ const Payment: React.FC = () => {
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Selected Zone</p>
-                                    <p className="text-lg font-bold">Pollards Masterclass</p>
+                                    <p className="text-lg font-bold">{zone ? zone.title : 'Loading...'}</p>
                                 </div>
                             </div>
                             <div className="flex justify-between items-center p-5">

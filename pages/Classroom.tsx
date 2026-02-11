@@ -17,9 +17,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import ClassroomStream from '../components/ClassroomStream';
 
-const ZONES_STORAGE_KEY = 'nunma_zones_data';
-const ENROLLED_STORAGE_KEY = 'nunma_enrolled_zones';
-const LIVE_SESSIONS_KEY = 'nunma_live_sessions';
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '../utils/firebase';
+import { useAuth } from '../context/AuthContext';
 
 const Classroom: React.FC = () => {
    const navigate = useNavigate();
@@ -28,32 +28,52 @@ const Classroom: React.FC = () => {
    const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
    const [showLeaderboard, setShowLeaderboard] = useState(false);
 
+   const { user } = useAuth();
+   const [enrollmentIds, setEnrollmentIds] = useState<string[]>([]);
+
    useEffect(() => {
-      const loadEnrolled = () => {
-         const zonesData = localStorage.getItem(ZONES_STORAGE_KEY);
-         const enrolledData = localStorage.getItem(ENROLLED_STORAGE_KEY);
-         const liveData = localStorage.getItem(LIVE_SESSIONS_KEY);
+      if (!user) return;
 
-         if (zonesData && enrolledData) {
-            const zones = JSON.parse(zonesData);
-            const enrolledIds = JSON.parse(enrolledData);
-            const filtered = zones.filter((z: any) => enrolledIds.includes(z.id)).map((z: any) => ({
-               ...z,
-               tutorName: 'Sundaram S M',
-               rating: '4.9'
-            }));
-            setEnrolledZones(filtered);
-         }
+      // 1. Fetch Enrollments
+      const fetchEnrollments = async () => {
+         const snap = await getDocs(collection(db, `users/${user.uid}/enrollments`));
+         const ids = snap.docs.map(d => d.data().zoneId);
+         setEnrollmentIds(ids);
 
-         if (liveData) {
-            setLiveSessions(JSON.parse(liveData));
+         // Fetch Zone Details
+         const zones: any[] = [];
+         for (const id of ids) {
+            const zDoc = await getDoc(doc(db, 'zones', id));
+            if (zDoc.exists()) {
+               zones.push({ id: zDoc.id, ...zDoc.data() });
+            }
          }
+         setEnrolledZones(zones);
       };
+      fetchEnrollments();
+   }, [user]);
 
-      loadEnrolled();
-      window.addEventListener('storage', loadEnrolled);
-      return () => window.removeEventListener('storage', loadEnrolled);
-   }, []);
+   // 2. Listen for Live Sessions in Enrolled Zones
+   useEffect(() => {
+      if (enrollmentIds.length === 0) return;
+
+      const unsubs: (() => void)[] = [];
+
+      enrollmentIds.forEach(zId => {
+         const q = query(collection(db, 'zones', zId, 'sessions'));
+         const un = onSnapshot(q, (snap) => {
+            const sessions = snap.docs.map(d => ({ id: d.id, zoneId: zId, ...d.data() }));
+            setLiveSessions(prev => {
+               // Remove old for this zone
+               const others = prev.filter(s => s.zoneId !== zId);
+               return [...others, ...sessions];
+            });
+         });
+         unsubs.push(un);
+      });
+
+      return () => unsubs.forEach(u => u());
+   }, [enrollmentIds]);
 
    const topStudents = [
       { name: 'Sachin Sundar', xp: '15,400', rank: 1, avatar: 'https://picsum.photos/seed/s1/40/40' },

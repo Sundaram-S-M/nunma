@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion } from 'firebase/firestore';
-import { db } from '../utils/firebase';
+import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, onSnapshot, addDoc, orderBy, deleteDoc } from 'firebase/firestore';
+import { db, functions } from '../utils/firebase';
+import { httpsCallable } from 'firebase/functions';
 import {
   ArrowLeft,
   ChevronRight,
@@ -27,14 +28,15 @@ import {
   Target,
   FileSpreadsheet,
   Share2,
-  LogOut
+  LogOut,
+  ArrowRight
 } from 'lucide-react';
 import ClassroomStream from '../components/ClassroomStream';
 import { generateOpenBadgeVC, downloadVCAsJSON } from '../utils/vcUtils';
 import { useAuth } from '../context/AuthContext';
 
-const ZONES_STORAGE_KEY = 'nunma_zones_data';
-const LIVE_SESSIONS_KEY = 'nunma_live_sessions';
+
+
 
 const StudentZoneView: React.FC = () => {
   const { zoneId } = useParams();
@@ -67,76 +69,126 @@ const StudentZoneView: React.FC = () => {
 
 
   useEffect(() => {
-    const loadData = () => {
-      const saved = localStorage.getItem(ZONES_STORAGE_KEY);
-      if (saved) {
-        const zones = JSON.parse(saved);
-        const found = zones.find((z: any) => z.id === zoneId);
-        setZone(found);
+    if (!zoneId || !db) return;
+
+    // 1. Zone Details
+    const zoneUnsub = onSnapshot(doc(db, 'zones', zoneId), (docSnap) => {
+      if (docSnap.exists()) {
+        setZone({ id: docSnap.id, ...docSnap.data() });
+      } else {
+        // Handle zone not found
       }
+    });
 
-      const liveData = localStorage.getItem(LIVE_SESSIONS_KEY);
-      if (liveData) {
-        setLiveSessions(JSON.parse(liveData));
+    // 2. Live Sessions
+    const sessionsQ = query(collection(db, 'zones', zoneId, 'sessions'), where('status', '==', 'live'));
+    const sessionsUnsub = onSnapshot(sessionsQ, (snapshot) => {
+      const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setLiveSessions(sessions);
+
+      // Auto-join if param present
+      const params = new URLSearchParams(location.search);
+      const sessionId = params.get('session');
+      if (sessionId) {
+        const found = sessions.find((s: any) => s.id === sessionId);
+        if (found) setActiveLiveRoom(found);
       }
-    };
+    });
 
-    loadData();
-    window.addEventListener('storage', loadData);
+    // 3. Exams
+    const examsQ = query(collection(db, 'zones', zoneId, 'exams'));
+    const examsUnsub = onSnapshot(examsQ, (snapshot) => {
+      setExams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
 
-    // Payment & Whitelist Check
-    const checkAccess = () => {
-      const savedZones = localStorage.getItem(ZONES_STORAGE_KEY);
-      if (savedZones) {
-        const zones = JSON.parse(savedZones);
-        const currentZone = zones.find((z: any) => z.id === zoneId);
+    // 4. Curriculum
+    const chaptersQ = query(collection(db, 'zones', zoneId, 'chapters'), orderBy('order', 'asc')); // Assuming 'order' field exists or update schema
+    const chaptersUnsub = onSnapshot(chaptersQ, (snapshot) => {
+      setCurriculum(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
 
-        // Mock payment check: If price > 0 and not whitelisted, redirect to payment
-        const isWhitelisted = currentZone?.whitelistedEmails?.includes(authUser?.email);
-        const hasPaid = localStorage.getItem(`nunma_paid_${zoneId}`) === 'true';
-
-        if (currentZone?.price > 0 && !isWhitelisted && !hasPaid) {
-          navigate(`/payment/${zoneId}`);
+    // 5. Student Data (Self)
+    let studentUnsub = () => { };
+    if (authUser) {
+      // Check both 'students' collection (enrolled)
+      // We assume the student ID is the auth uid or email is matched. 
+      // Best practice: use UID as doc ID for students.
+      // If the 'Grant Access' used random ID, we query by email.
+      const q = query(collection(db, 'zones', zoneId, 'students'), where('email', '==', authUser.email));
+      studentUnsub = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+          const sDoc = snapshot.docs[0];
+          setStudentData({ id: sDoc.id, ...sDoc.data() });
         }
-      }
-    };
-    checkAccess();
-
-    const params = new URLSearchParams(location.search);
-    const sessionId = params.get('session');
-    if (sessionId) {
-      const liveData = localStorage.getItem(LIVE_SESSIONS_KEY);
-      if (liveData) {
-        const sessions = JSON.parse(liveData);
-        const session = sessions.find((s: any) => s.id === sessionId && s.status === 'live');
-        if (session) {
-          setActiveLiveRoom(session);
-        }
-      }
+      });
     }
 
-    // Load Exams
-    const savedExams = localStorage.getItem(`nunma_exams_${zoneId}`);
-    if (savedExams) setExams(JSON.parse(savedExams));
-
-    // Load Curriculum
-    const savedCurriculum = localStorage.getItem(`nunma_chapters_${zoneId}`);
-    if (savedCurriculum) setCurriculum(JSON.parse(savedCurriculum));
-
-    const savedResults = localStorage.getItem(`nunma_results_${zoneId}`);
-    if (savedResults) setExamResults(JSON.parse(savedResults));
-
-    const savedStudents = localStorage.getItem(`nunma_students_${zoneId}`);
-    if (savedStudents && authUser) {
-      const students = JSON.parse(savedStudents);
-      const currentStudent = students.find((s: any) => s.email === authUser.email || s.id === authUser.uid);
-      setStudentData(currentStudent);
-    }
+    // 6. Exam Results (My Results)
+    // Assuming we store results in a subcollection 'submissions' or global 'exam_results'
+    // Let's use a subcollection in zone for now: zones/{zoneId}/exam_results where studentId == uid
+    const resultsQ = query(collection(db, 'zones', zoneId, 'exam_results'), where('studentId', '==', authUser?.uid || ''));
+    const resultsUnsub = onSnapshot(resultsQ, (snapshot) => {
+      setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
 
     return () => {
-      window.removeEventListener('storage', loadData);
+      zoneUnsub();
+      sessionsUnsub();
+      examsUnsub();
+      chaptersUnsub();
+      studentUnsub();
+      resultsUnsub();
     };
-  }, [zoneId, location.search]);
+  }, [zoneId, location.search, authUser]);
+
+  // Payment Check Effect
+  useEffect(() => {
+    if (!zone || !authUser) return;
+
+    // Wait for studentData to be attempted
+    // If price > 0 and user is NOT in studentData (and not owner/whitelisted in zone check which we might skip for now or check zone.whitelistedEmails)
+
+    const check = async () => {
+      // Mock payment check removed. We rely on studentData presence.
+      // If a student is in 'students' collection, they have access.
+      // If not, and zone.price > 0, redirect.
+
+      const isWhitelisted = zone.whitelistedEmails?.includes(authUser.email);
+      // If we have studentData, we are good.
+      if (studentData) return;
+
+      // If no student data, and price > 0, and not whitelisted -> Redirect
+      if (zone.price > 0 && !isWhitelisted) {
+        // Check if we are the owner? (Though this is student view)
+        if (zone.createdBy === authUser.uid) return;
+
+        navigate(`/payment/${zoneId}`);
+      }
+    };
+    check();
+  }, [zone, studentData, authUser, navigate, zoneId]);
+
+  // Auto-Resume (Select first incomplete segment)
+  useEffect(() => {
+    if (activeContent || !curriculum || curriculum.length === 0 || !studentData) return;
+
+    const allSegments = curriculum.flatMap(c => c.segments || []);
+    if (allSegments.length === 0) return;
+
+    const completedIds = studentData.completedSegments || [];
+    const firstIncomplete = allSegments.find(s => !completedIds.includes(s.id));
+
+    if (firstIncomplete) {
+      setActiveContent(firstIncomplete);
+      const chapter = curriculum.find(c => (c.segments || []).some((s: any) => s.id === firstIncomplete.id));
+      if (chapter && !expandedChapters.includes(chapter.id)) {
+        setExpandedChapters(prev => [...prev, chapter.id]);
+      }
+    } else {
+      // If all are completed, default to the first one so they aren't stuck on a blank screen
+      setActiveContent(allSegments[0]);
+    }
+  }, [curriculum, studentData, activeContent, expandedChapters]);
 
   // Cheating Detection: Window Blur
   useEffect(() => {
@@ -167,21 +219,29 @@ const StudentZoneView: React.FC = () => {
     setCameraStatus('on'); // Mock camera start
   };
 
-  const handleTerminateExam = (status: 'passed' | 'failed') => {
+  const handleTerminateExam = async (status: 'passed' | 'failed') => {
     setIsExamTerminated(true);
+    if (!zoneId || !activeExam) return;
+
     const result = {
-      id: Date.now().toString(),
       examId: activeExam.id,
       studentId: authUser?.uid || 'anon',
       studentName: authUser?.name || 'Anonymous',
-      marks: status === 'passed' ? Math.floor(activeExam.maxMark * 0.8) : 0, // Mock scoring
+      marks: status === 'passed' ? Math.floor(activeExam.maxMark * 0.8) : 0, // Mock scoring logic for now
       status: status,
       warnings: examWarnings,
       completedAt: new Date().toISOString()
     };
-    const updatedResults = [...examResults, result];
-    setExamResults(updatedResults);
-    localStorage.setItem('nunma_exam_results', JSON.stringify(updatedResults));
+
+    try {
+      await addDoc(collection(db, 'zones', zoneId, 'exam_results'), result);
+      // Optimistic update
+      setExamResults(prev => [...prev, { id: 'temp-' + Date.now(), ...result }]);
+    } catch (e) {
+      console.error("Failed to save exam result", e);
+      alert("Failed to submit exam result. Please contact support.");
+    }
+
     setActiveExam(null);
     setCameraStatus('off');
   };
@@ -205,6 +265,52 @@ const StudentZoneView: React.FC = () => {
     );
   };
 
+  const handleMarkAsCompleted = async (segmentId: string) => {
+    if (!zoneId || !studentData || !authUser) return;
+
+    // Prevent double completion
+    if (studentData.completedSegments?.includes(segmentId)) {
+      autoAdvance(segmentId);
+      return;
+    }
+
+    try {
+      const studentDocRef = doc(db, 'zones', zoneId, 'students', studentData.id);
+      await updateDoc(studentDocRef, {
+        completedSegments: arrayUnion(segmentId),
+        engagementScore: (studentData.engagementScore || 0) + 10
+      });
+      // studentData state will be updated via onSnapshot listener implicitly
+      autoAdvance(segmentId);
+    } catch (e) {
+      console.error("Failed to mark segment as completed", e);
+    }
+  };
+
+  const autoAdvance = (currentSegmentId: string) => {
+    const allSegments = curriculum.flatMap(c => c.segments);
+    const currentIndex = allSegments.findIndex(s => s.id === currentSegmentId);
+
+    if (currentIndex !== -1 && currentIndex < allSegments.length - 1) {
+      const nextSegment = allSegments[currentIndex + 1];
+      setActiveContent(nextSegment);
+
+      const nextChapter = curriculum.find(c => c.segments.some(s => s.id === nextSegment.id));
+      if (nextChapter && !expandedChapters.includes(nextChapter.id)) {
+        setExpandedChapters(prev => [...prev, nextChapter.id]);
+      }
+    } else {
+      alert("Congratulations! You've reached the end of the curriculum.");
+    }
+  };
+
+  const totalSegmentsCount = curriculum.flatMap(c => c.segments).length;
+  const completedSegmentsCount = studentData?.completedSegments?.length || 0;
+  const isCourseComplete = totalSegmentsCount > 0 && completedSegmentsCount >= totalSegmentsCount;
+  const progressPercentage = totalSegmentsCount > 0 ? Math.round((completedSegmentsCount / totalSegmentsCount) * 100) : 0;
+
+  const currentZoneLive = liveSessions.find(s => s.zoneId === zoneId && s.status === 'live');
+
   const handleClaimCertificate = () => {
     setIsGeneratingCert(true);
     setTimeout(() => {
@@ -215,26 +321,28 @@ const StudentZoneView: React.FC = () => {
     }, 1500);
   };
 
-  const currentZoneLive = liveSessions.find(s => s.zoneId === zoneId && s.status === 'live');
-
-  const handleLeaveZone = () => {
+  const handleLeaveZone = async () => {
     if (!zoneId || !authUser) return;
 
     if (confirm('Are you sure you want to leave this zone? All your progress and attendance data will be lost.')) {
-      // 1. Remove from enrolled zones (if kept in a user list - here we check all zones)
-      // 2. Remove student from the zone's student list
-      const savedStudents = localStorage.getItem(`nunma_students_${zoneId}`);
-      if (savedStudents) {
-        let students = JSON.parse(savedStudents);
-        students = students.filter((s: any) => s.email !== authUser.email && s.id !== authUser.uid);
-        localStorage.setItem(`nunma_students_${zoneId}`, JSON.stringify(students));
+      try {
+        // Assuming student ID is stored in studentData.id which should be same as students doc ID
+        if (studentData && studentData.id) {
+          await deleteDoc(doc(db, 'zones', zoneId, 'students', studentData.id));
+        } else {
+          // If we don't have studentData loaded but we want to leave, we try authUser.uid?
+          // But 'Grant Access' used random IDs initially.
+          // If we are migrating, we should rely on studentData being loaded.
+          // If manual grant, ID was random. We found it via query.
+          if (studentData?.id) {
+            await deleteDoc(doc(db, 'zones', zoneId, 'students', studentData.id));
+          }
+        }
+        navigate('/workplace');
+      } catch (e) {
+        console.error("Failed to leave zone", e);
+        alert("Failed to leave zone.");
       }
-
-      // 3. Remove from whitelist if applicable (optional, usually whitelist decides access, but here we just remove enrollment)
-      // (Skipping whitelist removal to allow re-join if still whitelisted)
-
-      // 4. Redirect
-      navigate('/workplace');
     }
   };
 
@@ -279,11 +387,19 @@ const StudentZoneView: React.FC = () => {
           )}
           {zone.provideCertificate && (
             <div
-              onClick={handleClaimCertificate}
-              className="bg-[#1A1A4E] px-8 py-4 rounded-[1.75rem] border border-white/10 flex items-center gap-4 shadow-2xl shadow-indigo-900/20 cursor-pointer hover:brightness-110 active:scale-95 transition-all"
+              onClick={() => isCourseComplete ? handleClaimCertificate() : alert(`Complete all modules to unlock certification. Progress: ${completedSegmentsCount}/${totalSegmentsCount}`)}
+              className={`px-8 py-4 rounded-[1.75rem] border flex flex-col items-center gap-1 shadow-2xl transition-all ${isCourseComplete ? 'bg-[#1A1A4E] border-white/10 shadow-indigo-900/20 cursor-pointer hover:brightness-110 active:scale-95' : 'bg-gray-100 border-gray-200 cursor-not-allowed grayscale'}`}
             >
-              <Award size={24} className="text-[#c2f575]" />
-              <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Certification Zone</span>
+              <div className="flex items-center gap-4">
+                <Award size={24} className={isCourseComplete ? "text-[#c2f575]" : "text-gray-400"} />
+                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isCourseComplete ? 'text-white' : 'text-gray-400'}`}>Certification Zone</span>
+              </div>
+              <div className="w-full h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
+                <div
+                  className="h-full bg-[#c2f575] transition-all duration-500"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
             </div>
           )}
           <div className="flex gap-4">
@@ -307,16 +423,40 @@ const StudentZoneView: React.FC = () => {
           {activeTab === 'content' ? (
             activeContent ? (
               <div className="bg-white rounded-[4rem] p-16 border border-gray-100 shadow-2xl min-h-[600px] flex flex-col items-center justify-center text-center relative overflow-hidden group">
-                <div className="w-32 h-32 bg-gray-50 rounded-[3rem] flex items-center justify-center text-indigo-900 mb-10 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-700">
-                  {activeContent.type === 'video' ? <Video size={64} strokeWidth={1.5} /> : <FileText size={64} strokeWidth={1.5} />}
-                </div>
-                <h2 className="text-4xl font-black text-indigo-900 mb-6 tracking-tight">{activeContent.title}</h2>
-                <p className="text-gray-400 max-w-md mx-auto leading-relaxed text-lg font-medium italic">
-                  Secure learning stream initiated. Interactive dashboard features are loading...
-                </p>
+                {activeContent.type === 'video' && activeContent.videoId ? (
+                  <BunnyVideoPlayer
+                    videoId={activeContent.videoId}
+                    title={activeContent.title}
+                    onComplete={() => handleMarkAsCompleted(activeContent.id)}
+                  />
+                ) : (
+                  <>
+                    <div className="w-32 h-32 bg-gray-50 rounded-[3rem] flex items-center justify-center text-indigo-900 mb-10 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-700">
+                      <FileText size={64} strokeWidth={1.5} />
+                    </div>
+                    <h2 className="text-4xl font-black text-indigo-900 mb-6 tracking-tight">{activeContent.title}</h2>
+                    <p className="text-gray-400 max-w-md mx-auto leading-relaxed text-lg font-medium italic">
+                      {activeContent.type === 'video' ? 'Video ID missing. Please re-upload.' : 'Content loaded successfully.'}
+                    </p>
+                  </>
+                )}
                 <div className="mt-14 flex gap-6">
                   <button onClick={() => setActiveContent(null)} className="px-12 py-5 bg-gray-50 text-gray-400 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-white hover:shadow-md transition-all">Close Player</button>
-                  <button className="px-14 py-5 bg-[#c2f575] text-indigo-900 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl shadow-[#c2f575]/30 hover:brightness-110 active:scale-95 transition-all">Mark as Completed</button>
+                  {studentData?.completedSegments?.includes(activeContent.id) ? (
+                    <button
+                      onClick={() => autoAdvance(activeContent.id)}
+                      className="px-14 py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center gap-3"
+                    >
+                      Continue to Next Module <ArrowRight size={16} />
+                    </button>
+                  ) : activeContent.type !== 'video' && (
+                    <button
+                      onClick={() => handleMarkAsCompleted(activeContent.id)}
+                      className="px-14 py-5 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all bg-[#c2f575] text-indigo-900 shadow-[#c2f575]/30 hover:brightness-110 active:scale-95"
+                    >
+                      Mark as Completed
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -428,12 +568,27 @@ const StudentZoneView: React.FC = () => {
             <div className="space-y-6">
               {curriculum.map((chapter, idx) => (
                 <div key={chapter.id} className="space-y-4">
-                  <button onClick={() => toggleChapter(chapter.id)} className="w-full flex items-center justify-between group">
+                  <button onClick={() => toggleChapter(chapter.id)} className="w-full flex items-center justify-between group text-left">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 text-sm font-black border border-gray-100 group-hover:bg-indigo-900 group-hover:text-white transition-all">
                         {idx + 1}
                       </div>
-                      <h4 className="font-black text-indigo-900 text-sm tracking-tight">{chapter.title}</h4>
+                      <div>
+                        <h4 className="font-black text-indigo-900 text-sm tracking-tight">{chapter.title}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="w-20 h-1 bg-gray-50 rounded-full overflow-hidden border border-gray-100">
+                            <div
+                              className="h-full bg-[#c2f575] transition-all duration-700"
+                              style={{
+                                width: `${Math.round(((chapter.segments || []).filter(s => studentData?.completedSegments?.includes(s.id)).length / (chapter.segments?.length || 1)) * 100)}%`
+                              }}
+                            />
+                          </div>
+                          <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">
+                            {Math.round(((chapter.segments || []).filter(s => studentData?.completedSegments?.includes(s.id)).length / (chapter.segments?.length || 1)) * 100)}%
+                          </span>
+                        </div>
+                      </div>
                     </div>
                     <ChevronDown size={18} className={`text-gray-300 transition-transform duration-500 ${expandedChapters.includes(chapter.id) ? 'rotate-180' : ''}`} />
                   </button>
@@ -447,7 +602,11 @@ const StudentZoneView: React.FC = () => {
                         >
                           <div className="flex items-center gap-4">
                             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${activeContent?.id === segment.id ? 'bg-white/10' : 'bg-gray-50'}`}>
-                              {segment.type === 'video' ? <Play size={16} fill="currentColor" /> : <FileText size={16} />}
+                              {studentData?.completedSegments?.includes(segment.id) ? (
+                                <CheckCircle size={16} className="text-green-500" />
+                              ) : (
+                                segment.type === 'video' ? <Play size={16} fill="currentColor" /> : <FileText size={16} />
+                              )}
                             </div>
                             <div className="text-left">
                               <p className="text-sm font-bold leading-none mb-2">{segment.title}</p>
@@ -482,13 +641,7 @@ const StudentZoneView: React.FC = () => {
                       }
                     });
                   } else {
-                    const savedConversations = JSON.parse(localStorage.getItem('nunma_conversations') || '[]');
-                    const conv = savedConversations.find((c: any) => c.zoneId === zoneId);
-                    if (conv) {
-                      navigate(`/inbox?tab=community&chatId=${conv.id}`);
-                    } else {
-                      navigate('/inbox?tab=community');
-                    }
+                    console.warn("Database not initialized");
                   }
                 }}
                 className="w-full py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.25em] shadow-2xl shadow-indigo-900/20 hover:bg-[#1A1A4E] transition-all active:scale-95"
@@ -711,3 +864,75 @@ const StudentZoneView: React.FC = () => {
 };
 
 export default StudentZoneView;
+
+const BunnyVideoPlayer: React.FC<{ videoId: string; title: string; onComplete?: () => void }> = ({ videoId, title, onComplete }) => {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      // Standard Bunny.net player events via postMessage
+      try {
+        const data = JSON.parse(e.data);
+        if (data.event === 'ended') {
+          console.log("Bunny: Video Finished");
+          if (onComplete) onComplete();
+        }
+      } catch (err) {
+        // Not a Bunny message or not JSON
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onComplete]);
+
+  useEffect(() => {
+    const fetchToken = async () => {
+      try {
+        const generateToken = httpsCallable(functions, 'generateBunnyToken');
+        const { data }: any = await generateToken({ videoId });
+
+        // Construct Signed URL
+        const signedUrl = `https://iframe.bunny.net/embed/${videoId}?token=${data.token}&expires=${data.expires}`;
+        setUrl(signedUrl);
+      } catch (err: any) {
+        console.error("Token Generation Failed:", err);
+        setError("Secure playback authorization failed.");
+      }
+    };
+    fetchToken();
+  }, [videoId]);
+
+  if (error) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-12 text-center">
+        <AlertTriangle size={48} className="text-red-500 mb-4" />
+        <h3 className="text-indigo-900 font-black text-xl mb-2">Access Denied</h3>
+        <p className="text-gray-400 text-sm max-w-xs">{error}</p>
+      </div>
+    );
+  }
+
+  if (!url) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center">
+        <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-6"></div>
+        <p className="text-xs font-black uppercase tracking-widest text-indigo-900">Authenticating Stream...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full rounded-[3rem] overflow-hidden bg-black shadow-2xl relative">
+      <iframe
+        src={url}
+        loading="lazy"
+        className="w-full h-full absolute inset-0 border-0"
+        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+        allowFullScreen={true}
+        title={title}
+      />
+    </div>
+  );
+};

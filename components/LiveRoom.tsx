@@ -10,7 +10,7 @@ import {
 } from '@livekit/components-react';
 import { Track, LocalAudioTrack, RoomEvent, ConnectionState } from 'livekit-client';
 import { httpsCallable } from 'firebase/functions';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 import ChatSidebar from './ChatSidebar';
@@ -194,10 +194,14 @@ const RoomContent: React.FC<RoomContentProps> = ({
   const [isScreenSharing, setIsScreenSharing] = useState(false);
 
   useEffect(() => {
-    const sessions = JSON.parse(localStorage.getItem('nunma_live_sessions') || '[]');
-    const active = sessions.find((s: any) => s.id === sessionId);
-    if (active) setActiveSession(active);
-  }, [sessionId]);
+    if (!zoneId || !sessionId || !db) return;
+    const unsub = onSnapshot(doc(db, 'zones', zoneId, 'sessions', sessionId), (doc) => {
+      if (doc.exists()) {
+        setActiveSession({ id: doc.id, ...doc.data() });
+      }
+    });
+    return () => unsub();
+  }, [sessionId, zoneId]);
 
   // Sync Attendance & Start Capture
   useEffect(() => {

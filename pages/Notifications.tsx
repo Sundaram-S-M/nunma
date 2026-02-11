@@ -2,20 +2,79 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Radio, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { db } from '../utils/firebase';
+import { useAuth } from '../context/AuthContext';
 
 const Notifications: React.FC = () => {
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
   const navigate = useNavigate();
 
+  const { user } = useAuth();
+
   useEffect(() => {
-    const fetchLocal = () => {
-      const active = JSON.parse(localStorage.getItem('nunma_live_sessions') || '[]');
-      setLiveSessions(active.filter((s: any) => s.status === 'live'));
+    if (!user) return;
+
+    // Fetch enrollments to know which zones to listen to
+    const fetchSessions = async () => {
+      const enrollSnap = await getDocs(collection(db, `users/${user.uid}/enrollments`));
+      const zoneIds = enrollSnap.docs.map(d => d.data().zoneId);
+
+      if (zoneIds.length === 0) {
+        setLiveSessions([]);
+        return;
+      }
+
+      const unsubs: (() => void)[] = [];
+      zoneIds.forEach(zId => {
+        const q = query(
+          collection(db, 'zones', zId, 'sessions'),
+          where('status', '==', 'live')
+        );
+
+        const un = onSnapshot(q, (snap) => {
+          const sessions = snap.docs.map(d => ({ id: d.id, zoneId: zId, ...d.data() }));
+          setLiveSessions(prev => {
+            const others = prev.filter(s => s.zoneId !== zId);
+            return [...others, ...sessions];
+          });
+        });
+        unsubs.push(un);
+      });
+
+      return () => unsubs.forEach(u => u());
     };
-    fetchLocal();
-    window.addEventListener('storage', fetchLocal);
-    return () => window.removeEventListener('storage', fetchLocal);
-  }, []);
+
+    // We can't really return the array of unsubs easily from async function to useEffect cleanup
+    // So we'll wrap it slightly differently or just use a mounting flag / simpler logic
+    // For simplicity in this tool call, I'll use a self-contained effect logic
+
+    let unsubs: (() => void)[] = [];
+
+    getDocs(collection(db, `users/${user.uid}/enrollments`)).then(enrollSnap => {
+      const zoneIds = enrollSnap.docs.map(d => d.data().zoneId);
+      if (zoneIds.length === 0) return;
+
+      zoneIds.forEach(zId => {
+        const q = query(
+          collection(db, 'zones', zId, 'sessions'),
+          where('status', '==', 'live')
+        );
+        const un = onSnapshot(q, (snap) => {
+          const sessions = snap.docs.map(d => ({ id: d.id, zoneId: zId, ...d.data() }));
+          setLiveSessions(prev => {
+            const others = prev.filter(s => s.zoneId !== zId);
+            return [...others, ...sessions];
+          });
+        });
+        unsubs.push(un);
+      });
+    });
+
+    return () => {
+      unsubs.forEach(u => u());
+    };
+  }, [user]);
 
   return (
     <div className="max-w-[1200px] mx-auto space-y-8 animate-in fade-in duration-700">

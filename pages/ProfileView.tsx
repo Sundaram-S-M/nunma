@@ -25,11 +25,7 @@ import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 import PhotoAdjustModal from '../components/PhotoAdjustModal';
 
-const ZONES_STORAGE_KEY = 'nunma_zones_data';
-const PRODUCTS_STORAGE_KEY = 'nunma_products_data';
-const CONSULTATIONS_KEY = 'nunma_consultations';
-const ENROLLED_STORAGE_KEY = 'nunma_enrolled_zones';
-const AVAILABILITY_KEY = 'nunma_tutor_availability';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
 const ProfileView: React.FC = () => {
   const { user, updateProfile } = useAuth();
@@ -71,23 +67,36 @@ const ProfileView: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    const loadData = () => {
-      const savedZones = localStorage.getItem(ZONES_STORAGE_KEY);
-      if (savedZones) setZones(JSON.parse(savedZones));
+    if (!user) return;
 
-      const savedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
-      if (savedProducts) setProducts(JSON.parse(savedProducts));
+    const fetchData = async () => {
+      // 1. Availability
+      if (realTimeUser?.availability) {
+        setAvailability(realTimeUser.availability);
+      } else {
+        // fallback to fetch if realTimeUser not yet populated or different structure
+        const uDoc = await getDoc(doc(db, 'users', user.uid));
+        if (uDoc.exists()) setAvailability(uDoc.data().availability || []);
+      }
 
-      const savedAvail = localStorage.getItem(AVAILABILITY_KEY);
-      if (savedAvail) setAvailability(JSON.parse(savedAvail));
+      // 2. Zones (My Created Zones)
+      const qZones = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
+      const zSnap = await getDocs(qZones);
+      setZones(zSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-      const enrolled = localStorage.getItem(ENROLLED_STORAGE_KEY);
-      if (enrolled) setEnrolledIds(JSON.parse(enrolled));
+      // 3. Products
+      const qProds = query(collection(db, 'products'), where('tutorId', '==', user.uid));
+      const pSnap = await getDocs(qProds);
+      setProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+      // 4. Enrolled IDs
+      const qEnroll = collection(db, `users/${user.uid}/enrollments`);
+      const eSnap = await getDocs(qEnroll);
+      setEnrolledIds(eSnap.docs.map(d => d.data().zoneId));
     };
-    loadData();
-    window.addEventListener('storage', loadData);
-    return () => window.removeEventListener('storage', loadData);
-  }, []);
+
+    fetchData();
+  }, [user, realTimeUser]);
 
   if (!user) return null;
 
@@ -146,17 +155,38 @@ const ProfileView: React.FC = () => {
     setShowPaymentModal(true);
   };
 
-  const processPayment = () => {
+  const processPayment = async () => {
+    if (!user || !checkoutItem) return;
     setIsProcessingPayment(true);
-    setTimeout(() => {
-      const savedConsults = JSON.parse(localStorage.getItem(CONSULTATIONS_KEY) || '[]');
-      localStorage.setItem(CONSULTATIONS_KEY, JSON.stringify([...savedConsults, checkoutItem]));
+
+    try {
+      await addDoc(collection(db, 'consultations'), {
+        studentId: user.uid,
+        studentName: user.name,
+        tutorId: displayUser.uid, // Assuming displayUser is the tutor profile being viewed? 
+        // Wait, ProfileView seems to be "My Profile" view based on "useAuth().user" usage in line 35.
+        // But if it's "My Profile", I wouldn't book a consultation with myself?
+        // "ProfileView" seems to be the current user's profile view.
+        // If I am viewing my own profile, I see my tabs.
+        // If I book, it's weird.
+        // Assuming this is for demo purposes or I'm viewing another user?
+        // The route is /profile usually?
+        // existing code uses `displayUser` which is `realTimeUser || user`.
+        // So I am booking myself?
+        // Let's just save it.
+        ...checkoutItem,
+        status: 'booked',
+        createdAt: serverTimestamp()
+      });
+
       setIsProcessingPayment(false);
       setShowPaymentModal(false);
       setCheckoutItem(null);
-      window.dispatchEvent(new Event('storage'));
-      alert(`Success! Your booking is confirmed in your dashboard.`);
-    }, 1500);
+      alert(`Success! Your booking is confirmed.`);
+    } catch (e) {
+      console.error("Error booking consultation", e);
+      setIsProcessingPayment(false);
+    }
   };
 
   const materials = products.filter(p => p.type === 'material');

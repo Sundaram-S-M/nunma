@@ -2,35 +2,66 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Radio, X, ArrowRight } from 'lucide-react';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { db } from '../utils/firebase';
+import { useAuth } from '../context/AuthContext';
 
 const LiveNotification: React.FC = () => {
+    const { user } = useAuth();
     const [activeSession, setActiveSession] = useState<any>(null);
     const [show, setShow] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
-        const checkSessions = () => {
-            const sessions = JSON.parse(localStorage.getItem('nunma_live_sessions') || '[]');
-            const live = sessions.find((s: any) => s.status === 'live');
+        if (!user) return;
 
-            if (live && (!activeSession || activeSession.id !== live.id)) {
-                setActiveSession(live);
-                setShow(true);
-            } else if (!live) {
-                setShow(false);
-                setActiveSession(null);
-            }
+        let unsubs: (() => void)[] = [];
+
+        const setupListeners = async () => {
+            // Get enrollments to know which zones to watch
+            const enrollRef = collection(db, `users/${user.uid}/enrollments`);
+            const enrollSnap = await getDocs(enrollRef);
+            const zoneIds = enrollSnap.docs.map(d => d.data().zoneId);
+
+            if (zoneIds.length === 0) return;
+
+            zoneIds.forEach(zId => {
+                const q = query(
+                    collection(db, `zones/${zId}/sessions`),
+                    where('status', '==', 'live')
+                );
+                const unsub = onSnapshot(q, (snap) => {
+                    // If we find a live session we haven't seen/dismissed, show it
+                    // For simplicity, just show the first one found
+                    if (!snap.empty) {
+                        const live = { id: snap.docs[0].id, zoneId: zId, ...snap.docs[0].data() };
+                        // Only show if it's different from current or we haven't shown it?
+                        // The logic in original was: if live && (!active || diff), show.
+                        setActiveSession((prev: any) => {
+                            if (!prev || prev.id !== live.id) {
+                                setShow(true);
+                                return live;
+                            }
+                            return prev;
+                        });
+                    } else {
+                        // If the current active session ended, hide
+                        setActiveSession((prev: any) => {
+                            if (prev && prev.zoneId === zId) {
+                                setShow(false);
+                                return null;
+                            }
+                            return prev;
+                        });
+                    }
+                });
+                unsubs.push(unsub);
+            });
         };
 
-        checkSessions();
-        window.addEventListener('storage', checkSessions);
-        const interval = setInterval(checkSessions, 5000);
-
-        return () => {
-            window.removeEventListener('storage', checkSessions);
-            clearInterval(interval);
-        };
-    }, [activeSession]);
+        setupListeners();
+        return () => unsubs.forEach(u => u());
+    }, [user]);
 
     if (!show || !activeSession) return null;
 

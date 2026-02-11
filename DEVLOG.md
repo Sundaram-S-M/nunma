@@ -46,6 +46,12 @@ Nunma is a comprehensive Learning Management System (LMS) designed for professio
 - **Template Customization:** Ability to brand certificates with custom colors and signatures.
 - **Verification Portal:** Public-facing page to verify certificate authenticity via ID.
 
+### 8. Advanced Features (New)
+- **Smart Pricing (PPP):** `usePPPPrice` hook automatically adjusts zone prices based on user location (e.g., 60% off for India).
+- **Proctored Exams:** `StudentZoneView` includes a secure exam environment with tab-switch warnings and mock biometric monitoring.
+- **Real-time Chat:** `ChatSidebar` enables live discussion within zones, powered by Firestore.
+- **Hex Code Support:** Enhanced color picker for certificate branding.
+
 ## Technical Architecture
 - **Frontend:** React 19 with TypeScript.
 - **Styling:** Tailwind CSS with a custom design system (Rounded UI, Glassmorphism).
@@ -57,6 +63,6 @@ Nunma is a comprehensive Learning Management System (LMS) designed for professio
 - **Canvas Context Error:** Fixed a critical bug in `ZoneManagement.tsx` where `getContext('2d')` was called on a null canvas reference during the grading view initialization.
 
 ## Next Steps
-- Implement actual backend integration (Supabase/Firebase).
-- enhance the Live Room with real WebRTC signaling.
+- Full Backend Migration (Replace localStorage fallbacks with Firebase).
+- P2P Video implementation for Live Rooms.
 - Expand the Digital Store for selling downloadable assets.

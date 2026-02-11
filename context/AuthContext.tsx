@@ -44,19 +44,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mock Mode Fallback: Check localStorage if Firebase is not initialized
-    const checkMockAuth = () => {
-      const mockUser = localStorage.getItem('nunma_mock_user');
-      if (mockUser) {
-        setUser(JSON.parse(mockUser));
-        setIsAuthenticated(true);
-      }
-      setLoading(false);
-    };
-
     if (!auth || !db) {
-      console.log("AuthContext: Using Mock Mode (Firebase not initialized)");
-      checkMockAuth();
+      console.warn("AuthContext: Firebase not initialized. Authentication disabled.");
+      setLoading(false);
       return;
     }
 
@@ -68,15 +58,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(userDoc.data() as UserProfile);
             setIsAuthenticated(true);
           } else {
+            // New user signed in but no profile doc yet (edge case)
+            setUser({ uid: firebaseUser.uid, email: firebaseUser.email || '', name: 'New User', avatar: '', role: UserRole.STUDENT });
+            setIsAuthenticated(true);
+          }
+        } catch (error: any) {
+          console.error("AuthContext: Error fetching user doc:", error);
+          if (error.code === 'permission-denied') {
+            console.warn("AuthContext: Permission denied for 'users' collection. Using minimal profile fallback.");
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || 'Developer',
+              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
+              role: UserRole.STUDENT
+            });
+            setIsAuthenticated(true);
+          } else {
             setUser(null);
             setIsAuthenticated(false);
           }
-        } catch (error) {
-          console.error("AuthContext: Error fetching user doc:", error);
-          checkMockAuth();
         }
       } else {
-        checkMockAuth();
+        setUser(null);
+        setIsAuthenticated(false);
       }
       setLoading(false);
     });
@@ -85,48 +90,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    if (!auth) {
-      // Mock Login Logic
-      const mockUser = localStorage.getItem('nunma_mock_user');
-      if (mockUser) {
-        const parsed = JSON.parse(mockUser);
-        if (parsed.email === email) {
-          setUser(parsed);
-          setIsAuthenticated(true);
-          return;
-        }
-      }
-      throw new Error("Mock Auth: Identity not found in local storage. Please create a profile first.");
-    }
+    if (!auth) throw new Error("Firebase Auth not initialized");
     await signInWithEmailAndPassword(auth, email, password);
   };
 
   const signup = async (profile: Omit<UserProfile, 'uid'>, password: string) => {
-    if (!auth || !db) {
-      // Mock Signup Logic
-      const uid = 'mock-' + Date.now();
-      const fullProfile: UserProfile = { ...profile, uid };
-      localStorage.setItem('nunma_mock_user', JSON.stringify(fullProfile));
-      setUser(fullProfile);
-      setIsAuthenticated(true);
-      return;
-    }
+    if (!auth || !db) throw new Error("Firebase not initialized");
+
     const userCredential = await createUserWithEmailAndPassword(auth, profile.email, password);
     const uid = userCredential.user.uid;
     const fullProfile: UserProfile = { ...profile, uid };
 
-    await setDoc(doc(db, 'users', uid), fullProfile);
+    try {
+      await setDoc(doc(db, 'users', uid), fullProfile);
+    } catch (error: any) {
+      console.error("AuthContext: Failed to create user profile doc:", error);
+      if (error.code !== 'permission-denied') throw error;
+      console.warn("AuthContext: Proceeding with local state only due to permission restricted environment.");
+    }
+
     setUser(fullProfile);
     setIsAuthenticated(true);
   };
 
   const logout = async () => {
-    if (!auth) {
-      localStorage.removeItem('nunma_mock_user');
-      setUser(null);
-      setIsAuthenticated(false);
-      return;
-    }
+    if (!auth) return;
     await signOut(auth);
     setUser(null);
     setIsAuthenticated(false);
@@ -136,20 +124,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     const updatedUser = { ...user, ...updates };
 
-    if (!db) {
-      localStorage.setItem('nunma_mock_user', JSON.stringify(updatedUser));
-      setUser(updatedUser);
-      return;
+    if (db) {
+      try {
+        // Use setDoc with merge to ensure doc creation and persist data
+        await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
+      } catch (error: any) {
+        console.error("AuthContext: Failed to update profile in Firestore:", error);
+        // Fallback for permission errors or missing docs in locked-down environments
+        alert("Failed to save profile changes to cloud. Local changes will persist for this session.");
+      }
+    } else {
+      console.warn("AuthContext: Firebase not initialized. Updating local state only.");
     }
 
-    await updateDoc(doc(db, 'users', user.uid), updates);
     setUser(updatedUser);
   };
 
   const toggleRole = async () => {
     if (!user) return;
-    const newRole = user.role === UserRole.STUDENT ? UserRole.TUTOR : UserRole.STUDENT;
-    await updateProfile({ role: newRole });
+    try {
+      const newRole = user.role === UserRole.STUDENT ? UserRole.TUTOR : UserRole.STUDENT;
+      await updateProfile({ role: newRole });
+      alert(`Switched to ${newRole === UserRole.TUTOR ? 'Tutor' : 'Student'} mode`);
+    } catch (error) {
+      console.error("AuthContext: Toggle role failed:", error);
+      alert("Failed to switch roles. Please try again.");
+    }
   };
 
   if (loading) {
