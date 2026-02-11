@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard, ShieldCheck, Zap, Check, Globe } from 'lucide-react';
 import { usePPPPrice } from '../hooks/usePPPPrice';

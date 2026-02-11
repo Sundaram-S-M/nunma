@@ -90,6 +90,7 @@ const Classroom: React.FC = () => {
          {activeLiveRoom && (
             <ClassroomStream
                sessionId={activeLiveRoom.id}
+               zoneId={activeLiveRoom.zoneId}
                role="STUDENT"
                title={activeLiveRoom.title}
                onClose={() => setActiveLiveRoom(null)}

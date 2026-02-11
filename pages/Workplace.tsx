@@ -194,6 +194,7 @@ const Workplace: React.FC = () => {
       {showStreamRoom && activeSession && (
         <ClassroomStream
           sessionId={activeSession.id}
+          zoneId={activeSession.zoneId}
           role="TUTOR"
           title={activeSession.title}
           onClose={handleCloseStream}

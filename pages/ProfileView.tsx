@@ -125,16 +125,11 @@ const ProfileView: React.FC = () => {
       // Assuming 'banner' might be stored in Firestore but not main Auth User object for now, 
       // or we just update the user metadata.
 
-      // Update Auth Context
+      // Update Auth Context and Firestore (via updateProfile)
       await updateProfile(updates);
 
-      // 2. Update Firestore explicitly if needed (though updateProfile might handle it depending on implementation)
-      if (db && user.uid) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          [adjustType === 'avatar' ? 'avatar' : 'banner']: croppedImage
-        });
-        setRealTimeUser(prev => ({ ...prev, [adjustType === 'avatar' ? 'avatar' : 'banner']: croppedImage }));
-      }
+      // 2. Local UI update for realTimeUser (which might not update immediately from onSnapshot)
+      setRealTimeUser(prev => ({ ...prev, ...updates }));
 
       // 3. Close modal
       setAdjustingImage(null);

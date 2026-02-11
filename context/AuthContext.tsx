@@ -55,11 +55,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
           if (userDoc.exists()) {
-            setUser(userDoc.data() as UserProfile);
+            const data = userDoc.data() as UserProfile;
+            setUser({ ...data, uid: firebaseUser.uid }); // Ensure UID is always present from auth
             setIsAuthenticated(true);
           } else {
             // New user signed in but no profile doc yet (edge case)
-            setUser({ uid: firebaseUser.uid, email: firebaseUser.email || '', name: 'New User', avatar: '', role: UserRole.STUDENT });
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || 'New User',
+              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
+              role: UserRole.STUDENT
+            });
             setIsAuthenticated(true);
           }
         } catch (error: any) {
@@ -121,20 +128,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user) return;
+    if (!user?.uid) {
+      console.error("AuthContext: Cannot update profile - User UID missing");
+      return;
+    }
+
     const updatedUser = { ...user, ...updates };
 
     if (db) {
       try {
+        console.log(`AuthContext: Attempting to update profile for ${user.uid}...`);
         // Use setDoc with merge to ensure doc creation and persist data
         await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
+        console.log("AuthContext: Profile updated successfully in Firestore");
       } catch (error: any) {
         console.error("AuthContext: Failed to update profile in Firestore:", error);
-        // Fallback for permission errors or missing docs in locked-down environments
-        alert("Failed to save profile changes to cloud. Local changes will persist for this session.");
+
+        let errorMsg = "Failed to save profile changes to cloud.";
+        if (error.code === 'permission-denied') {
+          errorMsg += " Permission denied. Your account may have restrictions.";
+        } else if (error.code === 'unavailable') {
+          errorMsg += " Firestore is currently offline.";
+        }
+
+        alert(`${errorMsg} Local changes will persist for this session.`);
       }
     } else {
-      console.warn("AuthContext: Firebase not initialized. Updating local state only.");
+      console.warn("AuthContext: Firebase not initialized (db is null). Updating local state only.");
     }
 
     setUser(updatedUser);
