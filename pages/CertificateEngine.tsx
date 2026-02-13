@@ -20,8 +20,13 @@ import {
   ExternalLink,
   Trash2,
   Pipette,
-  Sparkles
+  Sparkles,
+  Printer
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { useAuth } from '../context/AuthContext';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, onSnapshot, orderBy } from 'firebase/firestore';
+import { db } from '../utils/firebase';
 import CertificateOverlay from '../components/CertificateOverlay';
 
 const MOCK_TEMPLATES = [
@@ -224,25 +229,116 @@ const AdvancedColorPicker = ({ color, onChange, onClose }: { color: string, onCh
 
 
 const CertificateEngine: React.FC = () => {
+  const { user } = useAuth();
   const [showGeneratorModal, setShowGeneratorModal] = useState(false);
   const [modalStep, setModalStep] = useState(1);
   const [issuanceMethod, setIssuanceMethod] = useState<'manual' | 'template' | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [manualFile, setManualFile] = useState<string | null>(null);
   const [autoEmail, setAutoEmail] = useState(true);
-  const [selectedZone, setSelectedZone] = useState('Advanced Product Lifecycle');
+  const [selectedZone, setSelectedZone] = useState('');
+  const [zonesList, setZonesList] = useState<any[]>([]);
 
   const [brandColor, setBrandColor] = useState('#c2f575');
-  const [palette, setPalette] = useState(['#c2f575', '#052E16', '#02180b']);
+  const [palette, setPalette] = useState<string[]>([]);
   const [showAdvancedPicker, setShowAdvancedPicker] = useState(false);
 
   const [signature1, setSignature1] = useState<string | null>(null);
   const [signature2, setSignature2] = useState<string | null>(null);
   const [isIssuing, setIsIssuing] = useState(false);
+  const [issuanceHistory, setIssuanceHistory] = useState<any[]>([]);
 
   const sig1InputRef = useRef<HTMLInputElement>(null);
   const sig2InputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch settings and zones
+  useEffect(() => {
+    if (!user) return;
+
+    // Fetch branding settings
+    const fetchSettings = async () => {
+      const settingsDoc = await getDoc(doc(db, 'users', user.uid, 'settings', 'certificates'));
+      if (settingsDoc.exists()) {
+        const data = settingsDoc.data();
+        if (data.palette) setPalette(data.palette);
+        if (data.signature1) setSignature1(data.signature1);
+        if (data.signature2) setSignature2(data.signature2);
+      } else {
+        setPalette(['#c2f575', '#052E16', '#02180b']);
+      }
+    };
+
+    // Fetch tutor's zones
+    const fetchZones = async () => {
+      const q = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
+      const snap = await getDocs(q);
+      const zones = snap.docs.map(d => ({ id: d.id, ...d.data() } as { id: string, title: string }));
+      setZonesList(zones);
+      if (zones.length > 0) setSelectedZone(zones[0].title);
+    };
+
+    // Fetch issuance history
+    const qHistory = query(collection(db, 'issued_certificates'), where('tutorId', '==', user.uid), orderBy('date', 'desc'));
+    const unsubHistory = onSnapshot(qHistory, (snap) => {
+      const history = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setIssuanceHistory(history);
+    });
+
+    fetchSettings();
+    fetchZones();
+    return () => unsubHistory();
+  }, [user]);
+
+  const handleSaveSettings = async () => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'settings', 'certificates'), {
+        palette,
+        signature1,
+        signature2,
+        updatedAt: new Date().toISOString()
+      });
+      alert('Global settings saved successfully!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save settings.');
+    }
+  };
+
+  const addColorToPalette = (newColor: string) => {
+    if (palette.length >= 3) {
+      alert("Maximum 3 colors allowed in the palette.");
+      return;
+    }
+    if (!palette.includes(newColor)) {
+      setPalette(prev => [...prev, newColor]);
+    }
+    setShowAdvancedPicker(false);
+  };
+
+  const removeColorFromPalette = (colorToRemove: string) => {
+    setPalette(prev => prev.filter(c => c !== colorToRemove));
+  };
+
+  const downloadBatchAsExcel = (zoneName: string) => {
+    const zoneData = issuanceHistory.filter(h => h.zoneName === zoneName);
+    if (zoneData.length === 0) {
+      alert(`No issuance data found for zone: ${zoneName}`);
+      return;
+    }
+
+    const worksheetData = zoneData.map(h => ({
+      'Student Name': h.studentName,
+      'Zone Name': h.zoneName,
+      'Issuance Date': new Date(h.date).toLocaleDateString()
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, zoneName.substring(0, 31));
+    XLSX.writeFile(workbook, `Certificates_${zoneName.replace(/\s+/g, '_')}.xlsx`);
+  };
 
   const handleIssue = () => {
     setIsIssuing(true);
@@ -323,31 +419,40 @@ const CertificateEngine: React.FC = () => {
                 <div className="relative">
                   <div className="flex items-center gap-4 mb-10">
                     {palette.map(color => (
-                      <button
-                        key={color}
-                        onClick={() => setBrandColor(color)}
-                        className={`w-14 h-14 rounded-full border-[3px] transition-all shadow-sm flex items-center justify-center
-                              ${brandColor === color ? 'border-indigo-500 scale-110' : 'border-transparent'}
-                            `}
-                      >
-                        <div className="w-11 h-11 rounded-full shadow-inner" style={{ backgroundColor: color }} />
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setShowAdvancedPicker(!showAdvancedPicker)}
-                      className="w-12 h-12 rounded-full border-2 border-white shadow-xl flex items-center justify-center relative overflow-hidden transition-transform active:scale-90"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-tr from-yellow-300 via-green-400 to-purple-500" />
-                      <div className="absolute inset-[2px] bg-white rounded-full flex items-center justify-center">
-                        <Plus size={18} className="text-gray-400" />
+                      <div key={color} className="relative group/palette">
+                        <button
+                          onClick={() => setBrandColor(color)}
+                          className={`w-14 h-14 rounded-full border-[3px] transition-all shadow-sm flex items-center justify-center
+                                ${brandColor === color ? 'border-indigo-500 scale-110' : 'border-transparent'}
+                              `}
+                        >
+                          <div className="w-11 h-11 rounded-full shadow-inner" style={{ backgroundColor: color }} />
+                        </button>
+                        <button
+                          onClick={() => removeColorFromPalette(color)}
+                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover/palette:opacity-100 transition-opacity"
+                        >
+                          <X size={10} />
+                        </button>
                       </div>
-                    </button>
+                    ))}
+                    {palette.length < 3 && (
+                      <button
+                        onClick={() => setShowAdvancedPicker(!showAdvancedPicker)}
+                        className="w-12 h-12 rounded-full border-2 border-white shadow-xl flex items-center justify-center relative overflow-hidden transition-transform active:scale-90"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-tr from-yellow-300 via-green-400 to-purple-500" />
+                        <div className="absolute inset-[2px] bg-white rounded-full flex items-center justify-center">
+                          <Plus size={18} className="text-gray-400" />
+                        </div>
+                      </button>
+                    )}
 
                     {showAdvancedPicker && (
                       <AdvancedColorPicker
                         color={brandColor}
                         onChange={setBrandColor}
-                        onClose={() => setShowAdvancedPicker(false)}
+                        onClose={() => addColorToPalette(brandColor)}
                       />
                     )}
                   </div>
@@ -395,21 +500,46 @@ const CertificateEngine: React.FC = () => {
               <div className="space-y-6">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 block">Issuance History</label>
                 <div className="space-y-3">
-                  {[1, 2].map(i => (
-                    <div key={i} className="flex items-center justify-between p-6 bg-gray-50 rounded-[1.5rem] border border-gray-100 group hover:bg-white hover:shadow-md transition-all">
+                  {Object.entries(
+                    issuanceHistory.reduce((acc: any, curr) => {
+                      if (!acc[curr.zoneName]) acc[curr.zoneName] = { count: 0, lastDate: curr.date };
+                      acc[curr.zoneName].count++;
+                      if (new Date(curr.date) > new Date(acc[curr.zoneName].lastDate)) acc[curr.zoneName].lastDate = curr.date;
+                      return acc;
+                    }, {})
+                  ).map(([zName, data]: [string, any]) => (
+                    <div key={zName} className="flex items-center justify-between p-6 bg-gray-50 rounded-[1.5rem] border border-gray-100 group hover:bg-white hover:shadow-md transition-all">
                       <div>
-                        <p className="text-xs font-black text-[#040457]">Batch Alpha {i}</p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">12 STUDENTS • DEC 20, 2025</p>
+                        <p className="text-xs font-black text-[#040457]">{zName}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
+                          {data.count} STUDENTS • {new Date(data.lastDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
                       </div>
-                      <button className="p-3 text-[#040457] hover:bg-indigo-50 rounded-xl transition-colors"><Download size={16} /></button>
+                      <button
+                        onClick={() => downloadBatchAsExcel(zName)}
+                        className="p-3 text-[#040457] hover:bg-indigo-50 rounded-xl transition-colors"
+                      >
+                        <Download size={16} />
+                      </button>
                     </div>
                   ))}
+                  {issuanceHistory.length === 0 && (
+                    <div className="py-10 text-center opacity-20 flex flex-col items-center">
+                      <Database size={32} className="mb-2" />
+                      <p className="text-[9px] font-black uppercase tracking-widest">No issuances yet</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
             <div className="mt-12 pt-10 border-t border-gray-50 flex justify-between items-center">
-              <p className="text-[10px] font-bold text-gray-400 italic">Last modified: Dec 18, 2025</p>
-              <button className="px-12 py-5 bg-[#040457] text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all">Save Global Settings</button>
+              <p className="text-[10px] font-bold text-gray-400 italic">Configure global certificate assets.</p>
+              <button
+                onClick={handleSaveSettings}
+                className="px-12 py-5 bg-[#040457] text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all"
+              >
+                Save Global Settings
+              </button>
             </div>
           </div>
         </div>
@@ -424,10 +554,13 @@ const CertificateEngine: React.FC = () => {
             <div className="bg-white/5 rounded-[2rem] p-8 border border-white/10 backdrop-blur-md">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-[11px] font-black uppercase tracking-widest opacity-60">Verified Credentials</span>
-                <span className="text-2xl font-black text-[#c2f575]">124</span>
+                <span className="text-2xl font-black text-[#c2f575]">{issuanceHistory.length}</span>
               </div>
               <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-[#c2f575]" style={{ width: '85%' }}></div>
+                <div
+                  className="h-full bg-[#c2f575] transition-all duration-1000"
+                  style={{ width: `${Math.min(100, (issuanceHistory.length / 100) * 100)}%` }}
+                ></div>
               </div>
             </div>
           </div>
@@ -600,9 +733,8 @@ const CertificateEngine: React.FC = () => {
                           onChange={(e) => setSelectedZone(e.target.value)}
                           className="w-full bg-gray-50 border border-gray-100 rounded-3xl pl-16 pr-8 py-5 font-black text-lg text-[#040457] outline-none appearance-none focus:ring-4 focus:ring-[#c2f575]/20 transition-all cursor-pointer shadow-sm"
                         >
-                          <option>Advanced Product Lifecycle</option>
-                          <option>Agile Mastery Framework</option>
-                          <option>Supply Chain Systems</option>
+                          {zonesList.map(z => <option key={z.id} value={z.title}>{z.title}</option>)}
+                          {zonesList.length === 0 && <option disabled>No zones found</option>}
                         </select>
                       </div>
                     </div>

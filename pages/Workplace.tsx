@@ -19,6 +19,7 @@ import {
   Database
 } from 'lucide-react';
 import ClassroomStream from '../components/ClassroomStream';
+import LiveSessionStatus from '../components/LiveSessionStatus';
 
 import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../utils/firebase';
@@ -222,7 +223,7 @@ const Workplace: React.FC = () => {
             Certificate Issue
           </button>
           <button
-            onClick={() => setShowProductModal(true)}
+            onClick={() => navigate('/list-product/flow')}
             className="bg-[#040457] text-white font-bold px-6 py-3 rounded-2xl shadow-xl hover:bg-black transition-all flex items-center gap-2 group whitespace-nowrap"
           >
             <ShoppingBag size={18} className="text-[#c2f575] group-hover:scale-110 transition-transform" />
@@ -272,34 +273,29 @@ const Workplace: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {upcomingLive.map(session => (
-                      <div key={session.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-red-100 flex flex-col justify-between">
-                        <div>
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                            {session.status === 'live' ? 'CURRENTLY BROADCASTING' : 'SCHEDULED STREAM'}
-                          </p>
-                          <h4 className="font-black text-indigo-900 mb-2">{session.title}</h4>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                            <Clock size={12} /> {new Date(session.startTime).toLocaleString()}
-                          </p>
+                      <div key={session.id} className="bg-white p-8 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-red-100 flex flex-col justify-between group hover:-translate-y-1 transition-all duration-500">
+                        <div className="space-y-4">
+                          <LiveSessionStatus
+                            status={session.status as 'live' | 'scheduled' | 'ended'}
+                            startTime={session.startTime}
+                          />
+                          <h4 className="text-xl font-black text-indigo-900 tracking-tight leading-tight">{session.title}</h4>
                         </div>
                         {session.status === 'live' ? (
                           <button
                             onClick={() => { setActiveSession(session); setShowStreamRoom(true); }}
-                            className="w-full mt-4 py-3 bg-red-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-red-700 transition-all"
+                            className="w-full mt-8 py-5 bg-red-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-red-700 transition-all shadow-xl shadow-red-600/20 flex items-center justify-center gap-3"
                           >
-                            Return to Stream
+                            Return to Stream <Radio size={16} />
                           </button>
                         ) : (
                           <button
                             onClick={() => {
                               // update to live
-                              // would require updateDoc logic, skipping for brevity in this specific tool call
-                              // or assume user re-opens as instant live?
-                              // For now, let's just setActiveSession
                               setActiveSession({ ...session, status: 'live' });
                               setShowStreamRoom(true);
                             }}
-                            className="w-full mt-4 py-3 bg-indigo-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-800 transition-all"
+                            className="w-full mt-8 py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-900/20"
                           >
                             Start Stream Now
                           </button>

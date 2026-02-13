@@ -31,6 +31,7 @@ import {
   Users
 } from 'lucide-react';
 import ClassroomStream from '../components/ClassroomStream';
+import LiveSessionStatus from '../components/LiveSessionStatus';
 
 import { Link } from 'react-router-dom';
 
@@ -493,19 +494,18 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {upcomingLiveSessions.map((session, i) => (
                   <div key={i} className="p-10 bg-gray-50/50 rounded-[3rem] border border-gray-100 group hover:bg-white hover:shadow-2xl transition-all duration-700">
-                    <div className="flex items-center gap-5 mb-8">
-                      <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-red-500 shadow-sm border border-gray-50">
-                        <CalendarIcon size={24} />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Commencing At</p>
-                        <p className="font-black text-[#1A1A4E] text-lg tracking-tight">{new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                      </div>
+                    <div className="space-y-6">
+                      <LiveSessionStatus
+                        status="scheduled"
+                        startTime={session.startTime}
+                        className="bg-white"
+                      />
+                      <h4 className="text-xl font-black text-[#1A1A4E] leading-tight tracking-tighter group-hover:text-indigo-600 transition-colors">{session.title}</h4>
+                      <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{session.zoneTitle}</p>
                     </div>
-                    <h4 className="text-xl font-black text-[#1A1A4E] mb-8 leading-tight tracking-tighter group-hover:text-red-500 transition-colors">{session.title}</h4>
                     <button
                       disabled
-                      className="w-full py-5 bg-white border border-gray-100 text-gray-300 rounded-[2rem] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3"
+                      className="w-full mt-8 py-5 bg-white border border-gray-100 text-gray-300 rounded-[2rem] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3"
                     >
                       Access Code Locked
                     </button>
@@ -517,15 +517,16 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
             <div className="bg-white rounded-[4rem] p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
               {activeSessions.length > 0 ? (
                 <div className="w-full">
-                  <div className="bg-[#1A1A4E] rounded-[3rem] p-12 text-white shadow-2xl relative overflow-hidden">
+                  <div className="bg-[#1A1A4E] rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
                     <div className="relative z-10 flex flex-col items-center justify-center gap-8 text-center">
-                      <div className="w-20 h-20 bg-[#c2f575] rounded-[2rem] flex items-center justify-center animate-pulse shadow-[0_0_40px_rgba(194,245,117,0.3)]">
-                        <Radio size={36} className="text-[#1A1A4E]" />
-                      </div>
+                      <LiveSessionStatus
+                        status="live"
+                        className="bg-red-500/10 border-red-500/20 text-[#c2f575]"
+                      />
                       <div>
                         <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">Live Broadcast Active</h3>
                         <p className="text-white/60 font-medium text-lg italic">
-                          {activeSessions[0].title} is streaming now. Join the elite.
+                          {activeSessions[0].title} is streaming now in {activeSessions[0].zoneTitle}.
                         </p>
                       </div>
                       <button
@@ -535,7 +536,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                         Enter Room
                       </button>
                     </div>
-                    <div className="absolute top-0 right-0 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
+                    <div className="absolute top-0 right-0 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
                   </div>
                 </div>
               ) : (

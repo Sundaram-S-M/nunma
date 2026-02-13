@@ -18,6 +18,8 @@ export interface StatCardData {
   value: string | number;
 }
 
+export type ZoneType = 'Class Management' | 'Course' | 'Workshop';
+
 export interface Zone {
   id: string;
   title: string;
@@ -25,7 +27,8 @@ export interface Zone {
   level: 'Beginner' | 'Intermediate' | 'Expert';
   price: string;
   currency: 'USD' | 'INR' | 'EUR';
-  type: 'live-course' | 'course';
+  type: 'live-course' | 'course'; // Legacy type field, keeping for compatibility
+  zoneType: ZoneType;
   status: 'In Progress' | 'Completed' | 'Pending';
   createdAt: string;
   students: number;
@@ -93,4 +96,24 @@ export interface ExamResult {
   status: 'passed' | 'failed' | 'ongoing' | 'reported';
   warnings: number;
   completedAt?: string;
+}
+
+export interface AttendanceHistory {
+  sessionId: string;
+  status: 'Present' | 'Absent' | 'Late' | 'Pending';
+  date: string;
+}
+
+export interface Student {
+  id: string;
+  name: string;
+  avatar: string;
+  joinedAt: string;
+  status: 'Present' | 'Absent' | 'Late' | 'Pending';
+  joinTimestamp?: number;
+  durationInSession?: number;
+  engagementScore: number;
+  email?: string;
+  phone?: string;
+  attendanceHistory?: AttendanceHistory[];
 }

@@ -37,7 +37,7 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
         throw new functions.https.HttpsError("invalid-argument", "Room name is required.");
     }
 
-    const isTutor = role === "Tutor" || role === "TUTOR";
+    const isTutor = role?.toUpperCase() === "TUTOR";
     const canPublish = isTutor;
 
     try {
@@ -47,12 +47,16 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
 
         console.log("generateLiveKitToken: Environment check", {
             hasApiKey: !!apiKey,
-            hasApiSecret: !!apiSecret
+            hasApiSecret: !!apiSecret,
+            isTutor
         });
 
         if (!apiKey || !apiSecret) {
             console.error("generateLiveKitToken: Missing LiveKit API keys in environment");
-            throw new Error("LiveKit API configuration is missing on the server.");
+            throw new functions.https.HttpsError(
+                "failed-precondition",
+                "LiveKit API configuration is missing on the server. Please check environment variables."
+            );
         }
 
         const at = new AccessToken(apiKey, apiSecret, {
@@ -72,6 +76,7 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
         return { token, isTutor };
     } catch (error: any) {
         console.error("generateLiveKitToken: Error generating token:", error);
+        if (error instanceof functions.https.HttpsError) throw error;
         throw new functions.https.HttpsError(
             "internal",
             `Failed to generate token: ${error.message || 'Unknown error'}`
@@ -195,4 +200,18 @@ export const handleBunnyWebhook = functions.https.onRequest(async (req, res) => 
     }
 
     res.status(200).send('OK');
+});
+
+export const sendWhitelistInvite = functions.https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+
+    const { email, zoneTitle } = data;
+    if (!email) throw new functions.https.HttpsError("invalid-argument", "Email is required.");
+
+    console.log(`[INVITE] Whitelist invitation placeholder for ${email} to join zone: ${zoneTitle}`);
+
+    // In a real implementation, you would send an email here using a service like SendGrid
+    // and include a link like: https://nunma.app/signup?invite=${zoneId}
+
+    return { success: true, message: `Invitation logged for ${email}` };
 });

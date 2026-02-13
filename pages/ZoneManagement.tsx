@@ -51,31 +51,12 @@ import {
   Search
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
 
 
-
-interface AttendanceHistory {
-  sessionId: string;
-  status: 'Present' | 'Absent' | 'Late' | 'Pending';
-  date: string;
-}
-
-interface Student {
-  id: string;
-  name: string;
-  avatar: string;
-  joinedAt: string;
-  status: 'Present' | 'Absent' | 'Late' | 'Pending';
-  joinTimestamp?: number;
-  durationInSession?: number;
-  engagementScore: number;
-  email?: string;
-  phone?: string;
-  attendanceHistory?: AttendanceHistory[];
-}
+import { Student, AttendanceHistory, UserRole } from '../types';
 
 interface MCQ {
   id: string;
@@ -358,7 +339,20 @@ const ZoneManagement: React.FC = () => {
     // 1. Zone Details
     const zoneUnsub = onSnapshot(doc(db, 'zones', zoneId), (docSnap) => {
       if (docSnap.exists()) {
-        setZone({ id: docSnap.id, ...docSnap.data() });
+        const zoneData = { id: docSnap.id, ...docSnap.data() };
+        setZone(zoneData);
+
+        // Adjust activeTab if current one is not allowed
+        const zType = (zoneData as any).zoneType;
+        setActiveTab(prev => {
+          if (zType === 'Course' && (prev === 'attendance' || prev === 'exams' || prev === 'schedule')) {
+            return 'curriculum';
+          }
+          if (zType === 'Workshop' && (prev === 'attendance' || prev === 'curriculum' || prev === 'exams')) {
+            return 'schedule';
+          }
+          return prev;
+        });
       } else {
         navigate('/workplace'); // Zone not found
       }
@@ -837,8 +831,27 @@ const ZoneManagement: React.FC = () => {
       // Local Storage Cleanup - Removed
       // We rely on cloud deletion.
       navigate('/workplace');
+    }
+  };
 
-      navigate('/workplace');
+  const handleDismissStudent = async (student: Student) => {
+    if (!zoneId || !db || !confirm(`Are you sure you want to remove ${student.name} from this zone?`)) return;
+
+    try {
+      // 1. Remove from students subcollection
+      await deleteDoc(doc(db, 'zones', zoneId, 'students', student.id));
+
+      // 2. Remove from whitelistedEmails if present
+      const zoneRef = doc(db, 'zones', zoneId);
+      const updatedWhitelist = (zone.whitelistedEmails || []).filter((e: string) => e !== student.email);
+      if (updatedWhitelist.length !== (zone.whitelistedEmails || []).length) {
+        await updateDoc(zoneRef, { whitelistedEmails: updatedWhitelist });
+      }
+
+      alert('Student access removed.');
+    } catch (err) {
+      console.error("Error dismissing student:", err);
+      alert("Failed to remove student.");
     }
   };
 
@@ -1373,23 +1386,49 @@ const ZoneManagement: React.FC = () => {
                     <button
                       onClick={async () => {
                         if (!newStudentEmail || !zoneId) return;
-                        const newStudent: Student = {
-                          id: Date.now().toString(),
-                          name: newStudentEmail.split('@')[0],
-                          avatar: `https://picsum.photos/seed/${newStudentEmail}/40/40`,
-                          joinedAt: new Date().toLocaleDateString(),
-                          status: 'Pending',
-                          engagementScore: 0,
-                          email: newStudentEmail
-                        };
 
                         try {
-                          await setDoc(doc(db, 'zones', zoneId, 'students', newStudent.id), newStudent);
+                          // 1. Check if user exists in Firebase
+                          const usersRef = collection(db, 'users');
+                          const q = query(usersRef, where('email', '==', newStudentEmail), limit(1));
+                          const querySnapshot = await getDocs(q);
+
+                          if (!querySnapshot.empty) {
+                            // User exists - Enroll directly
+                            const userData = querySnapshot.docs[0].data();
+                            const userId = querySnapshot.docs[0].id;
+
+                            const newStudent: Student = {
+                              id: userId,
+                              name: userData.name || newStudentEmail.split('@')[0],
+                              avatar: userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+                              joinedAt: new Date().toLocaleDateString(),
+                              status: 'Present',
+                              engagementScore: 0,
+                              email: newStudentEmail,
+                              phone: userData.phone || ''
+                            };
+
+                            await setDoc(doc(db, 'zones', zoneId, 'students', userId), newStudent);
+                            alert(`User ${newStudent.name} enrolled directly!`);
+                          } else {
+                            // User doesn't exist - Whitelist email and invite
+                            await updateDoc(doc(db, 'zones', zoneId), {
+                              whitelistedEmails: arrayUnion(newStudentEmail)
+                            });
+
+                            // Call invitation function
+                            const sendInvite = httpsCallable(functions, 'sendWhitelistInvite');
+                            await sendInvite({ email: newStudentEmail, zoneTitle: zone.title });
+
+                            alert(`Email ${newStudentEmail} whitelisted. Invitation sent!`);
+                          }
+
                           setNewStudentEmail('');
-                          alert('Email whitelisted and student added!');
+                          setShowUserSuggestions(false);
                         } catch (e) {
-                          console.error("Error adding student:", e);
-                          alert("Failed to grant access.");
+                          console.error("Error grants access:", e);
+                          alert("Failed to grant access. Please try again.");
                         }
                       }}
                       className="px-8 py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
@@ -1418,33 +1457,48 @@ const ZoneManagement: React.FC = () => {
                   <p className="text-[10px] text-gray-300 font-bold px-2 italic">Tip: You can copy-paste a list from Excel or Google Sheets directly.</p>
                   <button
                     onClick={async () => {
-                      const emails = bulkEmails.split(/[,\n\s]+/).filter(e => e.includes('@'));
-                      if (!zoneId) return;
-
-                      const newStudents = emails.map(email => ({
-                        id: Math.random().toString(36).substr(2, 9),
-                        name: email.split('@')[0],
-                        avatar: `https://picsum.photos/seed/${email}/40/40`,
-                        joinedAt: new Date().toLocaleDateString(),
-                        status: 'Pending' as const,
-                        engagementScore: 0,
-                        email: email
-                      }));
+                      const emails = bulkEmails.split(/[,\n\s/]+/).map(e => e.trim().toLowerCase()).filter(e => e.includes('@'));
+                      if (!zoneId || emails.length === 0) return;
 
                       try {
-                        const batchPromises = newStudents.map(student =>
-                          setDoc(doc(db, `zones/${zoneId}/students`, student.id), {
-                            ...student,
-                            addedAt: new Date().toISOString()
-                          })
-                        );
-                        await Promise.all(batchPromises);
+                        const zoneRef = doc(db, 'zones', zoneId);
+                        const studentsRef = collection(db, 'zones', zoneId, 'students');
+                        const usersRef = collection(db, 'users');
+
+                        const results = { enrolled: 0, whitelisted: 0 };
+
+                        for (const email of emails) {
+                          // Check if exists
+                          const q = query(usersRef, where('email', '==', email), limit(1));
+                          const userSnap = await getDocs(q);
+
+                          if (!userSnap.empty) {
+                            const userData = userSnap.docs[0].data();
+                            const userId = userSnap.docs[0].id;
+                            await setDoc(doc(studentsRef, userId), {
+                              id: userId,
+                              name: userData.name || email.split('@')[0],
+                              avatar: userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+                              joinedAt: new Date().toLocaleDateString(),
+                              status: 'Present',
+                              engagementScore: 0,
+                              email: email,
+                              addedAt: new Date().toISOString()
+                            });
+                            results.enrolled++;
+                          } else {
+                            await updateDoc(zoneRef, {
+                              whitelistedEmails: arrayUnion(email)
+                            });
+                            results.whitelisted++;
+                          }
+                        }
 
                         setBulkEmails('');
-                        alert(`${newStudents.length} students enrolled!`);
+                        alert(`Successfully processed. Enrolled: ${results.enrolled}, Whitelisted: ${results.whitelisted}`);
                       } catch (err) {
-                        console.error("Error enrolling students:", err);
-                        alert("Failed to enroll students.");
+                        console.error("Error in bulk whitelist:", err);
+                        alert("Failed to process bulk enrollment.");
                       }
                     }}
                     className="w-full py-6 bg-[#c2f575] text-[#040457] rounded-3xl font-black uppercase text-xs tracking-[0.25em] hover:brightness-110 active:scale-[0.98] transition-all shadow-xl"
@@ -1628,12 +1682,12 @@ const ZoneManagement: React.FC = () => {
           <div className="bg-white rounded-[4rem] border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.02)] overflow-hidden min-h-[740px] flex flex-col">
             <div className="flex bg-gray-50/50 p-4 border-b border-gray-100 gap-2 overflow-x-auto no-scrollbar">
               {[
-                { id: 'attendance', label: 'ATTENDANCE', icon: <CheckCircle2 size={16} /> },
-                { id: 'curriculum', label: 'CURRICULUM', icon: <Layers size={16} /> },
-                { id: 'exams', label: 'EXAM STREAMS', icon: <GraduationCap size={16} /> },
-                { id: 'schedule', label: 'SCHEDULE LIVE', icon: <Video size={16} /> },
-                { id: 'students', label: 'STUDENTS', icon: <Users size={16} /> }
-              ].map(tab => (
+                { id: 'attendance', label: 'ATTENDANCE', icon: <CheckCircle2 size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' },
+                { id: 'curriculum', label: 'CURRICULUM', icon: <Layers size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course' },
+                { id: 'exams', label: 'EXAM STREAMS', icon: <GraduationCap size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' },
+                { id: 'schedule', label: 'SCHEDULE LIVE', icon: <Video size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Workshop' },
+                { id: 'students', label: 'STUDENTS', icon: <Users size={16} />, visible: true }
+              ].filter(t => t.visible).map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
@@ -1963,6 +2017,14 @@ const ZoneManagement: React.FC = () => {
                             <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Time</p>
                             <p className="font-bold text-[#040457]">{student.durationInSession}m</p>
                           </div>
+                        </div>
+                        <div className="w-full pt-4">
+                          <button
+                            onClick={() => handleDismissStudent(student)}
+                            className="w-full py-3 bg-red-50 text-red-500 rounded-2xl font-black uppercase text-[9px] tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
+                          >
+                            <X size={14} /> Dismiss Access
+                          </button>
                         </div>
                       </div>
                     ))}

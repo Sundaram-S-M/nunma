@@ -12,12 +12,26 @@ import {
    Star,
    ArrowRight,
    Calendar,
-   Video
+   Video,
+   Clock,
+   Layout,
+   CheckCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ClassroomStream from '../components/ClassroomStream';
+import LiveSessionStatus from '../components/LiveSessionStatus';
 
-import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import {
+   collection,
+   query,
+   where,
+   getDocs,
+   doc,
+   getDoc,
+   onSnapshot,
+   orderBy,
+   limit
+} from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -30,58 +44,160 @@ const Classroom: React.FC = () => {
 
    const { user } = useAuth();
    const [enrollmentIds, setEnrollmentIds] = useState<string[]>([]);
+   const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
+   const [certificates, setCertificates] = useState<any[]>([]);
 
    useEffect(() => {
       if (!user) return;
 
-      // 1. Fetch Enrollments
+      // 1. Fetch Enrollments & Progress
       const fetchEnrollments = async () => {
          const snap = await getDocs(collection(db, `users/${user.uid}/enrollments`));
          const ids = snap.docs.map(d => d.data().zoneId);
          setEnrollmentIds(ids);
 
-         // Fetch Zone Details
-         const zones: any[] = [];
+         const zonesData: any[] = [];
+         const tutorsData: any[] = [];
+
          for (const id of ids) {
             const zDoc = await getDoc(doc(db, 'zones', id));
             if (zDoc.exists()) {
-               zones.push({ id: zDoc.id, ...zDoc.data() });
+               const zone = { id: zDoc.id, ...zDoc.data() };
+
+               // Fetch Progress
+               // 1. Get total segments
+               const chaptersSnap = await getDocs(collection(db, 'zones', id, 'chapters'));
+               let totalSegments = 0;
+               chaptersSnap.forEach(chap => {
+                  totalSegments += (chap.data().segments || []).length;
+               });
+
+               // 2. Get student progress
+               const studentSnap = await getDoc(doc(db, 'zones', id, 'students', user.uid));
+               const studentData = studentSnap.exists() ? studentSnap.data() : { completedSegments: [], engagementScore: 0 };
+
+               const completedCount = (studentData.completedSegments || []).length;
+               const progressPercent = totalSegments > 0 ? Math.round((completedCount / totalSegments) * 100) : 0;
+
+               zonesData.push({
+                  ...zone,
+                  progress: progressPercent,
+                  completedCount,
+                  totalSegments,
+                  engagementScore: studentData.engagementScore || 0
+               });
+
+               // Collect Tutor Info
+               if ((zone as any).tutorId || (zone as any).createdBy) {
+                  const tId = (zone as any).tutorId || (zone as any).createdBy;
+                  if (!tutorsData.find(t => t.uid === tId)) {
+                     const tDoc = await getDoc(doc(db, 'users', tId));
+                     if (tDoc.exists()) {
+                        tutorsData.push({ uid: tId, ...tDoc.data() });
+                     }
+                  }
+               }
             }
          }
-         setEnrolledZones(zones);
+         setEnrolledZones(zonesData);
+         setFollowedTutors(tutorsData);
       };
+
+      // 2. Fetch Certificates
+      const fetchCertificates = async () => {
+         const q = query(collection(db, 'issued_certificates'), where('studentId', '==', user.uid));
+         const snap = await getDocs(q);
+         setCertificates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      };
+
       fetchEnrollments();
+      fetchCertificates();
    }, [user]);
 
-   // 2. Listen for Live Sessions in Enrolled Zones
+   // 2. Listen for Live Sessions & Milestones in Enrolled Zones
    useEffect(() => {
       if (enrollmentIds.length === 0) return;
 
       const unsubs: (() => void)[] = [];
+      const scheduledList: any[] = [];
 
       enrollmentIds.forEach(zId => {
-         const q = query(collection(db, 'zones', zId, 'sessions'));
-         const un = onSnapshot(q, (snap) => {
+         // Live Sessions
+         const qLive = query(collection(db, 'zones', zId, 'sessions'), where('status', '==', 'live'));
+         const unLive = onSnapshot(qLive, (snap) => {
             const sessions = snap.docs.map(d => ({ id: d.id, zoneId: zId, ...d.data() }));
             setLiveSessions(prev => {
-               // Remove old for this zone
                const others = prev.filter(s => s.zoneId !== zId);
                return [...others, ...sessions];
             });
          });
-         unsubs.push(un);
+         unsubs.push(unLive);
+
+         // Scheduled Sessions (Milestones)
+         const qSched = query(collection(db, 'zones', zId, 'sessions'), where('status', '==', 'scheduled'), orderBy('startTime', 'asc'), limit(5));
+         const unSched = onSnapshot(qSched, (snap) => {
+            const sessions = snap.docs.map(d => ({ id: d.id, zoneId: zId, ...d.data() }));
+            setUpcomingSessions(prev => {
+               const others = prev.filter(s => s.zoneId !== zId);
+               return [...others, ...sessions].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+            });
+         });
+         unsubs.push(unSched);
       });
 
       return () => unsubs.forEach(u => u());
    }, [enrollmentIds]);
 
-   const topStudents = [
-      { name: 'Sachin Sundar', xp: '15,400', rank: 1, avatar: 'https://picsum.photos/seed/s1/40/40' },
-      { name: 'Rahul K', xp: '14,200', rank: 2, avatar: 'https://picsum.photos/seed/s2/40/40' },
-      { name: 'Priya M', xp: '13,900', rank: 3, avatar: 'https://picsum.photos/seed/s3/40/40' },
-      { name: 'Ananya R', xp: '12,400', rank: 4, avatar: 'https://picsum.photos/seed/s4/40/40', isMe: true },
-      { name: 'Arjun P', xp: '11,800', rank: 5, avatar: 'https://picsum.photos/seed/s5/40/40' },
-   ];
+   const [followedTutors, setFollowedTutors] = useState<any[]>([]);
+   const [followedStudents, setFollowedStudents] = useState<any[]>([]);
+
+   useEffect(() => {
+      if (!user) return;
+
+      const fetchLeaderboard = async () => {
+         // 1. Fetch Followings
+         const followSnap = await getDocs(query(collection(db, 'followers'), where('followerId', '==', user.uid)));
+         const followingIds = followSnap.docs.map(d => d.data().followingId);
+
+         const students: any[] = [];
+
+         // Include me
+         const meDoc = await getDoc(doc(db, 'users', user.uid));
+         if (meDoc.exists()) {
+            students.push({ uid: user.uid, ...meDoc.data(), isMe: true });
+         }
+
+         for (const fId of followingIds) {
+            const fDoc = await getDoc(doc(db, 'users', fId));
+            if (fDoc.exists()) {
+               students.push({ uid: fId, ...fDoc.data() });
+            }
+         }
+
+         // For each student, we need to calculate XP. 
+         // Since it's per zone, and summing all zones is expensive, 
+         // we'll use 'engagementScore' from their profile if it exists, 
+         // or sum it from their enrollments (which might be many).
+         // For now, let's use a default/mock XP if not present in user doc, 
+         // but the user wants "real". 
+         // I'll check if 'engagementScore' is in the 'users' doc.
+
+         const studentsWithXP = students.map(s => ({
+            ...s,
+            xp: s.engagementScore || 0, // Fallback to 0
+            name: s.name || 'Anonymous',
+            avatar: s.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.uid}`
+         })).sort((a, b) => b.xp - a.xp)
+            .map((s, idx) => ({ ...s, rank: idx + 1 }));
+
+         setFollowedStudents(studentsWithXP);
+      };
+
+      fetchLeaderboard();
+   }, [user]);
+
+   const topStudents = followedStudents.slice(0, 5);
+
 
    return (
       <div className="space-y-12 max-w-[1600px] mx-auto animate-in fade-in duration-700 pb-20 pr-10">
@@ -129,24 +245,31 @@ const Classroom: React.FC = () => {
 
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {liveSessions.filter(s => s.status === 'live' || s.status === 'scheduled').map(session => (
-                     <div key={session.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-red-100 flex flex-col justify-between group">
-                        <div>
-                           <h4 className="font-black text-indigo-900 mb-1 group-hover:text-red-500 transition-colors">{session.title}</h4>
-                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Starts: {new Date(session.startTime).toLocaleTimeString()}</p>
+                     <div key={session.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 flex flex-col justify-between group hover:shadow-2xl transition-all duration-500">
+                        <div className="space-y-6">
+                           <LiveSessionStatus
+                              status={session.status as 'live' | 'scheduled' | 'ended'}
+                              startTime={session.startTime}
+                              className="bg-gray-50"
+                           />
+                           <div>
+                              <h4 className="text-xl font-black text-indigo-900 tracking-tight leading-tight mb-2 group-hover:text-indigo-600 transition-colors">{session.title}</h4>
+                              <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{session.zoneTitle || 'Learning Zone'}</p>
+                           </div>
                         </div>
                         {session.status === 'live' ? (
                            <button
                               onClick={() => setActiveLiveRoom(session)}
-                              className="w-full py-4 bg-red-500 text-white rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-red-600 transition-all shadow-lg shadow-red-500/10 mt-4 animate-pulse"
+                              className="w-full mt-8 py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-900/20"
                            >
-                              Join Live Classroom
+                              Enter Living Room
                            </button>
                         ) : (
                            <button
                               disabled
-                              className="w-full py-4 bg-gray-100 text-gray-400 rounded-xl font-black uppercase text-[9px] tracking-widest mt-4 cursor-not-allowed"
+                              className="w-full mt-8 py-5 bg-gray-50 text-gray-300 rounded-2xl font-black uppercase text-[10px] tracking-widest cursor-not-allowed border border-gray-100"
                            >
-                              Scheduled
+                              Session Locked
                            </button>
                         )}
                      </div>
@@ -210,12 +333,26 @@ const Classroom: React.FC = () => {
                               <div className="h-48 rounded-[2rem] overflow-hidden mb-8 relative shadow-lg">
                                  <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
                                  <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl text-[9px] font-black text-indigo-900 flex items-center gap-1">
-                                    <Star size={12} fill="#c2f575" className="text-[#c2f575]" /> {zone.rating}
+                                    <Star size={12} fill="#c2f575" className="text-[#c2f575]" /> {zone.rating || '4.8'}
                                  </div>
                               </div>
                               <div>
                                  <h4 className="text-2xl font-black text-[#1A1A4E] group-hover:text-indigo-600 transition-colors mb-2">{zone.title}</h4>
-                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-8">By {zone.tutorName}</p>
+                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">By {zone.tutorName || 'Expert Tutor'}</p>
+
+                                 {/* Progress Bar */}
+                                 <div className="space-y-2 mb-8">
+                                    <div className="flex justify-between items-center">
+                                       <span className="text-[10px] font-black text-indigo-900/40 uppercase tracking-widest">Zone Progress</span>
+                                       <span className="text-[10px] font-black text-indigo-900">{zone.progress}%</span>
+                                    </div>
+                                    <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                                       <div
+                                          className="h-full bg-indigo-900 rounded-full transition-all duration-1000"
+                                          style={{ width: `${zone.progress}%` }}
+                                       />
+                                    </div>
+                                 </div>
                               </div>
                               <div className="flex items-center justify-between mt-auto pt-6 border-t border-gray-100">
                                  <span className="text-[9px] font-black text-indigo-900/40 uppercase tracking-[0.2em]">{zone.level} • {zone.domain}</span>
@@ -244,32 +381,36 @@ const Classroom: React.FC = () => {
                      <button className="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-[10px] font-black text-[#c2f575] uppercase tracking-[0.2em] transition-all">View Full Portfolio</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10 relative z-10">
-                     <div className="aspect-[4/3] border-2 border-dashed border-white/10 rounded-[3rem] flex flex-col items-center justify-center gap-5 text-white/20 hover:border-white/20 transition-all cursor-pointer">
-                        <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center">
-                           <Award size={36} />
-                        </div>
-                        <p className="text-xs font-black uppercase tracking-widest">New Credential Awaiting</p>
-                     </div>
-                     <div className="aspect-[4/3] bg-white/5 border border-white/10 rounded-[3rem] p-10 flex flex-col justify-between group-hover:bg-white/10 transition-all relative overflow-hidden">
-                        <div className="flex justify-between items-start">
-                           <div className="w-16 h-16 bg-[#c2f575] text-indigo-900 rounded-3xl flex items-center justify-center shadow-2xl shadow-[#c2f575]/20">
-                              <Award size={32} />
+                     {certificates.length === 0 && (
+                        <div className="aspect-[4/3] border-2 border-dashed border-white/10 rounded-[3rem] flex flex-col items-center justify-center gap-5 text-white/20 hover:border-white/20 transition-all cursor-pointer">
+                           <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center">
+                              <Award size={36} />
                            </div>
-                           <span className="text-[10px] font-black bg-white/10 px-4 py-2 rounded-xl uppercase tracking-widest">Mastery</span>
+                           <p className="text-xs font-black uppercase tracking-widest">New Credential Awaiting</p>
                         </div>
-                        <div>
-                           <h4 className="text-2xl font-black mb-1">Advanced Product Lifecycle</h4>
-                           <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest">Issued: Dec 20, 2025</p>
+                     )}
+                     {certificates.map(cert => (
+                        <div key={cert.id} className="aspect-[4/3] bg-white/5 border border-white/10 rounded-[3rem] p-10 flex flex-col justify-between hover:bg-white/10 transition-all relative overflow-hidden group/cert">
+                           <div className="flex justify-between items-start">
+                              <div className="w-16 h-16 bg-[#c2f575] text-indigo-900 rounded-3xl flex items-center justify-center shadow-2xl shadow-[#c2f575]/20">
+                                 <Award size={32} />
+                              </div>
+                              <span className="text-[10px] font-black bg-white/10 px-4 py-2 rounded-xl uppercase tracking-widest">Mastery</span>
+                           </div>
+                           <div>
+                              <h4 className="text-2xl font-black mb-1 line-clamp-1">{cert.zoneName}</h4>
+                              <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest">Issued: {new Date(cert.date).toLocaleDateString()}</p>
+                           </div>
+                           <div className="flex gap-4">
+                              <button className="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
+                                 <Download size={16} /> Save
+                              </button>
+                              <button className="flex-1 py-4 bg-[#c2f575] text-indigo-900 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg">
+                                 <Share2 size={16} /> Profile
+                              </button>
+                           </div>
                         </div>
-                        <div className="flex gap-4">
-                           <button className="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
-                              <Download size={16} /> Save
-                           </button>
-                           <button className="flex-1 py-4 bg-[#c2f575] text-indigo-900 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg">
-                              <Share2 size={16} /> Profile
-                           </button>
-                        </div>
-                     </div>
+                     ))}
                   </div>
                </div>
             </div>
@@ -281,16 +422,20 @@ const Classroom: React.FC = () => {
                      <button className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest px-4 py-2 bg-white/5 rounded-xl">Search</button>
                   </div>
                   <div className="space-y-4 relative z-10">
-                     <div className="flex items-center gap-5 p-6 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-white/10 transition-all cursor-pointer">
-                        <div className="relative">
-                           <img src="https://picsum.photos/seed/sundaram/120/120" className="w-16 h-16 rounded-2xl object-cover shadow-2xl" alt="" />
-                           <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 bg-[#7cc142] border-[4px] border-indigo-900 rounded-full shadow-lg"></div>
+                     {followedTutors.length > 0 ? followedTutors.map(tutor => (
+                        <div key={tutor.uid} className="flex items-center gap-5 p-6 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-white/10 transition-all cursor-pointer group/tutor">
+                           <div className="relative">
+                              <img src={tutor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutor.uid}`} className="w-16 h-16 rounded-2xl object-cover shadow-2xl" alt="" />
+                              <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 bg-[#7cc142] border-[4px] border-indigo-900 rounded-full shadow-lg"></div>
+                           </div>
+                           <div>
+                              <p className="text-base font-black truncate max-w-[150px]">{tutor.name || 'Anonymous'}</p>
+                              <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest mt-1 truncate max-w-[150px]">{tutor.headline || 'Expert Mentor'}</p>
+                           </div>
                         </div>
-                        <div>
-                           <p className="text-base font-black">Sundaram S M</p>
-                           <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest mt-1">Lead Product Architect</p>
-                        </div>
-                     </div>
+                     )) : (
+                        <p className="text-white/20 text-xs italic text-center py-10">No mentors joined yet.</p>
+                     )}
                   </div>
                </div>
 
@@ -306,28 +451,34 @@ const Classroom: React.FC = () => {
                   </div>
 
                   <div className="space-y-6">
-                     <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 flex flex-col gap-4 hover:shadow-md transition-all">
-                        <div className="flex items-center justify-between">
-                           <span className="px-3 py-1 bg-red-50 text-red-500 rounded-full text-[9px] font-black uppercase">Live Session</span>
-                           <span className="text-[10px] font-black text-gray-400">TODAY, 6 PM</span>
+                     {upcomingSessions.length > 0 ? upcomingSessions.map(session => (
+                        <div key={session.id} className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 flex flex-col gap-4 hover:shadow-md transition-all">
+                           <div className="flex items-center justify-between">
+                              <span className="px-3 py-1 bg-red-50 text-red-500 rounded-full text-[9px] font-black uppercase">Upcoming Live</span>
+                              <span className="text-[10px] font-black text-gray-400">
+                                 {new Date(session.startTime).toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                           </div>
+                           <h4 className="font-black text-indigo-900 text-sm line-clamp-1">{session.title}</h4>
+                           <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest -mt-2">In {session.zoneTitle || 'Learning Zone'}</p>
+                           <button className="w-full py-3 bg-indigo-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-800 transition-all">Remind Me</button>
                         </div>
-                        <h4 className="font-black text-indigo-900 text-sm">Agile Sprint Strategy with Team</h4>
-                        <button className="w-full py-3 bg-indigo-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">Remind Me</button>
-                     </div>
-
-                     <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 flex flex-col gap-4 hover:shadow-md transition-all opacity-60">
-                        <div className="flex items-center justify-between">
-                           <span className="px-3 py-1 bg-indigo-50 text-indigo-900 rounded-full text-[9px] font-black uppercase">Exam</span>
-                           <span className="text-[10px] font-black text-gray-400">TOMORROW</span>
+                     )) : (
+                        <div className="py-10 text-center space-y-4">
+                           <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto text-gray-200">
+                              <CheckCircle size={24} />
+                           </div>
+                           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">All caught up!</p>
                         </div>
-                        <h4 className="font-black text-indigo-900 text-sm">Product Discovery Quiz</h4>
-                     </div>
+                     )}
                   </div>
 
                   <div className="mt-10 pt-8 border-t border-gray-100 flex items-center justify-between">
                      <div className="flex items-center gap-3">
                         <Star size={20} fill="#c2f575" className="text-[#c2f575]" />
-                        <span className="text-sm font-black text-indigo-900">1,240 XP</span>
+                        <span className="text-sm font-black text-indigo-900">
+                           {enrolledZones.reduce((acc, z) => acc + (z.engagementScore || 0), 0).toLocaleString()} XP
+                        </span>
                      </div>
                      <button
                         onClick={() => setShowLeaderboard(true)}

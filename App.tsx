@@ -16,8 +16,9 @@ import LaunchZone from './pages/LaunchZone';
 import Settings from './pages/Settings';
 import AvailabilitySetup from './pages/AvailabilitySetup';
 import ProfileView from './pages/ProfileView';
-import PublicProfile from './pages/PublicProfile';
+// PublicProfile removed
 import CertificateEngine from './pages/CertificateEngine';
+import ListProductFlow from './pages/ListProductFlow';
 import VerificationPortal from './pages/VerificationPortal';
 import Auth from './pages/Auth';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -52,7 +53,8 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/auth" element={!isAuthenticated ? <Auth /> : <Navigate to="/dashboard" />} />
           <Route path="/verify/:id" element={<VerificationPortal />} />
-          <Route path="/u/:username" element={<PublicProfile />} />
+          <Route path="/u/:id" element={<ProfileView />} />
+          <Route path="/profile/:id" element={<ProfileView />} />
         </Routes>
       </main>
     );
@@ -76,6 +78,7 @@ const AppContent: React.FC = () => {
             <Route path="/workplace/manage/:zoneId" element={role === UserRole.TUTOR ? <ZoneManagement /> : <Navigate to="/dashboard" />} />
             <Route path="/workplace/launch" element={role === UserRole.TUTOR ? <LaunchZone /> : <Navigate to="/dashboard" />} />
             <Route path="/certificate-engine" element={role === UserRole.TUTOR ? <CertificateEngine /> : <Navigate to="/dashboard" />} />
+            <Route path="/list-product/flow" element={role === UserRole.TUTOR ? <ListProductFlow /> : <Navigate to="/dashboard" />} />
             <Route path="/live/:zoneId/:sessionId" element={<LiveRoom />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/search" element={<Search />} />
@@ -84,6 +87,7 @@ const AppContent: React.FC = () => {
             <Route path="/settings/*" element={<Settings />} />
             <Route path="/settings/availability" element={<AvailabilitySetup />} />
             <Route path="/profile/:id" element={<ProfileView />} />
+            <Route path="/u/:id" element={<ProfileView />} />
             <Route path="/payment/:zoneId" element={<Payment />} />
           </Routes>
         </main>

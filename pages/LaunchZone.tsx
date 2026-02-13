@@ -15,8 +15,17 @@ import {
   Sparkles,
   AlertCircle,
   IndianRupee,
-  Euro
+  Euro,
+  GraduationCap,
+  BookOpen,
+  Mic
 } from 'lucide-react';
+
+const ZONE_TYPES = [
+  { id: 'Class Management', label: 'Class Management', icon: GraduationCap, description: 'Full system with exams & attendance.' },
+  { id: 'Course', label: 'Course', icon: BookOpen, description: 'Focus on curriculum & modules.' },
+  { id: 'Workshop', label: 'Workshop', icon: Mic, description: 'Focus on live sessions & schedule.' },
+] as const;
 
 const DOMAINS = [
   "Project Management",
@@ -39,6 +48,7 @@ const LaunchZone: React.FC = () => {
   const [zoneDomain, setZoneDomain] = useState(DOMAINS[0]);
   const [provideCertificate, setProvideCertificate] = useState(true);
   const [zoneImage, setZoneImage] = useState<string | null>(null);
+  const [zoneType, setZoneType] = useState<typeof ZONE_TYPES[number]['id']>('Class Management');
   const [isLaunching, setIsLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,7 +99,8 @@ const LaunchZone: React.FC = () => {
         createdAt: serverTimestamp(),
         students: 0,
         image: zoneImage,
-        isPublic: true
+        isPublic: true,
+        zoneType: zoneType
       };
 
       if (!db) {
@@ -204,6 +215,27 @@ const LaunchZone: React.FC = () => {
                       className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${zoneLevel === lvl ? 'bg-white text-indigo-900 shadow-md border border-gray-50' : 'text-gray-400 hover:text-indigo-900'}`}
                     >
                       {lvl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Zone Type</label>
+                <div className="grid grid-cols-1 gap-4">
+                  {ZONE_TYPES.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setZoneType(t.id)}
+                      className={`flex items-center gap-6 p-6 rounded-[2rem] border-2 text-left transition-all ${zoneType === t.id ? 'bg-[#1A1A4E] border-[#1A1A4E] text-white shadow-xl scale-[1.02]' : 'bg-gray-50 border-gray-100 text-indigo-900 hover:border-[#c1e60d]'}`}
+                    >
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${zoneType === t.id ? 'bg-white/10 text-[#c1e60d]' : 'bg-white text-indigo-900 shadow-sm'}`}>
+                        <t.icon size={28} />
+                      </div>
+                      <div>
+                        <p className="font-black text-lg leading-none mb-1">{t.label}</p>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${zoneType === t.id ? 'text-white/40' : 'text-gray-400'}`}>{t.description}</p>
+                      </div>
                     </button>
                   ))}
                 </div>

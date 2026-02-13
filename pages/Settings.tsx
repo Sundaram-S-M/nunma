@@ -41,103 +41,7 @@ const COUNTRIES = [
   { name: 'Singapore', code: '+65', banks: ['DBS Bank', 'OCBC Bank', 'UOB'] },
 ];
 
-const ProfileSettings = () => {
-  const { user, updateProfile } = useAuth();
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    bio: user?.bio || '',
-    location: user?.location || '',
-    dob: user?.dob || ''
-  });
-
-  const handleSave = () => {
-    updateProfile(formData);
-    setIsEditing(false);
-  };
-
-  if (!user) return null;
-
-  return (
-    <div className="space-y-12 animate-in fade-in duration-500">
-      <div className="bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-sm relative overflow-hidden">
-        <div className="flex justify-between items-start mb-12">
-          <h3 className="text-xl font-bold text-indigo-900">Profile Information</h3>
-          {isEditing ? (
-            <button onClick={handleSave} className="bg-[#1A1A4E] text-white font-bold px-6 py-2 rounded-xl flex items-center gap-2 text-sm shadow-xl transition-all">
-              <Save size={16} /> Save Changes
-            </button>
-          ) : (
-            <button onClick={() => setIsEditing(true)} className="bg-[#c1e60d] text-indigo-900 font-bold px-6 py-2 rounded-xl flex items-center gap-2 text-sm shadow-sm hover:shadow-md transition-all">
-              <Edit2 size={16} /> Edit
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-6 mb-12">
-          <div className="relative group">
-            <div className="w-24 h-24 rounded-full bg-indigo-50 border-4 border-white shadow-lg overflow-hidden ring-1 ring-gray-100">
-              <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
-            </div>
-            <button className="absolute bottom-0 right-0 bg-black text-white p-2 rounded-full text-[10px] font-bold uppercase ring-2 ring-white">
-              <Camera size={12} />
-            </button>
-          </div>
-          <div>
-            <h4 className="text-2xl font-black text-gray-900">{user.name}</h4>
-            <span className="inline-block mt-1 px-3 py-1 bg-[#c1e60d]/20 text-indigo-900 text-[10px] font-black uppercase rounded-full tracking-wider">
-              {user.role} Pro
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-10 gap-x-12">
-          <div className="space-y-8">
-            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">Personal Details</h5>
-            <div className="grid grid-cols-1 gap-6">
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Display Name</p>
-                {isEditing ? (
-                  <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-                ) : <p className="font-bold text-indigo-900">{user.name}</p>}
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Email</p>
-                {isEditing ? (
-                  <input type="email" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-                ) : <p className="font-bold text-indigo-900">{user.email}</p>}
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Date of Birth</p>
-                {isEditing ? (
-                  <input type="date" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value })} />
-                ) : <p className="font-bold text-indigo-900">{user.dob || 'Not set'}</p>}
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Bio</p>
-                {isEditing ? (
-                  <textarea className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-medium text-indigo-900 focus:outline-none" rows={3} value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} />
-                ) : <p className="text-gray-500 font-medium italic">{user.bio || 'No bio provided'}</p>}
-              </div>
-            </div>
-          </div>
-          <div className="space-y-8">
-            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">Professional</h5>
-            <div className="grid grid-cols-1 gap-6">
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Location</p>
-                {isEditing ? (
-                  <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 font-bold text-indigo-900 focus:outline-none" value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
-                ) : <p className="font-bold text-indigo-900">{user.location || 'Not set'}</p>}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+// ProfileSettings component removed as editing now happens directly on the profile page.
 
 
 const Preferences = () => (
@@ -576,7 +480,7 @@ const Settings: React.FC = () => {
   if (!user) return <Navigate to="/auth" />;
 
   const tabs = [
-    { label: 'MY PROFILE', path: '/settings/profile', icon: <UserIcon size={14} /> },
+    { label: 'MY PROFILE', path: '/profile/me', icon: <UserIcon size={14} /> },
     { label: 'PREFERENCES', path: '/settings/preferences', icon: <Sliders size={14} /> },
     { label: 'SECURITY OPTIONS', path: '/settings/security', icon: <ShieldCheck size={14} /> },
     ...(user.role === UserRole.TUTOR ? [
@@ -607,6 +511,7 @@ const Settings: React.FC = () => {
               <Link
                 key={tab.path}
                 to={tab.path}
+                target={tab.label === 'MY PROFILE' ? '_self' : undefined}
                 className={`flex items-center gap-3 py-4 px-10 text-[10px] font-black uppercase tracking-[0.25em] rounded-[1.75rem] transition-all
                   ${location.pathname === tab.path
                     ? 'bg-white text-indigo-900 shadow-lg border border-gray-100 translate-y-[-1px]'
@@ -623,8 +528,8 @@ const Settings: React.FC = () => {
         {/* Content Area */}
         <div className="pt-4 max-w-7xl">
           <Routes>
-            <Route path="/" element={<Navigate to="profile" replace />} />
-            <Route path="profile" element={<ProfileSettings />} />
+            <Route path="/" element={<Navigate to="preferences" replace />} />
+            <Route path="profile" element={<Navigate to="/profile/me" replace />} />
             <Route path="preferences" element={<Preferences />} />
             <Route path="security" element={<Security />} />
             <Route path="billing" element={<Billings />} />

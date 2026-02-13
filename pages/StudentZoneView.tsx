@@ -1,14 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, onSnapshot, addDoc, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, onSnapshot, addDoc, orderBy, deleteDoc, setDoc } from 'firebase/firestore';
 import { db, functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
+import { Student } from '../types';
 import {
   ArrowLeft,
   ChevronRight,
   Play,
   FileText,
+  Users,
+  Radio,
   FileDown,
   Award,
   Video,
@@ -16,7 +19,6 @@ import {
   Zap,
   Globe,
   ChevronDown,
-  Radio,
   QrCode,
   GraduationCap,
   Clock,
@@ -32,6 +34,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import ClassroomStream from '../components/ClassroomStream';
+import LiveSessionStatus from '../components/LiveSessionStatus';
 import { generateOpenBadgeVC, downloadVCAsJSON } from '../utils/vcUtils';
 import { useAuth } from '../context/AuthContext';
 
@@ -47,8 +50,9 @@ const StudentZoneView: React.FC = () => {
   const [expandedChapters, setExpandedChapters] = useState<string[]>(['c1']);
   const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'content' | 'exams'>('content');
+  const [activeTab, setActiveTab] = useState<'content' | 'exams' | 'students'>('content');
   const [exams, setExams] = useState<any[]>([]);
+  const [allStudents, setAllStudents] = useState<any[]>([]);
   const [examResults, setExamResults] = useState<any[]>([]);
   const [activeExam, setActiveExam] = useState<any>(null);
   const [examCurrentQuestion, setExamCurrentQuestion] = useState(0);
@@ -74,7 +78,16 @@ const StudentZoneView: React.FC = () => {
     // 1. Zone Details
     const zoneUnsub = onSnapshot(doc(db, 'zones', zoneId), (docSnap) => {
       if (docSnap.exists()) {
-        setZone({ id: docSnap.id, ...docSnap.data() });
+        const zoneData = { id: docSnap.id, ...docSnap.data() };
+        setZone(zoneData);
+
+        // Adjust activeTab if current one is not allowed
+        const zType = (zoneData as any).zoneType;
+        setActiveTab(prev => {
+          if (zType === 'Course' && prev === 'exams') return 'content';
+          if (zType === 'Workshop' && (prev === 'exams' || prev === 'content')) return 'students';
+          return prev;
+        });
       } else {
         // Handle zone not found
       }
@@ -131,6 +144,12 @@ const StudentZoneView: React.FC = () => {
       setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // 7. All Students (for Student List tab)
+    const allStudentsQ = query(collection(db, 'zones', zoneId, 'students'));
+    const allStudentsUnsub = onSnapshot(allStudentsQ, (snapshot) => {
+      setAllStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       zoneUnsub();
       sessionsUnsub();
@@ -138,6 +157,7 @@ const StudentZoneView: React.FC = () => {
       chaptersUnsub();
       studentUnsub();
       resultsUnsub();
+      allStudentsUnsub();
     };
   }, [zoneId, location.search, authUser]);
 
@@ -156,6 +176,26 @@ const StudentZoneView: React.FC = () => {
       const isWhitelisted = zone.whitelistedEmails?.includes(authUser.email);
       // If we have studentData, we are good.
       if (studentData) return;
+
+      // If whitelisted but no studentData, auto-enroll
+      if (isWhitelisted) {
+        try {
+          const newStudent: Student = {
+            id: authUser.uid,
+            name: authUser.name || authUser.email.split('@')[0],
+            avatar: authUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser.uid}`,
+            joinedAt: new Date().toLocaleDateString(),
+            status: 'Present',
+            engagementScore: 0,
+            email: authUser.email
+          };
+          await setDoc(doc(db, 'zones', zoneId, 'students', authUser.uid), newStudent);
+          // studentData will be updated via onSnapshot listener
+          return;
+        } catch (e) {
+          console.error("Failed to auto-enroll whitelisted user", e);
+        }
+      }
 
       // If no student data, and price > 0, and not whitelisted -> Redirect
       if (zone.price > 0 && !isWhitelisted) {
@@ -287,6 +327,34 @@ const StudentZoneView: React.FC = () => {
     }
   };
 
+  const registerIssuance = async () => {
+    if (!zoneId || !zone || !authUser || !studentData) return;
+
+    try {
+      // Check if already issued
+      const q = query(
+        collection(db, 'issued_certificates'),
+        where('studentId', '==', authUser.uid),
+        where('zoneId', '==', zoneId)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) return; // Already issued
+
+      await addDoc(collection(db, 'issued_certificates'), {
+        studentId: authUser.uid,
+        tutorId: zone.tutorId || zone.createdBy, // Fallback to createdBy if tutorId is missing
+        zoneId: zoneId,
+        studentName: authUser.name || authUser.email.split('@')[0],
+        zoneName: zone.title,
+        date: new Date().toISOString(),
+        verified: true
+      });
+      console.log("Certificate registered automatically");
+    } catch (e) {
+      console.error("Failed to register certificate issuance", e);
+    }
+  };
+
   const autoAdvance = (currentSegmentId: string) => {
     const allSegments = curriculum.flatMap(c => c.segments);
     const currentIndex = allSegments.findIndex(s => s.id === currentSegmentId);
@@ -300,6 +368,11 @@ const StudentZoneView: React.FC = () => {
         setExpandedChapters(prev => [...prev, nextChapter.id]);
       }
     } else {
+      // Course complete
+      const completedIds = studentData.completedSegments || [];
+      if (allSegments.every(s => s.id === currentSegmentId || completedIds.includes(s.id))) {
+        registerIssuance();
+      }
       alert("Congratulations! You've reached the end of the curriculum.");
     }
   };
@@ -377,13 +450,18 @@ const StudentZoneView: React.FC = () => {
         </div>
         <div className="shrink-0 flex items-center gap-4">
           {currentZoneLive && (
-            <button
-              onClick={() => setActiveLiveRoom(currentZoneLive)}
-              className="px-8 py-4 bg-red-600 text-white rounded-[1.75rem] flex items-center gap-4 shadow-2xl shadow-red-600/20 hover:bg-red-700 transition-all animate-in zoom-in"
-            >
-              <Radio size={20} className="animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em]">Join Live Session</span>
-            </button>
+            <div className="flex flex-col items-center gap-4 bg-white/5 backdrop-blur-md p-6 rounded-[2.5rem] border border-white/10 shadow-2xl animate-in zoom-in">
+              <LiveSessionStatus
+                status="live"
+                className="bg-[#c2f575]/10 border-[#c2f575]/20 text-[#c2f575]"
+              />
+              <button
+                onClick={() => setActiveLiveRoom(currentZoneLive)}
+                className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-[1.75rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
+              >
+                Join Live Classroom <ArrowRight size={16} />
+              </button>
+            </div>
           )}
           {zone.provideCertificate && (
             <div
@@ -415,9 +493,14 @@ const StudentZoneView: React.FC = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-12 items-start">
         <div className="xl:col-span-8 space-y-8">
-          <div className="flex bg-white/50 p-2 rounded-3xl border border-gray-100 gap-2 mb-4">
-            <button onClick={() => setActiveTab('content')} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'content' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Learning Content</button>
-            <button onClick={() => setActiveTab('exams')} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'exams' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Exam Portal</button>
+          <div className="flex bg-white/50 p-2 rounded-3xl border border-gray-100 gap-2 mb-4 overflow-x-auto no-scrollbar">
+            {(!zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course') && (
+              <button onClick={() => setActiveTab('content')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'content' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Learning Content</button>
+            )}
+            {(!zone?.zoneType || zone.zoneType === 'Class Management') && (
+              <button onClick={() => setActiveTab('exams')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'exams' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Exam Portal</button>
+            )}
+            <button onClick={() => setActiveTab('students')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'students' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Student List</button>
           </div>
 
           {activeTab === 'content' ? (
@@ -468,7 +551,7 @@ const StudentZoneView: React.FC = () => {
                 <div className="absolute -bottom-20 -right-20 w-[450px] h-[450px] bg-[#c2f575]/5 rounded-full blur-[120px] animate-pulse"></div>
               </div>
             )
-          ) : (
+          ) : activeTab === 'exams' ? (
             <div className="space-y-8 animate-in fade-in duration-500">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {exams.map(exam => {
@@ -521,8 +604,30 @@ const StudentZoneView: React.FC = () => {
                 })}
               </div>
             </div>
+          ) : (
+            <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
+              <div className="flex items-center justify-between mb-12">
+                <h3 className="text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
+                  <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-900">
+                    <Users size={24} />
+                  </div>
+                  Joined Students
+                </h3>
+                <span className="px-6 py-2 bg-indigo-900 text-[#c2f575] rounded-full text-[10px] font-black uppercase tracking-widest">{allStudents.length} ENROLLED</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {allStudents.map(student => (
+                  <div key={student.id} className="p-6 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex items-center gap-4 hover:shadow-xl hover:bg-white hover:border-[#c2f575] transition-all cursor-pointer group">
+                    <img src={student.avatar} className="w-14 h-14 rounded-2xl object-cover bg-white p-1 border border-gray-100 shadow-sm" alt="" />
+                    <div>
+                      <p className="font-black text-indigo-900 text-sm">{student.name}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Joined {student.joinedAt}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-
           <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
             <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
               <div className="w-2 h-8 bg-[#c2f575] rounded-full"></div>
@@ -725,7 +830,6 @@ const StudentZoneView: React.FC = () => {
         </div>
       )}
 
-      {/* EXAM RULES MODAL */}
       {showExamRules && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#040457]/90 backdrop-blur-xl p-6 animate-in fade-in duration-500">
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 space-y-10 animate-in zoom-in-95 duration-500">
@@ -754,7 +858,6 @@ const StudentZoneView: React.FC = () => {
         </div>
       )}
 
-      {/* ONLINE EXAM INTERFACE */}
       {activeExam && (
         <div className="fixed inset-0 z-[500] bg-white flex flex-col p-10 animate-in slide-in-from-bottom-10 duration-700">
           <div className="flex justify-between items-center mb-12">
