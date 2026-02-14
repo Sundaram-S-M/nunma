@@ -687,16 +687,18 @@ const ProfileView: React.FC = () => {
 
   return (
     <div className="-m-8 min-h-screen bg-[#fbfbfb] pb-20 animate-in fade-in duration-700">
-      <PhotoAdjustModal
-        image={adjustingImage || ''}
-        onSave={handleSavePhoto}
-        onClose={() => { setAdjustingImage(null); setAdjustType(null); }}
-        onChangePhoto={() => {
-          setAdjustingImage(null);
-          if (adjustType === 'avatar') avatarInputRef.current?.click();
-          else bannerInputRef.current?.click();
-        }}
-      />
+      {adjustingImage && (
+        <PhotoAdjustModal
+          image={adjustingImage}
+          onSave={handleSavePhoto}
+          onClose={() => { setAdjustingImage(null); setAdjustType(null); }}
+          onChangePhoto={() => {
+            setAdjustingImage(null);
+            if (adjustType === 'avatar') avatarInputRef.current?.click();
+            else bannerInputRef.current?.click();
+          }}
+        />
+      )}
 
       <ProfileHeader />
 
