@@ -1,81 +1,63 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { AccessToken } from "livekit-server-sdk";
-import * as dotenv from "dotenv";
-import * as path from "path";
-
-// Improved environment variable loading for Cloud Functions
-const envPath = path.join(__dirname, "../.env");
-const fallbackEnvPath = path.join(__dirname, "../../.env");
-
-if (require('fs').existsSync(envPath)) {
-    dotenv.config({ path: envPath });
-} else if (require('fs').existsSync(fallbackEnvPath)) {
-    dotenv.config({ path: fallbackEnvPath });
-}
-
-// In some environments, process.env might not be populated immediately or might have trailing spaces
-const getLiveKitKey = (key: string) => {
-    const val = process.env[key];
-    return val ? val.trim() : "";
-};
-
-admin.initializeApp();
-
 import * as crypto from "crypto";
 
+// Initialize admin only once
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
+
+/**
+ * Diagnostic function to check if LiveKit keys are visible to the server.
+ */
+export const checkLiveKitConfig = functions.https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Auth required.");
+
+    return {
+        hasApiKey: !!process.env.LIVEKIT_API_KEY,
+        apiKeyPrefix: process.env.LIVEKIT_API_KEY ? process.env.LIVEKIT_API_KEY.substring(0, 4) : 'none',
+        hasApiSecret: !!process.env.LIVEKIT_API_SECRET,
+        nodeVersion: process.version,
+        envKeys: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
+    };
+});
+
 export const generateLiveKitToken = functions.https.onCall(async (data, context) => {
-    console.log("generateLiveKitToken: API Invocation", {
-        hasAuth: !!context.auth,
-        roomName: data?.roomName,
-        role: data?.role,
-        uid: context.auth?.uid
+    console.log("generateLiveKitToken: Invoked", {
+        uid: context.auth?.uid,
+        room: data?.roomName
     });
 
-    // 1. Verify Authentication
     if (!context.auth) {
-        console.error("generateLiveKitToken: Rejected - Unauthenticated");
-        throw new functions.https.HttpsError(
-            "unauthenticated",
-            "You must be signed in to join a live stream."
-        );
+        throw new functions.https.HttpsError("unauthenticated", "User must be logged in.");
     }
 
     const { roomName, role } = data;
-    const userId = context.auth.uid;
-    const userName = context.auth.token.name || context.auth.token.email || userId;
-
     if (!roomName) {
-        console.error("generateLiveKitToken: Rejected - Missing roomName");
-        throw new functions.https.HttpsError("invalid-argument", "Room name is required.");
+        throw new functions.https.HttpsError("invalid-argument", "roomName is required.");
     }
 
-    const isTutor = role?.toUpperCase() === "TUTOR";
-    const canPublish = isTutor;
+    // Prioritize environment variables from Firebase's automatic .env loading
+    // Fallback to config if necessary, but .env is preferred in modern Firebase
+    const apiKey = process.env.LIVEKIT_API_KEY?.trim();
+    const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
+
+    if (!apiKey || !apiSecret) {
+        console.error("LiveKit config missing in process.env", {
+            keysFound: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
+        });
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "LiveKit Server is not configured. (Missing API Key or Secret)"
+        );
+    }
 
     try {
-        const apiKey = getLiveKitKey('LIVEKIT_API_KEY');
-        const apiSecret = getLiveKitKey('LIVEKIT_API_SECRET');
+        const userId = context.auth.uid;
+        const userName = context.auth.token.name || context.auth.token.email || userId;
+        const isTutor = role?.toUpperCase() === "TUTOR";
 
-        if (!apiKey || !apiSecret) {
-            console.error("generateLiveKitToken: Fatal - Missing Keys", {
-                hasApiKey: !!apiKey,
-                hasApiSecret: !!apiSecret,
-                envKeys: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
-            });
-            throw new functions.https.HttpsError(
-                "failed-precondition",
-                "LiveKit Server environment variables are not configured correctly. Please check server logs."
-            );
-        }
-
-        console.log("generateLiveKitToken: Creating AccessToken", {
-            identity: userId,
-            room: roomName,
-            isTutor
-        });
-
-        // Use the AccessToken from livekit-server-sdk
         const at = new AccessToken(apiKey, apiSecret, {
             identity: userId,
             name: userName as string,
@@ -84,28 +66,18 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
         at.addGrant({
             roomJoin: true,
             room: roomName,
-            canPublish: canPublish,
+            canPublish: isTutor,
             canSubscribe: true,
-            // Ensure permissions are correctly set for both roles
             canPublishData: true,
         });
 
         const token = at.toJwt();
-        console.log("generateLiveKitToken: Success - Token Generated");
-        return { token, isTutor };
+        return { token, isTutor, roomName };
     } catch (error: any) {
-        console.error("generateLiveKitToken: Internal Error Trace", {
-            message: error.message,
-            stack: error.stack,
-            code: error.code
-        });
-
-        if (error instanceof functions.https.HttpsError) throw error;
-
-        // Ensure the original error message is visible to help debugging
+        console.error("Token Generation Error:", error);
         throw new functions.https.HttpsError(
             "internal",
-            `LiveKit Error: ${error.message || 'An unknown error occurred on the server'}`
+            `LiveKit Error: ${error.message || 'Unknown generation failure'}`
         );
     }
 });

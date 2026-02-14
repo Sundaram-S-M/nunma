@@ -65,25 +65,27 @@ const LiveRoom: React.FC = () => {
 
       try {
         const generateToken = httpsCallable(functions, 'generateLiveKitToken');
-        console.log("LiveRoom: Calling generateLiveKitToken cloud function...");
+        console.log("LiveRoom: Calling generateLiveKitToken...");
 
-        // Add a timeout
-        const tokenPromise = generateToken({
+        const result = await generateToken({
           roomName: `${zoneId}-${sessionId}`,
           role: user.role
         });
 
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Connection timed out. Please check your network and Firebase Functions deployment.")), 15000)
-        );
-
-        const result = await Promise.race([tokenPromise, timeoutPromise]) as any;
-
-        console.log("LiveRoom: Token fetch result received.");
-        setToken(result.data.token);
+        console.log("LiveRoom: Token received successfully");
+        setToken((result.data as any).token);
       } catch (err: any) {
         console.error("LiveRoom: Token fetch failed:", err);
-        // Extract message from Firebase HttpsError if possible
+
+        // Attempt diagnostic check to help the user
+        try {
+          const checkConfig = httpsCallable(functions, 'checkLiveKitConfig');
+          const diagResult = await checkConfig({});
+          console.warn("LiveRoom: Server Config Diagnostic:", diagResult.data);
+        } catch (diagErr) {
+          console.error("LiveRoom: Diagnostic check failed:", diagErr);
+        }
+
         const errorMessage = err.details?.message || err.message || 'Check your connection and try again';
         setError(`Failed to join live session: ${errorMessage}`);
       }
