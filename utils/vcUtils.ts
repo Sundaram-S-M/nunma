@@ -51,17 +51,17 @@ export const generateOpenBadgeVC = (studentId: string, studentName: string, zone
         id: credentialId,
         type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: {
-            id: "did:web:nunma.io",
+            id: "did:web:nunma.in",
             type: "Profile",
             name: "Nunma Academy",
-            url: "https://nunma.io"
+            url: "https://nunma.in"
         },
         issuanceDate: issuanceDate,
         credentialSubject: {
             id: `did:nunma:student:${studentId.replace(/[^a-zA-Z0-9]/g, '')}`,
             type: "AchievementSubject",
             achievement: {
-                id: `https://nunma.io/achievements/${zone.id}`,
+                id: `https://nunma.in/achievements/${zone.id}`,
                 type: "Achievement",
                 name: zone.title,
                 description: zone.description || "Successful completion of professional learning stream.",
@@ -77,7 +77,7 @@ export const generateOpenBadgeVC = (studentId: string, studentName: string, zone
             type: "Ed25519Signature2020",
             created: issuanceDate,
             proofPurpose: "assertionMethod",
-            verificationMethod: "did:web:nunma.io#key-1",
+            verificationMethod: "did:web:nunma.in#key-1",
             jws: "eyJhbGciOiJFZERTQSIsImI2NCI6ZmFsc2UsImNyaXQiOlsiYjY0Il19..mock_signature"
         }
     };

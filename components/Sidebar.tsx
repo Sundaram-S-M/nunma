@@ -9,7 +9,8 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
-  Share2
+  Share2,
+  ShoppingBag
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -43,6 +44,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     },
     { id: 'explore', icon: <Layers size={20} />, path: '/explore', label: 'Explore' },
     { id: 'inbox', icon: <Mail size={20} />, path: '/inbox', label: 'Inbox' },
+    ...(role === UserRole.TUTOR && user?.onboardingCompleted ? [
+      { id: 'products', icon: <ShoppingBag size={20} />, path: '/products', label: 'Products' }
+    ] : [])
   ];
 
   return (

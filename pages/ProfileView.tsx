@@ -30,7 +30,8 @@ import {
   Zap,
   TrendingUp,
   CreditCard as CardIcon,
-  Plus as PlusIcon
+  Plus as PlusIcon,
+  HelpCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
@@ -632,35 +633,63 @@ const ProfileView: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
             <div className="bg-gray-50 rounded-[3.5rem] p-12 border border-gray-100">
               <h3 className="text-2xl font-black text-indigo-900 mb-10 flex items-center gap-4">
-                <CalendarIcon size={24} className="text-[#c2f575]" /> Sessions
+                <CalendarIcon size={24} className="text-[#c2f575]" /> Available Slots
               </h3>
-              <div className="space-y-8 max-h-[500px] overflow-y-auto custom-scrollbar pr-4">
+              <div className="space-y-8 max-h-[600px] overflow-y-auto custom-scrollbar pr-4">
                 {availability.filter(d => d.active).length > 0 ? availability.filter(d => d.active).map(day => (
                   <div key={day.day} className="space-y-4">
                     <p className="text-[11px] font-black text-indigo-900/30 uppercase tracking-[0.3em] ml-2">{day.day}</p>
-                    {day.slots.map((slot: any) => (
-                      <div key={slot.id} className="p-6 rounded-3xl bg-white border border-gray-100 flex items-center justify-between group hover:border-[#c2f575] transition-all">
-                        <div className="flex items-center gap-4"><Clock size={20} className="text-gray-300" /><span className="text-lg font-black text-indigo-900">{slot.start} — {slot.end}</span></div>
-                        <button className="px-6 py-3 bg-indigo-50 text-indigo-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#c2f575] transition-all">Book</button>
-                      </div>
-                    ))}
+                    <div className="grid grid-cols-1 gap-4">
+                      {day.slots.map((slot: any) => (
+                        <button key={slot.id} onClick={() => alert(`Booking ${slot.start} — ${slot.end} for ${day.day}`)} className="p-6 rounded-3xl bg-white border border-gray-100 flex items-center justify-between group hover:border-[#c2f575] hover:shadow-xl transition-all">
+                          <div className="flex items-center gap-4"><Clock size={20} className="text-gray-300 group-hover:text-[#c2f575]" /><span className="text-lg font-black text-indigo-900">{slot.start} — {slot.end}</span></div>
+                          <div className="px-6 py-3 bg-indigo-50 text-indigo-900 rounded-xl text-[10px] font-black uppercase tracking-widest group-hover:bg-[#c2f575] transition-all">Book Now</div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                )) : <div className="py-20 text-center text-gray-300 italic">No available slots.</div>}
+                )) : <div className="py-20 text-center text-gray-300 italic">No available slots set by the tutor.</div>}
               </div>
             </div>
-            <div className="bg-indigo-900 p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center">
-              <div className="relative z-10">
-                <div className="inline-flex items-center gap-3 bg-[#c2f575] text-indigo-900 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest mb-8">
-                  <Sparkles size={14} fill="currentColor" /> Premium Mentorship
+
+            <div className="space-y-8">
+              {products.filter(p => p.type === 'mentorship').length > 0 ? products.filter(p => p.type === 'mentorship').map(mentorship => (
+                <div key={mentorship.id} className="bg-indigo-900 p-12 rounded-[4rem] text-white shadow-2xl relative overflow-hidden group">
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-8">
+                      <div className="inline-flex items-center gap-3 bg-[#c2f575] text-indigo-900 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">
+                        <Video size={14} /> {mentorship.duration} Min Session
+                      </div>
+                      <p className="text-4xl font-black text-[#c2f575]">{mentorship.price} {mentorship.currency}</p>
+                    </div>
+                    <h3 className="text-3xl font-black mb-4 tracking-tighter leading-tight">{mentorship.title}</h3>
+                    <p className="text-indigo-100/70 text-lg mb-8 font-medium line-clamp-3">{mentorship.description}</p>
+
+                    {mentorship.faqs && mentorship.faqs.length > 0 && (
+                      <div className="space-y-4 mb-8">
+                        <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest">Common Questions</p>
+                        <div className="space-y-2">
+                          {mentorship.faqs.slice(0, 2).map((faq: any, idx: number) => (
+                            <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                              <p className="text-sm font-bold text-white mb-1">Q: {faq.q}</p>
+                              <p className="text-xs text-indigo-200/60">A: {faq.a}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <button className="w-full py-6 bg-[#c2f575] text-indigo-900 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-[1.02] transition-all">Select a Slot to Book</button>
+                  </div>
+                  <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-white/5 rounded-full blur-[100px] group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
                 </div>
-                <h3 className="text-4xl font-black mb-3 tracking-tighter">One-on-One Session</h3>
-                <p className="text-indigo-200 text-xl mb-12 font-medium">Book a personal stream with {profileUser.name.split(' ')[0]} for deep technical guidance.</p>
-                <div className="flex items-center justify-between border-t border-white/10 pt-12 mt-12">
-                  <p className="text-5xl font-black text-[#c2f575]">$150</p>
-                  <button className="px-12 py-6 bg-white text-indigo-900 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:scale-105 transition-all">Select a Slot</button>
+              )) : (
+                <div className="bg-indigo-900 p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center items-center text-center">
+                  <HelpCircle size={64} className="text-[#c2f575] mb-6 opacity-20" />
+                  <h3 className="text-2xl font-black mb-2">No mentorship sessions</h3>
+                  <p className="text-indigo-200/60">This tutor hasn't listed any private sessions yet.</p>
                 </div>
-              </div>
-              <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-white/5 rounded-full blur-[100px]"></div>
+              )}
             </div>
           </div>
         )}

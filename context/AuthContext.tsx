@@ -5,10 +5,14 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  User as FirebaseUser
+  User as FirebaseUser,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithCustomToken
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../utils/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '../utils/firebase';
 import { UserRole } from '../types';
 
 interface UserProfile {
@@ -24,6 +28,10 @@ interface UserProfile {
   followingCount?: number;
   earnings?: number;
   studentsCount?: number;
+  onboardingCompleted?: boolean;
+  linkedin?: string;
+  expertise?: string[];
+  availability?: any[];
 }
 
 interface AuthContextType {
@@ -31,6 +39,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (profile: Omit<UserProfile, 'uid'>, password: string) => Promise<void>;
+  requestOTP: (email: string) => Promise<void>;
+  verifyOTP: (email: string, otp: string, registrationData?: { name: string, role: string }) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   toggleRole: () => Promise<void>;
@@ -60,14 +71,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsAuthenticated(true);
           } else {
             // New user signed in but no profile doc yet (edge case)
-            setUser({
+            const newUserProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               name: firebaseUser.displayName || 'New User',
-              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
+              avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
               role: UserRole.STUDENT
-            });
+            };
+            setUser(newUserProfile);
             setIsAuthenticated(true);
+
+            // Auto-create doc if missing (for Google sign-in)
+            try {
+              await setDoc(doc(db, 'users', firebaseUser.uid), newUserProfile, { merge: true });
+            } catch (err) {
+              console.warn("AuthContext: Failed to auto-create profile doc", err);
+            }
           }
         } catch (error: any) {
           console.error("AuthContext: Error fetching user doc:", error);
@@ -77,7 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               name: firebaseUser.displayName || 'Developer',
-              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
+              avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
               role: UserRole.STUDENT
             });
             setIsAuthenticated(true);
@@ -120,6 +139,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthenticated(true);
   };
 
+  const requestOTP = async (email: string) => {
+    if (!functions) throw new Error("Firebase Functions not initialized");
+    const requestOTPFunc = httpsCallable(functions, 'requestOTP');
+    await requestOTPFunc({ email });
+  };
+
+  const verifyOTP = async (email: string, otp: string, registrationData?: { name: string, role: string }) => {
+    if (!auth || !functions) throw new Error("Firebase not initialized");
+    const verifyOTPFunc = httpsCallable<{ email: string, otp: string, registrationData?: any }, { customToken: string }>(functions, 'verifyOTPAndSignIn');
+    const result = await verifyOTPFunc({ email, otp, registrationData });
+
+    if (result.data.customToken) {
+      await signInWithCustomToken(auth, result.data.customToken);
+    } else {
+      throw new Error("Failed to receive authentication token.");
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    if (!auth) throw new Error("Firebase Auth not initialized");
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  };
+
   const logout = async () => {
     if (!auth) return;
     await signOut(auth);
@@ -138,7 +181,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (db) {
       try {
         console.log(`AuthContext: Attempting to update profile for ${user.uid}...`);
-        // Use setDoc with merge to ensure doc creation and persist data
         await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
         console.log("AuthContext: Profile updated successfully in Firestore");
       } catch (error: any) {
@@ -179,7 +221,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, signup, logout, updateProfile, toggleRole }}>
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated,
+      login,
+      signup,
+      requestOTP,
+      verifyOTP,
+      loginWithGoogle,
+      logout,
+      updateProfile,
+      toggleRole
+    }}>
       {children}
     </AuthContext.Provider>
   );

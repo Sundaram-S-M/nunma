@@ -17,6 +17,7 @@ import Settings from './pages/Settings';
 import AvailabilitySetup from './pages/AvailabilitySetup';
 import ProfileView from './pages/ProfileView';
 // PublicProfile removed
+import ProductManagement from './pages/ProductManagement';
 import CertificateEngine from './pages/CertificateEngine';
 import ListProductFlow from './pages/ListProductFlow';
 import VerificationPortal from './pages/VerificationPortal';
@@ -87,6 +88,7 @@ const AppContent: React.FC = () => {
             <Route path="/settings/*" element={<Settings />} />
             <Route path="/settings/availability" element={<AvailabilitySetup />} />
             <Route path="/profile/:id" element={<ProfileView />} />
+            <Route path="/products" element={<ProductManagement />} />
             <Route path="/u/:id" element={<ProfileView />} />
             <Route path="/payment/:zoneId" element={<Payment />} />
           </Routes>

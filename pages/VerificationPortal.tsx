@@ -73,7 +73,7 @@ const VerificationPortal: React.FC = () => {
               <div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Issuer</p>
                 <p className="text-lg font-black text-indigo-900">Nunma Academy</p>
-                <p className="text-[9px] font-mono text-gray-300">did:web:nunma.io</p>
+                <p className="text-[9px] font-mono text-gray-300">did:web:nunma.in</p>
               </div>
             </div>
           </div>

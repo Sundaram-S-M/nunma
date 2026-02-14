@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  Sparkles
+  Sparkles,
+  KeyRound
 } from 'lucide-react';
 
 const Auth: React.FC = () => {
@@ -20,29 +21,54 @@ const Auth: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // New OTP Flow State
+  const [step, setStep] = useState<'info' | 'otp'>('info');
+  const [otp, setOtp] = useState('');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<UserRole>(UserRole.STUDENT);
 
-  const { login, signup } = useAuth();
+  const { login, signup, requestOTP, verifyOTP, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  const handleSignUpInfoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setIsLoading(true);
-      await signup({
-        name,
-        email,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name || 'default'}`,
-        role,
-        // Location and DOB are now optional and set in Profile Settings later
-      }, password);
+      await requestOTP(email);
+      setStep('otp');
+    } catch (error: any) {
+      console.error("OTP Request error:", error);
+      alert(`Request Failed: ${error.message || "Failed to send verification code."}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsLoading(true);
+      await verifyOTP(email, otp, { name, role });
       navigate('/dashboard');
     } catch (error: any) {
-      console.error("Signup error:", error);
-      alert(`Initialization Failed: ${error.message || "Please check your network and configuration."}`);
+      console.error("OTP Verification error:", error);
+      alert(`Verification Failed: ${error.message || "Invalid or expired code."}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoading(true);
+      await loginWithGoogle();
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error("Google Sign-In error:", error);
+      alert(`Google Sign-In Failed: ${error.message || "Authentication cancelled."}`);
     } finally {
       setIsLoading(false);
     }
@@ -135,6 +161,23 @@ const Auth: React.FC = () => {
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-6">
+                  {/* Google Login Button */}
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={isLoading}
+                    className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
+                  >
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                    Continue with Google
+                  </button>
+
+                  <div className="relative flex items-center gap-4 mb-8">
+                    <div className="flex-1 h-[1px] bg-gray-100"></div>
+                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">or email access</span>
+                    <div className="flex-1 h-[1px] bg-gray-100"></div>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Identity (Email)</label>
                     <div className="relative group">
@@ -183,75 +226,99 @@ const Auth: React.FC = () => {
               <div className="animate-in fade-in slide-in-from-right-8 duration-700">
                 <div className="mb-14">
                   <h2 className="text-5xl font-black text-[#040457] tracking-tighter mb-4">Join Ecosystem</h2>
-                  <p className="text-gray-400 font-medium text-lg">Initialize your professional profile.</p>
+                  <p className="text-gray-400 font-medium text-lg">
+                    {step === 'info' ? "Initialize your professional profile." : "Enter the verification code sent to your email."}
+                  </p>
                 </div>
 
-                <form onSubmit={handleSignUp} className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Full Name</label>
-                    <div className="relative group">
-                      <User className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
-                      <input
-                        type="text" required placeholder="Legal full name"
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
-                        value={name} onChange={(e) => setName(e.target.value)}
-                      />
-                    </div>
-                  </div>
+                {step === 'info' ? (
+                  <form onSubmit={handleSignUpInfoSubmit} className="space-y-6">
+                    {/* Google Signup Button */}
+                    <button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      disabled={isLoading}
+                      className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
+                    >
+                      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                      Sign up with Google
+                    </button>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Identity (Email)</label>
-                    <div className="relative group">
-                      <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
-                      <input
-                        type="email" required placeholder="name@domain.com"
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
-                        value={email} onChange={(e) => setEmail(e.target.value)}
-                      />
+                    <div className="relative flex items-center gap-4 mb-8">
+                      <div className="flex-1 h-[1px] bg-gray-100"></div>
+                      <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">or use email</span>
+                      <div className="flex-1 h-[1px] bg-gray-100"></div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Access Key</label>
-                    <div className="relative group">
-                      <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
-                      <input
-                        type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-5 font-bold text-[#040457] outline-none transition-all"
-                        value={password} onChange={(e) => setPassword(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 hover:text-[#040457]"
-                      >
-                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                      </button>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Full Name</label>
+                      <div className="relative group">
+                        <User className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <input
+                          type="text" required placeholder="Legal full name"
+                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                          value={name} onChange={(e) => setName(e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Operational Mode</label>
-                    <div className="flex p-2 bg-gray-50 rounded-[1.5rem] border border-gray-100 gap-2">
-                      <button
-                        type="button" onClick={() => setRole(UserRole.STUDENT)}
-                        className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.STUDENT ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
-                      >
-                        Learner
-                      </button>
-                      <button
-                        type="button" onClick={() => setRole(UserRole.TUTOR)}
-                        className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.TUTOR ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
-                      >
-                        Expert
-                      </button>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Identity (Email)</label>
+                      <div className="relative group">
+                        <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <input
+                          type="email" required placeholder="name@domain.com"
+                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                          value={email} onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <button type="submit" className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8">
-                    {isLoading ? "Syncing..." : "Initialize Dashboard"} <Sparkles size={18} className="text-[#c2f575]" />
-                  </button>
-                </form>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Operational Mode</label>
+                      <div className="flex p-2 bg-gray-50 rounded-[1.5rem] border border-gray-100 gap-2">
+                        <button
+                          type="button" onClick={() => setRole(UserRole.STUDENT)}
+                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.STUDENT ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
+                        >
+                          Learner
+                        </button>
+                        <button
+                          type="button" onClick={() => setRole(UserRole.TUTOR)}
+                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.TUTOR ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
+                        >
+                          Expert
+                        </button>
+                      </div>
+                    </div>
+
+                    <button type="submit" disabled={isLoading} className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
+                      {isLoading ? "Sending Code..." : "Send Verification Code"} <ArrowRight size={18} className="text-[#c2f575]" />
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleVerifyOTP} className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">6-Digit Verification Code</label>
+                      <div className="relative group">
+                        <KeyRound className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <input
+                          type="text" required placeholder="••••••" maxLength={6}
+                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-black text-[#040457] outline-none transition-all text-2xl tracking-[0.5em]"
+                          value={otp} onChange={(e) => setOtp(e.target.value)}
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-medium ml-1">
+                        Code sent to <span className="text-[#040457] font-bold">{email}</span>.
+                        <button type="button" onClick={() => setStep('info')} className="ml-1 text-[#040457] font-black uppercase tracking-tighter hover:underline">Change</button>
+                      </p>
+                    </div>
+
+                    <button type="submit" disabled={isLoading} className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
+                      {isLoading ? "Verifying..." : "Initialize Dashboard"} <Sparkles size={18} className="text-[#c2f575]" />
+                    </button>
+                  </form>
+                )}
               </div>
             )}
 
@@ -259,7 +326,10 @@ const Auth: React.FC = () => {
               <p className="text-sm font-medium text-gray-400">
                 {isLogin ? "New to the ecosystem?" : "Identity already verified?"}{' '}
                 <button
-                  onClick={() => setIsLogin(!isLogin)}
+                  onClick={() => {
+                    setIsLogin(!isLogin);
+                    setStep('info');
+                  }}
                   className="text-[#040457] font-black uppercase text-[10px] tracking-[0.25em] hover:text-[#c2f575] transition-colors ml-2"
                 >
                   {isLogin ? 'Create Profile' : 'Sign In'}

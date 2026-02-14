@@ -780,7 +780,7 @@ const StudentZoneView: React.FC = () => {
                     <CheckCircle size={24} className="text-[#c2f575]" />
                     <div className="text-left">
                       <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Issuer</p>
-                      <p className="text-xs font-bold">Nunma Academy (did:web:nunma.io)</p>
+                      <p className="text-xs font-bold">Nunma Academy (did:web:nunma.in)</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">

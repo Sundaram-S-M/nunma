@@ -215,3 +215,108 @@ export const sendWhitelistInvite = functions.https.onCall(async (data, context) 
 
     return { success: true, message: `Invitation logged for ${email}` };
 });
+
+// --- OTP AUTHENTICATION SYSTEM ---
+
+/**
+ * Generates and stores a 6-digit OTP for a given email.
+ * Placeholder for real email sending.
+ */
+export const requestOTP = functions.https.onCall(async (data) => {
+    const { email } = data;
+    if (!email) {
+        throw new functions.https.HttpsError("invalid-argument", "Email is required.");
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = admin.firestore.Timestamp.now().toMillis() + (10 * 60 * 1000); // 10 mins
+
+    try {
+        await admin.firestore().collection("otp_verifications").doc(email).set({
+            otp,
+            expiresAt,
+            createdAt: admin.firestore.Timestamp.now()
+        });
+
+        console.log(`[OTP] Generated for ${email}: ${otp}. Expires in 10 mins.`);
+
+        // --- REAL EMAIL INTEGRATION WOULD GO HERE ---
+        // For now, we return success and use function logs to retrieve the OTP for testing.
+
+        return { success: true, message: "Verification code sent to email." };
+    } catch (error: any) {
+        console.error("requestOTP error:", error);
+        throw new functions.https.HttpsError("internal", "Failed to generate OTP.");
+    }
+});
+
+/**
+ * Verifies OTP and returns a custom token for client sign-in.
+ * If user doesn't exist, it creates a profile in Firestore.
+ */
+export const verifyOTPAndSignIn = functions.https.onCall(async (data) => {
+    const { email, otp, registrationData } = data;
+
+    if (!email || !otp) {
+        throw new functions.https.HttpsError("invalid-argument", "Email and OTP are required.");
+    }
+
+    try {
+        const otpRef = admin.firestore().collection("otp_verifications").doc(email);
+        const otpDoc = await otpRef.get();
+
+        if (!otpDoc.exists()) {
+            throw new functions.https.HttpsError("not-found", "No OTP requested for this email.");
+        }
+
+        const { otp: storedOtp, expiresAt } = otpDoc.data()!;
+
+        if (admin.firestore.Timestamp.now().toMillis() > expiresAt) {
+            await otpRef.delete();
+            throw new functions.https.HttpsError("out-of-range", "OTP has expired.");
+        }
+
+        if (storedOtp !== otp) {
+            throw new functions.https.HttpsError("permission-denied", "Invalid OTP.");
+        }
+
+        // OTP is valid, delete it
+        await otpRef.delete();
+
+        // Get or Create Firebase User
+        let userRecord;
+        try {
+            userRecord = await admin.auth().getUserByEmail(email);
+        } catch (error: any) {
+            if (error.code === 'auth/user-not-found') {
+                // Register new user
+                userRecord = await admin.auth().createUser({ email });
+
+                // If we have registration data, create the Firestore profile
+                if (registrationData) {
+                    const { name, role } = registrationData;
+                    await admin.firestore().collection('users').doc(userRecord.uid).set({
+                        uid: userRecord.uid,
+                        email,
+                        name: name || 'New User',
+                        role: role || 'STUDENT',
+                        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name || email}`,
+                        createdAt: admin.firestore.Timestamp.now()
+                    });
+                }
+            } else {
+                throw error;
+            }
+        }
+
+        // Generate Custom Token
+        const customToken = await admin.auth().createCustomToken(userRecord.uid);
+
+        return { customToken, uid: userRecord.uid };
+    } catch (error: any) {
+        console.error("verifyOTPAndSignIn error:", error);
+        if (error instanceof functions.https.HttpsError) throw error;
+        throw new functions.https.HttpsError("internal", error.message || "Failed to verify OTP.");
+    }
+});
