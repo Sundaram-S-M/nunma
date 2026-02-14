@@ -4,27 +4,36 @@ import { AccessToken } from "livekit-server-sdk";
 import * as dotenv from "dotenv";
 import * as path from "path";
 
-// Load environment variables from .env file explicitly
-dotenv.config({ path: path.join(__dirname, "../.env") });
+// Improved environment variable loading for both src/ and lib/ environments
+const envPath = path.join(__dirname, "../.env");
+const fallbackEnvPath = path.join(__dirname, "../../.env");
+
+if (require('fs').existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+} else if (require('fs').existsSync(fallbackEnvPath)) {
+    dotenv.config({ path: fallbackEnvPath });
+} else {
+    console.warn("generateLiveKitToken: No .env found at", { envPath, fallbackEnvPath });
+}
 
 admin.initializeApp();
 
 import * as crypto from "crypto";
 
 export const generateLiveKitToken = functions.https.onCall(async (data, context) => {
-    // ... (Existing code omitted for brevity in thought process, but preserved in action)
-    console.log("generateLiveKitToken: Function started", {
+    console.log("generateLiveKitToken: API Invocation", {
         hasAuth: !!context.auth,
         roomName: data?.roomName,
-        role: data?.role
+        role: data?.role,
+        uid: context.auth?.uid
     });
 
     // 1. Verify Authentication
     if (!context.auth) {
-        console.error("generateLiveKitToken: Unauthenticated call");
+        console.error("generateLiveKitToken: Rejected - Unauthenticated");
         throw new functions.https.HttpsError(
             "unauthenticated",
-            "The function must be called while authenticated."
+            "You must be signed in to join a live stream."
         );
     }
 
@@ -33,7 +42,7 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
     const userName = context.auth.token.name || context.auth.token.email || userId;
 
     if (!roomName) {
-        console.error("generateLiveKitToken: Missing roomName");
+        console.error("generateLiveKitToken: Rejected - Missing roomName");
         throw new functions.https.HttpsError("invalid-argument", "Room name is required.");
     }
 
@@ -41,27 +50,30 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
     const canPublish = isTutor;
 
     try {
-        // 3. Generate Token
         const apiKey = process.env.LIVEKIT_API_KEY;
         const apiSecret = process.env.LIVEKIT_API_SECRET;
 
-        console.log("generateLiveKitToken: Environment check", {
-            hasApiKey: !!apiKey,
-            hasApiSecret: !!apiSecret,
-            isTutor
-        });
-
         if (!apiKey || !apiSecret) {
-            console.error("generateLiveKitToken: Missing LiveKit API keys in environment");
+            console.error("generateLiveKitToken: Fatal - Missing Keys", {
+                hasApiKey: !!apiKey,
+                hasApiSecret: !!apiSecret,
+                envKeys: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
+            });
             throw new functions.https.HttpsError(
                 "failed-precondition",
-                "LiveKit API configuration is missing on the server. Please check environment variables."
+                "LiveKit Server is not configured. Please check server environment variables."
             );
         }
 
+        console.log("generateLiveKitToken: Creating AccessToken", {
+            identity: userId,
+            room: roomName,
+            isTutor
+        });
+
         const at = new AccessToken(apiKey, apiSecret, {
             identity: userId,
-            name: userName,
+            name: userName as string,
         });
 
         at.addGrant({
@@ -72,14 +84,20 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
         });
 
         const token = at.toJwt();
-        console.log("generateLiveKitToken: Token generated successfully");
+        console.log("generateLiveKitToken: Success - Token Generated");
         return { token, isTutor };
     } catch (error: any) {
-        console.error("generateLiveKitToken: Error generating token:", error);
+        console.error("generateLiveKitToken: Internal Error Trace", {
+            message: error.message,
+            stack: error.stack,
+            code: error.code
+        });
+
         if (error instanceof functions.https.HttpsError) throw error;
+
         throw new functions.https.HttpsError(
             "internal",
-            `Failed to generate token: ${error.message || 'Unknown error'}`
+            `LiveKit Service Error: ${error.message || 'Check server logs for details'}`
         );
     }
 });

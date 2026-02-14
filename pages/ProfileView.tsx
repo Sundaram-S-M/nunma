@@ -631,7 +631,7 @@ const ProfileView: React.FC = () => {
 
         {activeTab === 'mentorship' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
-            <div className="bg-gray-50 rounded-[3.5rem] p-12 border border-gray-100">
+            <div ref={mentorshipRef} className="bg-gray-50 rounded-[3.5rem] p-12 border border-gray-100">
               <h3 className="text-2xl font-black text-indigo-900 mb-10 flex items-center gap-4">
                 <CalendarIcon size={24} className="text-[#c2f575]" /> Available Slots
               </h3>
@@ -663,23 +663,33 @@ const ProfileView: React.FC = () => {
                       <p className="text-4xl font-black text-[#c2f575]">{mentorship.price} {mentorship.currency}</p>
                     </div>
                     <h3 className="text-3xl font-black mb-4 tracking-tighter leading-tight">{mentorship.title}</h3>
-                    <p className="text-indigo-100/70 text-lg mb-8 font-medium line-clamp-3">{mentorship.description}</p>
+                    <p className="text-indigo-100/70 text-lg mb-8 font-medium leading-relaxed">{mentorship.description}</p>
 
                     {mentorship.faqs && mentorship.faqs.length > 0 && (
-                      <div className="space-y-4 mb-8">
-                        <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest">Common Questions</p>
-                        <div className="space-y-2">
-                          {mentorship.faqs.slice(0, 2).map((faq: any, idx: number) => (
-                            <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                              <p className="text-sm font-bold text-white mb-1">Q: {faq.q}</p>
-                              <p className="text-xs text-indigo-200/60">A: {faq.a}</p>
+                      <div className="space-y-6 mb-10">
+                        <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest flex items-center gap-2">
+                          <HelpCircle size={14} /> Frequently Asked Questions
+                        </p>
+                        <div className="grid grid-cols-1 gap-4">
+                          {mentorship.faqs.map((faq: any, idx: number) => (
+                            <div key={idx} className="bg-white/5 p-6 rounded-[2rem] border border-white/10 hover:border-white/20 transition-all">
+                              <p className="text-base font-black text-white mb-2 flex items-center gap-3">
+                                <span className="w-6 h-6 rounded-full bg-[#c2f575] text-indigo-900 flex items-center justify-center text-[10px]">{idx + 1}</span>
+                                {faq.q}
+                              </p>
+                              <p className="text-sm text-indigo-200/60 leading-relaxed pl-9">{faq.a}</p>
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
 
-                    <button className="w-full py-6 bg-[#c2f575] text-indigo-900 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-[1.02] transition-all">Select a Slot to Book</button>
+                    <button
+                      onClick={() => mentorshipRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                      className="w-full py-6 bg-[#c2f575] text-indigo-900 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"
+                    >
+                      Select a Time Slot Below
+                    </button>
                   </div>
                   <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-white/5 rounded-full blur-[100px] group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
                 </div>

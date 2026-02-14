@@ -68,6 +68,15 @@ const ListProductFlow: React.FC = () => {
         }
     }, [user]);
 
+    useEffect(() => {
+        if (step === 4 && user?.uid) {
+            const timer = setTimeout(() => {
+                navigate(`/u/${user.uid}`);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [step, user, navigate]);
+
     const handleNext = () => setStep(prev => prev + 1);
     const handleBack = () => setStep(prev => prev - 1);
 

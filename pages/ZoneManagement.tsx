@@ -378,8 +378,11 @@ const ZoneManagement: React.FC = () => {
       setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student)));
     });
 
-    // 5. Scheduled Sessions
-    const sessionsq = query(collection(db, 'zones', zoneId, 'scheduled_sessions'));
+    // 5. Scheduled Sessions (unified sessions collection)
+    const sessionsq = query(
+      collection(db, 'zones', zoneId, 'sessions'),
+      where('status', '==', 'scheduled')
+    );
     const sessionsUnsub = onSnapshot(sessionsq, (snapshot) => {
       setScheduledSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -783,11 +786,14 @@ const ZoneManagement: React.FC = () => {
   const handleLaunchLive = async () => {
     if (!zone || !zoneId) return;
 
+    const now = new Date();
     const newSession = {
       zoneId: zoneId,
       title: zone.title,
       status: 'live',
-      startTime: new Date().toISOString(),
+      date: now.toISOString().split('T')[0],
+      time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      startTime: now.toISOString(),
       tutorName: 'Tutor' // Should get from AuthContext
     };
 
@@ -1097,28 +1103,34 @@ const ZoneManagement: React.FC = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    if (!scheduleTitle || !scheduleDate || !scheduleTime) return;
+                  onClick={async () => {
+                    if (!scheduleTitle || !scheduleDate || !scheduleTime || !zoneId) return;
                     const sessionData = {
-                      id: editingSession?.id || Date.now().toString(),
                       title: scheduleTitle,
                       date: scheduleDate,
                       time: scheduleTime,
                       duration: scheduleDuration,
-                      status: 'scheduled'
+                      status: 'scheduled',
+                      createdAt: new Date().toISOString()
                     };
 
-                    if (editingSession) {
-                      setScheduledSessions(scheduledSessions.map(s => s.id === editingSession.id ? sessionData : s));
-                    } else {
-                      setScheduledSessions([...scheduledSessions, sessionData]);
-                    }
+                    try {
+                      if (editingSession) {
+                        await updateDoc(doc(db, 'zones', zoneId, 'sessions', editingSession.id), sessionData);
+                      } else {
+                        await addDoc(collection(db, 'zones', zoneId, 'sessions'), sessionData);
+                      }
 
-                    setShowScheduleModal(false);
-                    setEditingSession(null);
-                    setScheduleTitle('');
-                    setScheduleDate('');
-                    setScheduleTime('');
+                      setShowScheduleModal(false);
+                      setEditingSession(null);
+                      setScheduleTitle('');
+                      setScheduleDate('');
+                      setScheduleTime('');
+                      alert(`Session ${editingSession ? 'updated' : 'scheduled'} successfully!`);
+                    } catch (e) {
+                      console.error("Error scheduling session:", e);
+                      alert("Failed to schedule session.");
+                    }
                   }}
                   className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all"
                 >

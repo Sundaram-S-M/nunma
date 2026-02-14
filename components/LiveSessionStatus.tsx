@@ -4,10 +4,12 @@ import { Radio, Clock, CheckCircle2 } from 'lucide-react';
 interface LiveSessionStatusProps {
     status: 'live' | 'scheduled' | 'ended';
     startTime?: string;
+    date?: string;
+    time?: string;
     className?: string;
 }
 
-const LiveSessionStatus: React.FC<LiveSessionStatusProps> = ({ status, startTime, className = "" }) => {
+const LiveSessionStatus: React.FC<LiveSessionStatusProps> = ({ status, startTime, date, time, className = "" }) => {
     const getStatusConfig = () => {
         switch (status) {
             case 'live':
@@ -29,7 +31,7 @@ const LiveSessionStatus: React.FC<LiveSessionStatusProps> = ({ status, startTime
                         day: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit'
-                    }) : 'Scheduled Session'
+                    }) : (date && time ? `${date} @ ${time}` : 'Scheduled Session')
                 };
             case 'ended':
                 return {

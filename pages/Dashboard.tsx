@@ -212,7 +212,25 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
     setSelectedPeriod('PM');
   };
 
-  const eventsForModal = modalDate ? (meetingsData[modalDate] || []) : [];
+  const getSessionsForDay = (day: number | null) => {
+    if (!day) return [];
+    const dateStr = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    return liveSessions.filter(s => s.date === dateStr);
+  };
+
+  const daySessions = getSessionsForDay(modalDate);
+  const eventsForModal = modalDate ? [
+    ...(meetingsData[modalDate] || []),
+    ...daySessions.map(s => ({
+      id: s.id,
+      title: s.title,
+      time: s.time,
+      type: 'live',
+      color: s.status === 'live' ? 'lime' : 'indigo',
+      isLive: true,
+      session: s
+    }))
+  ] : [];
   const activeSessions = liveSessions.filter(s => s.status === 'live');
   const upcomingLiveSessions = liveSessions.filter(s => s.status === 'scheduled');
 
@@ -368,15 +386,45 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                   </div>
                 </div>
               ) : (
-                eventsForModal.length > 0 ? eventsForModal.map((event) => (
-                  <div key={event.id} className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-100">
-                    <div className={`w-2 h-10 rounded-full ${event.color === 'lime' ? 'bg-[#c2f575]' : event.color === 'indigo' ? 'bg-indigo-600' : 'bg-gray-200'}`} />
-                    <div className="flex-1">
-                      <p className="text-sm font-black text-[#1A1A4E]">{event.title}</p>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{event.time}</p>
+                <div className="space-y-4">
+                  {eventsForModal.length > 0 ? eventsForModal.map((event) => (
+                    <div key={event.id} className="flex items-center gap-4 p-5 rounded-[2rem] bg-indigo-50/50 border border-indigo-100 hover:bg-white transition-all group">
+                      <div className={`w-2 h-12 rounded-full ${event.color === 'lime' ? 'bg-[#c2f575]' : event.color === 'indigo' ? 'bg-indigo-600' : 'bg-gray-200'}`} />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-base font-black text-[#1A1A4E]">{event.title}</p>
+                          {event.isLive && (
+                            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${event.session?.status === 'live' ? 'bg-red-500 text-white' : 'bg-indigo-900 text-[#c2f575]'}`}>
+                              {event.session?.status}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{event.time} {event.session?.zoneTitle && `• ${event.session.zoneTitle}`}</p>
+                      </div>
+                      {event.isLive && (
+                        <button
+                          onClick={() => {
+                            if (event.session?.status === 'live') {
+                              setActiveLiveRoom(event.session);
+                              setShowEventModal(false);
+                            } else {
+                              // Link to zone or show alert
+                              alert(`Class starts at ${event.time}`);
+                            }
+                          }}
+                          className={`p-3 rounded-xl transition-all ${event.session?.status === 'live' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'bg-gray-100 text-gray-400'}`}
+                        >
+                          <Video size={18} />
+                        </button>
+                      )}
                     </div>
-                  </div>
-                )) : <div className="text-center py-10 italic text-gray-400">No events scheduled. Plan your success.</div>
+                  )) : <div className="text-center py-20 flex flex-col items-center gap-4">
+                    <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-200">
+                      <Zap size={32} />
+                    </div>
+                    <p className="italic text-gray-400 font-medium">No events scheduled. Plan your success.</p>
+                  </div>}
+                </div>
               )}
             </div>
             <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
@@ -571,7 +619,9 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
               {Array.from({ length: daysCount }, (_, i) => {
                 const dayNum = i + 1;
                 const isToday = isThisMonth && today.getDate() === dayNum;
-                const hasEvent = meetingsData[dayNum] && meetingsData[dayNum].length > 0;
+                const sessions = getSessionsForDay(dayNum);
+                const hasEvent = (meetingsData[dayNum] && meetingsData[dayNum].length > 0) || sessions.length > 0;
+                const hasLive = sessions.some(s => s.status === 'live');
 
                 return (
                   <div
@@ -582,7 +632,9 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                       `}
                   >
                     <span className="text-sm font-black">{dayNum}</span>
-                    {hasEvent && !isToday && <div className="absolute bottom-2 w-1.5 h-1.5 bg-indigo-500 rounded-full" />}
+                    {hasEvent && !isToday && (
+                      <div className={`absolute bottom-2 w-1.5 h-1.5 rounded-full ${hasLive ? 'bg-red-500 animate-pulse' : 'bg-indigo-500'}`} />
+                    )}
                   </div>
                 );
               })}

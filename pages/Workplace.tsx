@@ -144,7 +144,8 @@ const Workplace: React.FC = () => {
     try {
       const sessionData = {
         title: liveTitle,
-        startTime: goLiveNow ? new Date().toISOString() : `${liveDate}T${liveTime}:00`,
+        date: goLiveNow ? new Date().toISOString().split('T')[0] : liveDate,
+        time: goLiveNow ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : liveTime,
         duration: 60,
         status: goLiveNow ? 'live' : 'scheduled',
         createdAt: new Date().toISOString()

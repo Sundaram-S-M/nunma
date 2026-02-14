@@ -73,24 +73,27 @@ const ClassroomStream: React.FC<ClassroomStreamProps> = ({ sessionId, zoneId, ro
         const generateToken = httpsCallable(functions, 'generateLiveKitToken');
         console.log("ClassroomStream: Calling generateLiveKitToken cloud function...");
 
-        // Add a timeout to the call
-        const tokenPromise = generateToken({
+        const result = await generateToken({
           roomName: `${zoneId}-${sessionId}`,
           role: role
         });
 
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Connection timed out. Please check your network and Firebase Functions deployment.")), 15000)
-        );
-
-        const result = await Promise.race([tokenPromise, timeoutPromise]) as any;
-
         console.log("ClassroomStream: Token fetch result:", result.data);
-        setToken(result.data.token);
+        setToken((result.data as any).token);
       } catch (err: any) {
-        console.error("ClassroomStream: Token fetch failed:", err);
-        setError(`Failed to join stream: ${err.message || 'Unknown error'}`);
-        setToast({ message: `Token Error: ${err.message}`, type: 'error' });
+        console.error("ClassroomStream: Token fetch failed:", {
+          message: err.message,
+          code: err.code,
+          details: err.details
+        });
+
+        let displayError = "Failed to join stream.";
+        if (err.code === 'unauthenticated') displayError = "You must be signed in to join.";
+        else if (err.code === 'failed-precondition') displayError = "LiveKit server is not configured correctly.";
+        else if (err.message) displayError = err.message;
+
+        setError(displayError);
+        setToast({ message: displayError, type: 'error' });
       }
     };
     fetchToken();

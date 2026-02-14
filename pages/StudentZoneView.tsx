@@ -31,7 +31,8 @@ import {
   FileSpreadsheet,
   Share2,
   LogOut,
-  ArrowRight
+  ArrowRight,
+  Calendar
 } from 'lucide-react';
 import ClassroomStream from '../components/ClassroomStream';
 import LiveSessionStatus from '../components/LiveSessionStatus';
@@ -93,8 +94,8 @@ const StudentZoneView: React.FC = () => {
       }
     });
 
-    // 2. Live Sessions
-    const sessionsQ = query(collection(db, 'zones', zoneId, 'sessions'), where('status', '==', 'live'));
+    // 2. Live & Scheduled Sessions
+    const sessionsQ = query(collection(db, 'zones', zoneId, 'sessions'), where('status', 'in', ['live', 'scheduled']));
     const sessionsUnsub = onSnapshot(sessionsQ, (snapshot) => {
       const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setLiveSessions(sessions);
@@ -729,6 +730,38 @@ const StudentZoneView: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {/* Upcoming Scheduled Sessions */}
+          {liveSessions.filter(s => s.status === 'scheduled').length > 0 && (
+            <div className="bg-white rounded-[4rem] p-10 border border-gray-100 shadow-2xl relative overflow-hidden">
+              <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-4">
+                <div className="p-3 bg-red-50 rounded-2xl text-red-500">
+                  <Calendar size={24} />
+                </div>
+                Upcoming Live Classes
+              </h3>
+              <div className="space-y-4">
+                {liveSessions.filter(s => s.status === 'scheduled').map(session => (
+                  <div key={session.id} className="p-6 bg-gray-50 rounded-[2.5rem] border border-gray-100 group hover:bg-white hover:shadow-xl transition-all duration-500">
+                    <div className="flex justify-between items-start mb-4">
+                      <h4 className="font-black text-indigo-900 text-lg tracking-tight">{session.title}</h4>
+                      <LiveSessionStatus status="scheduled" date={session.date} time={session.time} />
+                    </div>
+                    <div className="flex items-center gap-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                      <div className="flex items-center gap-2">
+                        <Clock size={14} /> {session.duration} Mins
+                      </div>
+                      <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
+                      <div>
+                        {session.date} @ {session.time}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-[#c2f575] p-12 rounded-[4rem] text-indigo-900 relative overflow-hidden group shadow-2xl border-4 border-white">
             <div className="relative z-10">
               <Zap size={40} fill="currentColor" className="mb-8" />
