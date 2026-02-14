@@ -83,7 +83,9 @@ const LiveRoom: React.FC = () => {
         setToken(result.data.token);
       } catch (err: any) {
         console.error("LiveRoom: Token fetch failed:", err);
-        setError(`Failed to join live session: ${err.message || 'Unknown error'}`);
+        // Extract message from Firebase HttpsError if possible
+        const errorMessage = err.details?.message || err.message || 'Check your connection and try again';
+        setError(`Failed to join live session: ${errorMessage}`);
       }
     };
 

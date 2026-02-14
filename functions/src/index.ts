@@ -4,7 +4,7 @@ import { AccessToken } from "livekit-server-sdk";
 import * as dotenv from "dotenv";
 import * as path from "path";
 
-// Improved environment variable loading for both src/ and lib/ environments
+// Improved environment variable loading for Cloud Functions
 const envPath = path.join(__dirname, "../.env");
 const fallbackEnvPath = path.join(__dirname, "../../.env");
 
@@ -12,9 +12,13 @@ if (require('fs').existsSync(envPath)) {
     dotenv.config({ path: envPath });
 } else if (require('fs').existsSync(fallbackEnvPath)) {
     dotenv.config({ path: fallbackEnvPath });
-} else {
-    console.warn("generateLiveKitToken: No .env found at", { envPath, fallbackEnvPath });
 }
+
+// In some environments, process.env might not be populated immediately or might have trailing spaces
+const getLiveKitKey = (key: string) => {
+    const val = process.env[key];
+    return val ? val.trim() : "";
+};
 
 admin.initializeApp();
 
@@ -50,8 +54,8 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
     const canPublish = isTutor;
 
     try {
-        const apiKey = process.env.LIVEKIT_API_KEY;
-        const apiSecret = process.env.LIVEKIT_API_SECRET;
+        const apiKey = getLiveKitKey('LIVEKIT_API_KEY');
+        const apiSecret = getLiveKitKey('LIVEKIT_API_SECRET');
 
         if (!apiKey || !apiSecret) {
             console.error("generateLiveKitToken: Fatal - Missing Keys", {
@@ -61,7 +65,7 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
             });
             throw new functions.https.HttpsError(
                 "failed-precondition",
-                "LiveKit Server is not configured. Please check server environment variables."
+                "LiveKit Server environment variables are not configured correctly. Please check server logs."
             );
         }
 
@@ -71,6 +75,7 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
             isTutor
         });
 
+        // Use the AccessToken from livekit-server-sdk
         const at = new AccessToken(apiKey, apiSecret, {
             identity: userId,
             name: userName as string,
@@ -81,6 +86,8 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
             room: roomName,
             canPublish: canPublish,
             canSubscribe: true,
+            // Ensure permissions are correctly set for both roles
+            canPublishData: true,
         });
 
         const token = at.toJwt();
@@ -95,9 +102,10 @@ export const generateLiveKitToken = functions.https.onCall(async (data, context)
 
         if (error instanceof functions.https.HttpsError) throw error;
 
+        // Ensure the original error message is visible to help debugging
         throw new functions.https.HttpsError(
             "internal",
-            `LiveKit Service Error: ${error.message || 'Check server logs for details'}`
+            `LiveKit Error: ${error.message || 'An unknown error occurred on the server'}`
         );
     }
 });
@@ -284,7 +292,7 @@ export const verifyOTPAndSignIn = functions.https.onCall(async (data) => {
         const otpRef = admin.firestore().collection("otp_verifications").doc(email);
         const otpDoc = await otpRef.get();
 
-        if (!otpDoc.exists()) {
+        if (!otpDoc.exists) {
             throw new functions.https.HttpsError("not-found", "No OTP requested for this email.");
         }
 

@@ -90,6 +90,7 @@ const ClassroomStream: React.FC<ClassroomStreamProps> = ({ sessionId, zoneId, ro
         let displayError = "Failed to join stream.";
         if (err.code === 'unauthenticated') displayError = "You must be signed in to join.";
         else if (err.code === 'failed-precondition') displayError = "LiveKit server is not configured correctly.";
+        else if (err.details?.message) displayError = err.details.message;
         else if (err.message) displayError = err.message;
 
         setError(displayError);

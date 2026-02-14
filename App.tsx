@@ -22,6 +22,8 @@ import CertificateEngine from './pages/CertificateEngine';
 import ListProductFlow from './pages/ListProductFlow';
 import VerificationPortal from './pages/VerificationPortal';
 import Auth from './pages/Auth';
+import BookingPage from './pages/BookingPage';
+
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 
@@ -91,6 +93,7 @@ const AppContent: React.FC = () => {
             <Route path="/products" element={<ProductManagement />} />
             <Route path="/u/:id" element={<ProfileView />} />
             <Route path="/payment/:zoneId" element={<Payment />} />
+            <Route path="/booking/:productId" element={<BookingPage />} />
           </Routes>
         </main>
       </div>

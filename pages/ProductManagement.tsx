@@ -217,7 +217,7 @@ const ProductManagement: React.FC = () => {
                                             <div className="flex justify-between items-start mb-4">
                                                 <div className="space-y-1">
                                                     <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest">{meeting.time}</p>
-                                                    <h5 className="text-lg font-black text-[#040457]">{meeting.userName}</h5>
+                                                    <h5 className="text-lg font-black text-[#040457]">{meeting.studentName || 'Student'}</h5>
                                                 </div>
                                                 <button className="p-2 bg-indigo-50 text-indigo-600 rounded-xl opacity-0 group-hover:opacity-100 transition-all"><Video size={18} /></button>
                                             </div>

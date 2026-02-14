@@ -40,7 +40,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showEventModal, setShowEventModal] = useState(false);
   const [modalDate, setModalDate] = useState<number | null>(null);
-  const [meetingsData, setMeetingsData] = useState<Record<number, any[]>>({});
+  const [meetingsData, setMeetingsData] = useState<Record<string, any[]>>({});
 
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
   const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
@@ -201,7 +201,8 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
       color: newEventIsImportant ? 'indigo' : 'gray',
       important: newEventIsImportant
     };
-    setMeetingsData(prev => ({ ...prev, [modalDate]: [...(prev[modalDate] || []), newEvent] }));
+    const dateKey = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${modalDate.toString().padStart(2, '0')}`;
+    setMeetingsData(prev => ({ ...prev, [dateKey]: [...(prev[dateKey] || []), newEvent] }));
     setNewEventTitle('');
     setNewEventTime('');
     setNewEventIsImportant(false);
@@ -218,9 +219,10 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
     return liveSessions.filter(s => s.date === dateStr);
   };
 
+  const dateKeyForModal = modalDate ? `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${modalDate.toString().padStart(2, '0')}` : '';
   const daySessions = getSessionsForDay(modalDate);
   const eventsForModal = modalDate ? [
-    ...(meetingsData[modalDate] || []),
+    ...(meetingsData[dateKeyForModal] || []),
     ...daySessions.map(s => ({
       id: s.id,
       title: s.title,
@@ -618,9 +620,10 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
               {Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`} className="p-2" />)}
               {Array.from({ length: daysCount }, (_, i) => {
                 const dayNum = i + 1;
+                const dateKey = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
                 const isToday = isThisMonth && today.getDate() === dayNum;
                 const sessions = getSessionsForDay(dayNum);
-                const hasEvent = (meetingsData[dayNum] && meetingsData[dayNum].length > 0) || sessions.length > 0;
+                const hasEvent = (meetingsData[dateKey] && meetingsData[dateKey].length > 0) || sessions.length > 0;
                 const hasLive = sessions.some(s => s.status === 'live');
 
                 return (

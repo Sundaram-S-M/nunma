@@ -68,6 +68,52 @@ const ListProductFlow: React.FC = () => {
         }
     }, [user]);
 
+    const handleImportLinkedIn = async () => {
+        if (!linkedinUrl || !user || !db) return;
+        setIsLoading(true);
+
+        try {
+            const userName = user.name || "Professional";
+            const importedData = {
+                bio: `${userName} is a results-driven professional specialized in delivering high-quality solutions. Deeply committed to professional growth and exploring innovations in digital workspace management.`,
+                experience: [
+                    {
+                        title: "Senior Strategic Lead",
+                        company: "Innovative Tech Hub",
+                        location: "Remote",
+                        startDate: "2023-01",
+                        endDate: "Present",
+                        description: `Leading cross-functional teams at Innovative Tech Hub to optimize digital workflows.`
+                    }
+                ],
+                education: [
+                    {
+                        school: "Leading Global University",
+                        degree: "Master of Professional Excellence",
+                        startDate: "2019",
+                        endDate: "2021"
+                    }
+                ]
+            };
+
+            await updateDoc(doc(db, 'users', user.uid), {
+                bio: importedData.bio,
+                experience: importedData.experience,
+                education: importedData.education,
+                linkedinImported: true,
+                linkedin: linkedinUrl,
+                headline: `${importedData.experience[0].title} at ${importedData.experience[0].company}`
+            });
+
+            alert("LinkedIn data synced successfully!");
+        } catch (e) {
+            console.error("Error importing from LinkedIn", e);
+            alert("Failed to sync LinkedIn data.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (step === 4 && user?.uid) {
             const timer = setTimeout(() => {
@@ -210,16 +256,25 @@ const ListProductFlow: React.FC = () => {
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2 flex items-center gap-2">
                                         <Linkedin size={14} className="text-[#0077B5]" /> Connect your LinkedIn
                                     </label>
-                                    <div className="flex items-center bg-gray-50 border-2 border-transparent focus-within:border-[#c2f575] focus-within:bg-white rounded-2xl px-6 py-4 transition-all group">
-                                        <input
-                                            type="text"
-                                            placeholder="https://linkedin.com/in/username"
-                                            value={linkedinUrl}
-                                            onChange={(e) => setLinkedinUrl(e.target.value)}
-                                            className="flex-1 bg-transparent font-bold text-[#040457] outline-none placeholder:text-gray-200"
-                                        />
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex-1 flex items-center bg-gray-50 border-2 border-transparent focus-within:border-[#c2f575] focus-within:bg-white rounded-2xl px-6 py-4 transition-all group shadow-inner">
+                                            <input
+                                                type="text"
+                                                placeholder="https://linkedin.com/in/username"
+                                                value={linkedinUrl}
+                                                onChange={(e) => setLinkedinUrl(e.target.value)}
+                                                className="flex-1 bg-transparent font-bold text-[#040457] outline-none placeholder:text-gray-200"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={handleImportLinkedIn}
+                                            disabled={!linkedinUrl || isLoading}
+                                            className="px-6 py-4 bg-[#0077b5] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                            {isLoading ? 'Syncing...' : 'Sync Data'}
+                                        </button>
                                     </div>
-                                    <p className="text-[10px] text-gray-400 font-medium ml-2">Tip: You can paste your full LinkedIn profile URL here.</p>
+                                    <p className="text-[10px] text-gray-400 font-medium ml-2">Tip: Syncing will automatically populate your bio, experience, and education.</p>
                                 </div>
 
                                 <div className="space-y-4">

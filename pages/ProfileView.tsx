@@ -67,6 +67,12 @@ const ProfileView: React.FC = () => {
   // Layout & Tabs State
   const [activeTab, setActiveTab] = useState<string>('mentorship');
 
+  // Editing State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editBio, setEditBio] = useState('');
+  const [editHeadline, setEditHeadline] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+
   // Product/Zone Listing State (for Tutor Self-View)
   const [showProductModal, setShowProductModal] = useState(false);
   const [productTitle, setProductTitle] = useState('');
@@ -115,6 +121,9 @@ const ProfileView: React.FC = () => {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setProfileUser({ uid: docSnap.id, ...data });
+          setEditBio(data.bio || '');
+          setEditHeadline(data.headline || '');
+          setEditLocation(data.location || '');
 
           // Fetch extra data for this profile
           fetchProfileExtraData(docSnap.id, data);
@@ -223,45 +232,48 @@ const ProfileView: React.FC = () => {
     setIsImporting(true);
 
     try {
-      // Simulation of data fetching from a LinkedIn scraper/API
-      // In a real app, this would be a cloud function call
-      const mockImportedData = {
-        bio: "Passionate lifelong learner exploring the intersection of technology and sustainable design. Dedicated to building accessible digital experiences.",
+      // Improved simulation of data fetching from a LinkedIn URL
+      const userName = currentUser.name || "Professional";
+      const profileSlug = linkedinUrl.split('/in/')[1]?.replace(/\/$/, '') || userName.toLowerCase().replace(/\s+/g, '-');
+
+      const importedData = {
+        bio: `${userName} is a results-driven professional specialized in delivering high-quality solutions. Deeply committed to professional growth and exploring innovations in digital workspace management.`,
         experience: [
           {
-            title: "Junior Frontend Developer",
-            company: "TechNexus Solutions",
-            location: "San Francisco, CA",
+            title: "Senior Strategic Lead",
+            company: "Innovative Tech Hub",
+            location: "Remote",
             startDate: "2023-01",
             endDate: "Present",
-            description: "Developed and maintained responsive web applications using React and Tailwind CSS. Collaborated with designers to implement pixel-perfect UIs."
+            description: `Leading cross-functional teams at Innovative Tech Hub to optimize digital workflows. Enhanced operational efficiency by 25% through strategic implementation of new tools.`
           },
           {
-            title: "Web Development Intern",
-            company: "Creative Digital Agency",
-            location: "Remote",
-            startDate: "2022-06",
+            title: "Specialist Consultant",
+            company: "Global Solutions Group",
+            location: "New York, NY",
+            startDate: "2021-06",
             endDate: "2022-12",
-            description: "Assisted in building client websites and optimized performance by 30%. Learned industry best practices for version control and CI/CD."
+            description: `Provided expert consultation for Global Solutions Group on scalable architecture and user engagement strategies. Managed a portfolio of 15+ high-value projects.`
           }
         ],
         education: [
           {
-            school: "University of Technology",
-            degree: "B.S. in Computer Science",
-            startDate: "2018",
-            endDate: "2022",
-            description: "Focused on Software Engineering and Human-Computer Interaction."
+            school: "Leading Global University",
+            degree: "Master of Professional Excellence",
+            startDate: "2019",
+            endDate: "2021",
+            description: "Advanced studies in Strategy and Technological Innovation."
           }
         ]
       };
 
       await updateDoc(doc(db, 'users', currentUser.uid), {
-        bio: mockImportedData.bio,
-        experience: mockImportedData.experience,
-        education: mockImportedData.education,
+        bio: importedData.bio,
+        experience: importedData.experience,
+        education: importedData.education,
         linkedinImported: true,
-        linkedinUrl: linkedinUrl
+        linkedinUrl: linkedinUrl,
+        headline: `${importedData.experience[0].title} at ${importedData.experience[0].company}`
       });
 
       setIsImporting(false);
@@ -282,6 +294,20 @@ const ProfileView: React.FC = () => {
         setAdjustType(type);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!currentUser || !db) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        bio: editBio.slice(0, 200),
+        headline: editHeadline,
+        location: editLocation
+      });
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Failed to save profile:", error);
     }
   };
 
@@ -344,17 +370,46 @@ const ProfileView: React.FC = () => {
           </div>
           <div className="flex-1 pb-4 text-center md:text-left text-white">
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-5 mb-6">
-              <h1 className="text-6xl font-black tracking-tighter drop-shadow-lg leading-tight">{profileUser.name}</h1>
+              {isEditing ? (
+                <input
+                  value={profileUser.name}
+                  disabled
+                  className="text-6xl font-black tracking-tighter drop-shadow-lg leading-tight bg-transparent text-white border-b border-white/20 outline-none"
+                />
+              ) : (
+                <h1 className="text-6xl font-black tracking-tighter drop-shadow-lg leading-tight">{profileUser.name}</h1>
+              )}
               {role === UserRole.TUTOR && (
                 <div className="bg-[#c2f575] text-indigo-900 px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl flex items-center gap-2">
                   <ShieldCheck size={16} strokeWidth={3} /> Verified Expert
                 </div>
               )}
             </div>
-            <p className="text-indigo-100/80 text-2xl font-medium max-w-2xl mb-12 leading-relaxed italic line-clamp-2">{profileUser.headline || (role === UserRole.TUTOR ? 'Expert Educator' : 'Aspiring Learner')}</p>
+            {isEditing ? (
+              <input
+                value={editHeadline}
+                onChange={(e) => setEditHeadline(e.target.value)}
+                placeholder="Your Headline"
+                className="text-indigo-100/80 text-2xl font-medium max-w-2xl mb-12 leading-relaxed bg-transparent border-b border-white/20 outline-none w-full"
+              />
+            ) : (
+              <p className="text-indigo-100/80 text-2xl font-medium max-w-2xl mb-12 leading-relaxed italic line-clamp-2">{profileUser.headline || (role === UserRole.TUTOR ? 'Expert Educator' : 'Aspiring Learner')}</p>
+            )}
 
             <div className="flex flex-wrap justify-center md:justify-start gap-12 items-center">
-              <div className="flex items-center gap-3 bg-white/5 px-6 py-3 rounded-2xl backdrop-blur-sm border border-white/10"><MapPin size={22} className="text-[#c2f575]" /><span className="text-base font-bold">{profileUser.location || 'Global'}</span></div>
+              <div className="flex items-center gap-3 bg-white/5 px-6 py-3 rounded-2xl backdrop-blur-sm border border-white/10">
+                <MapPin size={22} className="text-[#c2f575]" />
+                {isEditing ? (
+                  <input
+                    value={editLocation}
+                    onChange={(e) => setEditLocation(e.target.value)}
+                    placeholder="Location"
+                    className="bg-transparent text-white font-bold outline-none border-b border-white/20"
+                  />
+                ) : (
+                  <span className="text-base font-bold">{profileUser.location || 'Global'}</span>
+                )}
+              </div>
               <div className="flex gap-12 border-l border-white/10 pl-12">
                 <div className="flex flex-col items-center md:items-start">
                   <p className="text-4xl font-black text-[#c2f575] leading-none mb-1">{profileUser.followersCount || 0}</p>
@@ -369,18 +424,38 @@ const ProfileView: React.FC = () => {
           </div>
 
           {!isMe && (
-            <div className="shrink-0 flex flex-col gap-4 pb-4">
+            <div className="shrink-0 flex flex-row md:flex-col lg:flex-row gap-4 pb-4 w-full md:w-auto">
               <button
                 onClick={handleFollow}
-                className={`px-10 py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-2xl
+                className={`flex-1 md:flex-none px-10 py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-2xl
                   ${isFollowing ? 'bg-white/10 text-white border border-white/20 hover:text-red-500' : 'bg-[#c2f575] text-indigo-900 hover:scale-105 active:scale-95'}
                 `}
               >
                 {isFollowing ? <><UserCheck size={20} /> Following</> : <><UserPlus size={20} /> Follow</>}
               </button>
-              <button onClick={() => navigate('/inbox')} className="px-10 py-5 bg-white/5 backdrop-blur-xl border border-white/10 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-white hover:text-indigo-900 transition-all shadow-2xl flex items-center justify-center gap-3">
+              <button onClick={() => navigate('/inbox')} className="flex-1 md:flex-none px-10 py-5 bg-white/5 backdrop-blur-xl border border-white/10 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-white hover:text-indigo-900 transition-all shadow-2xl flex items-center justify-center gap-3">
                 <MessageSquare size={20} /> Message
               </button>
+            </div>
+          )}
+
+          {isMe && (
+            <div className="shrink-0 flex gap-4 pb-4">
+              {isEditing ? (
+                <button
+                  onClick={handleSaveProfile}
+                  className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-2xl flex items-center justify-center gap-3"
+                >
+                  Save Changes
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="px-10 py-5 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-white hover:text-indigo-900 transition-all shadow-2xl flex items-center justify-center gap-3"
+                >
+                  Edit Profile
+                </button>
+              )}
             </div>
           )}
 
@@ -413,20 +488,36 @@ const ProfileView: React.FC = () => {
     </div>
   );
 
-  const HighlightsSection = () => (
+  const AboutSection = () => (
     <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm mb-12">
-      <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
-        <Sparkles size={24} className="text-[#c2f575]" /> Highlights
-      </h3>
+      <div className="flex justify-between items-center mb-8">
+        <h3 className="text-2xl font-black text-indigo-900 flex items-center gap-3">
+          <Sparkles size={24} className="text-[#c2f575]" /> About
+        </h3>
+        {isEditing && (
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            {editBio.length}/200
+          </span>
+        )}
+      </div>
       <div className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100">
-        <p className="text-xl text-gray-700 leading-relaxed italic">{profileUser.bio || 'Sharing knowledge and building the future of learning.'}</p>
+        {isEditing ? (
+          <textarea
+            maxLength={200}
+            value={editBio}
+            onChange={(e) => setEditBio(e.target.value)}
+            className="w-full bg-transparent text-xl text-gray-700 leading-relaxed italic outline-none min-h-[100px] resize-none"
+            placeholder="Tell us about yourself..."
+          />
+        ) : (
+          <p className="text-xl text-gray-700 leading-relaxed italic">{profileUser.bio || 'Sharing knowledge and building the future of learning.'}</p>
+        )}
       </div>
     </div>
   );
 
   const StudentProfile = () => (
     <div className="space-y-12">
-      <HighlightsSection />
 
       {/* Activity Section */}
       <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
@@ -473,25 +564,29 @@ const ProfileView: React.FC = () => {
         </div>
       </div>
 
-      {/* Learning Path */}
+      {/* Learnings Section */}
       <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
-          <TrendingUp size={24} className="text-[#c2f575]" /> Learning Path
+          <Globe size={24} className="text-[#c2f575]" /> Learnings
         </h3>
-        <div className="space-y-6">
-          <div className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 flex items-center gap-6">
-            <div className="w-16 h-16 bg-indigo-900 text-white rounded-2xl flex items-center justify-center shadow-lg"><Zap size={28} /></div>
-            <div>
-              <h4 className="text-xl font-black text-indigo-900">Fullstack Expert Path</h4>
-              <p className="text-sm text-gray-500 mt-1">75% Complete • Next: Advanced React Patterns</p>
-            </div>
-            <div className="ml-auto flex items-center gap-4">
-              <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-[#c2f575]" style={{ width: '75%' }}></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {zones.filter(z => enrolledIds.includes(z.id)).length > 0 ? zones.filter(z => enrolledIds.includes(z.id)).map(zone => (
+            <div key={zone.id} className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 flex items-center gap-6 group hover:border-[#c2f575] transition-all cursor-pointer" onClick={() => navigate(`/classroom/zone/${zone.id}`)}>
+              <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg">
+                <img src={zone.image} alt={zone.title} className="w-full h-full object-cover" />
               </div>
-              <ArrowRight size={20} className="text-gray-300" />
+              <div className="flex-1">
+                <h4 className="text-xl font-black text-indigo-900">{zone.title}</h4>
+                <p className="text-sm text-gray-500 mt-1">Joined Zone</p>
+              </div>
+              <ArrowRight size={20} className="text-gray-300 group-hover:text-[#c2f575] transition-colors" />
             </div>
-          </div>
+          )) : (
+            <div className="col-span-full py-10 text-center opacity-30 italic flex flex-col items-center">
+              <Zap size={40} className="mb-4" />
+              <p>No joined zones yet.</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -552,34 +647,6 @@ const ProfileView: React.FC = () => {
         </div>
       </div>
 
-      {/* Projects */}
-      <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
-        <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
-          <Database size={24} /> Projects
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="p-10 bg-gray-50 rounded-[2.5rem] border border-gray-100 group hover:border-[#c2f575] transition-all">
-            <div className="flex items-center gap-6 mb-6">
-              <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-indigo-900 shadow-sm"><LayoutGrid size={24} /></div>
-              <div>
-                <h4 className="text-xl font-black text-indigo-900">Smart City Dashboard</h4>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">IoT & Data Viz</p>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 leading-relaxed">Integrated real-time sensor data into a React-based dashboard for urban resource management.</p>
-          </div>
-          <div className="p-10 bg-gray-50 rounded-[2.5rem] border border-gray-100 group hover:border-[#c2f575] transition-all">
-            <div className="flex items-center gap-6 mb-6">
-              <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-indigo-900 shadow-sm"><ShoppingBag size={24} /></div>
-              <div>
-                <h4 className="text-xl font-black text-indigo-900">Fintech Tracker</h4>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Banking API</p>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 leading-relaxed">Personal finance manager with automated categorization using Plaid API integrations.</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 
@@ -630,29 +697,26 @@ const ProfileView: React.FC = () => {
         )}
 
         {activeTab === 'mentorship' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
-            <div ref={mentorshipRef} className="bg-gray-50 rounded-[3.5rem] p-12 border border-gray-100">
-              <h3 className="text-2xl font-black text-indigo-900 mb-10 flex items-center gap-4">
-                <CalendarIcon size={24} className="text-[#c2f575]" /> Available Slots
-              </h3>
-              <div className="space-y-8 max-h-[600px] overflow-y-auto custom-scrollbar pr-4">
-                {availability.filter(d => d.active).length > 0 ? availability.filter(d => d.active).map(day => (
-                  <div key={day.day} className="space-y-4">
-                    <p className="text-[11px] font-black text-indigo-900/30 uppercase tracking-[0.3em] ml-2">{day.day}</p>
-                    <div className="grid grid-cols-1 gap-4">
-                      {day.slots.map((slot: any) => (
-                        <button key={slot.id} onClick={() => alert(`Booking ${slot.start} — ${slot.end} for ${day.day}`)} className="p-6 rounded-3xl bg-white border border-gray-100 flex items-center justify-between group hover:border-[#c2f575] hover:shadow-xl transition-all">
-                          <div className="flex items-center gap-4"><Clock size={20} className="text-gray-300 group-hover:text-[#c2f575]" /><span className="text-lg font-black text-indigo-900">{slot.start} — {slot.end}</span></div>
-                          <div className="px-6 py-3 bg-indigo-50 text-indigo-900 rounded-xl text-[10px] font-black uppercase tracking-widest group-hover:bg-[#c2f575] transition-all">Book Now</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )) : <div className="py-20 text-center text-gray-300 italic">No available slots set by the tutor.</div>}
+          <div className="space-y-20 animate-in fade-in duration-500">
+            <div className="bg-indigo-900 p-12 rounded-[4rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center items-center text-center">
+              <Sparkles size={64} className="text-[#c2f575] mb-6 opacity-20" />
+              <h3 className="text-4xl font-black mb-4 tracking-tighter">Personal Mentorship</h3>
+              <p className="text-indigo-100/70 text-lg max-w-lg mx-auto font-medium leading-relaxed mb-12">
+                Book a 1-on-1 session to dive deep into your specific challenges and fast-track your learning journey.
+              </p>
+              <div className="flex flex-wrap justify-center gap-4">
+                <div className="bg-white/10 px-6 py-3 rounded-2xl border border-white/10 flex items-center gap-3">
+                  <Video size={20} className="text-[#c2f575]" />
+                  <span className="font-bold uppercase tracking-wider text-xs">Live Video Call</span>
+                </div>
+                <div className="bg-white/10 px-6 py-3 rounded-2xl border border-white/10 flex items-center gap-3">
+                  <ShieldCheck size={20} className="text-[#c2f575]" />
+                  <span className="font-bold uppercase tracking-wider text-xs">Expert Guidance</span>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
               {products.filter(p => p.type === 'mentorship').length > 0 ? products.filter(p => p.type === 'mentorship').map(mentorship => (
                 <div key={mentorship.id} className="bg-indigo-900 p-12 rounded-[4rem] text-white shadow-2xl relative overflow-hidden group">
                   <div className="relative z-10">
@@ -663,39 +727,20 @@ const ProfileView: React.FC = () => {
                       <p className="text-4xl font-black text-[#c2f575]">{mentorship.price} {mentorship.currency}</p>
                     </div>
                     <h3 className="text-3xl font-black mb-4 tracking-tighter leading-tight">{mentorship.title}</h3>
-                    <p className="text-indigo-100/70 text-lg mb-8 font-medium leading-relaxed">{mentorship.description}</p>
-
-                    {mentorship.faqs && mentorship.faqs.length > 0 && (
-                      <div className="space-y-6 mb-10">
-                        <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest flex items-center gap-2">
-                          <HelpCircle size={14} /> Frequently Asked Questions
-                        </p>
-                        <div className="grid grid-cols-1 gap-4">
-                          {mentorship.faqs.map((faq: any, idx: number) => (
-                            <div key={idx} className="bg-white/5 p-6 rounded-[2rem] border border-white/10 hover:border-white/20 transition-all">
-                              <p className="text-base font-black text-white mb-2 flex items-center gap-3">
-                                <span className="w-6 h-6 rounded-full bg-[#c2f575] text-indigo-900 flex items-center justify-center text-[10px]">{idx + 1}</span>
-                                {faq.q}
-                              </p>
-                              <p className="text-sm text-indigo-200/60 leading-relaxed pl-9">{faq.a}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <p className="text-indigo-100/70 text-lg mb-8 font-medium leading-relaxed line-clamp-2">{mentorship.description}</p>
 
                     <button
-                      onClick={() => mentorshipRef.current?.scrollIntoView({ behavior: 'smooth' })}
-                      className="w-full py-6 bg-[#c2f575] text-indigo-900 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"
+                      onClick={() => navigate(`/booking/${mentorship.id}?tutorId=${profileUser.uid}`)}
+                      className="w-full py-6 bg-[#c2f575] text-indigo-900 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all mt-4"
                     >
-                      Select a Time Slot Below
+                      Book a Session
                     </button>
                   </div>
                   <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-white/5 rounded-full blur-[100px] group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
                 </div>
               )) : (
-                <div className="bg-indigo-900 p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center items-center text-center">
-                  <HelpCircle size={64} className="text-[#c2f575] mb-6 opacity-20" />
+                <div className="col-span-full bg-indigo-900 p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center items-center text-center">
+                  <Video size={64} className="text-[#c2f575] mb-6 opacity-20" />
                   <h3 className="text-2xl font-black mb-2">No mentorship sessions</h3>
                   <p className="text-indigo-200/60">This tutor hasn't listed any private sessions yet.</p>
                 </div>
@@ -742,7 +787,7 @@ const ProfileView: React.FC = () => {
       <ProfileHeader />
 
       <div className="max-w-7xl mx-auto -mt-16 px-10 relative z-20">
-        <HighlightsSection />
+        <AboutSection />
         {role === UserRole.STUDENT ? <StudentProfile /> : <TutorProfile />}
       </div>
 
