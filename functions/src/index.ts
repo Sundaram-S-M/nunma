@@ -2,6 +2,9 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { AccessToken } from "livekit-server-sdk";
 import * as crypto from "crypto";
+import * as corsLib from "cors";
+
+const cors = (corsLib as any)({ origin: true });
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -12,20 +15,13 @@ if (!admin.apps.length) {
  * EXPLICIT CORS handling for re-wired version.
  */
 export const checkLiveKitConfig = functions.https.onRequest(async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-    if (req.method === 'OPTIONS') {
-        res.status(204).send('');
-        return;
-    }
-
-    res.status(200).send({
-        hasApiKey: !!process.env.LIVEKIT_API_KEY,
-        apiKeyPrefix: process.env.LIVEKIT_API_KEY ? process.env.LIVEKIT_API_KEY.substring(0, 4) : 'none',
-        hasApiSecret: !!process.env.LIVEKIT_API_SECRET,
-        envKeys: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
+    return cors(req, res, async () => {
+        res.status(200).send({
+            hasApiKey: !!process.env.LIVEKIT_API_KEY,
+            apiKeyPrefix: process.env.LIVEKIT_API_KEY ? process.env.LIVEKIT_API_KEY.substring(0, 4) : 'none',
+            hasApiSecret: !!process.env.LIVEKIT_API_SECRET,
+            envKeys: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
+        });
     });
 });
 
@@ -33,61 +29,53 @@ export const checkLiveKitConfig = functions.https.onRequest(async (req, res) => 
  * Re-wired Token Generation using onRequest to bypass Firebase onCall CORS issues.
  */
 export const generateLiveKitToken = functions.https.onRequest(async (req, res) => {
-    // 1. Manually Handle CORS
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return cors(req, res, async () => {
+        try {
+            if (req.method !== 'POST') {
+                res.status(405).send({ error: 'Method Not Allowed' });
+                return;
+            }
 
-    if (req.method === 'OPTIONS') {
-        res.status(204).send('');
-        return;
-    }
+            const { roomName, role, userId: providedUserId, userName: providedUserName } = req.body;
 
-    try {
-        if (req.method !== 'POST') {
-            res.status(405).send({ error: 'Method Not Allowed' });
-            return;
+            if (!roomName) {
+                res.status(400).send({ error: 'roomName is required' });
+                return;
+            }
+
+            const apiKey = (process.env.LIVEKIT_API_KEY || '').trim();
+            const apiSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
+
+            if (!apiKey || !apiSecret) {
+                console.error("LiveKit configuration missing on server");
+                res.status(500).send({ error: 'LiveKit keys missing on server' });
+                return;
+            }
+
+            const identity = providedUserId || `user-${Math.random().toString(36).substring(7)}`;
+            const name = providedUserName || identity;
+            const isTutor = (role || '').toUpperCase() === "TUTOR";
+
+            const at = new AccessToken(apiKey, apiSecret, {
+                identity: identity,
+                name: name,
+            });
+
+            at.addGrant({
+                roomJoin: true,
+                room: roomName,
+                canPublish: isTutor,
+                canSubscribe: true,
+                canPublishData: true,
+            });
+
+            const token = at.toJwt();
+            res.status(200).send({ token, isTutor, roomName });
+        } catch (error: any) {
+            console.error("Token Generation Error:", error);
+            res.status(500).send({ error: error.message || 'Token generation failed' });
         }
-
-        const { roomName, role, userId: providedUserId, userName: providedUserName } = req.body;
-
-        if (!roomName) {
-            res.status(400).send({ error: 'roomName is required' });
-            return;
-        }
-
-        const apiKey = (process.env.LIVEKIT_API_KEY || '').trim();
-        const apiSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
-
-        if (!apiKey || !apiSecret) {
-            console.error("LiveKit configuration missing on server");
-            res.status(500).send({ error: 'LiveKit keys missing on server' });
-            return;
-        }
-
-        const identity = providedUserId || `user-${Math.random().toString(36).substring(7)}`;
-        const name = providedUserName || identity;
-        const isTutor = (role || '').toUpperCase() === "TUTOR";
-
-        const at = new AccessToken(apiKey, apiSecret, {
-            identity: identity,
-            name: name,
-        });
-
-        at.addGrant({
-            roomJoin: true,
-            room: roomName,
-            canPublish: isTutor,
-            canSubscribe: true,
-            canPublishData: true,
-        });
-
-        const token = at.toJwt();
-        res.status(200).send({ token, isTutor, roomName });
-    } catch (error: any) {
-        console.error("Token Generation Error:", error);
-        res.status(500).send({ error: error.message || 'Token generation failed' });
-    }
+    });
 });
 
 // --- BUNNY STREAM INTEGRATION ---
