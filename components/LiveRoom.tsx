@@ -64,30 +64,37 @@ const LiveRoom: React.FC = () => {
       }
 
       try {
-        const generateToken = httpsCallable(functions, 'generateLiveKitToken');
-        console.log("LiveRoom: Calling generateLiveKitToken...");
+        console.log("LiveRoom: Calling re-wired generateLiveKitToken...");
 
-        const result = await generateToken({
-          roomName: `${zoneId}-${sessionId}`,
-          role: user.role
+        const response = await fetch('https://us-central1-nunma-by-cursor.cloudfunctions.net/generateLiveKitToken', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomName: `${zoneId}-${sessionId}`,
+            role: user.role,
+            userId: user.uid,
+            userName: user.name
+          })
         });
 
-        console.log("LiveRoom: Token received successfully");
-        setToken((result.data as any).token);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("LiveRoom: Token received via re-wire");
+        setToken(data.token);
       } catch (err: any) {
         console.error("LiveRoom: Token fetch failed:", err);
 
-        // Attempt diagnostic check to help the user
-        try {
-          const checkConfig = httpsCallable(functions, 'checkLiveKitConfig');
-          const diagResult = await checkConfig({});
-          console.warn("LiveRoom: Server Config Diagnostic:", diagResult.data);
-        } catch (diagErr) {
-          console.error("LiveRoom: Diagnostic check failed:", diagErr);
-        }
+        // Attempt diagnostic check via fetch
+        fetch('https://us-central1-nunma-by-cursor.cloudfunctions.net/checkLiveKitConfig')
+          .then(r => r.json())
+          .then(diag => console.warn("LiveRoom: Server Diagnostic:", diag))
+          .catch(diagErr => console.error("LiveRoom: Diagnostic failed:", diagErr));
 
-        const errorMessage = err.details?.message || err.message || 'Check your connection and try again';
-        setError(`Failed to join live session: ${errorMessage}`);
+        setError(err.message || 'Failed to join live session. Please check your connection.');
       }
     };
 

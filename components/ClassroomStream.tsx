@@ -70,31 +70,31 @@ const ClassroomStream: React.FC<ClassroomStreamProps> = ({ sessionId, zoneId, ro
       }
 
       try {
-        const generateToken = httpsCallable(functions, 'generateLiveKitToken');
-        console.log("ClassroomStream: Calling generateLiveKitToken cloud function...");
+        console.log("ClassroomStream: Calling re-wired generateLiveKitToken...");
 
-        const result = await generateToken({
-          roomName: `${zoneId}-${sessionId}`,
-          role: role
+        const response = await fetch('https://us-central1-nunma-by-cursor.cloudfunctions.net/generateLiveKitToken', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomName: `${zoneId}-${sessionId}`,
+            role: role,
+            userId: user?.uid,
+            userName: user?.name
+          })
         });
 
-        console.log("ClassroomStream: Token fetch result:", result.data);
-        setToken((result.data as any).token);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("ClassroomStream: Token received via re-wire");
+        setToken(data.token);
       } catch (err: any) {
-        console.error("ClassroomStream: Token fetch failed:", {
-          message: err.message,
-          code: err.code,
-          details: err.details
-        });
-
-        let displayError = "Failed to join stream.";
-        if (err.code === 'unauthenticated') displayError = "You must be signed in to join.";
-        else if (err.code === 'failed-precondition') displayError = "LiveKit server is not configured correctly.";
-        else if (err.details?.message) displayError = err.details.message;
-        else if (err.message) displayError = err.message;
-
-        setError(displayError);
-        setToast({ message: displayError, type: 'error' });
+        console.error("ClassroomStream: Token fetch failed:", err);
+        setError(err.message || 'Failed to join live session.');
+        setToast({ message: err.message || 'Connection failed', type: 'error' });
       }
     };
     fetchToken();

@@ -28,54 +28,63 @@ const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const livekit_server_sdk_1 = require("livekit-server-sdk");
 const crypto = __importStar(require("crypto"));
-// Initialize admin only once
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 /**
  * Diagnostic function to check if LiveKit keys are visible to the server.
+ * EXPLICIT CORS handling for re-wired version.
  */
-exports.checkLiveKitConfig = functions.https.onCall(async (data, context) => {
-    if (!context.auth)
-        throw new functions.https.HttpsError("unauthenticated", "Auth required.");
-    return {
+exports.checkLiveKitConfig = functions.https.onRequest(async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+        res.status(204).send('');
+        return;
+    }
+    res.status(200).send({
         hasApiKey: !!process.env.LIVEKIT_API_KEY,
         apiKeyPrefix: process.env.LIVEKIT_API_KEY ? process.env.LIVEKIT_API_KEY.substring(0, 4) : 'none',
         hasApiSecret: !!process.env.LIVEKIT_API_SECRET,
-        nodeVersion: process.version,
         envKeys: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
-    };
-});
-exports.generateLiveKitToken = functions.https.onCall(async (data, context) => {
-    var _a, _b, _c;
-    console.log("generateLiveKitToken: Invoked", {
-        uid: (_a = context.auth) === null || _a === void 0 ? void 0 : _a.uid,
-        room: data === null || data === void 0 ? void 0 : data.roomName
     });
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "User must be logged in.");
-    }
-    const { roomName, role } = data;
-    if (!roomName) {
-        throw new functions.https.HttpsError("invalid-argument", "roomName is required.");
-    }
-    // Prioritize environment variables from Firebase's automatic .env loading
-    // Fallback to config if necessary, but .env is preferred in modern Firebase
-    const apiKey = (_b = process.env.LIVEKIT_API_KEY) === null || _b === void 0 ? void 0 : _b.trim();
-    const apiSecret = (_c = process.env.LIVEKIT_API_SECRET) === null || _c === void 0 ? void 0 : _c.trim();
-    if (!apiKey || !apiSecret) {
-        console.error("LiveKit config missing in process.env", {
-            keysFound: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
-        });
-        throw new functions.https.HttpsError("failed-precondition", "LiveKit Server is not configured. (Missing API Key or Secret)");
+});
+/**
+ * Re-wired Token Generation using onRequest to bypass Firebase onCall CORS issues.
+ */
+exports.generateLiveKitToken = functions.https.onRequest(async (req, res) => {
+    // 1. Manually Handle CORS
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+        res.status(204).send('');
+        return;
     }
     try {
-        const userId = context.auth.uid;
-        const userName = context.auth.token.name || context.auth.token.email || userId;
-        const isTutor = (role === null || role === void 0 ? void 0 : role.toUpperCase()) === "TUTOR";
+        if (req.method !== 'POST') {
+            res.status(405).send({ error: 'Method Not Allowed' });
+            return;
+        }
+        const { roomName, role, userId: providedUserId, userName: providedUserName } = req.body;
+        if (!roomName) {
+            res.status(400).send({ error: 'roomName is required' });
+            return;
+        }
+        const apiKey = (process.env.LIVEKIT_API_KEY || '').trim();
+        const apiSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
+        if (!apiKey || !apiSecret) {
+            console.error("LiveKit configuration missing on server");
+            res.status(500).send({ error: 'LiveKit keys missing on server' });
+            return;
+        }
+        const identity = providedUserId || `user-${Math.random().toString(36).substring(7)}`;
+        const name = providedUserName || identity;
+        const isTutor = (role || '').toUpperCase() === "TUTOR";
         const at = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
-            identity: userId,
-            name: userName,
+            identity: identity,
+            name: name,
         });
         at.addGrant({
             roomJoin: true,
@@ -85,11 +94,11 @@ exports.generateLiveKitToken = functions.https.onCall(async (data, context) => {
             canPublishData: true,
         });
         const token = at.toJwt();
-        return { token, isTutor, roomName };
+        res.status(200).send({ token, isTutor, roomName });
     }
     catch (error) {
         console.error("Token Generation Error:", error);
-        throw new functions.https.HttpsError("internal", `LiveKit Error: ${error.message || 'Unknown generation failure'}`);
+        res.status(500).send({ error: error.message || 'Token generation failed' });
     }
 });
 // --- BUNNY STREAM INTEGRATION ---
