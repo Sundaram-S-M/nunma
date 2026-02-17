@@ -19,10 +19,9 @@ export const useLinkedInParser = () => {
             const genAI = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
             const prompt = `Analyze this LinkedIn profile PDF. 
-            Extract and return the information in EXACTLY this JSON format:
+            Extract ONLY the following information and return it in EXACTLY this JSON format:
             {
-                "bio": "A professional summary (max 200 chars)",
-                "headline": "Current job title and company",
+                "bio": "A professional summary (About section) - max 200 chars",
                 "experience": [
                     {
                         "title": "Job Title",
@@ -41,10 +40,10 @@ export const useLinkedInParser = () => {
                         "endDate": "YYYY",
                         "description": "Short description"
                     }
-                ],
-                "skills": ["Skill 1", "Skill 2"]
+                ]
             }
-            Return ONLY the JSON.`;
+            Do NOT extract contact info, email, phone, or website.
+            Return ONLY the valid JSON object. Do not include markdown formatting or explanations.`;
 
             const result = await genAI.models.generateContent({
                 model: 'gemini-1.5-flash',
@@ -63,7 +62,9 @@ export const useLinkedInParser = () => {
             });
 
             const responseText = result.text || "";
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            // Clean up markdown code blocks if present
+            const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+            const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
 
             if (jsonMatch) {
                 return JSON.parse(jsonMatch[0]);

@@ -107,10 +107,10 @@ const ProfileHeader = ({
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Your Name"
-                className="text-6xl font-black tracking-tighter drop-shadow-lg leading-tight bg-transparent text-white border-b border-white/20 outline-none w-full"
+                className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-lg leading-tight bg-transparent text-white border-b border-white/20 outline-none w-full break-words"
               />
             ) : (
-              <h1 className="text-6xl font-black tracking-tighter drop-shadow-lg leading-tight">{profileUser.name}</h1>
+              <h1 className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-lg leading-tight break-words">{profileUser.name}</h1>
             )}
             {role === UserRole.TUTOR && (
               <div className="bg-[#c2f575] text-indigo-900 px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl flex items-center gap-2">
@@ -166,7 +166,7 @@ const ProfileHeader = ({
             >
               {isFollowing ? <><UserCheck size={20} /> Following</> : <><UserPlus size={20} /> Follow</>}
             </button>
-            <button onClick={() => navigate('/inbox')} className="flex-1 md:flex-none px-10 py-5 bg-white/5 backdrop-blur-xl border border-white/10 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-white hover:text-indigo-900 transition-all shadow-2xl flex items-center justify-center gap-3">
+            <button onClick={() => navigate(`/inbox?userId=${profileUser.uid}`)} className="flex-1 md:flex-none px-10 py-5 bg-white/5 backdrop-blur-xl border border-white/10 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-white hover:text-indigo-900 transition-all shadow-2xl flex items-center justify-center gap-3">
               <MessageSquare size={20} /> Message
             </button>
           </div>
@@ -712,11 +712,9 @@ const ProfileView: React.FC = () => {
 
       // We populate the edit state so the user can review before saving
       setEditBio(parsedData.bio || editBio);
-      setEditHeadline(parsedData.headline || editHeadline);
       setEditExperience(parsedData.experience || editExperience);
       setEditEducation(parsedData.education || editEducation);
-      setEditSkills(parsedData.skills || editSkills);
-      if (parsedData.name) setEditName(parsedData.name);
+      // User requested ONLY Bio, Experience, Education. Ignoring Name, Skills, Headline.
 
       setIsImporting(false);
       setShowLinkedInModal(false);

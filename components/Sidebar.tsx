@@ -21,13 +21,15 @@ interface SidebarProps {
 }
 
 const LogoIcon = () => (
-  <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-10 h-10 shrink-0 object-contain" />
+  <Link to="/dashboard">
+    <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-10 h-10 shrink-0 object-contain" />
+  </Link>
 );
 
 const LogoFull = () => (
-  <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-4 duration-300">
+  <Link to="/dashboard" className="flex items-center gap-3 animate-in fade-in slide-in-from-left-4 duration-300">
     <img src="/assets/logo-full.png" alt="Nunma Logo" className="h-10 shrink-0 object-contain" />
-  </div>
+  </Link>
 );
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {

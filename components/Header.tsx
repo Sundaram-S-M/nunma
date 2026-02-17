@@ -6,7 +6,6 @@ import {
   Settings as SettingsIcon,
   LogOut,
   CreditCard,
-  LayoutGrid,
   Search,
   Bell
 } from 'lucide-react';
@@ -53,9 +52,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
         <Link to="/notifications" className="p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group">
           <Bell className="text-gray-400 group-hover:text-[#1A1A4E] transition-colors" size={20} />
         </Link>
-        <div className="p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group">
-          <LayoutGrid className="text-gray-400 group-hover:text-[#1A1A4E] transition-colors" size={20} />
-        </div>
+
       </div>
 
       <div className="relative">

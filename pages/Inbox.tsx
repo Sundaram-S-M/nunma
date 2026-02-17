@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   collection, query, where, onSnapshot, orderBy,
   addDoc, serverTimestamp, setDoc, doc, updateDoc,
-  getDocs, limit, or
+  getDocs, limit, or, getDoc
 } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import {
@@ -34,6 +34,12 @@ interface Chat {
   online: boolean;
   type: 'chat' | 'community' | 'collaboration';
   participants: string[];
+  otherUser?: {
+    uid: string;
+    name: string;
+    avatar: string;
+    online?: boolean; // Add if we track online status
+  };
 }
 
 const Inbox: React.FC = () => {
@@ -43,6 +49,7 @@ const Inbox: React.FC = () => {
   const params = new URLSearchParams(location.search);
   const initialTab = (params.get('tab') as any) || 'chat';
   const initialChatId = params.get('chatId');
+  const targetUserId = params.get('userId');
 
   const [activeCategory, setActiveCategory] = useState<'chat' | 'community' | 'collaboration'>(initialTab);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(initialChatId);
@@ -73,17 +80,97 @@ const Inbox: React.FC = () => {
       where('participants', 'array-contains', user.uid)
     );
 
-    const unsubscribeChats = onSnapshot(q, (snapshot) => {
-      const chatData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Chat[];
-      setChats(chatData);
+    const unsubscribeChats = onSnapshot(q, async (snapshot) => {
+      const chatData = await Promise.all(snapshot.docs.map(async (docSnap) => {
+        const data = docSnap.data();
+        let otherUser = undefined;
+
+        // If it's a 1:1 chat, try to resolve the other participant
+        if (data.type === 'chat' && data.participants && data.participants.length === 2) {
+          const otherId = data.participants.find((p: string) => p !== user.uid);
+          if (otherId) {
+            // Ideally, fetch this user's basic info. 
+            // For performance in a list, you might want to cache this or store a denormalized 'participantsInfo' map in the chat doc.
+            // But for now, let's fetch individual docs or use what we have.
+            // NOTE: Fetching inside a map like this inside onSnapshot can be expensive and cause valid reads. 
+            // Better approach: Store participant names in the chat doc OR use a separate listener for users.
+            // For simplicity in this iteration, we will try to get it if we can, or just use static data if available.
+
+            // OPTIMIZATION: We'll do a quick fetch ONLY if we don't have the data, but doing async inside onSnapshot callback 
+            // requires handling the promise.
+
+            try {
+              const userSnap = await getDoc(doc(db, 'users', otherId));
+              if (userSnap.exists()) {
+                otherUser = userSnap.data();
+              }
+            } catch (e) {
+              console.error("Error fetching other user", e);
+            }
+          }
+        }
+
+        return {
+          id: docSnap.id,
+          ...data,
+          otherUser,
+          // Override name/avatar for 1:1 chats if we found the user
+          name: data.type === 'chat' && otherUser ? otherUser.name : data.name,
+          avatar: data.type === 'chat' && otherUser ? otherUser.avatar : data.avatar
+        };
+      }));
+      setChats(chatData as Chat[]);
       setLoading(false);
     });
 
     return () => unsubscribeChats();
   }, [user]);
+
+  // Handle creating/finding chat when targetUserId is present
+  useEffect(() => {
+    const handleDirectMessage = async () => {
+      if (!user || !targetUserId) return;
+
+      // Check if we already have a chat with this user
+      // We can check our local 'chats' state if it uses a listener, but better to query to be sure if we haven't loaded yet.
+      // Or since we have 'chats' from the listener above, we can check that.
+
+      // Wait for chats to load if they haven't
+      if (loading) return;
+
+      const existingChat = chats.find(c =>
+        c.type === 'chat' &&
+        c.participants.includes(targetUserId) &&
+        c.participants.includes(user.uid)
+      );
+
+      if (existingChat) {
+        setSelectedChatId(existingChat.id);
+        // Optionally clear the param so refreshing doesn't re-trigger logic unnecessary, but keeping it is fine too.
+      } else {
+        // Create new chat
+        try {
+          const newChatRef = await addDoc(collection(db, 'conversations'), {
+            type: 'chat',
+            participants: [user.uid, targetUserId],
+            createdAt: serverTimestamp(),
+            lastMessage: '',
+            lastMessageTime: serverTimestamp(),
+            unreadCounts: {
+              [user.uid]: 0,
+              [targetUserId]: 0
+            }
+            // We don't verify if targetUser exists here, assuming valid ID passed.
+          });
+          setSelectedChatId(newChatRef.id);
+        } catch (err) {
+          console.error("Error creating chat:", err);
+        }
+      }
+    };
+
+    handleDirectMessage();
+  }, [user, targetUserId, chats, loading]);
 
   useEffect(() => {
     if (!selectedChatId) {
