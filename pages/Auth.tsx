@@ -253,7 +253,7 @@ const Auth: React.FC = () => {
                   </p>
                 </div>
 
-                {step === 'info' ? (
+                {step === 'info' && (
                   <form onSubmit={handleSignUpInfoSubmit} className="space-y-6">
                     {/* Google Signup Button */}
                     <button
@@ -318,7 +318,9 @@ const Auth: React.FC = () => {
                       {isLoading ? "Sending Code..." : "Send Verification Code"} <ArrowRight size={18} className="text-[#c2f575]" />
                     </button>
                   </form>
-                ) : (
+                )}
+
+                {step === 'otp' && (
                   <form onSubmit={handleVerifyOTP} className="space-y-6 animate-in slide-in-from-right-4 duration-500">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">6-Digit Verification Code</label>
@@ -340,7 +342,7 @@ const Auth: React.FC = () => {
                       {isLoading ? "Verifying..." : "Verify Code"} <ArrowRight size={18} className="text-[#c2f575]" />
                     </button>
                   </form>
-                ) : null}
+                )}
 
                 {step === 'password' && (
                   <form onSubmit={handleFinalizeSignUp} className="space-y-6 animate-in slide-in-from-right-4 duration-500">
@@ -391,7 +393,7 @@ const Auth: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 
