@@ -12,10 +12,10 @@
 
 ## 🌟 Overview
 
-**Nunma** is a cutting-edge learning ecosystem designed for the modern era. It combines high-performance live streaming, AI-driven assessment generation, and blockchain-inspired verifiable credentials to create a seamless, professional experience for both tutors and students.
+**Nunma** is a next-generation **Verifiable Mastery Ecosystem**. It moves beyond traditional video-based learning by combining low-latency live streaming, AI-driven assessment (Gemini 1.5 Pro), and W3C Verifiable Credentials. Nunma is designed to bridge the gap between learning and professional proof-of-work.
 
 > [!IMPORTANT]
-> This platform transitions learning from simple consumption to **verifiable mastery** using Zero-Knowledge proofs and W3C standards.
+> Nunma transitions the educational experience from simple consumption to **verifiable mastery** using Zero-Knowledge proofs and global certification standards.
 
 ---
 
@@ -23,11 +23,12 @@
 
 | Feature | Description |
 | :--- | :--- |
-| **Learning Zones** | Structured course hubs with curriculum management, live scheduling, and student tracking. |
-| **AI Assessment** | Automated MCQ generation from documents using **Gemini 1.5 Pro**. |
-| **LiveRoom Plus** | Low-latency streaming with AI co-hosting via the **Gemini Multimodal Live API**. |
-| **Certification Engine** | Custom branded certificates with digital signatures and selective disclosure. |
-| **ZK-Verification** | Privacy-preserving achievement verification for employers and peers. |
+| **Learning Zones** | Adaptive hubs for courses, workshops, and proctored exams with student tracking. |
+| **AI Assessment** | Automated MCQ and rubric-based grading using **Gemini 1.5 Pro**. |
+| **LiveRoom Plus** | Low-latency WebRTC streaming with integrated AI co-hosting. |
+| **Verifiable Credentials** | W3C-compliant digital signatures and selective disclosure for achievements. |
+| **PPP Smart Pricing** | Global accessibility with automated regional pricing adjustments. |
+| **Digital Storefront** | Highly optimized public profiles for tutors to sell products and services. |
 
 ---
 

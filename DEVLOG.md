@@ -1,68 +1,75 @@
 
-# Nunma Development Log
+# Nunma Development Log & Feature Roadmap
 
-## Overview
-Nunma is a comprehensive Learning Management System (LMS) designed for professional educators and serious learners. It features distinct dashboards for students and tutors, advanced classroom management, AI-driven tools, and secure credentialing.
+## 🎯 Project Overview
+Nunma is a next-generation Learning Management System (LMS) built for the decentralized era. It focuses on **Verifiable Mastery**, combining high-performance live streaming, AI-driven content generation, and cryptographically secure certifications.
 
-## Key Features Implemented
+---
 
-### 1. Authentication & Onboarding
-- **Role-Based Access:** Secure login/signup flow separating 'Student' and 'Tutor' roles.
-- **Personalized Onboarding:** Captures user details like birthdate and city with auto-suggest.
-- **Visual Branding:** Distinct high-contrast UI with deep navy and lime green accents.
+## ⚡ Key Features Implemented
 
-### 2. Core Dashboard
-- **Dynamic Stats:** Real-time counters for earnings, students, and zone activity.
-- **Calendar Integration:** Interactive monthly calendar with event creation (Meeting/Task).
-- **Consultation Tracking:** Display of booked 1:1 mentorship sessions for tutors.
+### 1. Unified Dashboard & Role Management
+- **Binary Roles**: Complete separation of **Tutor** (Management) and **Student** (Learning) workflows.
+- **Smart Onboarding**: Personalized multi-step onboarding capturing professional and personal data.
+- **Interactive Calendar**: Centralized hub for managing sessions, exams, and personal tasks.
 
-### 3. Zone Management (Tutor)
-- **Course Creation:** 'Launch Zone' flow to create new learning streams with cover images, pricing, and domain selection.
-- **Curriculum Builder:** Drag-and-drop style interface to manage chapters and segments (Video, PDF, Quiz).
-- **AI MCQ Generator:** Integration with **Gemini 3 Pro** to generate quiz questions from uploaded PDF/Image context.
-- **Exam Management:** Scheduling and publishing exams with support for online/offline modes.
-- **Grading System:** Canvas-based interface for grading uploaded student scripts with 'tick' and 'cross' annotations.
-- **Student Whitelisting:** Manual and bulk import options for adding students to private zones.
-- **Manual Attendance:** Interface for tutors to log daily attendance.
+### 2. The "Zone" Ecosystem (Tutor Side)
+- **Course Launchpad**: Full-featured creation flow for Courses, Workshops, and Class Management.
+- **AI-Powered Assessments**: Gemini 1.5 Pro integration to generate MCQ quizzes from PDF/Image uploads.
+- **Advanced Grading**: Canvas-based annotation tool for marking student scripts with real-time feedback.
+- **Student Access Control**: Manual whitelisting and bulk enrollment via CSV (mock).
 
-### 4. Classroom Experience (Student)
-- **Enrolled Zones:** Grid view of all active courses with progress tracking.
-- **Live Session Integration:** 'Join Live Classroom' feature for real-time streams.
-- **Curriculum Player:** Interactive video/content player for consuming course material.
-- **Gamification:** XP Leaderboard ranking top students in the cohort.
+### 3. Immersive Classroom (Student Side)
+- **Progressive Learning**: Linear curriculum player with support for video, text, and docs.
+- **Live Classroom**: Low-latency WebRTC streams with integrated real-time chat.
+- **Gamified Mastery**: XP-based leaderboard and achievement system.
 
-### 5. Communication & Community
-- **Inbox System:** Unified messaging for direct chats, community forums, and collaboration groups.
-- **Live Room:** WebRTC-based live streaming interface (mock implementation with camera/mic controls).
+### 4. Advanced Monetization & Reach
+- **Purchasing Power Parity (PPP)**: Automatic price adjustment based on location (e.g., automated discounts for developing markets).
+- **Public Profiles**: Highly optimized "Digital Storefronts" for tutors to showcase products and ratings.
+- **Service Booking**: Automated 1:1 mentorship scheduling based on tutor availability.
 
-### 6. Monetization & Profile
-- **Public Profile:** A shareable page for tutors showcasing bio, ratings, and active zones.
-- **Service Booking:** System for students to book 1:1 mentorship slots based on tutor availability.
-- **Availability Setup:** specialized calendar for tutors to define working hours.
-- **Billing & Payouts:** Settings page for managing subscription plans and payout bank details.
+### 5. Certification & Verification
+- **Branded Engine**: Customizable certificate templates with brand colors and multiple signatures.
+- **W3C Standards**: Credentials issued as verifiable JSON-LD objects.
+- **Public Verification**: A secure portal for employers to verify student credentials via ID.
 
-### 7. Certification Engine
-- **Certificate Issuance:** Tool for tutors to issue cryptographically signed credentials.
-- **Template Customization:** Ability to brand certificates with custom colors and signatures.
-- **Verification Portal:** Public-facing page to verify certificate authenticity via ID.
+---
 
-### 8. Advanced Features (New)
-- **Smart Pricing (PPP):** `usePPPPrice` hook automatically adjusts zone prices based on user location (e.g., 60% off for India).
-- **Proctored Exams:** `StudentZoneView` includes a secure exam environment with tab-switch warnings and mock biometric monitoring.
-- **Real-time Chat:** `ChatSidebar` enables live discussion within zones, powered by Firestore.
-- **Hex Code Support:** Enhanced color picker for certificate branding.
+## 🛠 Technical Architecture
 
-## Technical Architecture
-- **Frontend:** React 19 with TypeScript.
-- **Styling:** Tailwind CSS with a custom design system (Rounded UI, Glassmorphism).
-- **State Management:** React Context API (Auth) + LocalStorage for persistence.
-- **AI Integration:** Google GenAI SDK (Gemini 2.5 Flash / 3 Pro) for content generation and live multimodal interaction.
-- **Icons:** Lucide React.
+| Component | Technology |
+| :--- | :--- |
+| **Frontend** | React 19, TypeScript, Tailwind CSS |
+| **State** | React Context API + Firebase Auth |
+| **Database** | Google Firestore (Real-time NoSQL) |
+| **AI** | Google Gemini SDK (@google/genai) |
+| **Streaming** | LiveKit (Self-hosted/Cloud WebRTC) |
+| **Icons** | Lucide React |
 
-## Recent Fixes
-- **Canvas Context Error:** Fixed a critical bug in `ZoneManagement.tsx` where `getContext('2d')` was called on a null canvas reference during the grading view initialization.
+---
 
-## Next Steps
-- Full Backend Migration (Replace localStorage fallbacks with Firebase).
-- P2P Video implementation for Live Rooms.
-- Expand the Digital Store for selling downloadable assets.
+## 🛣 Future Roadmap
+
+### 🔴 Phase 1: Persistence & Stability (In Progress)
+- [ ] Complete replacement of `localStorage` fallbacks with Firestore.
+- [ ] Optimize Firebase Security Rules for multi-tenant access.
+- [ ] Refine the "Join Live" flow with robust token generation.
+
+### 🟡 Phase 2: Engagement & Interaction
+- [ ] Implement Peer-to-Peer (P2P) video for student collaboration.
+- [ ] Add real-time "Polls" and "Hand-raise" features to the LiveRoom.
+- [ ] Integrate a "Course Forum" for asynchronous community discussion.
+
+### 🟢 Phase 3: The Talent Layer
+- [ ] Zero-Knowledge Proof (ZKP) verification for privacy-first achievement sharing.
+- [ ] Launch the "Digital Goods" store for selling templates, assets, and guides.
+- [ ] Integration with LinkedIn for "One-Click Achievement Add".
+
+---
+
+## 📝 Change Log (Recent)
+- **[Fix]** Canvas initialization error in `ZoneManagement` grading view.
+- **[Update]** Added hex code support for certificate brand colors.
+- **[Feature]** Initial implementation of Gemini MCQ generator.
+- **[Feature]** Added smart PPP pricing detection.

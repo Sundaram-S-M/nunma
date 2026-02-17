@@ -209,9 +209,20 @@ const StudentZoneView: React.FC = () => {
     check();
   }, [zone, studentData, authUser, navigate, zoneId]);
 
-  // Auto-Resume (Select first incomplete segment)
+  // 2. Auto-Resume (Select first incomplete segment)
   useEffect(() => {
     if (activeContent || !curriculum || curriculum.length === 0 || !studentData) return;
+
+    // Check if an exam was active
+    if (studentData.activeExamId && !activeExam && exams.length > 0) {
+      const foundExam = exams.find(e => e.id === studentData.activeExamId);
+      if (foundExam) {
+        setActiveExam(foundExam);
+        setExamWarnings(studentData.currentExamWarnings || 0);
+        // Continue but maybe show a message
+        console.log("Resuming active exam session...");
+      }
+    }
 
     const allSegments = curriculum.flatMap(c => c.segments || []);
     if (allSegments.length === 0) return;
@@ -229,40 +240,65 @@ const StudentZoneView: React.FC = () => {
       // If all are completed, default to the first one so they aren't stuck on a blank screen
       setActiveContent(allSegments[0]);
     }
-  }, [curriculum, studentData, activeContent, expandedChapters]);
+  }, [curriculum, studentData, activeContent, expandedChapters, exams, activeExam]);
 
   // Cheating Detection: Window Blur
   useEffect(() => {
     if (activeExam && !isExamTerminated) {
-      const handleBlur = () => {
+      const handleBlur = async () => {
+        let newWarningCount = 0;
         setExamWarnings(prev => {
-          const next = prev + 1;
-          if (next >= 3) {
-            handleTerminateExam('failed');
-            alert('Exam terminated due to multiple tab switches.');
-          } else {
-            alert(`WARNING: Window focus lost. Warning ${next}/2. Next time your exam will be reported.`);
-          }
-          return next;
+          newWarningCount = prev + 1;
+          return newWarningCount;
         });
+
+        // Persist to Firestore
+        if (zoneId && studentData) {
+          try {
+            await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
+              currentExamWarnings: newWarningCount
+            });
+          } catch (e) {
+            console.error("Failed to sync warning", e);
+          }
+        }
+
+        if (newWarningCount >= 3) {
+          handleTerminateExam('failed');
+          alert('Exam terminated due to multiple tab switches.');
+        } else {
+          alert(`WARNING: Window focus lost. Warning ${newWarningCount}/2. Next time your exam will be reported.`);
+        }
       };
       window.addEventListener('blur', handleBlur);
       return () => window.removeEventListener('blur', handleBlur);
     }
-  }, [activeExam, isExamTerminated]);
+  }, [activeExam, isExamTerminated, zoneId, studentData]);
 
-  const handleStartExam = (exam: any) => {
+  const handleStartExam = async (exam: any) => {
     setActiveExam(exam);
     setExamCurrentQuestion(0);
     setExamAnswers({});
     setExamWarnings(0);
     setIsExamTerminated(false);
     setCameraStatus('on'); // Mock camera start
+
+    // Persist to Firestore
+    if (zoneId && studentData) {
+      try {
+        await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
+          activeExamId: exam.id,
+          currentExamWarnings: 0
+        });
+      } catch (e) {
+        console.error("Failed to sync exam start", e);
+      }
+    }
   };
 
   const handleTerminateExam = async (status: 'passed' | 'failed') => {
     setIsExamTerminated(true);
-    if (!zoneId || !activeExam) return;
+    if (!zoneId || !activeExam || !studentData) return;
 
     const result = {
       examId: activeExam.id,
@@ -276,6 +312,11 @@ const StudentZoneView: React.FC = () => {
 
     try {
       await addDoc(collection(db, 'zones', zoneId, 'exam_results'), result);
+      // Update student doc to clear active exam
+      await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
+        activeExamId: null,
+        currentExamWarnings: 0
+      });
       // Optimistic update
       setExamResults(prev => [...prev, { id: 'temp-' + Date.now(), ...result }]);
     } catch (e) {

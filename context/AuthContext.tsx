@@ -24,6 +24,10 @@ interface UserProfile {
   bio?: string;
   location?: string;
   dob?: string;
+  headline?: string;
+  experience?: any[];
+  education?: any[];
+  skills?: string[];
   followersCount?: number;
   followingCount?: number;
   earnings?: number;
@@ -40,7 +44,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (profile: Omit<UserProfile, 'uid'>, password: string) => Promise<void>;
   requestOTP: (email: string) => Promise<void>;
-  verifyOTP: (email: string, otp: string, registrationData?: { name: string, role: string }) => Promise<void>;
+  verifyOTP: (email: string, otp: string, registrationData?: { name: string, role: string }, password?: string) => Promise<any>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
@@ -145,10 +149,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await requestOTPFunc({ email });
   };
 
-  const verifyOTP = async (email: string, otp: string, registrationData?: { name: string, role: string }) => {
+  const verifyOTP = async (email: string, otp: string, registrationData?: { name: string, role: string }, password?: string) => {
     if (!auth || !functions) throw new Error("Firebase not initialized");
-    const verifyOTPFunc = httpsCallable<{ email: string, otp: string, registrationData?: any }, { customToken: string }>(functions, 'verifyOTPAndSignIn');
-    const result = await verifyOTPFunc({ email, otp, registrationData });
+    const verifyOTPFunc = httpsCallable<{ email: string, otp: string, registrationData?: any, password?: string }, any>(functions, 'verifyOTPAndSignIn');
+    const result = await verifyOTPFunc({ email, otp, registrationData, password });
+
+    if (result.data.verified && !result.data.customToken) {
+      // Intermediate step for registration (OTP verified, need password)
+      return result.data;
+    }
 
     if (result.data.customToken) {
       await signInWithCustomToken(auth, result.data.customToken);

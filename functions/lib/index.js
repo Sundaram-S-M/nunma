@@ -29,6 +29,7 @@ const admin = __importStar(require("firebase-admin"));
 const livekit_server_sdk_1 = require("livekit-server-sdk");
 const crypto = __importStar(require("crypto"));
 const corsLib = __importStar(require("cors"));
+const nodemailer = __importStar(require("nodemailer"));
 const cors = corsLib({ origin: true });
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -48,7 +49,7 @@ exports.checkLiveKitConfig = functions.https.onRequest(async (req, res) => {
     });
 });
 /**
- * Re-wired Token Generation using onRequest to bypass Firebase onCall CORS issues.
+ * Re-wired Token Generation using onRequest with Security.
  */
 exports.generateLiveKitToken = functions.https.onRequest(async (req, res) => {
     return cors(req, res, async () => {
@@ -57,9 +58,46 @@ exports.generateLiveKitToken = functions.https.onRequest(async (req, res) => {
                 res.status(405).send({ error: 'Method Not Allowed' });
                 return;
             }
-            const { roomName, role, userId: providedUserId, userName: providedUserName } = req.body;
-            if (!roomName) {
-                res.status(400).send({ error: 'roomName is required' });
+            // 1. Authenticate Request
+            const authHeader = req.headers.authorization;
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                res.status(401).send({ error: 'Unauthorized: Missing or malformed token' });
+                return;
+            }
+            const idToken = authHeader.split('Bearer ')[1];
+            let decodedToken;
+            try {
+                decodedToken = await admin.auth().verifyIdToken(idToken);
+            }
+            catch (e) {
+                res.status(401).send({ error: 'Unauthorized: Invalid token' });
+                return;
+            }
+            const uid = decodedToken.uid;
+            const { roomName, zoneId } = req.body;
+            if (!roomName || !zoneId) {
+                res.status(400).send({ error: 'roomName and zoneId are required' });
+                return;
+            }
+            // 2. Authorize User
+            const zoneRef = admin.firestore().collection('zones').doc(zoneId);
+            const zoneDoc = await zoneRef.get();
+            if (!zoneDoc.exists) {
+                res.status(404).send({ error: 'Zone not found' });
+                return;
+            }
+            const zoneData = zoneDoc.data();
+            const isCreator = zoneData.createdBy === uid;
+            let isAuthorized = isCreator;
+            if (!isAuthorized) {
+                // Check if enrolled as student
+                const studentDoc = await zoneRef.collection('students').doc(uid).get();
+                if (studentDoc.exists) {
+                    isAuthorized = true;
+                }
+            }
+            if (!isAuthorized) {
+                res.status(403).send({ error: 'Forbidden: You are not authorized to join this room' });
                 return;
             }
             const apiKey = (process.env.LIVEKIT_API_KEY || '').trim();
@@ -69,9 +107,9 @@ exports.generateLiveKitToken = functions.https.onRequest(async (req, res) => {
                 res.status(500).send({ error: 'LiveKit keys missing on server' });
                 return;
             }
-            const identity = providedUserId || `user-${Math.random().toString(36).substring(7)}`;
-            const name = providedUserName || identity;
-            const isTutor = (role || '').toUpperCase() === "TUTOR";
+            const identity = uid;
+            const name = decodedToken.name || decodedToken.email || uid;
+            const isTutor = isCreator; // Only the creator gets publisher rights for now
             const at = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
                 identity: identity,
                 name: name,
@@ -202,9 +240,18 @@ exports.sendWhitelistInvite = functions.https.onCall(async (data, context) => {
     return { success: true, message: `Invitation logged for ${email}` };
 });
 // --- OTP AUTHENTICATION SYSTEM ---
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+});
 /**
  * Generates and stores a 6-digit OTP for a given email.
- * Placeholder for real email sending.
+ * Sends the OTP via email.
  */
 exports.requestOTP = functions.https.onCall(async (data) => {
     const { email } = data;
@@ -221,8 +268,29 @@ exports.requestOTP = functions.https.onCall(async (data) => {
             createdAt: admin.firestore.Timestamp.now()
         });
         console.log(`[OTP] Generated for ${email}: ${otp}. Expires in 10 mins.`);
-        // --- REAL EMAIL INTEGRATION WOULD GO HERE ---
-        // For now, we return success and use function logs to retrieve the OTP for testing.
+        // --- REAL EMAIL INTEGRATION ---
+        const mailOptions = {
+            from: `"Nunma Platform" <${process.env.SMTP_USER}>`,
+            to: email,
+            subject: "Your Nunma Verification Code",
+            text: `Your verification code is: ${otp}. It will expire in 10 minutes.`,
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; color: #040457;">
+                    <h2 style="color: #040457;">Verification Code</h2>
+                    <p style="font-size: 16px;">Welcome to Nunma. Use the following code to verify your email address:</p>
+                    <div style="background: #f4f4f4; padding: 15px; font-size: 24px; font-weight: bold; text-align: center; border-radius: 8px; letter-spacing: 5px;">
+                        ${otp}
+                    </div>
+                    <p style="font-size: 12px; color: #666; margin-top: 20px;">This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
+                </div>
+            `,
+        };
+        if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+            await transporter.sendMail(mailOptions);
+        }
+        else {
+            console.warn("SMTP credentials missing. Email not sent. Check logs for OTP.");
+        }
         return { success: true, message: "Verification code sent to email." };
     }
     catch (error) {
@@ -232,10 +300,10 @@ exports.requestOTP = functions.https.onCall(async (data) => {
 });
 /**
  * Verifies OTP and returns a custom token for client sign-in.
- * If user doesn't exist, it creates a profile in Firestore.
+ * If user doesn't exist, it creates a profile in Firestore only IF password is provided.
  */
 exports.verifyOTPAndSignIn = functions.https.onCall(async (data) => {
-    const { email, otp, registrationData } = data;
+    const { email, otp, registrationData, password } = data;
     if (!email || !otp) {
         throw new functions.https.HttpsError("invalid-argument", "Email and OTP are required.");
     }
@@ -263,7 +331,14 @@ exports.verifyOTPAndSignIn = functions.https.onCall(async (data) => {
         catch (error) {
             if (error.code === 'auth/user-not-found') {
                 // Register new user
-                userRecord = await admin.auth().createUser({ email });
+                if (!password) {
+                    // This is the intermediate step where we only verify OTP
+                    return { verified: true, message: "OTP verified. Please proceed to set a password." };
+                }
+                userRecord = await admin.auth().createUser({
+                    email,
+                    password: password
+                });
                 // If we have registration data, create the Firestore profile
                 if (registrationData) {
                     const { name, role } = registrationData;

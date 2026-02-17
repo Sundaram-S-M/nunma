@@ -70,16 +70,16 @@ const ClassroomStream: React.FC<ClassroomStreamProps> = ({ sessionId, zoneId, ro
       }
 
       try {
-        console.log("ClassroomStream: Calling re-wired generateLiveKitToken...");
-
+        const idToken = await auth.currentUser?.getIdToken();
         const response = await fetch('https://us-central1-nunma-by-cursor.cloudfunctions.net/generateLiveKitToken', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
           body: JSON.stringify({
             roomName: `${zoneId}-${sessionId}`,
-            role: role,
-            userId: user?.uid,
-            userName: user?.name
+            zoneId: zoneId
           })
         });
 

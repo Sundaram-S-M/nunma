@@ -1,110 +1,88 @@
 
-# Nunma Architecture & Design
+# Nunma Architecture & Vision
 
-## Project Structure
+## 🚀 The Vision: Beyond Traditional LMS
+Nunma is not just a platform for sharing videos; it's a **Verifiable Mastery Ecosystem**. Our goal is to bridge the gap between learning and professional proof-of-work. By combining real-time AI assistance, high-performance streaming, and cryptographic certification, Nunma creates a "Trust Layer" for education.
 
-The project follows a standard React application structure, organized by feature capability.
+---
 
-```
-/
-├── components/         # Reusable UI components
-│   ├── Header.tsx      # Global navigation header
-│   ├── Sidebar.tsx     # Collapsible side navigation
-│   ├── LiveRoom.tsx    # LiveKit streaming interface
-│   ├── ChatSidebar.tsx # Real-time Firestore chat
-│   └── ...
-├── context/
-│   └── AuthContext.tsx # Global authentication state management
-├── hooks/              # Custom React hooks
-│   └── usePPPPrice.ts  # Regional pricing logic
-├── pages/              # Main route views
-│   ├── Auth.tsx        # Login/Signup logic
-│   ├── Dashboard.tsx   # Main landing for authenticated users
-│   ├── ZoneManagement.tsx # Course/Exam/Certificate administration
-│   ├── Classroom.tsx   # Student learning hub
-│   ├── CertificateEngine.tsx # Branding & issuance
-│   ├── VerificationPortal.tsx # ZK Proof generation
-│   └── ...
-├── types.ts            # TypeScript definitions
-├── App.tsx             # Main routing configuration
-└── index.tsx           # Entry point
-```
+## 🛠 Project Structure & Technology Stack
 
-## Core Concepts
+Nunma is built on a modern, high-performance stack designed for scale and real-time interaction.
 
-### 1. "Zones" (Learning Streams)
-A **Zone** is the central unit of the Nunma ecosystem. It represents a course, a workshop, or a mentorship program.
-- **Tutor View:** Tutors manage content, schedule exams, and track attendance.
-- **Student View:** Students consume content, take quizzes, and join live sessions.
+### Frontend Architecture
+Organized by feature capability for high maintainability:
+- **`components/`**: Atomic UI components and feature-specific modules (e.g., `LiveRoom.tsx`, `ChatSidebar.tsx`).
+- **`pages/`**: Route-level views implementing core business logic.
+- **`context/`**: Global state management (Auth, Theme, User Preferences).
+- **`hooks/`**: Specialized logic like `usePPPPrice` for regional adjustments.
 
-### 2. User Roles
-The application strictly separates **Student** and **Tutor** capabilities via the `UserRole` enum.
-- **Tutors:** Access to `Workplace`, `ZoneManagement`, `CertificateEngine`, and `AvailabilitySetup`.
-- **Students:** Access to `Classroom`, `StudentZoneView`, and `PublicProfile`.
+### Technology Stack
+| Layer | Technology |
+| :--- | :--- |
+| **Framework** | React 19 + TypeScript + Vite |
+| **Styling** | Tailwind CSS (Custom "Deep Professional" Design System) |
+| **Backend** | Firebase (Auth, Firestore, Storage, Cloud Functions) |
+| **Real-time** | LiveKit (Video/Audio WebRTC), Firestore (Chat/State) |
+| **AI Engine** | Google Gemini 1.5 Pro & Multimodal Live API |
+| **Security** | W3C Verifiable Credentials + Ed25519 Signatures |
 
-### 3. Data Persistence
-Transitioning from `localStorage` mock to **Firebase** for persistence.
-- **Auth:** Firebase Authentication.
-- **Database:** Firestore for `zones`, `sessions` (chat messages), and `users`.
-- **Keys:** `nunma_user`, `nunma_zones_data` (fallback), `nunma_exams`, etc.
+---
 
-### 4. Monetization & PPP
-Implemented in `Payment.tsx` and `usePPPPrice.ts`:
-- **Smart Pricing:** Automatically detects user country via IP.
-- **PPP Adjustment:** Applies purchasing power parity discounts for eligible regions (e.g., India).
-- **Transparency:** Displays original and adjusted prices to the user.
+## 💎 Core Feature Pillars
 
-### 5. AI Integration (Gemini)
-Leveraging the `@google/genai` SDK:
-- **MCQ Generation:** `ZoneManagement` uses Gemini 1.5 Pro to generate structured JSON quizzes from document context.
-- **Live Co-host:** `LiveRoom` utilizes Gemini Multimodal Live API for real-time AI interaction (audio/video).
+### 1. Adaptive Learning Zones
+A **Zone** is a self-contained learning environment that can be a single course, a recurring workshop, or a proctored exam center.
+- **Dynamic Content**: Support for Video, PDF, and Interactive Quizzes.
+- **Hybrid Delivery**: Seamless transition between recorded material and live sessions.
+- **Smart Scheduling**: Integration with tutor availability and global timezones.
 
-### 6. Real-time Communication
-- **Chat System:** Firestore-backed real-time messaging in `ChatSidebar`.
-- **Scope:** Zone-specific and Session-specific chat rooms.
-- **Persistence:** Messages flow into Firestore `zones/{zoneId}/sessions/{sessionId}/messages`.
+### 2. AI-Driven Intelligence (Powered by Gemini)
+We leverage Google's most advanced models to automate the tedious parts of teaching:
+- **Instant Assessments**: Tutors can upload any document, and Gemini generates a structured, high-quality MCQ quiz in seconds.
+- **Multimodal AI Co-host**: In the `LiveRoom`, a Gemini-powered co-host can "see" and "hear" participants, answering questions in real-time and providing sentiment analysis.
+- **Automated Grading**: For handwritten or text-based answers, Gemini assists in evaluating student scripts against a rubric.
 
-## Design System
-- **Visual Style:** "Deep Professional" (Glassmorphism & High Contrast).
-- **Core Colors:** 
-  - **Navy:** `#1A1A4E` (Primary background & headers)
-  - **Lime Green:** `#c1e60d` (Action items, highlights, rewards)
-  - **White:** `#FFFFFF` (Card backgrounds)
-  - **Soft Gray:** `#fbfbfb` (App background)
-- **Typography:** `Plus Jakarta Sans` (Headings), `Inter` (Body).
+### 3. Trust & Certification (W3C Standards)
+Nunma transitions from "certificates that are pictures" to "certificates that are data":
+- **W3C Verifiable Credentials**: Every certificate is a signed JSON-LD object compatible with global standards.
+- **Zero-Knowledge Proofs**: Students can prove they passed a course or achieved a certain grade without revealing their identity or private data.
+- **Selective Disclosure**: share only what is necessary (e.g., "I passed Level 3" without showing the score).
 
-## Certification & Verifiable Credentials
+### 4. Global Accessibility (PPP & Localization)
+Education should be accessible regardless of geography:
+- **Purchasing Power Parity (PPP)**: Our `usePPPPrice` hook automatically adjusts pricing based on the learner's country, ensuring fair access in markets like India, Africa, and LATAM.
+- **Regional Edge Nodes**: Leveraging Firebase and LiveKit's global infra for low-latency streaming everywhere.
 
-### 1. Branding System
-Implemented in `CertificateEngine`, allowing tutors to customize achievement assets:
-- **Brand Colors:** Full hex control for certificate highlights.
-- **Signatures:** Support for dual-signature uploads (SVG/PNG).
+---
 
-### 2. Verifiable Credentials (W3C)
-- **Standard:** Compliant with OpenBadges 3.0 / JSON-LD LD-Proof.
-- **Issuance:** Digital signatures generated using Ed25519 signatures (mocked).
+## 🛡 Proctoring & Assessment Architecture
 
-### 3. Zero-Knowledge Verification
-Implemented in `VerificationPortal`:
-- **Privacy:** Selective disclosure allows students to prove they passed/mastered a course without revealing their exact score.
-- **Proof Check:** The verification landing computes the ZK proof validity before displaying the achievement details.
+### Digital Proctoring Engine
+Active during assessments to ensure integrity:
+- **Behavioral Analysis**: Tracks tab switching, browser focus, and copy-paste attempts.
+- **Biometric Monitoring (AI Mock)**: Simulated webcam checks for "Face Detected" status to prevent impersonation.
+- **3-Strike Enforcement**: Automated session termination for policy violations.
 
-## Assessment & Proctoring Architecture
+### Grading Loop
+- **Vector Annotation**: Tutors use a `<canvas>` interface to mark student uploads, saving corrections as vector coordinates for lossless rendering across devices.
+- **Reward Ecosystem**: 10 XP awarded per mark, feeding into a global and zone-specific leaderboard.
 
-### 1. Unified Exam Gateway
-Supports **Online** (automated) and **Offline** (manual) assessments.
+---
 
-### 2. Digital Proctoring Engine
-Active in `StudentZoneView`:
-- **Tab Tracking:** Focus/Blur detection triggers warnings.
-- **Biometric Mock:** UI simulation of webcam monitoring ("Face Detected: YES").
-- **3-Strike Policy:** Automatic termination upon the 3rd violation (window blur).
+## 🛣 Future Roadmap
 
-### 3. Grading Loops
-- **Automated MCQ:** Real-time grading and XP commitment.
-- **Manual Annotation:** Tutors use a `<canvas>` marking interface in `ZoneManagement` for handwritten scripts, saving vector coordinates for feedback.
+### Phase 1: Full Backend Integration (Current)
+Moving remaining local session data to Firestore and optimizing Cloud Functions for LiveKit token generation.
 
-### 4. Reward Services
-- **XP Ecosystem:** 10 XP per mark awarded upon successful verification of results.
-- **Badges:** Earned upon zone completion, represented as Verifiable Credentials.
+### Phase 2: Collaborative Multi-Peer Video
+Expanding `LiveRoom` to support interactive breakout rooms and P2P collaboration sessions.
+
+### Phase 3: Digital Product Marketplace
+A "Gumroad-style" store for educators to sell downloadable assets (Notion templates, code bundles, checklists) alongside their courses.
+
+### Phase 4: Decentralized Identity (DID)
+Full integration with decentralized identifiers to give students total ownership of their learning history across different platforms.
+
+---
 

@@ -22,7 +22,7 @@ const Auth: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // New OTP Flow State
-  const [step, setStep] = useState<'info' | 'otp'>('info');
+  const [step, setStep] = useState<'info' | 'otp' | 'password'>('info');
   const [otp, setOtp] = useState('');
 
   const [email, setEmail] = useState('');
@@ -51,11 +51,31 @@ const Auth: React.FC = () => {
     e.preventDefault();
     try {
       setIsLoading(true);
-      await verifyOTP(email, otp, { name, role });
-      navigate('/dashboard');
+      const result: any = await verifyOTP(email, otp, { name, role });
+
+      if (result?.verified) {
+        setStep('password');
+      } else {
+        // If result has customToken, verifyOTP would have already signed in
+        navigate('/dashboard');
+      }
     } catch (error: any) {
       console.error("OTP Verification error:", error);
       alert(`Verification Failed: ${error.message || "Invalid or expired code."}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFinalizeSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsLoading(true);
+      await verifyOTP(email, otp, { name, role }, password);
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error("Finalize Sign-Up error:", error);
+      alert(`Setup Failed: ${error.message || "Failed to create account."}`);
     } finally {
       setIsLoading(false);
     }
@@ -227,7 +247,9 @@ const Auth: React.FC = () => {
                 <div className="mb-14">
                   <h2 className="text-5xl font-black text-[#040457] tracking-tighter mb-4">Join Ecosystem</h2>
                   <p className="text-gray-400 font-medium text-lg">
-                    {step === 'info' ? "Initialize your professional profile." : "Enter the verification code sent to your email."}
+                    {step === 'info' && "Initialize your professional profile."}
+                    {step === 'otp' && "Enter the verification code sent to your email."}
+                    {step === 'password' && "Create a secure password for your account."}
                   </p>
                 </div>
 
@@ -315,7 +337,37 @@ const Auth: React.FC = () => {
                     </div>
 
                     <button type="submit" disabled={isLoading} className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
-                      {isLoading ? "Verifying..." : "Initialize Dashboard"} <Sparkles size={18} className="text-[#c2f575]" />
+                      {isLoading ? "Verifying..." : "Verify Code"} <ArrowRight size={18} className="text-[#c2f575]" />
+                    </button>
+                  </form>
+                ) : null}
+
+                {step === 'password' && (
+                  <form onSubmit={handleFinalizeSignUp} className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Create Access Key</label>
+                      <div className="relative group">
+                        <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <input
+                          type={showPassword ? "text" : "password"} required placeholder="••••••••"
+                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-5 font-bold text-[#040457] outline-none transition-all shadow-sm"
+                          value={password} onChange={(e) => setPassword(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 hover:text-[#040457] transition-colors"
+                        >
+                          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-medium ml-1">
+                        Use at least 8 characters with numbers and symbols.
+                      </p>
+                    </div>
+
+                    <button type="submit" disabled={isLoading} className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
+                      {isLoading ? "Finalizing..." : "Initialize Dashboard"} <Sparkles size={18} className="text-[#c2f575]" />
                     </button>
                   </form>
                 )}

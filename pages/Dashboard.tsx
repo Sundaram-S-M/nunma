@@ -4,7 +4,7 @@ import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import {
   collection, query, where, onSnapshot, orderBy,
-  getDocs, limit, doc, getDoc
+  getDocs, limit, doc, getDoc, addDoc, deleteDoc
 } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import {
@@ -166,14 +166,27 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   // 3. Flatten Sessions Map to Live/Scheduled
   useEffect(() => {
     const all = Object.values(sessionsMap).flat();
-    // Filter?
     setLiveSessions(all);
-
-    const active = all.find(s => s.status === 'live');
-    if (active && !activeLiveRoom) {
-      // Optional: Auto-prompt? Or just let UI show "Live Broadcast Active"
-    }
   }, [sessionsMap]);
+
+  // 4. Listen to Personal Calendar Events (Firestore)
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'users', user.uid, 'calendar_events'));
+    const unsub = onSnapshot(q, (snap) => {
+      const data: Record<string, any[]> = {};
+      snap.forEach(d => {
+        const event = { docId: d.id, ...d.data() };
+        const dKey = (event as any).dateKey;
+        if (dKey) {
+          if (!data[dKey]) data[dKey] = [];
+          data[dKey].push(event);
+        }
+      });
+      setMeetingsData(data);
+    });
+    return () => unsub();
+  }, [user]);
 
   const monthName = currentMonth.toLocaleString('default', { month: 'long' }).toUpperCase();
   const year = currentMonth.getFullYear();
@@ -190,27 +203,35 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
     setIsCreatingEvent(false);
   };
 
-  const handleSaveEvent = () => {
-    if (!newEvenTitle || !modalDate) return;
+  const handleSaveEvent = async () => {
+    if (!newEvenTitle || !modalDate || !user) return;
     const timeString = newEventTime || `${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`;
+    const dateKey = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${modalDate.toString().padStart(2, '0')}`;
+
     const newEvent = {
-      id: Date.now(),
       title: newEvenTitle,
       time: timeString,
       type: newEventIsImportant ? 'meeting' : 'task',
       color: newEventIsImportant ? 'indigo' : 'gray',
-      important: newEventIsImportant
+      important: newEventIsImportant,
+      dateKey: dateKey,
+      createdAt: new Date().toISOString()
     };
-    const dateKey = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${modalDate.toString().padStart(2, '0')}`;
-    setMeetingsData(prev => ({ ...prev, [dateKey]: [...(prev[dateKey] || []), newEvent] }));
-    setNewEventTitle('');
-    setNewEventTime('');
-    setNewEventIsImportant(false);
-    setIsCreatingEvent(false);
-    setShowClockPicker(false);
-    setSelectedHour(12);
-    setSelectedMinute(0);
-    setSelectedPeriod('PM');
+
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'calendar_events'), newEvent);
+      setNewEventTitle('');
+      setNewEventTime('');
+      setNewEventIsImportant(false);
+      setIsCreatingEvent(false);
+      setShowClockPicker(false);
+      setSelectedHour(12);
+      setSelectedMinute(0);
+      setSelectedPeriod('PM');
+    } catch (e) {
+      console.error("Error saving event:", e);
+      alert("Failed to save event. Please try again.");
+    }
   };
 
   const getSessionsForDay = (day: number | null) => {
