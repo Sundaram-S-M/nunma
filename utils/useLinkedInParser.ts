@@ -7,6 +7,14 @@ export const useLinkedInParser = () => {
     const parsePDF = async (pdfFile: File) => {
         setIsParsing(true);
         try {
+            const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+            if (!apiKey) {
+                console.error("Missing VITE_GEMINI_API_KEY in environment variables");
+                alert("Configuration Error: Gemini API Key is missing. Please check your .env file.");
+                throw new Error("Missing API Key");
+            }
+
+            console.log("Starting PDF parsing...");
             const reader = new FileReader();
             const base64PDF = await new Promise<string>((resolve) => {
                 reader.onloadend = () => {
@@ -15,8 +23,9 @@ export const useLinkedInParser = () => {
                 };
                 reader.readAsDataURL(pdfFile);
             });
+            console.log("PDF converted to base64");
 
-            const genAI = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+            const genAI = new GoogleGenAI(apiKey); // Use the variable we checked
 
             const prompt = `Analyze this LinkedIn profile PDF. 
             Extract ONLY the following information and return it in EXACTLY this JSON format:
@@ -45,15 +54,16 @@ export const useLinkedInParser = () => {
             Do NOT extract contact info, email, phone, or website.
             Return ONLY the valid JSON object. Do not include markdown formatting or explanations.`;
 
+            console.log("Calling Gemini API...");
             const result = await genAI.models.generateContent({
-                model: 'gemini-1.5-flash',
+                model: 'gemini-1.5-flash', // check model availability
                 contents: [{
                     role: 'user',
                     parts: [
                         { text: prompt },
                         {
                             inlineData: {
-                                mimeType: "application/pdf",
+                                mimeType: "application/pdf", // Verify mime type is supported
                                 data: base64PDF
                             }
                         }
@@ -61,18 +71,33 @@ export const useLinkedInParser = () => {
                 }]
             });
 
+            console.log("Gemini response received");
             const responseText = result.text || "";
+            console.log("Raw response (first 200 chars):", responseText.substring(0, 200));
+
             // Clean up markdown code blocks if present
             const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
             const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
 
             if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
+                const parsed = JSON.parse(jsonMatch[0]);
+                console.log("JSON parsed successfully", parsed);
+                return parsed;
             }
+            console.error("JSON regex failed. Clean text:", cleanText);
             throw new Error("Could not parse JSON from Gemini response");
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("LinkedIn PDF Parsing Error:", error);
+            // Log specific API errors
+            if (error.response) {
+                console.error("API Error Response:", error.response);
+            }
+            if (error.message && error.message.includes("403")) {
+                alert("API Error: Access Denied (403). Check if your API Key has access to Gemini 1.5 Flash.");
+            } else if (error.message && error.message.includes("404")) {
+                alert("API Error: Model not found (404). Gemini 1.5 Flash might not be available for this key.");
+            }
             throw error;
         } finally {
             setIsParsing(false);

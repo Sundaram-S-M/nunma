@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useNavigate } from 'react-router-dom';
 import { Layers, Search, Filter, Globe, ArrowRight, MonitorPlay, Video } from 'lucide-react';
@@ -24,6 +24,7 @@ const Explore: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const [tutorData, setTutorData] = useState<Record<string, { name: string }>>({});
 
   useEffect(() => {
     let unsubscribe = () => { };
@@ -76,6 +77,34 @@ const Explore: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!db || zones.length === 0) return;
+
+    const fetchTutors = async () => {
+      const uniqueTutors = [...new Set(zones.map(z => z.tutorId))];
+      const newTutorData: Record<string, { name: string }> = {};
+
+      await Promise.all(uniqueTutors.map(async (tutorId) => {
+        if (!tutorId || tutorData[tutorId]) return;
+
+        try {
+          const userDoc = await getDoc(doc(db, 'users', tutorId));
+          if (userDoc.exists()) {
+            newTutorData[tutorId] = { name: userDoc.data().name };
+          }
+        } catch (error) {
+          console.error("Error fetching tutor:", tutorId, error);
+        }
+      }));
+
+      if (Object.keys(newTutorData).length > 0) {
+        setTutorData(prev => ({ ...prev, ...newTutorData }));
+      }
+    };
+
+    fetchTutors();
+  }, [zones]);
 
   const filteredZones = zones.filter(zone =>
     zone.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -146,9 +175,9 @@ const Explore: React.FC = () => {
                 <div className="absolute bottom-8 left-8 right-8 flex items-center justify-between opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500">
                   <div className="flex items-center gap-3 bg-[#040457]/80 backdrop-blur-md p-2 pr-6 rounded-2xl border border-white/10">
                     <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/20">
-                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.tutorName}`} alt="Tutor" />
+                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${tutorData[zone.tutorId]?.name || zone.tutorName}`} alt="Tutor" />
                     </div>
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">{zone.tutorName}</span>
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">{tutorData[zone.tutorId]?.name || zone.tutorName}</span>
                   </div>
                 </div>
               </div>
