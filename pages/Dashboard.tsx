@@ -120,12 +120,22 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
           }
         });
 
-        setStats([
-          { label: 'Active Zones', value: zonesList.length },
-          { label: 'Total Students', value: totalStudents },
-          { label: 'Hours Streamed', value: '124' }, // Placeholder
-          { label: 'Earnings', value: `$${totalEarnings}` }
-        ]);
+        if (role === UserRole.STUDENT) {
+          const studentZonesCount = zonesList.filter(z => z.role === 'student').length;
+          setStats([
+            { label: 'Active Courses', value: studentZonesCount },
+            { label: 'Completed Courses', value: 0 },
+            { label: 'Hours Learned', value: '24' }, // Placeholder
+            { label: 'Certificates', value: 0 }
+          ]);
+        } else {
+          setStats([
+            { label: 'Active Zones', value: zonesList.filter(z => z.role === 'tutor').length },
+            { label: 'Total Students', value: totalStudents },
+            { label: 'Hours Streamed', value: '124' }, // Placeholder
+            { label: 'Earnings', value: `$${totalEarnings}` }
+          ]);
+        }
 
       } catch (e) {
         console.error("Error fetching my zones:", e);
@@ -493,188 +503,331 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, idx) => (
-          <div key={idx} className="bg-[#e9ecef]/60 p-6 rounded-[3rem] flex flex-col justify-center min-h-[180px] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 group">
-            <div className="bg-white p-8 rounded-[2.5rem] flex flex-col items-center justify-center shadow-inner text-center border border-gray-50 group-hover:border-[#c2f575]/30 transition-colors">
-              <p className="text-5xl font-black text-[#1A1A4E] mb-2 tracking-tighter leading-none">{stat.value}</p>
-              <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.3em]">{stat.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* MY ACTIVE ZONES (Student View) */}
-      {role === UserRole.STUDENT && myZones.length > 0 && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="flex items-center justify-between">
-            <h2 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-4">
-              <BookOpen className="text-[#c2f575]" /> My Active Zones
-            </h2>
-            <Link to="/classroom" className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-900 transition-colors flex items-center gap-2">
-              Explore All <ArrowRight size={14} />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {myZones.map((zone) => (
-              <div key={zone.id} className="bg-white rounded-[3.5rem] p-10 border border-gray-100 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
-                <div className="flex justify-between items-start mb-8">
-                  <div className="w-16 h-16 bg-gray-50 rounded-[1.75rem] flex items-center justify-center text-indigo-900 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-500 overflow-hidden">
-                    {zone.avatar ? <img src={zone.avatar} alt="" className="w-full h-full object-cover" /> : <Zap size={32} />}
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[9px] font-black bg-[#c2f575] text-indigo-900 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">
-                      {zone.level}
-                    </span>
-                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2">{zone.domain}</p>
-                  </div>
-                </div>
-
-                <h3 className="text-2xl font-black text-[#1A1A4E] mb-6 tracking-tight line-clamp-1 group-hover:text-indigo-600 transition-colors">
-                  {zone.title}
-                </h3>
-
-                <Link
-                  to={`/zone/${zone.id}`}
-                  className="w-full py-5 bg-indigo-900 text-white rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-indigo-900/10"
-                >
-                  Resume Stream <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+      {role === UserRole.STUDENT ? (
+        <>
+          {myZones.length > 0 && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="flex items-center justify-between">
+                <h2 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-4">
+                  <BookOpen className="text-[#c2f575]" /> My Active Courses
+                </h2>
+                <Link to="/classroom" className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-900 transition-colors flex items-center gap-2">
+                  Explore All <ArrowRight size={14} />
                 </Link>
-
-                <div className="absolute top-0 right-0 w-24 h-24 bg-[#c2f575]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
-        <div className="xl:col-span-8 space-y-8">
-          {upcomingLiveSessions.length > 0 ? (
-            <div className="bg-white rounded-[4rem] p-12 border border-gray-100 shadow-xl overflow-hidden relative">
-              <div className="flex items-center justify-between mb-12">
-                <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-5">
-                  <Radio className="text-red-500 animate-pulse" /> Scheduled Curriculum
-                </h3>
-                <div className="flex items-center gap-2 px-5 py-2 bg-red-50 text-red-600 rounded-full">
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div>
-                  <span className="text-[10px] font-black uppercase tracking-widest">{upcomingLiveSessions.length} Upcoming</span>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {upcomingLiveSessions.map((session, i) => (
-                  <div key={i} className="p-10 bg-gray-50/50 rounded-[3rem] border border-gray-100 group hover:bg-white hover:shadow-2xl transition-all duration-700">
-                    <div className="space-y-6">
-                      <LiveSessionStatus
-                        status="scheduled"
-                        startTime={session.startTime}
-                        className="bg-white"
-                      />
-                      <h4 className="text-xl font-black text-[#1A1A4E] leading-tight tracking-tighter group-hover:text-indigo-600 transition-colors">{session.title}</h4>
-                      <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{session.zoneTitle}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {myZones.map((zone) => (
+                  <div key={zone.id} className="bg-white rounded-[3.5rem] p-10 border border-gray-100 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
+                    <div className="flex justify-between items-start mb-8">
+                      <div className="w-16 h-16 bg-gray-50 rounded-[1.75rem] flex items-center justify-center text-indigo-900 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-500 overflow-hidden">
+                        {zone.avatar ? <img src={zone.avatar} alt="" className="w-full h-full object-cover" /> : <Zap size={32} />}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] font-black bg-[#c2f575] text-indigo-900 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">
+                          {zone.level}
+                        </span>
+                        <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2">{zone.domain}</p>
+                      </div>
                     </div>
-                    <button
-                      disabled
-                      className="w-full mt-8 py-5 bg-white border border-gray-100 text-gray-300 rounded-[2rem] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3"
+
+                    <h3 className="text-2xl font-black text-[#1A1A4E] mb-6 tracking-tight line-clamp-1 group-hover:text-indigo-600 transition-colors">
+                      {zone.title}
+                    </h3>
+
+                    <Link
+                      to={`/classroom/zone/${zone.id}`}
+                      className="w-full py-5 bg-indigo-900 text-white rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-indigo-900/10"
                     >
-                      Access Code Locked
-                    </button>
+                      Resume Learning <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    </Link>
+
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-[#c2f575]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                   </div>
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="bg-white rounded-[4rem] p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
-              {activeSessions.length > 0 ? (
-                <div className="w-full">
-                  <div className="bg-[#1A1A4E] rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
-                    <div className="relative z-10 flex flex-col items-center justify-center gap-8 text-center">
-                      <LiveSessionStatus
-                        status="live"
-                        className="bg-red-500/10 border-red-500/20 text-[#c2f575]"
-                      />
-                      <div>
-                        <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">Live Broadcast Active</h3>
-                        <p className="text-white/60 font-medium text-lg italic">
-                          {activeSessions[0].title} is streaming now in {activeSessions[0].zoneTitle}.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setActiveLiveRoom(activeSessions[0])}
-                        className="px-12 py-6 bg-[#c2f575] text-[#1A1A4E] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
-                      >
-                        Enter Room
-                      </button>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {stats.map((stat, idx) => (
+              <div key={idx} className="bg-[#e9ecef]/60 p-6 rounded-[3rem] flex flex-col justify-center min-h-[180px] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 group">
+                <div className="bg-white p-8 rounded-[2.5rem] flex flex-col items-center justify-center shadow-inner text-center border border-gray-50 group-hover:border-[#c2f575]/30 transition-colors">
+                  <p className="text-5xl font-black text-[#1A1A4E] mb-2 tracking-tighter leading-none">{stat.value}</p>
+                  <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.3em]">{stat.label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
+            <div className="xl:col-span-8 space-y-8">
+              {upcomingLiveSessions.length > 0 ? (
+                <div className="bg-white rounded-[4rem] p-12 border border-gray-100 shadow-xl overflow-hidden relative">
+                  <div className="flex items-center justify-between mb-12">
+                    <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-5">
+                      <Radio className="text-red-500 animate-pulse" /> Scheduled Curriculum
+                    </h3>
+                    <div className="flex items-center gap-2 px-5 py-2 bg-red-50 text-red-600 rounded-full">
+                      <div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">{upcomingLiveSessions.length} Upcoming</span>
                     </div>
-                    <div className="absolute top-0 right-0 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {upcomingLiveSessions.map((session, i) => (
+                      <div key={i} className="p-10 bg-gray-50/50 rounded-[3rem] border border-gray-100 group hover:bg-white hover:shadow-2xl transition-all duration-700">
+                        <div className="space-y-6">
+                          <LiveSessionStatus
+                            status="scheduled"
+                            startTime={session.startTime}
+                            className="bg-white"
+                          />
+                          <h4 className="text-xl font-black text-[#1A1A4E] leading-tight tracking-tighter group-hover:text-indigo-600 transition-colors">{session.title}</h4>
+                          <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{session.zoneTitle}</p>
+                        </div>
+                        <button
+                          disabled
+                          className="w-full mt-8 py-5 bg-white border border-gray-100 text-gray-300 rounded-[2rem] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3"
+                        >
+                          Access Code Locked
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ) : (
-                <>
-                  <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mb-10 text-gray-200">
-                    <CalendarIcon size={48} />
-                  </div>
-                  <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter mb-4">A Quiet Horizon</h3>
-                  <p className="text-gray-400 font-medium max-w-sm mx-auto leading-relaxed text-lg italic">
-                    No scheduled sessions found. Use this time to sharpen your skills or explore new zones.
-                  </p>
-                </>
+                <div className="bg-white rounded-[4rem] p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
+                  {activeSessions.length > 0 ? (
+                    <div className="w-full">
+                      <div className="bg-[#1A1A4E] rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
+                        <div className="relative z-10 flex flex-col items-center justify-center gap-8 text-center">
+                          <LiveSessionStatus
+                            status="live"
+                            className="bg-red-500/10 border-red-500/20 text-[#c2f575]"
+                          />
+                          <div>
+                            <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">Live Broadcast Active</h3>
+                            <p className="text-white/60 font-medium text-lg italic">
+                              {activeSessions[0].title} is streaming now in {activeSessions[0].zoneTitle}.
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setActiveLiveRoom(activeSessions[0])}
+                            className="px-12 py-6 bg-[#c2f575] text-[#1A1A4E] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                          >
+                            Enter Room
+                          </button>
+                        </div>
+                        <div className="absolute top-0 right-0 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mb-10 text-gray-200">
+                        <CalendarIcon size={48} />
+                      </div>
+                      <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter mb-4">A Quiet Horizon</h3>
+                      <p className="text-gray-400 font-medium max-w-sm mx-auto leading-relaxed text-lg italic">
+                        No scheduled sessions found. Use this time to sharpen your skills or explore new zones.
+                      </p>
+                    </>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
 
-        <div className="xl:col-span-4 space-y-8">
-          <div className="bg-white rounded-[4rem] p-10 border border-gray-100 shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between mb-10 px-4">
-              <span className="text-2xl font-black text-[#1A1A4E] tracking-tighter">{monthName} {year}</span>
-              <div className="flex gap-2">
-                <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronLeft size={20} /></button>
-                <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronRight size={20} /></button>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 gap-y-2 text-center mb-4">
-              {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map(day => (
-                <div key={day} className="text-[10px] font-black text-gray-300 uppercase tracking-widest py-3">{day}</div>
-              ))}
-              {Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`} className="p-2" />)}
-              {Array.from({ length: daysCount }, (_, i) => {
-                const dayNum = i + 1;
-                const dateKey = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
-                const isToday = isThisMonth && today.getDate() === dayNum;
-                const sessions = getSessionsForDay(dayNum);
-                const hasEvent = (meetingsData[dateKey] && meetingsData[dateKey].length > 0) || sessions.length > 0;
-                const hasLive = sessions.some(s => s.status === 'live');
-
-                return (
-                  <div
-                    key={dayNum}
-                    onClick={() => handleDayClick(dayNum)}
-                    className={`relative aspect-square flex flex-col items-center justify-center transition-all rounded-[1.25rem] m-1 cursor-pointer
-                        ${isToday ? 'bg-[#c2f575] text-[#1A1A4E] shadow-[0_10px_30px_rgba(194,245,117,0.4)]' : 'text-gray-500 hover:bg-gray-50'}
-                      `}
-                  >
-                    <span className="text-sm font-black">{dayNum}</span>
-                    {hasEvent && !isToday && (
-                      <div className={`absolute bottom-2 w-1.5 h-1.5 rounded-full ${hasLive ? 'bg-red-500 animate-pulse' : 'bg-indigo-500'}`} />
-                    )}
+            <div className="xl:col-span-4 space-y-8">
+              <div className="bg-white rounded-[4rem] p-10 border border-gray-100 shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between mb-10 px-4">
+                  <span className="text-2xl font-black text-[#1A1A4E] tracking-tighter">{monthName} {year}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronLeft size={20} /></button>
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronRight size={20} /></button>
                   </div>
-                );
-              })}
-            </div>
-            <div className="mt-10 p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-              <div className="flex items-center gap-4 mb-2">
-                <div className="p-2 bg-white rounded-xl text-[#c2f575] shadow-sm"><Zap size={18} fill="currentColor" /></div>
-                <p className="text-[11px] font-black text-[#1A1A4E] uppercase tracking-widest">Growth Tip</p>
+                </div>
+                <div className="grid grid-cols-7 gap-y-2 text-center mb-4">
+                  {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map(day => (
+                    <div key={day} className="text-[10px] font-black text-gray-300 uppercase tracking-widest py-3">{day}</div>
+                  ))}
+                  {Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`} className="p-2" />)}
+                  {Array.from({ length: daysCount }, (_, i) => {
+                    const dayNum = i + 1;
+                    const dateKey = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
+                    const isToday = isThisMonth && today.getDate() === dayNum;
+                    const sessions = getSessionsForDay(dayNum);
+                    const hasEvent = (meetingsData[dateKey] && meetingsData[dateKey].length > 0) || sessions.length > 0;
+                    const hasLive = sessions.some(s => s.status === 'live');
+
+                    return (
+                      <div
+                        key={dayNum}
+                        onClick={() => handleDayClick(dayNum)}
+                        className={`relative aspect-square flex flex-col items-center justify-center transition-all rounded-[1.25rem] m-1 cursor-pointer
+                            ${isToday ? 'bg-[#c2f575] text-[#1A1A4E] shadow-[0_10px_30px_rgba(194,245,117,0.4)]' : 'text-gray-500 hover:bg-gray-50'}
+                          `}
+                      >
+                        <span className="text-sm font-black">{dayNum}</span>
+                        {hasEvent && !isToday && (
+                          <div className={`absolute bottom-2 w-1.5 h-1.5 rounded-full ${hasLive ? 'bg-red-500 animate-pulse' : 'bg-indigo-500'}`} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-10 p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
+                  <div className="flex items-center gap-4 mb-2">
+                    <div className="p-2 bg-white rounded-xl text-[#c2f575] shadow-sm"><Zap size={18} fill="currentColor" /></div>
+                    <p className="text-[11px] font-black text-[#1A1A4E] uppercase tracking-widest">Growth Tip</p>
+                  </div>
+                  <p className="text-gray-400 text-sm font-medium leading-relaxed italic">
+                    Consistency is the language of mastery. Tag your daily goals on the calendar.
+                  </p>
+                </div>
               </div>
-              <p className="text-gray-400 text-sm font-medium leading-relaxed italic">
-                Consistency is the language of mastery. Tag your daily goals on the calendar.
-              </p>
             </div>
           </div>
-        </div>
-      </div>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {stats.map((stat, idx) => (
+              <div key={idx} className="bg-[#e9ecef]/60 p-6 rounded-[3rem] flex flex-col justify-center min-h-[180px] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 group">
+                <div className="bg-white p-8 rounded-[2.5rem] flex flex-col items-center justify-center shadow-inner text-center border border-gray-50 group-hover:border-[#c2f575]/30 transition-colors">
+                  <p className="text-5xl font-black text-[#1A1A4E] mb-2 tracking-tighter leading-none">{stat.value}</p>
+                  <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.3em]">{stat.label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
+            <div className="xl:col-span-8 space-y-8">
+              {upcomingLiveSessions.length > 0 ? (
+                <div className="bg-white rounded-[4rem] p-12 border border-gray-100 shadow-xl overflow-hidden relative">
+                  <div className="flex items-center justify-between mb-12">
+                    <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-5">
+                      <Radio className="text-red-500 animate-pulse" /> Scheduled Curriculum
+                    </h3>
+                    <div className="flex items-center gap-2 px-5 py-2 bg-red-50 text-red-600 rounded-full">
+                      <div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">{upcomingLiveSessions.length} Upcoming</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {upcomingLiveSessions.map((session, i) => (
+                      <div key={i} className="p-10 bg-gray-50/50 rounded-[3rem] border border-gray-100 group hover:bg-white hover:shadow-2xl transition-all duration-700">
+                        <div className="space-y-6">
+                          <LiveSessionStatus
+                            status="scheduled"
+                            startTime={session.startTime}
+                            className="bg-white"
+                          />
+                          <h4 className="text-xl font-black text-[#1A1A4E] leading-tight tracking-tighter group-hover:text-indigo-600 transition-colors">{session.title}</h4>
+                          <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{session.zoneTitle}</p>
+                        </div>
+                        <button
+                          disabled
+                          className="w-full mt-8 py-5 bg-white border border-gray-100 text-gray-300 rounded-[2rem] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3"
+                        >
+                          Access Code Locked
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-[4rem] p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
+                  {activeSessions.length > 0 ? (
+                    <div className="w-full">
+                      <div className="bg-[#1A1A4E] rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
+                        <div className="relative z-10 flex flex-col items-center justify-center gap-8 text-center">
+                          <LiveSessionStatus
+                            status="live"
+                            className="bg-red-500/10 border-red-500/20 text-[#c2f575]"
+                          />
+                          <div>
+                            <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">Live Broadcast Active</h3>
+                            <p className="text-white/60 font-medium text-lg italic">
+                              {activeSessions[0].title} is streaming now in {activeSessions[0].zoneTitle}.
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setActiveLiveRoom(activeSessions[0])}
+                            className="px-12 py-6 bg-[#c2f575] text-[#1A1A4E] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                          >
+                            Enter Room
+                          </button>
+                        </div>
+                        <div className="absolute top-0 right-0 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mb-10 text-gray-200">
+                        <CalendarIcon size={48} />
+                      </div>
+                      <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter mb-4">A Quiet Horizon</h3>
+                      <p className="text-gray-400 font-medium max-w-sm mx-auto leading-relaxed text-lg italic">
+                        No scheduled sessions found. Use this time to sharpen your skills or explore new zones.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="xl:col-span-4 space-y-8">
+              <div className="bg-white rounded-[4rem] p-10 border border-gray-100 shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between mb-10 px-4">
+                  <span className="text-2xl font-black text-[#1A1A4E] tracking-tighter">{monthName} {year}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronLeft size={20} /></button>
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronRight size={20} /></button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-7 gap-y-2 text-center mb-4">
+                  {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map(day => (
+                    <div key={day} className="text-[10px] font-black text-gray-300 uppercase tracking-widest py-3">{day}</div>
+                  ))}
+                  {Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`} className="p-2" />)}
+                  {Array.from({ length: daysCount }, (_, i) => {
+                    const dayNum = i + 1;
+                    const dateKey = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
+                    const isToday = isThisMonth && today.getDate() === dayNum;
+                    const sessions = getSessionsForDay(dayNum);
+                    const hasEvent = (meetingsData[dateKey] && meetingsData[dateKey].length > 0) || sessions.length > 0;
+                    const hasLive = sessions.some(s => s.status === 'live');
+
+                    return (
+                      <div
+                        key={dayNum}
+                        onClick={() => handleDayClick(dayNum)}
+                        className={`relative aspect-square flex flex-col items-center justify-center transition-all rounded-[1.25rem] m-1 cursor-pointer
+                            ${isToday ? 'bg-[#c2f575] text-[#1A1A4E] shadow-[0_10px_30px_rgba(194,245,117,0.4)]' : 'text-gray-500 hover:bg-gray-50'}
+                          `}
+                      >
+                        <span className="text-sm font-black">{dayNum}</span>
+                        {hasEvent && !isToday && (
+                          <div className={`absolute bottom-2 w-1.5 h-1.5 rounded-full ${hasLive ? 'bg-red-500 animate-pulse' : 'bg-indigo-500'}`} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-10 p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
+                  <div className="flex items-center gap-4 mb-2">
+                    <div className="p-2 bg-white rounded-xl text-[#c2f575] shadow-sm"><Zap size={18} fill="currentColor" /></div>
+                    <p className="text-[11px] font-black text-[#1A1A4E] uppercase tracking-widest">Growth Tip</p>
+                  </div>
+                  <p className="text-gray-400 text-sm font-medium leading-relaxed italic">
+                    Consistency is the language of mastery. Tag your daily goals on the calendar.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div >
   );
 };

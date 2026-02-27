@@ -254,7 +254,10 @@ const ProductManagement: React.FC = () => {
                                         <h4 className="text-xl font-black text-[#040457] mb-2">{product.title}</h4>
                                         <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest mb-6">{product.type}</p>
                                         <div className="flex items-center justify-between pt-6 border-t border-gray-100">
-                                            <p className="text-2xl font-black text-[#040457]">{product.price} {product.currency}</p>
+                                            <p className="text-2xl font-black text-[#040457]">
+                                                {product.priceINR ? `₹${product.priceINR}` : ''} {product.priceUSD ? `/ $${product.priceUSD}` : ''}
+                                                {(!product.priceINR && !product.priceUSD) ? `${product.price} ${product.currency}` : ''}
+                                            </p>
                                             <button className="p-2 text-gray-300 hover:text-[#040457] transition-all"><ExternalLink size={18} /></button>
                                         </div>
                                     </div>
@@ -369,16 +372,12 @@ const ProductManagement: React.FC = () => {
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Price</label>
-                                    <input type="text" value={editingProduct.price} onChange={e => setEditingProduct({ ...editingProduct, price: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Price (USD Tier)</label>
+                                    <input type="number" value={editingProduct.priceUSD || ''} onChange={e => setEditingProduct({ ...editingProduct, priceUSD: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
                                 </div>
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Currency</label>
-                                    <select value={editingProduct.currency} onChange={e => setEditingProduct({ ...editingProduct, currency: e.target.value as any })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all appearance-none cursor-pointer">
-                                        <option value="INR">INR</option>
-                                        <option value="USD">USD</option>
-                                        <option value="EUR">EUR</option>
-                                    </select>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Price (INR Tier)</label>
+                                    <input type="number" value={editingProduct.priceINR || ''} onChange={e => setEditingProduct({ ...editingProduct, priceINR: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
                                 </div>
                             </div>
                             <div className="space-y-3">

@@ -56,6 +56,9 @@ const Inbox: React.FC = () => {
   const [messageText, setMessageText] = useState('');
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [mutualFollowers, setMutualFollowers] = useState<any[]>([]);
+  const [loadingMutuals, setLoadingMutuals] = useState(false);
+  const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
 
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -63,6 +66,8 @@ const Inbox: React.FC = () => {
 
   const addMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileUploadRef = useRef<HTMLInputElement>(null);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -125,6 +130,48 @@ const Inbox: React.FC = () => {
 
     return () => unsubscribeChats();
   }, [user]);
+
+  // Fetch mutual followers when create group modal opens
+  useEffect(() => {
+    const fetchMutuals = async () => {
+      if (!showCreateGroup || !user) return;
+      setLoadingMutuals(true);
+      try {
+        const followingSnap = await getDocs(query(collection(db, 'followers'), where('followerId', '==', user.uid)));
+        const followingIds = followingSnap.docs.map(d => d.data().followingId);
+
+        if (followingIds.length === 0) {
+          setMutualFollowers([]);
+          setLoadingMutuals(false);
+          return;
+        }
+
+        const followersSnap = await getDocs(query(collection(db, 'followers'), where('followingId', '==', user.uid)));
+        const followerIds = followersSnap.docs.map(d => d.data().followerId);
+
+        const mutualIds = followingIds.filter(id => followerIds.includes(id));
+
+        if (mutualIds.length === 0) {
+          setMutualFollowers([]);
+          setLoadingMutuals(false);
+          return;
+        }
+
+        const usersData: any[] = [];
+        for (let i = 0; i < mutualIds.length; i += 10) {
+          const chunk = mutualIds.slice(i, i + 10);
+          const usersQ = query(collection(db, 'users'), where('__name__', 'in', chunk));
+          const usersSnap = await getDocs(usersQ);
+          usersSnap.forEach(d => usersData.push({ id: d.id, ...d.data() }));
+        }
+        setMutualFollowers(usersData);
+      } catch (e) {
+        console.error("Error fetching mutuals", e);
+      }
+      setLoadingMutuals(false);
+    };
+    fetchMutuals();
+  }, [showCreateGroup, user]);
 
   // Handle creating/finding chat when targetUserId is present
   useEffect(() => {
@@ -253,18 +300,56 @@ const Inbox: React.FC = () => {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
                 <input type="text" placeholder="Search mutual followers..." className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 font-bold text-indigo-900 focus:outline-none" />
               </div>
-              <div className="space-y-4 max-h-60 overflow-y-auto">
-                {[1, 2].map(i => (
-                  <div key={i} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-                    <div className="flex items-center gap-4">
-                      <img src={`https://picsum.photos/seed/fol${i}/40/40`} className="w-10 h-10 rounded-xl" alt="" />
-                      <p className="text-sm font-black text-indigo-900">User Alpha {i}</p>
-                    </div>
-                    <button className="p-2 bg-[#c2f575] text-indigo-900 rounded-xl"><Plus size={16} /></button>
+              <div className="space-y-4 max-h-60 overflow-y-auto custom-scrollbar">
+                {loadingMutuals ? (
+                  <div className="flex justify-center py-6">
+                    <div className="w-6 h-6 border-2 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
                   </div>
-                ))}
+                ) : mutualFollowers.length > 0 ? (
+                  mutualFollowers.map(mUser => (
+                    <div key={mUser.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+                      <div className="flex items-center gap-4">
+                        <img src={mUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mUser.id}`} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                        <p className="text-sm font-black text-indigo-900">{mUser.name}</p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedForGroup(prev => prev.includes(mUser.id) ? prev.filter(id => id !== mUser.id) : [...prev, mUser.id])}
+                        className={`p-2 rounded-xl transition-colors ${selectedForGroup.includes(mUser.id) ? 'bg-indigo-900 text-white' : 'bg-[#c2f575] text-indigo-900'}`}
+                      >
+                        {selectedForGroup.includes(mUser.id) ? <CheckCheck size={16} /> : <Plus size={16} />}
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No Mutual Followers</p>
+                  </div>
+                )}
               </div>
-              <button className="w-full py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Create Group</button>
+              <button
+                disabled={selectedForGroup.length === 0}
+                onClick={async () => {
+                  try {
+                    await addDoc(collection(db, 'conversations'), {
+                      type: 'collaboration',
+                      participants: [user?.uid, ...selectedForGroup],
+                      createdAt: serverTimestamp(),
+                      lastMessage: 'Group created',
+                      lastMessageTime: serverTimestamp(),
+                      unreadCounts: {},
+                      name: 'New Collab Group', // Users can edit this later
+                      avatar: 'https://picsum.photos/seed/collab/80/80',
+                    });
+                    setShowCreateGroup(false);
+                    setSelectedForGroup([]);
+                  } catch (e) {
+                    console.error("Error creating group", e);
+                  }
+                }}
+                className="w-full py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl disabled:opacity-50"
+              >
+                Create Group {selectedForGroup.length > 0 && `(${selectedForGroup.length})`}
+              </button>
             </div>
           </div>
         </div>
@@ -364,7 +449,10 @@ const Inbox: React.FC = () => {
           <div className="flex-1 flex flex-col animate-in slide-in-from-right-4 duration-500">
             <div className="px-12 py-8 flex items-center justify-between border-b border-gray-50 bg-white sticky top-0 z-30">
               <div className="flex items-center gap-6">
-                <div className="relative">
+                <div
+                  className="relative cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => navigate(`/profile/${activeChat.otherUser?.uid || activeChat.id}`)}
+                >
                   <img src={activeChat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={activeChat.name} className="w-14 h-14 rounded-2xl object-cover shadow-xl" />
                   {activeChat.online && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#7cc142] border-[3px] border-white rounded-full"></div>}
                 </div>
@@ -376,13 +464,19 @@ const Inbox: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <button className="w-12 h-12 flex items-center justify-center hover:bg-gray-50 rounded-2xl text-indigo-900 transition-all border border-gray-100 shadow-sm bg-white">
-                  <Phone size={20} />
-                </button>
-                <button className="w-12 h-12 flex items-center justify-center hover:bg-gray-50 rounded-2xl text-gray-300 hover:text-indigo-900 transition-all bg-white border border-gray-50">
+              <div className="flex items-center gap-3 relative">
+                <button
+                  onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                  className="w-12 h-12 flex items-center justify-center hover:bg-gray-50 rounded-2xl text-gray-400 hover:text-indigo-900 transition-all bg-white border border-gray-100 shadow-sm relative z-40"
+                >
                   <MoreVertical size={20} />
                 </button>
+                {showOptionsMenu && (
+                  <div className="absolute top-14 right-0 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 p-2 z-50 w-48 animate-in slide-in-from-top-2">
+                    <button onClick={() => { setShowOptionsMenu(false); navigate(`/profile/${activeChat.otherUser?.uid || activeChat.id}`); }} className="w-full text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-indigo-900 hover:bg-gray-50 rounded-xl transition-colors">View Profile</button>
+                    <button onClick={() => { setShowOptionsMenu(false); alert("Options menu active."); }} className="w-full text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 rounded-xl transition-colors mt-1">Block User</button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -424,12 +518,15 @@ const Inbox: React.FC = () => {
                     <div className="absolute bottom-full left-0 mb-6 w-64 bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 p-4 z-50 animate-in slide-in-from-bottom-4 duration-300">
                       <p className="px-5 py-3 text-[9px] font-black text-indigo-900/30 uppercase tracking-[0.25em] border-b border-gray-50 mb-3">Attach Resource</p>
                       <div className="space-y-2">
+                        <input type="file" ref={fileUploadRef} className="hidden" accept="application/pdf, image/*" onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) alert(`Selected file: ${file.name} (Valid PDF/Image)`);
+                          setShowAddMenu(false);
+                        }} />
                         {[
-                          { label: 'Cloud Documents', icon: <FileText size={20} />, color: 'text-orange-500', bg: 'bg-orange-50' },
-                          { label: 'Capture & Send', icon: <Camera size={20} />, color: 'text-red-500', bg: 'bg-red-50' },
-                          { label: 'Contact Node', icon: <UserPlus size={20} />, color: 'text-purple-500', bg: 'bg-purple-50' }
+                          { label: 'Upload PDF / Image', icon: <FileText size={20} />, color: 'text-orange-500', bg: 'bg-orange-50', onClick: () => fileUploadRef.current?.click() },
                         ].map((opt) => (
-                          <button key={opt.label} className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest text-indigo-900 transition-all group">
+                          <button key={opt.label} onClick={opt.onClick} className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest text-indigo-900 transition-all group">
                             <div className={`w-10 h-10 rounded-2xl ${opt.bg} ${opt.color} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>{opt.icon}</div>
                             {opt.label}
                           </button>

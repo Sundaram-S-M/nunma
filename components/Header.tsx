@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
+import PayoutSetupModal from './PayoutSetupModal';
 
 interface HeaderProps {
   onToggleRole: () => void;
@@ -18,6 +19,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
   const { user, logout } = useAuth();
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -104,8 +106,12 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
                   <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Switch to {user.role === UserRole.STUDENT ? 'Tutor' : 'Student'}</span>
                   <button
                     onClick={() => {
-                      onToggleRole();
                       setShowProfileMenu(false);
+                      if (user.role === UserRole.STUDENT && !user.bankingDetailsProvided) {
+                        setShowPayoutModal(true);
+                      } else {
+                        onToggleRole();
+                      }
                     }}
                     className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-300 shadow-inner ${user.role === UserRole.TUTOR ? 'bg-[#c2f575]' : 'bg-gray-200'}`}
                   >
@@ -123,6 +129,16 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
           </div>
         )}
       </div>
+
+      {showPayoutModal && (
+        <PayoutSetupModal
+          onClose={() => setShowPayoutModal(false)}
+          onComplete={() => {
+            setShowPayoutModal(false);
+            onToggleRole();
+          }}
+        />
+      )}
     </header>
   );
 };

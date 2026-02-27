@@ -12,7 +12,7 @@ service cloud.firestore {
       
       // Allow access to subcollections like enrollments
       match /{allSubcollections=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;+
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
 
@@ -39,6 +39,10 @@ service cloud.firestore {
       }
       
       // Exam results
+      match /exams/{examId} {
+        allow read, write: if request.auth != null;
+      }
+
       match /exam_results/{resultId} {
         allow read: if request.auth != null && (request.auth.uid == resource.data.studentId || get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy == request.auth.uid);
         allow create: if request.auth != null;

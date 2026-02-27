@@ -27,7 +27,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ zoneId, sessionId, isOpen, on
     useEffect(() => {
         if (!zoneId || !sessionId) return;
 
-        const messagesRef = collection(db, `zones/${zoneId}/sessions/${sessionId}/messages`);
+        const messagesRef = collection(db, `zones/${zoneId}/messages`);
         const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -51,7 +51,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ zoneId, sessionId, isOpen, on
         if (!newMessage.trim() || !user) return;
 
         try {
-            await addDoc(collection(db, `zones/${zoneId}/sessions/${sessionId}/messages`), {
+            await addDoc(collection(db, `zones/${zoneId}/messages`), {
                 text: newMessage,
                 senderId: user.uid,
                 senderName: user.displayName || 'Anonymous',
@@ -86,8 +86,8 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ zoneId, sessionId, isOpen, on
                                 <span className="text-[10px] font-bold text-gray-400">{msg.senderName}</span>
                             </div>
                             <div className={`p-3 rounded-2xl max-w-[85%] text-sm font-medium leading-relaxed ${isMe
-                                    ? 'bg-primary text-secondary rounded-tr-none'
-                                    : 'bg-white/10 text-white rounded-tl-none border border-white/5'
+                                ? 'bg-primary text-secondary rounded-tr-none'
+                                : 'bg-white/10 text-white rounded-tl-none border border-white/5'
                                 }`}>
                                 {msg.text}
                             </div>

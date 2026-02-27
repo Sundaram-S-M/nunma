@@ -51,7 +51,8 @@ const ListProductFlow: React.FC = () => {
 
     // Step 3: Product Details
     const [productTitle, setProductTitle] = useState('');
-    const [productPrice, setProductPrice] = useState('');
+    const [productPriceUSD, setProductPriceUSD] = useState('');
+    const [productPriceINR, setProductPriceINR] = useState('');
     const [productDescription, setProductDescription] = useState('');
     const [productDuration, setProductDuration] = useState('60');
     const [faqs, setFaqs] = useState<{ q: string, a: string }[]>([{ q: '', a: '' }]);
@@ -170,8 +171,8 @@ const ListProductFlow: React.FC = () => {
 
     const handleLaunch = async () => {
         if (!user) return;
-        if (!productTitle || !productPrice) {
-            alert("Please fill in the product title and price.");
+        if (!productTitle || !productPriceUSD || !productPriceINR) {
+            alert("Please fill in the product title and distinct tier prices (USD and INR).");
             return;
         }
         setIsLoading(true);
@@ -189,12 +190,12 @@ const ListProductFlow: React.FC = () => {
             await addDoc(collection(db, 'products'), {
                 tutorId: user.uid,
                 title: productTitle,
-                price: productPrice,
+                priceUSD: productPriceUSD,
+                priceINR: productPriceINR,
                 description: productDescription,
                 duration: productDuration,
                 faqs: faqs.filter(f => f.q && f.a),
                 type: 'mentorship',
-                currency: 'INR',
                 createdAt: serverTimestamp()
             });
 
@@ -424,15 +425,26 @@ const ListProductFlow: React.FC = () => {
                                         />
                                     </div>
                                     <div className="space-y-4">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Price (INR)</label>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Price (USD Tier)</label>
                                         <input
                                             type="number"
-                                            placeholder="500"
-                                            value={productPrice}
-                                            onChange={(e) => setProductPrice(e.target.value)}
+                                            placeholder="10"
+                                            value={productPriceUSD}
+                                            onChange={(e) => setProductPriceUSD(e.target.value)}
                                             className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
                                         />
                                     </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Price (INR Tier)</label>
+                                    <input
+                                        type="number"
+                                        placeholder="500"
+                                        value={productPriceINR}
+                                        onChange={(e) => setProductPriceINR(e.target.value)}
+                                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                                    />
                                 </div>
 
                                 <div className="space-y-4">

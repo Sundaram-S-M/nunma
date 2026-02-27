@@ -32,6 +32,7 @@ import {
   Share2,
   LogOut,
   ArrowRight,
+  Upload,
   Calendar
 } from 'lucide-react';
 import ClassroomStream from '../components/ClassroomStream';
@@ -62,8 +63,14 @@ const StudentZoneView: React.FC = () => {
   const [isExamTerminated, setIsExamTerminated] = useState(false);
   const [showExamRules, setShowExamRules] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'off' | 'on' | 'denied'>('off');
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [postExamTimer, setPostExamTimer] = useState<number | null>(null);
+  const [uploadedAnswerFiles, setUploadedAnswerFiles] = useState<File | null>(null);
   const [curriculum, setCurriculum] = useState<any[]>([]);
   const [studentData, setStudentData] = useState<any>(null);
+  const [examEndTime, setExamEndTime] = useState<Date | null>(null);
+  const [examTimeRemaining, setExamTimeRemaining] = useState<number | null>(null);
 
   const { user: authUser } = useAuth();
 
@@ -244,7 +251,7 @@ const StudentZoneView: React.FC = () => {
 
   // Cheating Detection: Window Blur
   useEffect(() => {
-    if (activeExam && !isExamTerminated) {
+    if (activeExam && !isExamTerminated && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq')) {
       const handleBlur = async () => {
         let newWarningCount = 0;
         setExamWarnings(prev => {
@@ -281,14 +288,23 @@ const StudentZoneView: React.FC = () => {
     setExamAnswers({});
     setExamWarnings(0);
     setIsExamTerminated(false);
-    setCameraStatus('on'); // Mock camera start
+    setCameraStatus(exam.type === 'online-test' ? 'on' : 'off');
+    setShowExamRules(false);
+
+    const now = new Date();
+    // Use exam duration or default to 30 mins
+    const durationMins = exam.duration || 30;
+    const endTime = new Date(now.getTime() + durationMins * 60000);
+    setExamEndTime(endTime);
 
     // Persist to Firestore
     if (zoneId && studentData) {
       try {
         await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
           activeExamId: exam.id,
-          currentExamWarnings: 0
+          currentExamWarnings: 0,
+          examStartedAt: now.toISOString(),
+          examEndsAt: endTime.toISOString()
         });
       } catch (e) {
         console.error("Failed to sync exam start", e);
@@ -296,9 +312,48 @@ const StudentZoneView: React.FC = () => {
     }
   };
 
-  const handleTerminateExam = async (status: 'passed' | 'failed') => {
-    setIsExamTerminated(true);
+  // Exam Timer Logic
+  useEffect(() => {
+    if (!activeExam || !examEndTime || isExamTerminated) return;
+
+    const timer = setInterval(() => {
+      const now = new Date();
+      const remainingMs = examEndTime.getTime() - now.getTime();
+
+      if (remainingMs <= 0) {
+        clearInterval(timer);
+        setExamTimeRemaining(0);
+        alert("Time is up! Your exam is being automatically submitted.");
+
+        if (activeExam.type === 'online-test') {
+          handleTerminateExam('ongoing');
+        } else {
+          handleSubmitExam(); // Auto-submit MCQ
+        }
+      } else {
+        setExamTimeRemaining(Math.ceil(remainingMs / 1000));
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeExam, examEndTime, isExamTerminated]);
+
+  const formatTime = (seconds: number | null) => {
+    if (seconds === null) return "00:00";
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleTerminateExam = async (status: 'passed' | 'failed' | 'ongoing') => {
     if (!zoneId || !activeExam || !studentData) return;
+
+    if (activeExam.type === 'online-test') {
+      // Start 20-minute upload countdown instead of immediate fail/pass
+      setPostExamTimer(20 * 60);
+      alert("Time is up! You have 20 minutes to scan and upload your answer sheet as a PDF.");
+      return;
+    }
 
     const result = {
       examId: activeExam.id,
@@ -326,10 +381,19 @@ const StudentZoneView: React.FC = () => {
 
     setActiveExam(null);
     setCameraStatus('off');
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+      setVideoStream(null);
+    }
   };
 
   const handleSubmitExam = () => {
-    // Basic scoring
+    if (activeExam.type === 'online-test') {
+      handleTerminateExam('ongoing');
+      return;
+    }
+
+    // Basic scoring for MCQ
     let score = 0;
     activeExam.questions.forEach((q: any) => {
       if (examAnswers[q.id] === q.correctAnswer) score++;
@@ -340,6 +404,89 @@ const StudentZoneView: React.FC = () => {
     handleTerminateExam(status);
     alert(`Exam submitted! Your score: ${finalMarks}/${activeExam.maxMark}. Status: ${status}`);
   };
+
+  const handleUploadAnswerSheet = async () => {
+    if (!uploadedAnswerFiles || !zoneId || !activeExam || !studentData) return;
+    // Mock upload logic
+    alert(`Uploading ${uploadedAnswerFiles.name}... Success!`);
+
+    const result = {
+      examId: activeExam.id,
+      studentId: authUser?.uid || 'anon',
+      studentName: authUser?.name || 'Anonymous',
+      marks: 0, // Pending grading
+      status: 'ongoing',
+      warnings: examWarnings,
+      completedAt: new Date().toISOString(),
+      answerSheetUrl: URL.createObjectURL(uploadedAnswerFiles) // Mock URL
+    };
+
+    try {
+      await addDoc(collection(db, 'zones', zoneId, 'exam_results'), result);
+      await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
+        activeExamId: null,
+        currentExamWarnings: 0
+      });
+      setExamResults(prev => [...prev, { id: 'temp-' + Date.now(), ...result }]);
+      setPostExamTimer(null);
+      setActiveExam(null);
+      setCameraStatus('off');
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        setVideoStream(null);
+      }
+      alert("Answer sheet submitted successfully. Awaiting grading.");
+    } catch (e) {
+      console.error("Failed to save exam result", e);
+      alert("Failed to submit exam result. Please try again.");
+    }
+  };
+
+  useEffect(() => {
+    if (postExamTimer !== null && postExamTimer > 0) {
+      const timerId = setInterval(() => setPostExamTimer(p => p !== null ? p - 1 : null), 1000);
+      return () => clearInterval(timerId);
+    } else if (postExamTimer === 0) {
+      alert("Upload time has expired. Exam marked as failed.");
+      // Ideally push a failed result here
+      setPostExamTimer(null);
+      setActiveExam(null);
+      setCameraStatus('off');
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        setVideoStream(null);
+      }
+    }
+  }, [postExamTimer]);
+
+  useEffect(() => {
+    if (cameraStatus === 'on') {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+          setVideoStream(stream);
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        })
+        .catch(err => {
+          console.error("Error accessing media devices.", err);
+          setCameraStatus('denied');
+          alert("Camera/Mic access is required for this exam mode.");
+        });
+    } else {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        setVideoStream(null);
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [cameraStatus]);
 
   const toggleChapter = (id: string) => {
     setExpandedChapters(prev =>
@@ -601,8 +748,8 @@ const StudentZoneView: React.FC = () => {
                   return (
                     <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-8 shadow-sm hover:shadow-2xl transition-all group">
                       <div className="flex justify-between items-start">
-                        <div className={`p-5 rounded-3xl ${exam.type === 'online' ? 'bg-indigo-50 text-indigo-600' : 'bg-green-50 text-green-600'}`}>
-                          {exam.type === 'online' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
+                        <div className={`p-5 rounded-3xl ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-green-50 text-green-600'}`}>
+                          {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
                         </div>
                         {result ? (
                           <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${result.status === 'passed' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
@@ -637,9 +784,23 @@ const StudentZoneView: React.FC = () => {
                           </div>
                         </div>
                       ) : (
-                        exam.type === 'online' && exam.status === 'UPCOMING' && (
-                          <button onClick={() => setShowExamRules(true)} className="w-full py-5 bg-[#1A1A4E] text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
-                        )
+                        (exam.type === 'online-test' || exam.type === 'online-mcq') && exam.status === 'UPCOMING' ? (
+                          <button onClick={() => {
+                            updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), { activeExamId: exam.id });
+                            setShowExamRules(true);
+                          }} className="w-full py-5 bg-[#1A1A4E] text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
+                        ) : exam.type === 'offline' && exam.status === 'UPCOMING' ? (
+                          <div className="space-y-4">
+                            <a href={exam.excelTemplateUrl || '#'} download className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-200 transition-all flex items-center justify-center gap-2">
+                              <FileDown size={16} /> Download Template
+                            </a>
+                            <p className="text-center text-[10px] text-gray-400 font-bold px-2">Fill the template and upload it back here during the exam window.</p>
+                            <label className="w-full py-4 bg-[#c2f575] text-indigo-900 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xl">
+                              <Upload size={16} /> Upload Answers
+                              <input type="file" className="hidden" accept=".xlsx, .pdf" onChange={() => alert("File uploaded successfully. Awaiting grading.")} />
+                            </label>
+                          </div>
+                        ) : null
                       )}
                     </div>
                   );
@@ -926,7 +1087,12 @@ const StudentZoneView: React.FC = () => {
             </div>
             <div className="flex gap-4">
               <button onClick={() => setShowExamRules(false)} className="flex-1 py-5 bg-gray-50 text-gray-300 rounded-3xl font-black uppercase text-[10px] tracking-widest">Decline</button>
-              <button onClick={() => { setShowExamRules(false); handleStartExam(exams[0]); }} className="flex-[2] py-5 bg-[#1A1A4E] text-white rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-2xl">Acknowledge & Start</button>
+              <button
+                onClick={() => handleStartExam(exams.find(e => e.id === studentData?.activeExamId) || exams[0])}
+                className="flex-[2] py-5 bg-[#1A1A4E] text-white rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-2xl"
+              >
+                Acknowledge & Start
+              </button>
             </div>
           </div>
         </div>
@@ -1005,17 +1171,29 @@ const StudentZoneView: React.FC = () => {
 
             <div className="w-[350px] space-y-8 flex flex-col">
               <div className="bg-black rounded-[3rem] aspect-video relative overflow-hidden shadow-2xl">
-                <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-[8px] font-black text-white uppercase tracking-widest shadow-lg">
+                <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-[8px] font-black text-white uppercase tracking-widest shadow-lg z-10">
                   <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
                   Live Feed
                 </div>
-                {/* Mock Camera Feed */}
-                <div className="w-full h-full flex items-center justify-center bg-gray-900">
-                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center px-10 leading-relaxed italic">
-                    Biometric stream active. <br /> Face detected: YES
-                  </p>
-                </div>
-                <div className="absolute bottom-4 right-4 text-white p-2 bg-black/40 backdrop-blur-md rounded-lg">
+                {cameraStatus === 'on' ? (
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 text-center px-4">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-relaxed italic mb-2">
+                      Camera processing...
+                    </p>
+                    {cameraStatus === 'denied' && (
+                      <p className="text-xs font-bold text-red-500 uppercase">Access Denied</p>
+                    )}
+                  </div>
+                )}
+                <div className="absolute bottom-4 right-4 text-white p-2 bg-black/40 backdrop-blur-md rounded-lg z-10">
                   <Camera size={20} />
                 </div>
               </div>
@@ -1026,13 +1204,46 @@ const StudentZoneView: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="text-xl font-black text-[#1A1A4E] mb-2 uppercase tracking-tight">Time Remaining</h4>
-                  <p className="text-4xl font-black text-[#1A1A4E]">29:45</p>
+                  <p className="text-4xl font-black text-[#1A1A4E] tabular-nums">{formatTime(examTimeRemaining)}</p>
                 </div>
                 <div className="pt-8 border-t border-gray-50 text-[10px] font-black text-gray-300 uppercase tracking-widest leading-relaxed">
                   Your session will auto-submit <br /> when the timer reaches zero.
                 </div>
+                {activeExam.type === 'online-test' && (
+                  <div className="mt-8">
+                    <button onClick={handleSubmitExam} className="w-full py-5 bg-red-500 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">End Exam Now</button>
+                  </div>
+                )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post Exam Timer Modal for Online Test */}
+      {postExamTimer !== null && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-in zoom-in-95 duration-500">
+          <div className="bg-white rounded-[3rem] max-w-lg w-full p-12 text-center shadow-2xl border border-white/10">
+            <div className="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
+              <Clock size={48} />
+            </div>
+            <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tight mb-4">Exam Concluded</h3>
+            <p className="text-gray-500 font-medium mb-8">Scan your answer sheets and upload them as a single PDF. You have strictly 20 minutes before submissions are locked.</p>
+            <div className="text-6xl font-black text-red-500 mb-10 tracking-tighter tabular-nums">
+              {Math.floor(postExamTimer / 60).toString().padStart(2, '0')}:{(postExamTimer % 60).toString().padStart(2, '0')}
+            </div>
+            <label className="w-full py-6 bg-gray-50 border-2 border-dashed border-gray-300 text-indigo-900 rounded-3xl font-black uppercase text-[11px] tracking-widest hover:border-indigo-500 hover:bg-indigo-50 transition-all flex flex-col items-center justify-center gap-3 cursor-pointer shadow-sm mb-6 h-32">
+              <Upload size={24} className="text-indigo-400" />
+              {uploadedAnswerFiles ? uploadedAnswerFiles.name : 'Select PDF Answer Sheet'}
+              <input type="file" accept=".pdf" className="hidden" onChange={(e) => e.target.files && setUploadedAnswerFiles(e.target.files[0])} />
+            </label>
+            <button
+              disabled={!uploadedAnswerFiles}
+              onClick={handleUploadAnswerSheet}
+              className="w-full py-6 bg-green-500 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              Submit Answers
+            </button>
           </div>
         </div>
       )}

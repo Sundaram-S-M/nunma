@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.generateLiveKitToken = exports.checkLiveKitConfig = void 0;
+exports.createMentorshipBooking = exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.generateLiveKitToken = exports.checkLiveKitConfig = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const livekit_server_sdk_1 = require("livekit-server-sdk");
@@ -365,6 +365,67 @@ exports.verifyOTPAndSignIn = functions.https.onCall(async (data) => {
         if (error instanceof functions.https.HttpsError)
             throw error;
         throw new functions.https.HttpsError("internal", error.message || "Failed to verify OTP.");
+    }
+});
+// --- SECURE BOOKING SYSTEM ---
+exports.createMentorshipBooking = functions.https.onCall(async (data, context) => {
+    if (!context.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { tutorId, productId, date, slotId, time, studentCountry } = data;
+    if (!tutorId || !productId || !date || !slotId) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing required fields.");
+    }
+    try {
+        const db = admin.firestore();
+        const productSnap = await db.collection('products').doc(productId).get();
+        if (!productSnap.exists) {
+            throw new functions.https.HttpsError("not-found", "Product not found.");
+        }
+        const productData = productSnap.data();
+        const priceUSD = productData.priceUSD || productData.price || '0';
+        const priceINR = productData.priceINR || productData.price || '0';
+        const tutorSnap = await db.collection('users').doc(tutorId).get();
+        const tutorData = tutorSnap.data() || {};
+        const tutorCountry = tutorData.country || 'IN'; // Assuming default to IN if not set
+        let finalPrice = priceUSD;
+        let currency = 'USD';
+        // Check distinct pricing tier
+        if (studentCountry === 'IN' && tutorCountry === 'IN') {
+            finalPrice = priceINR;
+            currency = 'INR';
+        }
+        const bookingData = {
+            productId: productId,
+            productTitle: productData.title,
+            tutorId: tutorId,
+            studentId: context.auth.uid,
+            studentName: context.auth.token.name || 'Student',
+            date: date,
+            slotId: slotId,
+            time: time,
+            status: 'confirmed',
+            price: finalPrice,
+            currency: currency,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        const bookingRef = await db.collection('bookings').add(bookingData);
+        await db.collection('users').doc(context.auth.uid).collection('enrollments').doc(productId).set({
+            productId: productId,
+            title: productData.title,
+            type: 'mentorship',
+            date: date,
+            enrolledAt: new Date().toISOString()
+        });
+        return {
+            success: true,
+            bookingId: bookingRef.id,
+            price: finalPrice,
+            currency: currency
+        };
+    }
+    catch (error) {
+        console.error("createMentorshipBooking error:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to create booking.");
     }
 });
 //# sourceMappingURL=index.js.map

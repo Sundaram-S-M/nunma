@@ -33,14 +33,35 @@ export interface Zone {
   createdAt: string;
   students: number;
   image: string;
+  landingPageConfig?: LandingPageConfig;
+  postSessionSurvey?: PostSessionSurveyConfig;
+}
+
+export interface LandingPageConfig {
+  paid: boolean;
+  paymentLink?: string;
+  enableCalendar: boolean;
+  emailSubject: string;
+  emailBody: string;
+  customFields: string[];
+}
+
+export interface PostSessionSurveyConfig {
+  enabled: boolean;
+  ratingSystem: boolean;
+  npsTracking: boolean;
+  feedbackText: boolean;
 }
 
 export interface Product {
   id: string;
   title: string;
   type: 'material' | 'service';
-  price: string;
-  currency: 'USD' | 'INR' | 'EUR';
+  price?: string; // Legacy
+  currency?: 'USD' | 'INR' | 'EUR'; // Legacy
+  priceUSD: string;
+  priceINR: string;
+  duration?: string;
   availability?: { day: string; time: string }[] | null;
   createdAt: string;
 }
@@ -52,6 +73,7 @@ export interface LiveSession {
   startTime: string; // ISO string
   duration: number; // minutes
   status: 'scheduled' | 'live' | 'ended';
+  coHosts?: string[];
 }
 
 
@@ -72,7 +94,7 @@ export interface Question {
   correctAnswer: number; // Index of the correct option
 }
 
-export type ExamType = 'online' | 'offline';
+export type ExamType = 'online-test' | 'online-mcq' | 'offline';
 
 export interface Exam {
   id: string;
@@ -83,7 +105,9 @@ export interface Exam {
   type: ExamType;
   maxMark: number;
   minMark: number;
-  questions?: Question[]; // Only for online exams
+  questions?: Question[]; // Only for online-mcq
+  pdfUrl?: string; // For online-test or offline downlaod
+  excelTemplateUrl?: string; // For offline download
   status: 'scheduled' | 'active' | 'completed';
 }
 
@@ -96,6 +120,7 @@ export interface ExamResult {
   status: 'passed' | 'failed' | 'ongoing' | 'reported';
   warnings: number;
   completedAt?: string;
+  answerSheetUrl?: string; // URL to uploaded PDF (online-test) or Excel (offline)
 }
 
 export interface AttendanceHistory {

@@ -1,3 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
 /* LiveKit Branded Overrides */
 .lk-theme-navy {
   --lk-bg: #1A1A4E;

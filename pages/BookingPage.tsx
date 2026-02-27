@@ -92,7 +92,36 @@ const BookingPage: React.FC = () => {
     const getAvailableSlotsForDay = () => {
         const dayName = getDayName(selectedDate);
         const dayConfig = availability.find(d => d.day === dayName && d.active);
-        return dayConfig ? dayConfig.slots : [];
+        if (!dayConfig || !dayConfig.slots) return [];
+
+        let durationMinutes = parseInt(product?.duration) || 30;
+
+        const generatedSlots: any[] = [];
+
+        dayConfig.slots.forEach((block: any, idx: number) => {
+            let current = new Date(`1970-01-01T${block.start}:00`);
+            const end = new Date(`1970-01-01T${block.end}:00`);
+
+            let slotIndex = 0;
+            while (current < end) {
+                const next = new Date(current.getTime() + durationMinutes * 60000);
+                if (next > end) break; // Don't overflow the block
+
+                const startStr = current.toTimeString().slice(0, 5);
+                const endStr = next.toTimeString().slice(0, 5);
+
+                generatedSlots.push({
+                    id: `${block.id}-${idx}-${slotIndex}`,
+                    start: startStr,
+                    end: endStr
+                });
+
+                current = next;
+                slotIndex++;
+            }
+        });
+
+        return generatedSlots;
     };
 
     const handleContinue = () => {
@@ -137,7 +166,9 @@ const BookingPage: React.FC = () => {
                             <Video size={14} /> {product.duration || '30'} Min Session
                         </div>
                         <h1 className="text-5xl font-black tracking-tighter leading-tight text-indigo-900">{product.title}</h1>
-                        <p className="text-4xl font-black text-indigo-900/30">{product.price} {product.currency}</p>
+                        <p className="text-3xl font-black text-indigo-900/30">
+                            {product.priceINR ? `₹${product.priceINR} / $${product.priceUSD}` : `${product.price} ${product.currency}`}
+                        </p>
                     </div>
 
                     <div className="p-10 bg-white rounded-[3rem] border border-indigo-900/5 shadow-sm">
@@ -210,13 +241,14 @@ const BookingPage: React.FC = () => {
                                         key={slot.id}
                                         disabled={isBooked}
                                         onClick={() => setSelectedSlot(slot)}
-                                        className={`py-5 rounded-2xl font-black text-sm tracking-tight transition-all
+                                        className={`py-5 rounded-2xl font-black text-sm tracking-tight transition-all flex flex-col items-center justify-center gap-1
                       ${isBooked ? 'bg-gray-100 text-gray-300 cursor-not-allowed border-transparent' :
                                                 isSelected ? 'bg-[#c2f575] text-indigo-900 shadow-xl border-transparent scale-[1.02]' :
                                                     'bg-white text-indigo-900 border border-gray-100 hover:border-indigo-900/20'}
                     `}
                                     >
-                                        {slot.start}
+                                        <span>{slot.start}</span>
+                                        <span className="text-[10px] font-bold opacity-50 uppercase">{slot.end}</span>
                                     </button>
                                 );
                             }) : (

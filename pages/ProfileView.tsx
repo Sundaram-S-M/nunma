@@ -63,7 +63,8 @@ const ProfileHeader = ({
   editHeadline, setEditHeadline, editLocation, setEditLocation,
   isFollowing, handleFollow, bannerInputRef, handleFileChange,
   avatarInputRef, setIsEditing, handleSaveProfile,
-  setShowLinkedInModal, setShowProductModal, navigate
+  setShowLinkedInModal, setShowProductModal, navigate,
+  handleViewFollowers
 }: any) => (
   <div className="bg-[#1A1A4E] h-[480px] relative overflow-hidden flex flex-col justify-end pb-20">
     <div className="absolute inset-0 opacity-15">
@@ -144,10 +145,10 @@ const ProfileHeader = ({
               )}
             </div>
             <div className="flex gap-12 border-l border-white/10 pl-12">
-              <div className="flex flex-col items-center md:items-start">
+              <button onClick={handleViewFollowers} className="flex flex-col items-center md:items-start text-left hover:scale-105 transition-transform">
                 <p className="text-4xl font-black text-[#c2f575] leading-none mb-1">{profileUser.followersCount || 0}</p>
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200/50">Followers</p>
-              </div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200/50">{role === UserRole.TUTOR ? 'Students' : 'Followers'}</p>
+              </button>
               <div className="flex flex-col items-center md:items-start">
                 <p className="text-4xl font-black text-white leading-none mb-1">{profileUser.followingCount || 0}</p>
                 <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200/50">Following</p>
@@ -517,6 +518,12 @@ const ProfileView: React.FC = () => {
   const [isMe, setIsMe] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
 
+  // Followers Modal State
+  const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [followersList, setFollowersList] = useState<any[]>([]);
+  const [loadingFollowers, setLoadingFollowers] = useState(false);
+  const [profileUserFollowsMe, setProfileUserFollowsMe] = useState(false);
+
   // Layout & Tabs State
   const [activeTab, setActiveTab] = useState<string>('mentorship');
 
@@ -670,6 +677,55 @@ const ProfileView: React.FC = () => {
     }
   };
 
+  const handleViewFollowers = async () => {
+    if (!profileUser?.uid || !db || !currentUser) return;
+
+    setShowFollowersModal(true);
+    setLoadingFollowers(true);
+
+    try {
+      // If NOT me, verify mutual follow first
+      if (!isMe) {
+        const meFollowingThem = isFollowing;
+        const themFollowingMeSnap = await getDoc(doc(db, 'followers', `${profileUser.uid}_${currentUser.uid}`));
+        const themFollowingMe = themFollowingMeSnap.exists();
+
+        setProfileUserFollowsMe(themFollowingMe);
+
+        if (!meFollowingThem || !themFollowingMe) {
+          setFollowersList([]);
+          setLoadingFollowers(false);
+          return; // Block viewing if not mutual
+        }
+      }
+
+      const q = query(collection(db, 'followers'), where('followingId', '==', profileUser.uid));
+      const snap = await getDocs(q);
+
+      const followersIds = snap.docs.map(doc => doc.data().followerId);
+      if (followersIds.length === 0) {
+        setFollowersList([]);
+        setLoadingFollowers(false);
+        return;
+      }
+
+      // Fetch user details for each follower
+      const usersData: any[] = [];
+      // Split into chunks of 10 for 'in' queries
+      for (let i = 0; i < followersIds.length; i += 10) {
+        const chunk = followersIds.slice(i, i + 10);
+        const usersQ = query(collection(db, 'users'), where('__name__', 'in', chunk));
+        const usersSnap = await getDocs(usersQ);
+        usersSnap.forEach(d => usersData.push({ id: d.id, ...d.data() }));
+      }
+
+      setFollowersList(usersData);
+    } catch (e) {
+      console.error("Error fetching followers", e);
+    }
+    setLoadingFollowers(false);
+  };
+
   const handleListProduct = async () => {
     if (!productTitle || !productPrice || !currentUser || !db) return;
     setIsListingProduct(true);
@@ -802,6 +858,7 @@ const ProfileView: React.FC = () => {
         editLocation={editLocation} setEditLocation={setEditLocation} isFollowing={isFollowing} handleFollow={handleFollow}
         bannerInputRef={bannerInputRef} handleFileChange={handleFileChange} avatarInputRef={avatarInputRef}
         setIsEditing={setIsEditing} handleSaveProfile={handleSaveProfile} setShowLinkedInModal={setShowLinkedInModal} setShowProductModal={setShowProductModal} navigate={navigate}
+        handleViewFollowers={handleViewFollowers}
       />
 
       <div className="max-w-7xl mx-auto -mt-16 px-10 relative z-20">
@@ -887,6 +944,54 @@ const ProfileView: React.FC = () => {
               <button onClick={handleListProduct} disabled={isListingProduct} className="w-full py-7 bg-indigo-900 text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-70">
                 {isListingProduct ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div> : <>CONFIRM LISTING <ArrowRight size={20} className="text-[#c2f575]" /></>}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Followers Modal (Instagram Style) */}
+      {showFollowersModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 flex flex-col max-h-[80vh]">
+            <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30 shrink-0">
+              <div>
+                <h3 className="text-2xl font-black text-indigo-900">Followers</h3>
+                {(!isMe && !(isFollowing && profileUserFollowsMe)) ? (
+                  <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Mutual Followers Only</p>
+                ) : (
+                  <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">{followersList.length} total</p>
+                )}
+              </div>
+              <button onClick={() => setShowFollowersModal(false)} className="p-3 text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
+            </div>
+
+            <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
+              {(!isMe && !(isFollowing && profileUserFollowsMe)) ? (
+                <div className="text-center py-10 opacity-50">
+                  <p className="text-sm font-bold text-indigo-900">Private List</p>
+                  <p className="text-[10px] uppercase font-bold mt-2">You must mutually follow each <br />other to view connections.</p>
+                </div>
+              ) : loadingFollowers ? (
+                <div className="flex justify-center py-10">
+                  <div className="w-8 h-8 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : followersList.length > 0 ? (
+                <div className="space-y-4">
+                  {followersList.map(fUser => (
+                    <div key={fUser.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl cursor-pointer" onClick={() => { setShowFollowersModal(false); navigate(`/profile/${fUser.id}`); }}>
+                      <img src={fUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + fUser.id} className="w-12 h-12 rounded-xl object-cover" alt="" />
+                      <div>
+                        <p className="text-sm font-black text-indigo-900">{fUser.name}</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate w-48">{fUser.headline || 'Nunma User'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 opacity-50">
+                  <p className="text-sm font-bold text-indigo-900">No followers yet.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -4,7 +4,8 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CreditCard, ShieldCheck, Zap, Check, Globe, Video, Clock } from 'lucide-react';
 import { usePPPPrice } from '../hooks/usePPPPrice';
 import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../utils/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 
 const Payment: React.FC = () => {
@@ -42,84 +43,48 @@ const Payment: React.FC = () => {
         fetchItem();
     }, [zoneId, isMentorship]);
 
-    const basePrice = item ? item.price : '0';
+    const basePrice = item ? item.priceUSD || item.price || '0' : '0';
+    const basePriceINR = item ? item.priceINR || item.price || '0' : '0';
+
+    // We update usePPP logic purely for display here, and let backend do real final auth check.
     const { price, currency, isPPPApplied, originalPrice, countryCode, isLoading } = usePPPPrice(basePrice);
+
+    // For mentorship specifically, we know distinct tiers exist:
+    const displayPrice = isMentorship && countryCode === 'IN' && basePriceINR ? basePriceINR : price;
+    const displayCurrency = isMentorship && countryCode === 'IN' && basePriceINR ? 'INR' : currency;
+    const finalOriginalPrice = isMentorship && countryCode === 'IN' && basePriceINR ? null : originalPrice;
+
 
     const handlePayment = async () => {
         if (!user || !zoneId || !item) return;
         setIsProcessing(true);
 
         try {
-            if (db) {
-                if (isMentorship) {
-                    // MENTORSHIP BOOKING LOGIC
-                    await addDoc(collection(db, 'bookings'), {
-                        productId: zoneId,
-                        productTitle: item.title,
-                        tutorId: tutorId,
-                        studentId: user.uid,
-                        studentName: user.name || 'Student',
-                        date: bookingDate,
-                        slotId: slotId,
-                        time: bookingTime,
-                        status: 'confirmed',
-                        price: price,
-                        currency: currency,
-                        createdAt: serverTimestamp()
-                    });
+            if (!functions) throw new Error("Functions not initialized");
 
-                    // Add to student enrollments for record
-                    await setDoc(doc(db, 'users', user.uid, 'enrollments', zoneId), {
-                        productId: zoneId,
-                        title: item.title,
-                        type: 'mentorship',
-                        date: bookingDate,
-                        enrolledAt: new Date().toISOString()
-                    });
+            const createZohoCheckoutSession = httpsCallable(functions, 'createZohoCheckoutSession');
 
-                } else {
-                    // ZONE ENROLLMENT LOGIC (Existing)
-                    const studentData = {
-                        id: user.uid,
-                        name: user.name || 'Student',
-                        email: user.email,
-                        avatar: user.avatar || '',
-                        joinedAt: new Date().toISOString(),
-                        status: 'Active',
-                        engagementScore: 0,
-                        attendanceHistory: []
-                    };
-                    await setDoc(doc(db, 'zones', zoneId, 'students', user.uid), studentData);
+            const returnUrl = `${window.location.origin}${isMentorship ? '/dashboard' : `/classroom/zone/${zoneId}`}`;
 
-                    await setDoc(doc(db, 'users', user.uid, 'enrollments', zoneId), {
-                        zoneId: zoneId,
-                        enrolledAt: new Date().toISOString(),
-                        role: 'student'
-                    });
+            const result = await createZohoCheckoutSession({
+                productId: zoneId,
+                title: item.title,
+                amount: displayPrice,
+                currency: displayCurrency,
+                returnUrl: returnUrl
+            });
 
-                    const q = query(collection(db, 'conversations'), where('zoneId', '==', zoneId), limit(1));
-                    const snapshot = await getDocs(q);
-                    if (!snapshot.empty) {
-                        const convId = snapshot.docs[0].id;
-                        await updateDoc(doc(db, 'conversations', convId), {
-                            participants: arrayUnion(user.uid)
-                        });
-                    }
-                }
+            const data = result.data as any;
+
+            if (data.success && data.checkoutUrl) {
+                window.location.href = data.checkoutUrl;
             } else {
-                console.warn("Database not initialized");
-            }
-
-            setIsProcessing(false);
-            if (isMentorship) {
-                navigate('/dashboard');
-            } else {
-                navigate(`/classroom/zone/${zoneId}`);
+                throw new Error(data.message || "Failed to retrieve checkout URL");
             }
         } catch (error) {
             console.error("Payment failed:", error);
             setIsProcessing(false);
-            alert("Payment confirmation failed. Please try again.");
+            alert("Payment initiation failed. Please try again.");
         }
     };
 
@@ -165,15 +130,15 @@ const Payment: React.FC = () => {
                                         <span className="text-white/50 text-sm">Calculating regional price...</span>
                                     ) : (
                                         <>
-                                            {isPPPApplied && (
+                                            {isPPPApplied && finalOriginalPrice && (
                                                 <span className="block text-sm text-gray-400 line-through font-bold">
-                                                    ${originalPrice}
+                                                    ${finalOriginalPrice}
                                                 </span>
                                             )}
                                             <span className="text-3xl font-black text-[#c1e60d]">
-                                                {currency === 'USD' ? '$' : currency === 'INR' ? '₹' : currency} {price}
+                                                {displayCurrency === 'USD' ? '$' : displayCurrency === 'INR' ? '₹' : displayCurrency} {displayPrice}
                                             </span>
-                                            {isPPPApplied && (
+                                            {(isPPPApplied || (isMentorship && countryCode === 'IN')) && (
                                                 <div className="flex items-center gap-1 justify-end mt-1 text-[#c1e60d] text-[10px] uppercase font-black tracking-widest">
                                                     <Globe size={12} />
                                                     <span>PPP Applied ({countryCode})</span>

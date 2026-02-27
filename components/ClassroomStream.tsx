@@ -29,7 +29,7 @@ import '@livekit/components-styles';
 interface ClassroomStreamProps {
   sessionId: string;
   zoneId: string;
-  role: 'TUTOR' | 'STUDENT';
+  role: 'TUTOR' | 'STUDENT' | 'COHOST';
   onClose: () => void;
   title: string;
 }
@@ -134,7 +134,7 @@ const ClassroomStream: React.FC<ClassroomStreamProps> = ({ sessionId, zoneId, ro
         token={token}
         serverUrl={import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'}
         audio={true}
-        video={role === 'TUTOR'}
+        video={role === 'TUTOR' || role === 'COHOST'}
         connect={true}
         className="flex-1 flex flex-col relative"
         onDisconnected={onClose}
@@ -152,7 +152,7 @@ const ClassroomStream: React.FC<ClassroomStreamProps> = ({ sessionId, zoneId, ro
 };
 
 const ClassroomContent: React.FC<{
-  role: 'TUTOR' | 'STUDENT';
+  role: 'TUTOR' | 'STUDENT' | 'COHOST';
   title: string;
   sessionId: string;
   onClose: () => void;
@@ -210,7 +210,7 @@ const ClassroomContent: React.FC<{
           drawOnCanvas(data.action);
         } else if (data.type === 'whiteboard_toggle') {
           setShowWhiteboard(data.state);
-        } else if (data.type === 'sentiment_update' && role === 'TUTOR') {
+        } else if (data.type === 'sentiment_update' && (role === 'TUTOR' || role === 'COHOST')) {
           setSentimentData(prev => [...prev.slice(-19), { time: new Date().toLocaleTimeString(), confusion: data.score * 100 }]);
           if (data.score > 0.5) setNudge("Students might be confused. Try explaining again?");
         }
@@ -328,7 +328,7 @@ const ClassroomContent: React.FC<{
                 onClose={() => setIsChatOpen(false)}
               />
             </div>
-            {role === 'TUTOR' && sentimentData.length > 0 && (
+            {(role === 'TUTOR' || role === 'COHOST') && sentimentData.length > 0 && (
               <div className="p-6 border-t border-white/5 bg-[#040457]/40">
                 <ConfusionHeatmap data={sentimentData} />
               </div>
@@ -390,24 +390,27 @@ const ClassroomContent: React.FC<{
           <div className="h-24 bg-[#1A1A4E] border-t border-white/5 flex items-center justify-center gap-4 px-8 shrink-0 relative z-[100]">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => localParticipant.setMicrophoneEnabled(!localParticipant.isMicrophoneEnabled)}
-                className={`p-5 rounded-2xl transition-all ${!localParticipant.isMicrophoneEnabled ? 'bg-red-500 text-white animate-pulse' : 'bg-white/5 text-white hover:bg-white/10'}`}
+                onClick={() => localParticipant?.setMicrophoneEnabled(!localParticipant?.isMicrophoneEnabled)}
+                disabled={!localParticipant}
+                className={`p-5 rounded-2xl transition-all ${!localParticipant?.isMicrophoneEnabled ? 'bg-red-500 text-white animate-pulse' : 'bg-white/5 text-white hover:bg-white/10'} disabled:opacity-50`}
               >
-                {localParticipant.isMicrophoneEnabled ? <Mic size={24} /> : <MicOff size={24} />}
+                {localParticipant?.isMicrophoneEnabled ? <Mic size={24} /> : <MicOff size={24} />}
               </button>
 
               <button
-                onClick={() => localParticipant.setCameraEnabled(!localParticipant.isCameraEnabled)}
-                className={`p-5 rounded-2xl transition-all ${!localParticipant.isCameraEnabled ? 'bg-red-500 text-white' : 'bg-white/5 text-white hover:bg-white/10'}`}
+                onClick={() => localParticipant?.setCameraEnabled(!localParticipant?.isCameraEnabled)}
+                disabled={!localParticipant}
+                className={`p-5 rounded-2xl transition-all ${!localParticipant?.isCameraEnabled ? 'bg-red-500 text-white' : 'bg-white/5 text-white hover:bg-white/10'} disabled:opacity-50`}
               >
-                {localParticipant.isCameraEnabled ? <VideoIcon size={24} /> : <VideoOff size={24} />}
+                {localParticipant?.isCameraEnabled ? <VideoIcon size={24} /> : <VideoOff size={24} />}
               </button>
 
               <div className="w-[1px] h-8 bg-white/10 mx-2" />
 
               <button
-                onClick={() => localParticipant.setScreenShareEnabled(!localParticipant.isScreenShareEnabled)}
-                className={`p-5 rounded-2xl transition-all ${localParticipant.isScreenShareEnabled ? 'bg-[#c2f575] text-[#1A1A4E]' : 'bg-white/5 text-white hover:bg-white/10'}`}
+                onClick={() => localParticipant?.setScreenShareEnabled(!localParticipant?.isScreenShareEnabled)}
+                disabled={!localParticipant}
+                className={`p-5 rounded-2xl transition-all ${localParticipant?.isScreenShareEnabled ? 'bg-[#c2f575] text-[#1A1A4E]' : 'bg-white/5 text-white hover:bg-white/10'} disabled:opacity-50`}
               >
                 <Monitor size={24} />
               </button>

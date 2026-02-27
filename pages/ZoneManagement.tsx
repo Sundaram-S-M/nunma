@@ -48,13 +48,17 @@ import {
   Link,
   Copy,
   ExternalLink,
-  Search
+  Search,
+  Star,
+  Trophy
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
-
+import * as XLSX from 'xlsx';
+import PDFViewer from '../components/PDFViewer'; // Import added for grading
+import { QRCodeSVG } from 'qrcode.react';
 
 import { Student, AttendanceHistory, UserRole } from '../types';
 
@@ -70,13 +74,15 @@ interface Exam {
   title: string;
   date: string;
   time: string;
-  type: 'online' | 'offline';
+  type: 'online-test' | 'online-mcq' | 'offline';
   status: 'UPCOMING' | 'CONDUCTED';
   participants?: number;
   avgScore?: string;
   questions?: MCQ[];
   maxMark: number;
   minMark: number;
+  pdfUrl?: string;
+  excelTemplateUrl?: string;
 }
 
 interface ExamResult {
@@ -88,6 +94,7 @@ interface ExamResult {
   status: 'passed' | 'failed' | 'ongoing' | 'reported';
   warnings: number;
   completedAt?: string;
+  answerSheetUrl?: string;
 }
 
 interface Chapter {
@@ -130,9 +137,27 @@ interface AttendanceSession {
 const ZoneManagement: React.FC = () => {
   const { zoneId } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'attendance' | 'curriculum' | 'exams' | 'schedule' | 'students'>('exams');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'curriculum' | 'exams' | 'schedule' | 'students' | 'landing' | 'post-session'>('exams');
   const [view, setView] = useState<'management' | 'review' | 'grading'>('management');
   const [zone, setZone] = useState<any>(null);
+
+  // Landing Page State
+  const [lpPaid, setLpPaid] = useState(false);
+  const [lpPaymentLink, setLpPaymentLink] = useState('');
+  const [lpCalendar, setLpCalendar] = useState(false);
+  const [lpEmailSubject, setLpEmailSubject] = useState('Your Workshop Confirmation');
+  const [lpEmailBody, setLpEmailBody] = useState('We are excited to see you at the workshop!');
+  const [lpCustomFields, setLpCustomFields] = useState<string[]>([]);
+  const [newCustomField, setNewCustomField] = useState('');
+
+  // Post Session State
+  const [psEnabled, setPsEnabled] = useState(false);
+  const [psRating, setPsRating] = useState(true);
+  const [psNps, setPsNps] = useState(true);
+  const [psFeedback, setPsFeedback] = useState(true);
+
+  // Co-Hosts for Scheduled Sessions
+  const [scheduleCoHosts, setScheduleCoHosts] = useState<string[]>([]);
 
   // Upload State
   const [isUploading, setIsUploading] = useState(false);
@@ -141,10 +166,12 @@ const ZoneManagement: React.FC = () => {
   // Modals
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [showAddExamModal, setShowAddExamModal] = useState(false);
+  const [showMarkEntryModal, setShowMarkEntryModal] = useState(false);
   const [showAiGeneratorModal, setShowAiGeneratorModal] = useState(false);
   const [showStartExamModal, setShowStartExamModal] = useState(false);
   const [showTakeAttendanceModal, setShowTakeAttendanceModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [viewingPdfUrl, setViewingPdfUrl] = useState<string | null>(null);
 
   // Input States
   const [newStudentName, setNewStudentName] = useState('');
@@ -243,17 +270,17 @@ const ZoneManagement: React.FC = () => {
 
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [examSearchQuery, setExamSearchQuery] = useState('');
-  const [showMarkEntryModal, setShowMarkEntryModal] = useState(false);
   const [selectedExamForMarks, setSelectedExamForMarks] = useState<Exam | null>(null);
 
   // New Exam Modal State
   const [newExamTitle, setNewExamTitle] = useState('');
   const [newExamDate, setNewExamDate] = useState('');
   const [newExamTime, setNewExamTime] = useState('');
-  const [newExamType, setNewExamType] = useState<'online' | 'offline'>('online');
+  const [newExamType, setNewExamType] = useState<'online-test' | 'online-mcq' | 'offline'>('online-test');
   const [newExamMaxMark, setNewExamMaxMark] = useState('100');
   const [newExamMinMark, setNewExamMinMark] = useState('40');
   const [newExamQuestions, setNewExamQuestions] = useState<MCQ[]>([]);
+  const [newExamFile, setNewExamFile] = useState<File | null>(null);
 
   const handleAddQuestion = () => {
     const newQ: MCQ = {
@@ -277,7 +304,9 @@ const ZoneManagement: React.FC = () => {
       type: newExamType,
       maxMark: parseInt(newExamMaxMark),
       minMark: parseInt(newExamMinMark),
-      questions: newExamType === 'online' ? newExamQuestions : undefined
+      questions: newExamType === 'online-mcq' ? newExamQuestions : [],
+      pdfUrl: newExamType === 'online-test' && newExamFile ? URL.createObjectURL(newExamFile) : undefined, // Mock URL for now
+      excelTemplateUrl: newExamType === 'offline' && newExamFile ? URL.createObjectURL(newExamFile) : undefined
     };
 
     try {
@@ -290,6 +319,7 @@ const ZoneManagement: React.FC = () => {
       setNewExamMaxMark('100');
       setNewExamMinMark('40');
       setNewExamQuestions([]);
+      setNewExamFile(null);
       alert(`Exam "${newExamTitle}" created! Notifications sent.`);
     } catch (e) {
       console.error("Error creating exam:", e);
@@ -298,35 +328,92 @@ const ZoneManagement: React.FC = () => {
   };
 
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>, examId: string) => {
-    // Mock excel processing
-    if (!zoneId) return;
+    const file = e.target.files?.[0];
+    if (!file || !zoneId) return;
 
-    alert('Processing Excel sheet: Students detected, marks imported.');
-    const mockResults: ExamResult[] = students.map(s => ({
-      id: Math.random().toString(),
-      examId,
-      studentId: s.id,
-      studentName: s.name,
-      marks: Math.floor(Math.random() * 100),
-      status: 'passed',
-      warnings: 0
-    }));
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      // Expecting standard columns: [S.no, Name, Mark] (or similar, we'll try to map by index or look for 'Mark')
+      const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
 
-    // Persist to Firestore
-    if (db) {
-      try {
-        for (const result of mockResults) {
-          await setDoc(doc(db, `zones/${zoneId}/exams/${examId}/results`, result.studentId), {
-            ...result,
-            updatedAt: new Date().toISOString()
-          });
-        }
-        setExamResults(prev => [...prev.filter(r => r.examId !== examId), ...mockResults]);
-      } catch (err) {
-        console.error("Error saving exam results:", err);
+      if (json.length < 2) {
+        alert("Excel sheet appears empty or missing headers.");
+        return;
       }
-    } else {
-      console.warn("ZoneManagement: Mock Mode disabled. Database required for results.");
+
+      const headers = json[0] as string[];
+      // Find the index of the column that might contain marks (e.g., "Mark", "Score", "Marks")
+      const markIndex = headers.findIndex(h => typeof h === 'string' && ['mark', 'marks', 'score'].includes(h.toLowerCase()));
+      // Find the index of the column that might contain student names (or we just map by row assuming order if needed)
+      const nameIndex = headers.findIndex(h => typeof h === 'string' && ['name', 'student'].includes(h.toLowerCase()));
+
+      if (markIndex === -1) {
+        alert("Could not find a 'Mark' or 'Score' column in the Excel sheet.");
+        return;
+      }
+
+      const parsedResults: ExamResult[] = [];
+      const exam = exams.find(e => e.id === examId);
+      const minPassMark = exam ? exam.minMark : 40;
+
+      for (let i = 1; i < json.length; i++) {
+        const row = json[i];
+        if (!row || row.length === 0) continue;
+
+        const rawMark = row[markIndex];
+        const markNum = parseInt(rawMark);
+        if (isNaN(markNum)) continue;
+
+        const nameValue = nameIndex !== -1 ? String(row[nameIndex]) : `Student Row ${i}`;
+
+        // Attempt to match with existing student by name (naive matching for now)
+        // In a real scenario, an ID or Email column is safer.
+        const matchedStudent = students.find(s => s.name?.toLowerCase() === nameValue.toLowerCase());
+
+        parsedResults.push({
+          id: `${examId}_${matchedStudent ? matchedStudent.id : `mock_${i}`}`,
+          examId,
+          studentId: matchedStudent ? matchedStudent.id : `mock_${i}`,
+          studentName: matchedStudent ? matchedStudent.name : nameValue,
+          marks: markNum,
+          status: markNum >= minPassMark ? 'passed' : 'failed',
+          warnings: 0
+        });
+      }
+
+      if (parsedResults.length === 0) {
+        alert("Failed to parse any valid marks from the sheet.");
+        return;
+      }
+
+      // Persist to Firestore
+      if (db) {
+        try {
+          for (const result of parsedResults) {
+            await setDoc(doc(db, `zones/${zoneId}/exams/${examId}/results`, result.studentId), {
+              ...result,
+              updatedAt: new Date().toISOString()
+            });
+          }
+          // Optimistic update
+          setExamResults(prev => {
+            const filtered = prev.filter(r => r.examId !== examId);
+            return [...filtered, ...parsedResults];
+          });
+          alert(`Successfully imported marks for ${parsedResults.length} students!`);
+        } catch (err) {
+          console.error("Error saving exam results:", err);
+          alert("Failed to save results to database.");
+        }
+      } else {
+        console.warn("ZoneManagement: Mock Mode disabled. Database required for results.");
+      }
+    } catch (error) {
+      console.error("Error parsing Excel:", error);
+      alert("Failed to parse Excel file. Please ensure it's a valid format.");
     }
   };
 
@@ -345,14 +432,36 @@ const ZoneManagement: React.FC = () => {
         // Adjust activeTab if current one is not allowed
         const zType = (zoneData as any).zoneType;
         setActiveTab(prev => {
-          if (zType === 'Course' && (prev === 'attendance' || prev === 'exams' || prev === 'schedule')) {
+          if (typeof zType === 'string' && zType === 'Course' && (prev === 'attendance' || prev === 'exams' || prev === 'schedule' || prev === 'landing' || prev === 'post-session')) {
             return 'curriculum';
           }
-          if (zType === 'Workshop' && (prev === 'attendance' || prev === 'curriculum' || prev === 'exams')) {
-            return 'schedule';
+          if (typeof zType === 'string' && zType === 'Workshop' && (prev === 'attendance' || prev === 'curriculum' || prev === 'exams')) {
+            return 'schedule'; // or 'landing'
+          }
+          if (typeof zType === 'string' && zType === 'Class Management' && (prev === 'landing' || prev === 'post-session')) {
+            return 'attendance';
           }
           return prev;
         });
+
+        // Load initial Configs for Workshop
+        if (typeof zType === 'string' && zType === 'Workshop') {
+          const zData = zoneData as any;
+          if (zData.landingPageConfig) {
+            setLpPaid(zData.landingPageConfig.paid || false);
+            setLpPaymentLink(zData.landingPageConfig.paymentLink || '');
+            setLpCalendar(zData.landingPageConfig.enableCalendar || false);
+            setLpEmailSubject(zData.landingPageConfig.emailSubject || 'Your Workshop Confirmation');
+            setLpEmailBody(zData.landingPageConfig.emailBody || 'We are excited to see you at the workshop!');
+            setLpCustomFields(zData.landingPageConfig.customFields || []);
+          }
+          if (zData.postSessionSurvey) {
+            setPsEnabled(zData.postSessionSurvey.enabled || false);
+            setPsRating(zData.postSessionSurvey.ratingSystem ?? true);
+            setPsNps(zData.postSessionSurvey.npsTracking ?? true);
+            setPsFeedback(zData.postSessionSurvey.feedbackText ?? true);
+          }
+        }
       } else {
         navigate('/workplace'); // Zone not found
       }
@@ -953,7 +1062,7 @@ const ZoneManagement: React.FC = () => {
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-3xl font-black text-[#040457]">{editingSession ? 'Edit' : 'Schedule'} Session</h3>
                 <button
-                  onClick={() => { setShowScheduleModal(false); setEditingSession(null); }}
+                  onClick={() => { setShowScheduleModal(false); setEditingSession(null); setScheduleCoHosts([]); }}
                   className="p-2 hover:bg-gray-100 rounded-xl text-gray-400"
                 >
                   <X size={24} />
@@ -1093,11 +1202,39 @@ const ZoneManagement: React.FC = () => {
                     className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
                   />
                 </div>
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Assign Co-Hosts</label>
+                  <select
+                    onChange={e => {
+                      if (e.target.value && !scheduleCoHosts.includes(e.target.value)) {
+                        setScheduleCoHosts([...scheduleCoHosts, e.target.value]);
+                      }
+                      e.target.value = '';
+                    }}
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all cursor-pointer"
+                  >
+                    <option value="">Select a student to co-host...</option>
+                    {students.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
+                    ))}
+                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    {scheduleCoHosts.map(hostId => {
+                      const host = students.find(s => s.id === hostId);
+                      return (
+                        <div key={hostId} className="flex items-center gap-2 bg-[#c2f575]/20 text-[#040457] px-3 py-1.5 rounded-lg text-xs font-bold">
+                          {host ? host.name : hostId}
+                          <button type="button" onClick={() => setScheduleCoHosts(scheduleCoHosts.filter(id => id !== hostId))} className="text-red-500 hover:scale-110"><X size={12} /></button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-4">
                 <button
-                  onClick={() => { setShowScheduleModal(false); setEditingSession(null); }}
+                  onClick={() => { setShowScheduleModal(false); setEditingSession(null); setScheduleCoHosts([]); }}
                   className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest"
                 >
                   Cancel
@@ -1110,6 +1247,7 @@ const ZoneManagement: React.FC = () => {
                       date: scheduleDate,
                       time: scheduleTime,
                       duration: scheduleDuration,
+                      coHosts: scheduleCoHosts,
                       status: 'scheduled',
                       createdAt: new Date().toISOString()
                     };
@@ -1126,6 +1264,7 @@ const ZoneManagement: React.FC = () => {
                       setScheduleTitle('');
                       setScheduleDate('');
                       setScheduleTime('');
+                      setScheduleCoHosts([]);
                       alert(`Session ${editingSession ? 'updated' : 'scheduled'} successfully!`);
                     } catch (e) {
                       console.error("Error scheduling session:", e);
@@ -1169,7 +1308,7 @@ const ZoneManagement: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">Exam Mode</label>
                     <div className="flex gap-4">
-                      {(['online', 'offline'] as const).map(mode => (
+                      {(['online-test', 'online-mcq', 'offline'] as const).map(mode => (
                         <button key={mode} onClick={() => setNewExamType(mode)} className={`flex-1 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${newExamType === mode ? 'bg-[#040457] text-white shadow-xl' : 'bg-gray-50 text-gray-400'}`}>
                           {mode}
                         </button>
@@ -1190,11 +1329,11 @@ const ZoneManagement: React.FC = () => {
 
                 <div className="bg-gray-50 rounded-[2.5rem] p-8 overflow-hidden flex flex-col">
                   <div className="flex justify-between items-center mb-6">
-                    <h4 className="font-black text-[#040457] uppercase text-[11px] tracking-widest">Questions {newExamType === 'offline' && '(Disabled)'}</h4>
-                    {newExamType === 'online' && <button onClick={handleAddQuestion} className="p-2 bg-[#c2f575] text-[#040457] rounded-lg hover:scale-110 transition-all"><Plus size={16} /></button>}
+                    <h4 className="font-black text-[#040457] uppercase text-[11px] tracking-widest">{newExamType === 'offline' ? 'Settings (No Questions)' : 'Questions'}</h4>
+                    {newExamType === 'online-mcq' && <button onClick={handleAddQuestion} className="p-2 bg-[#c2f575] text-[#040457] rounded-lg hover:scale-110 transition-all"><Plus size={16} /></button>}
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
-                    {newExamType === 'online' ? (
+                    {newExamType === 'online-mcq' ? (
                       newExamQuestions.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-300 italic text-sm text-center p-10">
                           <Radio size={40} className="mb-4 opacity-20" />
@@ -1232,9 +1371,34 @@ const ZoneManagement: React.FC = () => {
                         ))
                       )
                     ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-gray-300 italic text-sm text-center p-10">
-                        <FileSpreadsheet size={40} className="mb-4 opacity-20" />
-                        Offline mode selected. You will be able to upload marks via Excel once the exam is conducted.
+                      <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center p-10 space-y-6">
+                        {newExamType === 'offline' ? (
+                          <>
+                            <FileSpreadsheet size={40} className="mb-4 opacity-50 text-green-500" />
+                            <p className="font-bold">Offline Assessment Mode</p>
+                            <p className="text-xs text-gray-400">Upload a template Excel sheet for students to download (Optional).<br />After the exam, upload the filled sheet here to auto-grade.</p>
+                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-green-200 hover:border-green-400 rounded-2xl cursor-pointer bg-green-50 transition-all">
+                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Upload size={24} className="mb-2 text-green-500" />
+                                <p className="text-xs font-bold text-green-600">{newExamFile ? newExamFile.name : 'Upload Template (.xlsx)'}</p>
+                              </div>
+                              <input type="file" className="hidden" accept=".xlsx, .xls" onChange={(e) => e.target.files && setNewExamFile(e.target.files[0])} />
+                            </label>
+                          </>
+                        ) : (
+                          <>
+                            <FileText size={40} className="mb-4 opacity-50 text-indigo-500" />
+                            <p className="font-bold">Online PDF Test Mode</p>
+                            <p className="text-xs text-gray-400">Students will view your uploaded PDF question paper while their camera/mic is monitored.<br />They will have 20 mins after the exam to scan and upload their answers.</p>
+                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-2xl cursor-pointer bg-indigo-50 transition-all">
+                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Upload size={24} className="mb-2 text-indigo-500" />
+                                <p className="text-xs font-bold text-indigo-600">{newExamFile ? newExamFile.name : 'Upload Question Paper (.pdf)'}</p>
+                              </div>
+                              <input type="file" className="hidden" accept=".pdf" onChange={(e) => e.target.files && setNewExamFile(e.target.files[0])} />
+                            </label>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1300,6 +1464,14 @@ const ZoneManagement: React.FC = () => {
                             <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${result ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
                               {result ? 'Graded' : 'Pending'}
                             </span>
+                            {result?.answerSheetUrl && (
+                              <button
+                                onClick={() => setViewingPdfUrl(result.answerSheetUrl!)}
+                                className="block mx-auto mt-2 text-[10px] text-indigo-500 font-bold hover:underline"
+                              >
+                                View Answer Sheet
+                              </button>
+                            )}
                           </div>
                           <div className="flex justify-center">
                             <input
@@ -1339,6 +1511,11 @@ const ZoneManagement: React.FC = () => {
           </div>
         )}
 
+        {/* PDF Viewer for Grading */}
+        {viewingPdfUrl && (
+          <PDFViewer url={viewingPdfUrl} onClose={() => setViewingPdfUrl(null)} />
+        )}
+
         {/* WHITELIST MODAL */}
         {showAddStudentModal && (
           <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
@@ -1352,6 +1529,34 @@ const ZoneManagement: React.FC = () => {
               </div>
 
               <div className="space-y-10">
+                {/* Promote Zone Section */}
+                {zone?.zoneType === 'Workshop' && (
+                  <div className="bg-gray-50 rounded-3xl p-6 border-2 border-dashed border-gray-200">
+                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><Globe size={16} /> Promote Workshop</h4>
+                    <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">
+                      <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100 flex-shrink-0">
+                        <QRCodeSVG value={`${window.location.origin}/workplace?join=${zoneId}`} size={100} fgColor="#040457" />
+                      </div>
+                      <div className="space-y-4 flex-1 w-full">
+                        <p className="text-xs text-gray-500 font-bold">Share your unique event link or QR code to gather registrations.</p>
+                        <div className="flex gap-2">
+                          <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/workplace?join=${zoneId}`).then(() => alert('Link copied!'))} className="flex-1 py-3 bg-white border border-gray-200 text-[#040457] rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2">
+                            <Copy size={14} /> Copy Link
+                          </button>
+                          <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join my workshop: ${zone?.title}`)}&url=${encodeURIComponent(`${window.location.origin}/workplace?join=${zoneId}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-sm">
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" /></svg>
+                          </a>
+                          <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window.location.origin}/workplace?join=${zoneId}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-700 hover:text-white transition-all shadow-sm">
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" clipRule="evenodd" /></svg>
+                          </a>
+                          <a href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my workshop: ${zone?.title} ${window.location.origin}/workplace?join=${zoneId}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-green-50 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-sm">
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-4">
                   <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Individual Invite</label>
                   <div className="flex gap-4">
@@ -1698,7 +1903,9 @@ const ZoneManagement: React.FC = () => {
                 { id: 'curriculum', label: 'CURRICULUM', icon: <Layers size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course' },
                 { id: 'exams', label: 'EXAM STREAMS', icon: <GraduationCap size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' },
                 { id: 'schedule', label: 'SCHEDULE LIVE', icon: <Video size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Workshop' },
-                { id: 'students', label: 'STUDENTS', icon: <Users size={16} />, visible: true }
+                { id: 'students', label: 'STUDENTS', icon: <Users size={16} />, visible: true },
+                { id: 'landing', label: 'LANDING PAGE', icon: <Globe size={16} />, visible: zone?.zoneType === 'Workshop' },
+                { id: 'post-session', label: 'POST-SESSION', icon: <FileText size={16} />, visible: zone?.zoneType === 'Workshop' }
               ].filter(t => t.visible).map(tab => (
                 <button
                   key={tab.id}
@@ -2224,8 +2431,8 @@ const ZoneManagement: React.FC = () => {
                     {exams.filter(e => e.title.toLowerCase().includes(examSearchQuery.toLowerCase())).map(exam => (
                       <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-10 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group">
                         <div className="flex justify-between items-start">
-                          <div className={`p-5 rounded-[1.75rem] shadow-sm ${exam.type === 'online' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                            {exam.type === 'online' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
+                          <div className={`p-5 rounded-[1.75rem] shadow-sm ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                            {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
                           </div>
                           <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${exam.status === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : 'bg-green-50 text-green-500'}`}>
                             {exam.status}
@@ -2273,9 +2480,151 @@ const ZoneManagement: React.FC = () => {
                   </div>
                 </div>
               )}
-              {activeTab !== 'exams' && activeTab !== 'schedule' && <div className="py-20 text-center text-gray-300 italic">Configuration module loading...</div>}
+              {activeTab === 'landing' && (
+                <div className="space-y-12 animate-in fade-in duration-500">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Landing Page Config</h3>
+                      <p className="text-sm text-gray-400 mt-2 font-medium">Customize registration workflows and automated emails.</p>
+                    </div>
+                    <button onClick={async () => {
+                      if (!zoneId) return;
+                      try {
+                        await updateDoc(doc(db, 'zones', zoneId), {
+                          landingPageConfig: {
+                            paid: lpPaid, paymentLink: lpPaymentLink, enableCalendar: lpCalendar,
+                            emailSubject: lpEmailSubject, emailBody: lpEmailBody, customFields: lpCustomFields
+                          }
+                        });
+                        alert('Landing Page configuration saved!');
+                      } catch (e) { alert('Failed to save config.'); }
+                    }} className="px-8 py-4 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
+                      <Save size={18} className="inline mr-2" /> Save Config
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Registration Settings */}
+                    <div className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm">
+                      <h4 className="text-2xl font-black text-[#040457] flex items-center gap-3"><Globe className="text-[#c2f575]" /> Registration Form</h4>
+
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                          <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Paid Event</span>
+                          <button onClick={() => setLpPaid(!lpPaid)} className={`w-12 h-6 rounded-full transition-colors relative ${lpPaid ? 'bg-[#c2f575]' : 'bg-gray-300'}`}>
+                            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${lpPaid ? 'translate-x-6' : ''}`} />
+                          </button>
+                        </div>
+
+                        {lpPaid && (
+                          <div className="space-y-2 animate-in slide-in-from-top-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Zoho Payment Link</label>
+                            <input value={lpPaymentLink} onChange={e => setLpPaymentLink(e.target.value)} placeholder="https://zoho.com/pay..." className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                          <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Calendar Integration</span>
+                          <button onClick={() => setLpCalendar(!lpCalendar)} className={`w-12 h-6 rounded-full transition-colors relative ${lpCalendar ? 'bg-[#c2f575]' : 'bg-gray-300'}`}>
+                            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${lpCalendar ? 'translate-x-6' : ''}`} />
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Custom Form Fields</label>
+                          <div className="flex gap-2">
+                            <input value={newCustomField} onChange={e => setNewCustomField(e.target.value)} placeholder="e.g. Job Title" className="flex-1 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-xl px-4 py-3 font-bold text-sm text-[#040457] outline-none" />
+                            <button onClick={() => { if (newCustomField) { setLpCustomFields([...lpCustomFields, newCustomField]); setNewCustomField(''); } }} className="px-4 py-3 bg-[#040457] text-white rounded-xl font-black text-xs hover:scale-105"><Plus size={16} /></button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {lpCustomFields.map((f, i) => (
+                              <div key={i} className="flex items-center gap-2 bg-[#c2f575]/20 text-[#040457] px-3 py-1.5 rounded-lg text-xs font-bold">
+                                {f} <button onClick={() => setLpCustomFields(lpCustomFields.filter((_, idx) => idx !== i))} className="text-red-500"><X size={12} /></button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Email Configurations */}
+                    <div className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm">
+                      <h4 className="text-2xl font-black text-[#040457] flex items-center gap-3"><Mic className="text-indigo-400" /> Auto-Emails</h4>
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Email Subject</label>
+                          <input value={lpEmailSubject} onChange={e => setLpEmailSubject(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Confirmation Body</label>
+                          <textarea value={lpEmailBody} onChange={e => setLpEmailBody(e.target.value)} rows={5} className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-[1.5rem] px-6 py-4 font-bold text-[#040457] outline-none transition-all resize-none"></textarea>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === 'post-session' && (
+                <div className="space-y-12 animate-in fade-in duration-500">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Post-Session Survey</h3>
+                      <p className="text-sm text-gray-400 mt-2 font-medium">Automatically collect NPS and feedback after completed sessions.</p>
+                    </div>
+                    <button onClick={async () => {
+                      if (!zoneId) return;
+                      try {
+                        await updateDoc(doc(db, 'zones', zoneId), {
+                          postSessionSurvey: {
+                            enabled: psEnabled, ratingSystem: psRating, npsTracking: psNps, feedbackText: psFeedback
+                          }
+                        });
+                        alert('Survey configuration saved!');
+                      } catch (e) { alert('Failed to save survey.'); }
+                    }} className="px-8 py-4 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
+                      <Save size={18} className="inline mr-2" /> Save Survey
+                    </button>
+                  </div>
+
+                  <div className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm max-w-2xl">
+                    <div className="flex items-center justify-between p-6 bg-gray-50 border border-gray-100 rounded-[2rem]">
+                      <div className="space-y-1">
+                        <h4 className="font-black text-[#040457] uppercase text-xs tracking-widest">Enable Automatic Survey</h4>
+                        <p className="text-[10px] text-gray-400 font-bold">Pops up for students immediately upon session end.</p>
+                      </div>
+                      <button onClick={() => setPsEnabled(!psEnabled)} className={`w-14 h-8 rounded-full transition-colors relative shadow-inner ${psEnabled ? 'bg-[#c2f575]' : 'bg-gray-300'}`}>
+                        <div className={`absolute top-1.5 left-1.5 bg-white w-5 h-5 rounded-full transition-transform shadow-sm ${psEnabled ? 'translate-x-6' : ''}`} />
+                      </button>
+                    </div>
+
+                    {psEnabled && (
+                      <div className="space-y-6 animate-in slide-in-from-top-4">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Survey Modules</label>
+                        <div className="grid grid-cols-1 gap-4">
+                          {[
+                            { id: 'rating', label: 'Star Rating (1-5)', icon: <Star size={18} />, state: psRating, set: setPsRating },
+                            { id: 'nps', label: 'NPS Score (1-10)', icon: <Trophy size={18} />, state: psNps, set: setPsNps },
+                            { id: 'feedback', label: 'Open Feedback Box', icon: <FileText size={18} />, state: psFeedback, set: setPsFeedback }
+                          ].map(mod => (
+                            <div key={mod.id} className="flex items-center justify-between p-5 bg-white border-2 hover:border-[#c2f575]/50 border-gray-50 rounded-2xl transition-all cursor-pointer" onClick={() => mod.set(!mod.state)}>
+                              <div className="flex items-center gap-4 text-[#040457] font-bold text-sm">
+                                <div className={`p-2 rounded-lg ${mod.state ? 'bg-[#c2f575]/20 text-indigo-600' : 'bg-gray-50 text-gray-400'}`}>{mod.icon}</div>
+                                {mod.label}
+                              </div>
+                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${mod.state ? 'bg-[#c2f575] border-[#c2f575]' : 'border-gray-200 bg-gray-50'}`}>
+                                {mod.state && <Check size={14} className="text-[#040457]" />}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {activeTab !== 'exams' && activeTab !== 'schedule' && activeTab !== 'landing' && activeTab !== 'post-session' && <div className="py-20 text-center text-gray-300 italic">Configuration module loading...</div>}
             </div>
-          </div>
+          </div >
         ) : view === 'grading' ? (
           /* GRADING POWER-VIEW */
           <div className={`animate-in fade-in slide-in-from-right-10 duration-700 h-[calc(100vh-140px)] flex flex-col ${isSmartMarking ? 'bg-[#03031f] -m-12 p-12 rounded-none fixed inset-0 z-[100]' : ''}`}>
@@ -2412,7 +2761,7 @@ const ZoneManagement: React.FC = () => {
             <h2 className="text-4xl font-black uppercase tracking-widest">Workspace View</h2>
           </div>
         )}
-      </div>
+      </div >
       {/* UPLOAD OVERLAY */}
       {
         isUploading && (
@@ -2442,7 +2791,7 @@ const ZoneManagement: React.FC = () => {
           </div>
         )
       }
-    </React.Fragment>
+    </React.Fragment >
   );
 };
 

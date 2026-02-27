@@ -351,21 +351,25 @@ export const verifyOTPAndSignIn = functions.https.onCall(async (data) => {
             throw new functions.https.HttpsError("permission-denied", "Invalid OTP.");
         }
 
-        // OTP is valid, delete it
-        await otpRef.delete();
+        // OTP is valid, but we delay deleting until full sign-up or sign-in is complete to allow intermediate password step
+        // If password is not provided, this is just the intermediate verification step.
+        if (!password) {
+            return { verified: true, message: "OTP verified. Please proceed to provide a password." };
+        }
 
         // Get or Create Firebase User
         let userRecord;
         try {
             userRecord = await admin.auth().getUserByEmail(email);
+
+            // If user exists and password IS provided, update their password (e.g. forgot password flow) 
+            // OR we are just confirming their sign in. For security, if they provide a password with OTP, we can set it.
+            await admin.auth().updateUser(userRecord.uid, {
+                password: password
+            });
         } catch (error: any) {
             if (error.code === 'auth/user-not-found') {
-                // Register new user
-                if (!password) {
-                    // This is the intermediate step where we only verify OTP
-                    return { verified: true, message: "OTP verified. Please proceed to set a password." };
-                }
-
+                // Register new user since we have the password
                 userRecord = await admin.auth().createUser({
                     email,
                     password: password
@@ -388,13 +392,157 @@ export const verifyOTPAndSignIn = functions.https.onCall(async (data) => {
             }
         }
 
-        // Generate Custom Token
+        // Generate Custom Token for successful sign in
         const customToken = await admin.auth().createCustomToken(userRecord.uid);
+
+        // Security: Delete the OTP only after successful token generation
+        await otpRef.delete();
 
         return { customToken, uid: userRecord.uid };
     } catch (error: any) {
         console.error("verifyOTPAndSignIn error:", error);
         if (error instanceof functions.https.HttpsError) throw error;
         throw new functions.https.HttpsError("internal", error.message || "Failed to verify OTP.");
+    }
+});
+
+// --- SECURE BOOKING SYSTEM ---
+
+export const createMentorshipBooking = functions.https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+
+    const { tutorId, productId, date, slotId, time, studentCountry } = data;
+    if (!tutorId || !productId || !date || !slotId) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing required fields.");
+    }
+
+    try {
+        const db = admin.firestore();
+        const productSnap = await db.collection('products').doc(productId).get();
+        if (!productSnap.exists) {
+            throw new functions.https.HttpsError("not-found", "Product not found.");
+        }
+
+        const productData = productSnap.data()!;
+
+        const priceUSD = productData.priceUSD || productData.price || '0';
+        const priceINR = productData.priceINR || productData.price || '0';
+
+        const tutorSnap = await db.collection('users').doc(tutorId).get();
+        const tutorData = tutorSnap.data() || {};
+        const tutorCountry = tutorData.country || 'IN'; // Assuming default to IN if not set
+
+        let finalPrice = priceUSD;
+        let currency = 'USD';
+
+        // Check distinct pricing tier
+        if (studentCountry === 'IN' && tutorCountry === 'IN') {
+            finalPrice = priceINR;
+            currency = 'INR';
+        }
+
+        const bookingData = {
+            productId: productId,
+            productTitle: productData.title,
+            tutorId: tutorId,
+            studentId: context.auth.uid,
+            studentName: context.auth.token.name || 'Student',
+            date: date,
+            slotId: slotId,
+            time: time,
+            status: 'confirmed',
+            price: finalPrice,
+            currency: currency,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        const bookingRef = await db.collection('bookings').add(bookingData);
+
+        await db.collection('users').doc(context.auth.uid).collection('enrollments').doc(productId).set({
+            productId: productId,
+            title: productData.title,
+            type: 'mentorship',
+            date: date,
+            enrolledAt: new Date().toISOString()
+        });
+
+        return {
+            success: true,
+            bookingId: bookingRef.id,
+            price: finalPrice,
+            currency: currency
+        };
+
+    } catch (error: any) {
+        console.error("createMentorshipBooking error:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to create booking.");
+    }
+});
+
+// --- ZOHO PAYMENTS INTEGRATION ---
+
+export const createZohoCheckoutSession = functions.https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+
+    const { productId, title, amount, currency, returnUrl } = data;
+
+    if (!productId || !amount) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing required product details for checkout.");
+    }
+
+    const ZOHO_API_KEY = process.env.ZOHO_API_KEY;
+    const ZOHO_DOMAIN = process.env.ZOHO_DOMAIN || 'checkout.zoho.in'; // typically checkout.zoho.in or checkout.zoho.com
+
+    if (!ZOHO_API_KEY) {
+        console.warn("ZOHO_API_KEY is missing. Returning a simulated checkout URL for development.");
+        // Simulated response for development when keys aren't added yet
+        return {
+            success: true,
+            checkoutUrl: `${returnUrl}?simulated_zoho_success=true&product_id=${productId}`,
+            message: "Simulated Zoho Checkout URL (Configure ZOHO_API_KEY in .env for live)"
+        };
+    }
+
+    try {
+        // Standard payload scaffolding for Zoho Checkout API (Hosted Pages)
+        // Adjust endpoint and payload specific to the exact Zoho product (Checkout, Subscriptions, Invoice)
+        const payload = {
+            amount: parseFloat(amount),
+            currency: currency || 'INR',
+            reference_id: productId,
+            description: title || 'Nunma Session Checkout',
+            redirect_url: returnUrl,
+            customer: {
+                name: context.auth.token.name || 'Student',
+                email: context.auth.token.email || ''
+            }
+        };
+
+        const response = await fetch(`https://${ZOHO_DOMAIN}/api/v1/checkout`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Zoho-oauthtoken ${ZOHO_API_KEY}` // Ensure correct Auth scheme is used depending on Zoho Product
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Zoho Checkout API Error:", errorText);
+            throw new Error(`Zoho API Error: ${response.status}`);
+        }
+
+        const responseData: any = await response.json();
+
+        // Assuming Zoho responds with a hosted page URL
+        return {
+            success: true,
+            checkoutUrl: responseData.hosted_page_url || responseData.url || returnUrl
+        };
+
+    } catch (error: any) {
+        console.error("createZohoCheckoutSession error:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to initiate Zoho Checkout.");
     }
 });

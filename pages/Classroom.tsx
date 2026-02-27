@@ -41,6 +41,12 @@ const Classroom: React.FC = () => {
    const [liveSessions, setLiveSessions] = useState<any[]>([]);
    const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
    const [showLeaderboard, setShowLeaderboard] = useState(false);
+   const [surveyForRoom, setSurveyForRoom] = useState<any>(null);
+
+   // Survey tracking
+   const [surveyRating, setSurveyRating] = useState(0);
+   const [surveyNps, setSurveyNps] = useState(5);
+   const [surveyFeedback, setSurveyFeedback] = useState('');
 
    const { user } = useAuth();
    const [enrollmentIds, setEnrollmentIds] = useState<string[]>([]);
@@ -207,10 +213,75 @@ const Classroom: React.FC = () => {
             <ClassroomStream
                sessionId={activeLiveRoom.id}
                zoneId={activeLiveRoom.zoneId}
-               role="STUDENT"
+               role={activeLiveRoom.coHosts?.includes(user?.uid) ? 'COHOST' : 'STUDENT'}
                title={activeLiveRoom.title}
-               onClose={() => setActiveLiveRoom(null)}
+               onClose={() => {
+                  setActiveLiveRoom(null);
+                  const activeZone = enrolledZones.find(z => z.id === activeLiveRoom.zoneId);
+                  if (activeZone?.postSessionSurvey?.enabled) {
+                     setSurveyForRoom({ room: activeLiveRoom, config: activeZone.postSessionSurvey });
+                  }
+               }}
             />
+         )}
+
+         {/* Post-Session Survey Modal */}
+         {surveyForRoom && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+               <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500 text-center">
+                  <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] mx-auto flex items-center justify-center mb-6">
+                     <Star size={32} className="text-[#c2f575]" />
+                  </div>
+                  <h3 className="text-3xl font-black text-[#040457] tracking-tight mb-2">Session Completed</h3>
+                  <p className="text-sm font-medium text-gray-400 mb-8">We'd love to hear your thoughts on this session.</p>
+
+                  <div className="space-y-8 mb-10 text-left">
+                     {surveyForRoom.config.ratingSystem && (
+                        <div className="space-y-3">
+                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Rate the Session</label>
+                           <div className="flex items-center justify-center gap-2">
+                              {[1, 2, 3, 4, 5].map(star => (
+                                 <button key={star} onClick={() => setSurveyRating(star)} className={`p-3 rounded-2xl transition-all ${surveyRating >= star ? 'text-yellow-400 bg-yellow-50' : 'text-gray-300 hover:bg-gray-50'}`}>
+                                    <Star size={32} fill={surveyRating >= star ? 'currentColor' : 'none'} />
+                                 </button>
+                              ))}
+                           </div>
+                        </div>
+                     )}
+
+                     {surveyForRoom.config.npsTracking && (
+                        <div className="space-y-3">
+                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">How likely to recommend?</label>
+                           <div className="flex justify-between items-center gap-1 bg-gray-50 p-2 rounded-2xl">
+                              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
+                                 <button key={score} onClick={() => setSurveyNps(score)} className={`w-8 h-10 rounded-xl font-black text-xs transition-all ${surveyNps === score ? 'bg-[#c2f575] text-[#040457] shadow-lg scale-110' : 'text-gray-400 hover:bg-white'}`}>
+                                    {score}
+                                 </button>
+                              ))}
+                           </div>
+                        </div>
+                     )}
+
+                     {surveyForRoom.config.feedbackText && (
+                        <div className="space-y-3">
+                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Additional Feedback</label>
+                           <textarea value={surveyFeedback} onChange={e => setSurveyFeedback(e.target.value)} rows={3} placeholder="What did you like? What could be improved?" className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-[1.5rem] px-6 py-4 font-bold text-[#040457] outline-none transition-all resize-none"></textarea>
+                        </div>
+                     )}
+                  </div>
+
+                  <div className="flex gap-4">
+                     <button onClick={() => setSurveyForRoom(null)} className="flex-1 py-4 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-100 transition-all">Skip</button>
+                     <button onClick={() => {
+                        // Normally submit to Firestore here
+                        alert('Survey submitted! Thank you.');
+                        setSurveyForRoom(null);
+                        setSurveyRating(0);
+                        setSurveyFeedback('');
+                     }} className="flex-[2] py-4 bg-[#c2f575] text-[#040457] rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 transition-all">Submit Feedback</button>
+                  </div>
+               </div>
+            </div>
          )}
 
          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">

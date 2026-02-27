@@ -15,7 +15,7 @@ import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../utils/firebase';
 import { UserRole } from '../types';
 
-interface UserProfile {
+export interface UserProfile {
   uid: string;
   name: string;
   email: string;
@@ -33,6 +33,7 @@ interface UserProfile {
   earnings?: number;
   studentsCount?: number;
   onboardingCompleted?: boolean;
+  bankingDetailsProvided?: boolean;
   linkedin?: string;
   expertise?: string[];
   availability?: any[];
