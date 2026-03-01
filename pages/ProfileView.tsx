@@ -64,159 +64,171 @@ const ProfileHeader = ({
   isFollowing, handleFollow, bannerInputRef, handleFileChange,
   avatarInputRef, setIsEditing, handleSaveProfile,
   setShowLinkedInModal, setShowProductModal, navigate,
-  handleViewFollowers
+  handleViewFollowers, tutorStudentsCount
 }: any) => (
-  <div className="bg-[#1A1A4E] h-[480px] relative overflow-hidden flex flex-col justify-end pb-20">
-    <div className="absolute inset-0 opacity-15">
-      {profileUser.banner ? (
-        <img src={profileUser.banner} className="w-full h-full object-cover" alt="Banner" />
-      ) : (
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,#c2f575_0,transparent_60%)]"></div>
-      )}
-    </div>
-
-    {isMe && (
-      <div className="absolute top-10 right-10 z-30">
-        <button
-          onClick={() => bannerInputRef.current?.click()}
-          className="p-4 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl text-white hover:bg-[#c2f575] hover:text-indigo-900 transition-all shadow-2xl flex items-center gap-3"
-        >
-          <Camera size={20} />
-          <span className="text-[10px] font-black uppercase tracking-widest">Update Banner</span>
-        </button>
-        <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'banner')} />
+  <div className="flex flex-col w-full relative">
+    {/* Dark Banner Section */}
+    <div className="bg-[#1A1A4E] relative h-[260px] md:h-[320px] flex flex-col justify-end pb-8">
+      <div className="absolute inset-0 opacity-40">
+        {profileUser.banner ? (
+          <img src={profileUser.banner} className="w-full h-full object-cover" alt="Banner" />
+        ) : (
+          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,#c2f575_0,transparent_60%)]"></div>
+        )}
       </div>
-    )}
 
-    <div className="max-w-7xl mx-auto w-full px-10 relative z-10">
-      <div className="flex flex-col md:flex-row items-center md:items-end gap-12">
-        <div className="relative group shrink-0">
-          <div className={`w-64 h-64 ${role === UserRole.STUDENT ? 'rounded-full' : 'rounded-[3.5rem]'} border-8 border-white/10 p-1.5 bg-white/5 backdrop-blur-md relative overflow-hidden shadow-2xl`}>
-            <img src={profileUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + profileUser.uid} alt="Profile" className={`w-full h-full ${role === UserRole.STUDENT ? 'rounded-full' : 'rounded-[3rem]'} object-cover border-4 border-white shadow-2xl`} />
-            {isMe && (
-              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                <button onClick={() => avatarInputRef.current?.click()} className="w-12 h-12 bg-white text-indigo-900 rounded-2xl shadow-xl flex items-center justify-center hover:bg-[#c2f575] transition-all"><Camera size={20} /></button>
+      {/* Banner Actions */}
+      {isMe && (
+        <div className="absolute top-6 right-6 z-30">
+          <button
+            onClick={() => bannerInputRef.current?.click()}
+            className="px-4 py-2 bg-black/30 backdrop-blur-md border border-white/20 rounded-lg text-white hover:bg-white hover:text-[#1A1A4E] transition-all shadow-lg flex items-center gap-2"
+          >
+            <Camera size={14} />
+            <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Update Banner</span>
+          </button>
+          <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'banner')} />
+        </div>
+      )}
+
+      {/* Name and Action Buttons on Banner */}
+      <div className="max-w-7xl mx-auto w-full px-6 md:px-10 relative z-10">
+        <div className="flex flex-col md:flex-row justify-between items-end gap-6 w-full">
+          {/* Avatar Space Offset */}
+          <div className="hidden md:block w-40 shrink-0 md:mr-8"></div>
+
+          <div className="flex-1 w-full flex flex-col md:flex-row justify-between items-start md:items-end gap-6 text-white pl-1 md:pl-0">
+            {/* User Details */}
+            <div className="mb-1 md:mb-0 w-full md:w-auto mt-4 md:mt-0">
+              <div className="flex flex-wrap items-center gap-3 mb-1">
+                {isEditing ? (
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Your Name"
+                    className="text-3xl md:text-[34px] font-black tracking-tight drop-shadow-md bg-transparent border-b border-white/20 outline-none w-full"
+                  />
+                ) : (
+                  <h1 className="text-3xl md:text-[34px] font-black tracking-tight drop-shadow-md">{profileUser.name}</h1>
+                )}
+                {role === UserRole.TUTOR && (
+                  <div className="bg-[#5c7a36]/40 border border-[#6b8e23] text-[#c2f575] px-2.5 py-1 rounded flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest backdrop-blur-sm">
+                    <ShieldCheck size={12} strokeWidth={3} /> Verified Expert
+                  </div>
+                )}
               </div>
-            )}
-            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'avatar')} />
+              {isEditing ? (
+                <input
+                  value={editHeadline}
+                  onChange={(e) => setEditHeadline(e.target.value)}
+                  placeholder="Your Headline"
+                  className="text-indigo-100/90 text-[15px] italic max-w-xl bg-transparent border-b border-white/20 outline-none w-full"
+                />
+              ) : (
+                <p className="text-indigo-100/90 text-[15px] italic line-clamp-1">{profileUser.headline || (role === UserRole.TUTOR ? 'Expert Educator' : 'Aspiring Learner')}</p>
+              )}
+            </div>
+
+            {/* Action Buttons Row */}
+            <div className="flex flex-row gap-3 mt-4 md:mt-0 w-full md:w-auto">
+              {isMe ? (
+                <>
+                  {isEditing ? (
+                    <button onClick={handleSaveProfile} className="flex-1 sm:flex-none px-6 py-2.5 bg-white/10 border border-white/20 text-white rounded-full font-bold uppercase text-[10px] tracking-widest hover:bg-white hover:text-indigo-900 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+                      Save Profile
+                    </button>
+                  ) : (
+                    <button onClick={() => setIsEditing(true)} className="flex-1 sm:flex-none px-6 py-2.5 bg-[#403e6a]/80 border border-white/10 backdrop-blur-md text-white rounded-full font-bold uppercase text-[10px] tracking-widest hover:bg-white/20 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+                      Edit Profile
+                    </button>
+                  )}
+                  {role === UserRole.STUDENT ? (
+                    <button onClick={() => setShowLinkedInModal(true)} className="flex-1 sm:flex-none px-5 py-2.5 bg-[#0077b5] text-white rounded-full font-bold uppercase text-[10px] tracking-widest hover:brightness-110 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+                      Import in
+                    </button>
+                  ) : (
+                    <button onClick={() => setShowProductModal(true)} className="flex-1 sm:flex-none px-6 py-2.5 bg-[#c2f575] text-[#1A1A4E] rounded-full font-bold uppercase text-[10px] tracking-widest hover:brightness-105 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+                      <ShoppingBag size={14} /> List Product
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button onClick={() => navigate(`/inbox?userId=${profileUser.uid}`)} className="flex-1 sm:flex-none px-6 py-2.5 bg-[#403e6a]/80 border border-white/10 backdrop-blur-md text-white rounded-full font-bold uppercase text-[10px] tracking-widest hover:bg-white/20 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+                    <MessageSquare size={14} /> Message
+                  </button>
+                  <button onClick={handleFollow} className={`flex-1 sm:flex-none px-8 py-2.5 rounded-full font-bold uppercase text-[10px] tracking-widest transition-all flex justify-center items-center gap-2 shadow-lg whitespace-nowrap ${isFollowing ? 'bg-white/10 text-white border border-white/20 hover:bg-red-500/80 hover:border-red-500' : 'bg-[#c2f575] text-[#1A1A4E] hover:brightness-105'}`}>
+                    {isFollowing ? <><UserCheck size={14} /> Following</> : <><UserPlus size={14} /> Follow</>}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex-1 pb-4 text-center md:text-left text-white">
-          <div className="flex flex-wrap items-center justify-center md:justify-start gap-5 mb-6">
-            {isEditing ? (
-              <input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Your Name"
-                className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-lg leading-tight bg-transparent text-white border-b border-white/20 outline-none w-full break-words"
-              />
-            ) : (
-              <h1 className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-lg leading-tight break-words">{profileUser.name}</h1>
-            )}
-            {role === UserRole.TUTOR && (
-              <div className="bg-[#c2f575] text-indigo-900 px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl flex items-center gap-2">
-                <ShieldCheck size={16} strokeWidth={3} /> Verified Expert
-              </div>
-            )}
-          </div>
-          {isEditing ? (
-            <input
-              value={editHeadline}
-              onChange={(e) => setEditHeadline(e.target.value)}
-              placeholder="Your Headline"
-              className="text-indigo-100/80 text-2xl font-medium max-w-2xl mb-12 leading-relaxed bg-transparent border-b border-white/20 outline-none w-full"
-            />
-          ) : (
-            <p className="text-indigo-100/80 text-2xl font-medium max-w-2xl mb-12 leading-relaxed italic line-clamp-2">{profileUser.headline || (role === UserRole.TUTOR ? 'Expert Educator' : 'Aspiring Learner')}</p>
-          )}
+      </div>
+    </div>
 
-          <div className="flex flex-wrap justify-center md:justify-start gap-12 items-center">
-            <div className="flex items-center gap-3 bg-white/5 px-6 py-3 rounded-2xl backdrop-blur-sm border border-white/10">
-              <MapPin size={22} className="text-[#c2f575]" />
+    {/* White Bottom Strip & Avatar */}
+    <div className="bg-white border-b border-gray-100/50 relative shadow-sm z-20">
+      <div className="max-w-7xl mx-auto w-full px-6 md:px-10">
+        <div className="flex flex-col md:flex-row items-center md:items-start pt-4 md:pt-0 pb-6 w-full relative">
+
+          {/* Avatar - Negative Margin makes it overlap perfectly */}
+          <div className="relative group shrink-0 -mt-[80px] md:-mt-[110px] mb-6 md:mb-0 md:mr-8 z-30">
+            <div className={`w-36 h-36 md:w-44 md:h-44 rounded-3xl md:rounded-[2.2rem] p-[5px] bg-gradient-to-tr from-[#c2f575] via-[#4d56c8] to-[#1A1A4E] shadow-2xl overflow-hidden`}>
+              <div className="w-full h-full bg-[#1A1A4E] rounded-[1.8rem] overflow-hidden border-2 border-[#1A1A4E] relative group">
+                <img src={profileUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + profileUser.uid} alt="Profile" className="w-full h-full object-cover" />
+                {isMe && (
+                  <div className="absolute bottom-2 right-2">
+                    <button onClick={() => avatarInputRef.current?.click()} className="w-8 h-8 md:w-10 md:h-10 bg-white text-indigo-900 rounded-full shadow-lg flex items-center justify-center hover:bg-[#c2f575] border border-transparent transition-all opacity-0 group-hover:opacity-100"><Camera size={14} /></button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* User Stats on the White Part */}
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-12 mt-2 md:mt-5 w-full">
+            <div className="flex items-center gap-2">
+              <MapPin size={16} className="text-[#c2f575]" />
               {isEditing ? (
                 <input
                   value={editLocation}
                   onChange={(e) => setEditLocation(e.target.value)}
                   placeholder="Location"
-                  className="bg-transparent text-white font-bold outline-none border-b border-white/20"
+                  className="bg-transparent text-gray-500 font-bold text-xs outline-none border-b border-gray-300 w-24"
                 />
               ) : (
-                <span className="text-base font-bold">{profileUser.location || 'Global'}</span>
+                <span className="text-gray-300 font-bold text-[10px] uppercase tracking-[0.2em]">{profileUser.location || 'Global'}</span>
               )}
             </div>
-            <div className="flex gap-12 border-l border-white/10 pl-12">
-              <button onClick={handleViewFollowers} className="flex flex-col items-center md:items-start text-left hover:scale-105 transition-transform">
-                <p className="text-4xl font-black text-[#c2f575] leading-none mb-1">{profileUser.followersCount || 0}</p>
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200/50">{role === UserRole.TUTOR ? 'Students' : 'Followers'}</p>
-              </button>
-              <div className="flex flex-col items-center md:items-start">
-                <p className="text-4xl font-black text-white leading-none mb-1">{profileUser.followingCount || 0}</p>
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200/50">Following</p>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {!isMe && (
-          <div className="shrink-0 flex flex-row md:flex-col lg:flex-row gap-4 pb-4 w-full md:w-auto">
-            <button
-              onClick={handleFollow}
-              className={`flex-1 md:flex-none px-10 py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-2xl
-                ${isFollowing ? 'bg-white/10 text-white border border-white/20 hover:text-red-500' : 'bg-[#c2f575] text-indigo-900 hover:scale-105 active:scale-95'}
-              `}
-            >
-              {isFollowing ? <><UserCheck size={20} /> Following</> : <><UserPlus size={20} /> Follow</>}
-            </button>
-            <button onClick={() => navigate(`/inbox?userId=${profileUser.uid}`)} className="flex-1 md:flex-none px-10 py-5 bg-white/5 backdrop-blur-xl border border-white/10 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-white hover:text-indigo-900 transition-all shadow-2xl flex items-center justify-center gap-3">
-              <MessageSquare size={20} /> Message
-            </button>
-          </div>
-        )}
-
-        {isMe && (
-          <div className="shrink-0 flex gap-4 pb-4">
-            {isEditing ? (
-              <button
-                onClick={handleSaveProfile}
-                className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-2xl flex items-center justify-center gap-3"
-              >
-                Save Changes
-              </button>
+            {role === UserRole.TUTOR ? (
+              <>
+                <div className="flex flex-col items-center">
+                  <p className="text-xl font-black text-indigo-900 leading-none mb-1">{tutorStudentsCount || 0}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Students</p>
+                </div>
+                <button onClick={handleViewFollowers} className="flex flex-col items-center hover:scale-105 transition-transform group">
+                  <p className="text-xl font-black text-indigo-900 group-hover:text-indigo-600 leading-none mb-1">{profileUser.followersCount || 0}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Followers</p>
+                </button>
+              </>
             ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="px-10 py-5 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-white hover:text-indigo-900 transition-all shadow-2xl flex items-center justify-center gap-3"
-              >
-                Edit Profile
-              </button>
+              <>
+                <button onClick={handleViewFollowers} className="flex flex-col items-center hover:scale-105 transition-transform group">
+                  <p className="text-xl font-black text-indigo-900 group-hover:text-indigo-600 leading-none mb-1">{profileUser.followersCount || 0}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Followers</p>
+                </button>
+                <div className="flex flex-col items-center">
+                  <p className="text-xl font-black text-indigo-900 leading-none mb-1">{profileUser.followingCount || 0}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Following</p>
+                </div>
+              </>
             )}
           </div>
-        )}
 
-        {isMe && role === UserRole.STUDENT && (
-          <div className="shrink-0 pb-4">
-            <button
-              onClick={() => setShowLinkedInModal(true)}
-              className="px-8 py-5 bg-[#0077b5] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-2xl flex items-center justify-center gap-3"
-            >
-              <div className="w-6 h-6 bg-white rounded-md flex items-center justify-center">
-                <span className="text-[#0077b5] text-sm font-black">in</span>
-              </div>
-              Import from LinkedIn
-            </button>
-          </div>
-        )}
-
-        {isMe && role === UserRole.TUTOR && (
-          <div className="shrink-0 pb-4">
-            <button
-              onClick={() => setShowProductModal(true)}
-              className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-2xl flex items-center justify-center gap-3"
-            >
-              <ShoppingBag size={20} /> List Product
-            </button>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   </div>
@@ -558,6 +570,7 @@ const ProfileView: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [availability, setAvailability] = useState<any[]>([]);
   const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
+  const [tutorStudentsCount, setTutorStudentsCount] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [checkoutItem, setCheckoutItem] = useState<any>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -635,7 +648,14 @@ const ProfileView: React.FC = () => {
     // 2. Zones (Created by this user)
     const qZones = query(collection(db, 'zones'), where('tutorId', '==', uid));
     const zSnap = await getDocs(qZones);
-    setZones(zSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const zonesData = zSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setZones(zonesData);
+
+    let studentsCount = 0;
+    zonesData.forEach((z: any) => {
+      studentsCount += (z.students || 0);
+    });
+    setTutorStudentsCount(studentsCount);
 
     // 3. Products
     const qProds = query(collection(db, 'products'), where('tutorId', '==', uid));
@@ -829,7 +849,11 @@ const ProfileView: React.FC = () => {
   if (loading) return <div className="h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div></div>;
   if (!profileUser) return <div className="h-screen flex flex-col items-center justify-center"><h2 className="text-3xl font-black text-indigo-900 mb-4">User Not Found</h2><button onClick={() => navigate('/dashboard')} className="px-8 py-4 bg-indigo-900 text-white rounded-2xl">Return to Dashboard</button></div>;
 
-  const role = profileUser.role || UserRole.STUDENT;
+  let displayRole = profileUser.role || UserRole.STUDENT;
+  if (!isMe && profileUser.bankingDetailsProvided) {
+    displayRole = UserRole.TUTOR;
+  }
+  const role = displayRole;
 
 
   // --- RENDERING ---
@@ -858,7 +882,7 @@ const ProfileView: React.FC = () => {
         editLocation={editLocation} setEditLocation={setEditLocation} isFollowing={isFollowing} handleFollow={handleFollow}
         bannerInputRef={bannerInputRef} handleFileChange={handleFileChange} avatarInputRef={avatarInputRef}
         setIsEditing={setIsEditing} handleSaveProfile={handleSaveProfile} setShowLinkedInModal={setShowLinkedInModal} setShowProductModal={setShowProductModal} navigate={navigate}
-        handleViewFollowers={handleViewFollowers}
+        handleViewFollowers={handleViewFollowers} tutorStudentsCount={tutorStudentsCount}
       />
 
       <div className="max-w-7xl mx-auto -mt-16 px-10 relative z-20">

@@ -694,13 +694,26 @@ const StudentZoneView: React.FC = () => {
 
           {activeTab === 'content' ? (
             activeContent ? (
-              <div className="bg-white rounded-[4rem] p-16 border border-gray-100 shadow-2xl min-h-[600px] flex flex-col items-center justify-center text-center relative overflow-hidden group">
+              <div
+                className="bg-white rounded-[4rem] p-6 lg:p-10 border border-gray-100 shadow-2xl min-h-[600px] flex flex-col items-center justify-center text-center relative overflow-hidden group"
+                onContextMenu={(e) => e.preventDefault()}
+                style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+              >
                 {activeContent.type === 'video' && activeContent.videoId ? (
                   <BunnyVideoPlayer
                     videoId={activeContent.videoId}
                     title={activeContent.title}
                     onComplete={() => handleMarkAsCompleted(activeContent.id)}
                   />
+                ) : (activeContent.type === 'pdf' || activeContent.type === 'document' || activeContent.url || activeContent.fileUrl) ? (
+                  <div className="w-full h-full min-h-[600px] rounded-[3rem] overflow-hidden bg-gray-50 shadow-inner relative flex flex-col items-center justify-center">
+                    <iframe
+                      src={`${activeContent.url || activeContent.fileUrl || activeContent.documentUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                      className="w-full h-full min-h-[600px] border-none"
+                      title={activeContent.title}
+                    />
+                    <div className="absolute top-0 w-full h-14 bg-transparent z-10" title="Protected Content" />
+                  </div>
                 ) : (
                   <>
                     <div className="w-32 h-32 bg-gray-50 rounded-[3rem] flex items-center justify-center text-indigo-900 mb-10 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-700">
@@ -791,13 +804,13 @@ const StudentZoneView: React.FC = () => {
                           }} className="w-full py-5 bg-[#1A1A4E] text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
                         ) : exam.type === 'offline' && exam.status === 'UPCOMING' ? (
                           <div className="space-y-4">
-                            <a href={exam.excelTemplateUrl || '#'} download className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-200 transition-all flex items-center justify-center gap-2">
-                              <FileDown size={16} /> Download Template
+                            <a href={exam.pdfUrl || '#'} target="_blank" rel="noreferrer" download className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-200 transition-all flex items-center justify-center gap-2">
+                              <FileDown size={16} /> Download Question Paper
                             </a>
-                            <p className="text-center text-[10px] text-gray-400 font-bold px-2">Fill the template and upload it back here during the exam window.</p>
+                            <p className="text-center text-[10px] text-gray-400 font-bold px-2">Write your answers and upload them as a PDF during the exam window.</p>
                             <label className="w-full py-4 bg-[#c2f575] text-indigo-900 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xl">
-                              <Upload size={16} /> Upload Answers
-                              <input type="file" className="hidden" accept=".xlsx, .pdf" onChange={() => alert("File uploaded successfully. Awaiting grading.")} />
+                              <Upload size={16} /> Upload Answer Sheet
+                              <input type="file" className="hidden" accept=".pdf" onChange={() => alert("File uploaded successfully. Awaiting grading.")} />
                             </label>
                           </div>
                         ) : null
@@ -831,38 +844,7 @@ const StudentZoneView: React.FC = () => {
               </div>
             </div>
           )}
-          <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
-            <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
-              <div className="w-2 h-8 bg-[#c2f575] rounded-full"></div>
-              Zone Description
-            </h3>
-            <p className="text-gray-500 leading-relaxed text-lg font-medium">{zone.description || 'Elevate your skills through Sundaram\'s expert-led curriculum designed for industry precision.'}</p>
-          </div>
-
-          {studentData && (
-            <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
-              <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
-                <div className="w-2 h-8 bg-indigo-900 rounded-full"></div>
-                Your Progress
-              </h3>
-              <div className="grid grid-cols-2 gap-8">
-                <div className="bg-gray-50 p-8 rounded-[2rem] text-center">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Attendance %</p>
-                  <p className="text-4xl font-black text-indigo-900">
-                    {(() => {
-                      if (!studentData.attendanceHistory || studentData.attendanceHistory.length === 0) return 0;
-                      const presentCount = studentData.attendanceHistory.filter((h: any) => h.status === 'Present').length;
-                      return Math.round((presentCount / studentData.attendanceHistory.length) * 100);
-                    })()}%
-                  </p>
-                </div>
-                <div className="bg-gray-50 p-8 rounded-[2rem] text-center">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">XP Earned</p>
-                  <p className="text-4xl font-black text-indigo-900">{studentData.engagementScore || 0}</p>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Removed Zone Description and Progress tracking sections as per minimalist UI requirement */}
         </div>
 
         <div className="xl:col-span-4 space-y-8">

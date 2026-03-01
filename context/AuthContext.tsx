@@ -186,8 +186,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const updatedUser = { ...user, ...updates };
-
     if (db) {
       try {
         console.log(`AuthContext: Attempting to update profile for ${user.uid}...`);
@@ -209,7 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn("AuthContext: Firebase not initialized (db is null). Updating local state only.");
     }
 
-    setUser(updatedUser);
+    setUser(prev => prev ? { ...prev, ...updates } : null);
   };
 
   const toggleRole = async () => {

@@ -251,6 +251,11 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   };
 
   const dateKeyForModal = modalDate ? `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${modalDate.toString().padStart(2, '0')}` : '';
+
+  const todayDateObj = new Date();
+  todayDateObj.setHours(0, 0, 0, 0);
+  const isModalDatePast = modalDate ? new Date(year, currentMonth.getMonth(), modalDate) < todayDateObj : false;
+
   const daySessions = getSessionsForDay(modalDate);
   const eventsForModal = modalDate ? [
     ...(meetingsData[dateKeyForModal] || []),
@@ -455,18 +460,22 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                     <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-200">
                       <Zap size={32} />
                     </div>
-                    <p className="italic text-gray-400 font-medium">No events scheduled. Plan your success.</p>
+                    <p className="italic text-gray-400 font-medium">
+                      {isModalDatePast ? "No events were scheduled for this day." : "No events scheduled. Plan your success."}
+                    </p>
                   </div>}
                 </div>
               )}
             </div>
-            <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
-              {isCreatingEvent ? (
-                <button onClick={handleSaveEvent} className="w-full py-4 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest"><Save size={16} className="inline mr-2" /> Save Event</button>
-              ) : (
-                <button onClick={() => setIsCreatingEvent(true)} className="w-full py-4 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest"><Plus size={16} className="inline mr-2" /> Add Event</button>
-              )}
-            </div>
+            {!isModalDatePast && (
+              <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
+                {isCreatingEvent ? (
+                  <button onClick={handleSaveEvent} className="w-full py-4 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest"><Save size={16} className="inline mr-2" /> Save Event</button>
+                ) : (
+                  <button onClick={() => setIsCreatingEvent(true)} className="w-full py-4 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest"><Plus size={16} className="inline mr-2" /> Add Event</button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

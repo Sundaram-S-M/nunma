@@ -15,7 +15,8 @@ import {
     Video,
     ExternalLink,
     CheckCircle2,
-    Info
+    Info,
+    ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -49,6 +50,14 @@ const ProductManagement: React.FC = () => {
 
     // Availability State
     const [availability, setAvailability] = useState<any[]>(user?.availability || []);
+
+    // New Product State
+    const [showProductModal, setShowProductModal] = useState(false);
+    const [productTitle, setProductTitle] = useState('');
+    const [productType, setProductType] = useState<'material' | 'service' | 'mentorship'>('service');
+    const [productPrice, setProductPrice] = useState('');
+    const [productCurrency, setProductCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
+    const [isListingProduct, setIsListingProduct] = useState(false);
 
     useEffect(() => {
         if (!user) return;
@@ -130,6 +139,30 @@ const ProductManagement: React.FC = () => {
         const { id, ...data } = editingProduct;
         await updateDoc(doc(db, 'products', id), data);
         setEditingProduct(null);
+    };
+
+    const handleListProduct = async () => {
+        if (!productTitle || !productPrice || !user) return;
+        setIsListingProduct(true);
+
+        try {
+            await addDoc(collection(db, 'products'), {
+                tutorId: user.uid,
+                title: productTitle,
+                type: productType,
+                price: productPrice,
+                currency: productCurrency,
+                createdAt: serverTimestamp()
+            });
+
+            setIsListingProduct(false);
+            setShowProductModal(false);
+            setProductTitle('');
+            setProductPrice('');
+        } catch (e) {
+            console.error("Error listing product", e);
+            setIsListingProduct(false);
+        }
     };
 
     return (
@@ -239,6 +272,14 @@ const ProductManagement: React.FC = () => {
 
                     {activeTab === 'products' && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={() => setShowProductModal(true)}
+                                    className="px-6 py-2.5 bg-[#c2f575] text-[#1A1A4E] rounded-full font-bold uppercase text-[10px] tracking-widest hover:brightness-105 transition-all shadow-lg flex justify-center items-center gap-2"
+                                >
+                                    <Plus size={14} /> List Product
+                                </button>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                 {products.length > 0 ? products.map(product => (
                                     <div key={product.id} className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 hover:bg-white hover:shadow-2xl transition-all group">
@@ -356,6 +397,39 @@ const ProductManagement: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {/* List Product Modal */}
+            {showProductModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
+                        <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center">
+                            <h3 className="text-3xl font-black text-[#040457] tracking-tight">List Digital Product</h3>
+                            <button onClick={() => setShowProductModal(false)} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"><X size={24} /></button>
+                        </div>
+                        <div className="p-12 space-y-10">
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRODUCT NAME</label>
+                                <input type="text" placeholder="e.g. Masterclass Assets" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
+                            </div>
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">TYPE</label>
+                                <div className="grid grid-cols-3 gap-4">
+                                    {(['material', 'service', 'mentorship'] as const).map(t => (
+                                        <button key={t} onClick={() => setProductType(t)} className={`py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${productType === t ? 'bg-[#040457] text-white shadow-xl' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{t}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none" /></div>
+                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label><select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none"><option value="INR">INR (₹)</option><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option></select></div>
+                            </div>
+                            <button onClick={handleListProduct} disabled={isListingProduct} className="w-full py-7 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-70">
+                                {isListingProduct ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div> : <>CONFIRM LISTING <ArrowRight size={20} className="text-[#c2f575]" /></>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Edit Product Modal */}
             {editingProduct && (

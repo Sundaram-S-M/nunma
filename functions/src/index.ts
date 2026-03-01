@@ -546,3 +546,118 @@ export const createZohoCheckoutSession = functions.https.onCall(async (data, con
         throw new functions.https.HttpsError("internal", error.message || "Failed to initiate Zoho Checkout.");
     }
 });
+
+// --- INVOICING & BILLING SYSTEM ---
+
+export const sendInvoiceEmail = functions.https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+
+    const { transactionId, amount, service, date, recipientEmail, recipientName } = data;
+    if (!transactionId || !amount || !recipientEmail) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing invoice data.");
+    }
+
+    try {
+        const mailOptions = {
+            from: `"Nunma Billing" <${process.env.SMTP_USER}>`,
+            to: recipientEmail,
+            subject: `Invoice for ${service} (${transactionId})`,
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; color: #040457;">
+                    <h2 style="color: #040457;">Payment Receipt</h2>
+                    <p>Hi ${recipientName || 'User'},</p>
+                    <p>Thank you for your payment. Here are the details of your transaction:</p>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                        <tr style="background: #f4f4f4;">
+                            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Transaction ID</th>
+                            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Date</th>
+                            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Service</th>
+                            <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Amount</th>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${transactionId}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${date}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${service}</td>
+                            <td style="padding: 10px; text-align: right; border: 1px solid #ddd; font-weight: bold;">${amount}</td>
+                        </tr>
+                    </table>
+                    <p style="margin-top: 30px; font-size: 12px; color: #666;">This is an automated receipt from Nunma Academy.</p>
+                </div>
+            `,
+        };
+
+        if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+            await transporter.sendMail(mailOptions);
+            return { success: true, message: "Invoice sent successfully." };
+        } else {
+            console.warn("SMTP credentials missing. Invoice email not sent.");
+            return { success: false, message: "SMTP credentials missing. Logging only." };
+        }
+    } catch (error: any) {
+        console.error("sendInvoiceEmail error:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to send invoice email.");
+    }
+});
+
+export const downloadInvoice = functions.https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+
+    const { transactionId, amount, service, date, status } = data;
+    if (!transactionId) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing transactionId.");
+    }
+
+    // Return a raw HTML string that the client can open in a new tab and print/save as PDF.
+    const htmlInvoice = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Invoice - ${transactionId}</title>
+        <style>
+            body { font-family: 'Inter', sans-serif; padding: 40px; color: #1A1A4E; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f4f4f4; padding-bottom: 20px; margin-bottom: 40px; }
+            .title { font-size: 32px; font-weight: 900; margin: 0; }
+            .meta { text-align: right; color: #666; font-size: 14px; }
+            .details { margin-bottom: 40px; }
+            .table { width: 100%; border-collapse: collapse; }
+            .table th, .table td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+            .table th { background: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 12px; color: #888; }
+            .table .amount { text-align: right; font-weight: bold; color: #1A1A4E; }
+            .footer { margin-top: 60px; font-size: 12px; color: #aaa; text-align: center; }
+            @media print { .no-print { display: none; } }
+        </style>
+    </head>
+    <body onload="window.print()">
+        <div class="header">
+            <h1 class="title">NUNMA INVOICE</h1>
+            <div class="meta">
+                <p>Transaction ID: <strong>${transactionId}</strong></p>
+                <p>Date: ${date}</p>
+                <p>Status: <span style="color: ${status === 'Completed' ? 'green' : 'inherit'};">${status}</span></p>
+            </div>
+        </div>
+        <div class="details">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th class="amount">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>${service}</td>
+                        <td class="amount">${amount}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="footer">
+            <p>Thank you for your business. For any queries, contact support@nunma.in.</p>
+        </div>
+    </body>
+    </html>
+    `;
+
+    return { success: true, html: htmlInvoice };
+});

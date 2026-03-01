@@ -13,8 +13,10 @@ import {
   Send,
   MessageCircle, Users, Zap, X, Search, MoreVertical,
   ImageIcon, Smile, Mic, Phone, Video, CheckCheck,
-  FileText, Camera, Mail, ArrowRight, UserPlus
+  FileText, Camera, Mail, ArrowRight, UserPlus, Image as LucideImage
 } from 'lucide-react';
+
+import PhotoAdjustModal from '../components/PhotoAdjustModal';
 
 interface Message {
   id: string;
@@ -34,6 +36,7 @@ interface Chat {
   online: boolean;
   type: 'chat' | 'community' | 'collaboration';
   participants: string[];
+  description?: string;
   otherUser?: {
     uid: string;
     name: string;
@@ -68,6 +71,17 @@ const Inbox: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+
+  // Group Profile State
+  const [showGroupProfile, setShowGroupProfile] = useState(false);
+  const [isEditingGroup, setIsEditingGroup] = useState(false);
+  const [groupEditName, setGroupEditName] = useState('');
+  const [groupEditDesc, setGroupEditDesc] = useState('');
+  const [groupParticipants, setGroupParticipants] = useState<any[]>([]);
+  const [loadingParticipants, setLoadingParticipants] = useState(false);
+
+  const [adjustingImage, setAdjustingImage] = useState<string | null>(null);
+  const groupAvatarRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -282,8 +296,173 @@ const Inbox: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleGroupHeaderClick = () => {
+    if (activeChat?.type === 'collaboration' || activeChat?.type === 'community') {
+      setShowGroupProfile(true);
+      setGroupEditName(activeChat.name || '');
+      setGroupEditDesc(activeChat.description || '');
+      fetchGroupParticipants();
+    } else if (activeChat) {
+      navigate(`/profile/${activeChat.otherUser?.uid || activeChat.id}`);
+    }
+  };
+
+  const fetchGroupParticipants = async () => {
+    if (!activeChat || !activeChat.participants) return;
+    setLoadingParticipants(true);
+    try {
+      const usersData: any[] = [];
+      const ids = activeChat.participants;
+      for (let i = 0; i < ids.length; i += 10) {
+        const chunk = ids.slice(i, i + 10);
+        const usersQ = query(collection(db, 'users'), where('__name__', 'in', chunk));
+        const usersSnap = await getDocs(usersQ);
+        usersSnap.forEach(d => usersData.push({ id: d.id, ...d.data() }));
+      }
+      setGroupParticipants(usersData);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingParticipants(false);
+  };
+
+  const handleSaveGroupProfile = async () => {
+    if (!activeChat) return;
+    try {
+      await updateDoc(doc(db, 'conversations', activeChat.id), {
+        name: groupEditName,
+        description: groupEditDesc
+      });
+      setIsEditingGroup(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleGroupFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAdjustingImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveGroupPhoto = async (croppedImage: string) => {
+    if (!activeChat) return;
+    try {
+      await updateDoc(doc(db, 'conversations', activeChat.id), {
+        avatar: croppedImage
+      });
+      setAdjustingImage(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-140px)] flex bg-[#fbfbfb] rounded-[4rem] border border-gray-100 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-700 relative">
+
+      {adjustingImage && (
+        <PhotoAdjustModal
+          image={adjustingImage}
+          onSave={handleSaveGroupPhoto}
+          onClose={() => setAdjustingImage(null)}
+          onChangePhoto={() => {
+            setAdjustingImage(null);
+            groupAvatarRef.current?.click();
+          }}
+        />
+      )}
+
+      {showGroupProfile && activeChat && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 relative flex flex-col max-h-[90vh]">
+            <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30 shrink-0">
+              <div>
+                <h3 className="text-2xl font-black text-indigo-900">Group Profile</h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Manage details & members</p>
+              </div>
+              <button onClick={() => { setShowGroupProfile(false); setIsEditingGroup(false); }} className="p-3 text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
+            </div>
+
+            <div className="p-8 overflow-y-auto custom-scrollbar flex-1 space-y-8">
+              <div className="flex flex-col items-center">
+                <div className="relative group mb-6">
+                  <div className="w-32 h-32 rounded-[2.5rem] border-4 border-gray-50 p-1 bg-white relative overflow-hidden shadow-xl">
+                    <img src={activeChat.avatar || 'https://picsum.photos/seed/group/200/200'} alt="Group" className="w-full h-full rounded-[2rem] object-cover" />
+                  </div>
+                  <button onClick={() => groupAvatarRef.current?.click()} className="absolute bottom-[-10px] right-[-10px] w-12 h-12 bg-[#c2f575] text-indigo-900 rounded-2xl shadow-lg flex items-center justify-center hover:scale-110 transition-all border-4 border-white z-10">
+                    <Camera size={20} className="ml-[1px]" />
+                  </button>
+                  <input ref={groupAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleGroupFileChange} />
+                </div>
+
+                {isEditingGroup ? (
+                  <div className="w-full space-y-4">
+                    <input
+                      value={groupEditName}
+                      onChange={(e) => setGroupEditName(e.target.value)}
+                      placeholder="Group Name"
+                      className="w-full text-center text-2xl font-black text-indigo-900 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 outline-none focus:border-[#c2f575] transition-colors"
+                    />
+                    <textarea
+                      value={groupEditDesc}
+                      onChange={(e) => setGroupEditDesc(e.target.value)}
+                      placeholder="Add a description..."
+                      maxLength={150}
+                      className="w-full text-center text-sm font-bold text-gray-500 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 outline-none focus:border-[#c2f575] transition-colors resize-none h-24"
+                    />
+                    <button onClick={handleSaveGroupProfile} className="w-full py-4 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
+                      Save Changes
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center w-full">
+                    <h2 className="text-3xl font-black text-indigo-900 tracking-tight leading-tight mb-2">{activeChat.name}</h2>
+                    <p className="text-sm font-medium text-gray-500 italic mb-6 max-w-[250px] mx-auto">{activeChat.description || 'No description provided.'}</p>
+                    <button onClick={() => setIsEditingGroup(true)} className="px-8 py-3 bg-gray-50 text-indigo-900 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] hover:bg-gray-100 transition-colors">
+                      Edit Group Info
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-50 pt-8">
+                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex justify-between items-center">
+                  <span>Participants</span>
+                  <span className="bg-gray-100 text-indigo-900 px-3 py-1 rounded-full">{groupParticipants.length}</span>
+                </h4>
+
+                {loadingParticipants ? (
+                  <div className="flex justify-center py-6">
+                    <div className="w-6 h-6 border-2 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {groupParticipants.map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => { setShowGroupProfile(false); navigate(`/profile/${p.id}`); }}
+                        className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl cursor-pointer transition-colors border border-transparent hover:border-gray-100"
+                      >
+                        <img src={p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`} className="w-12 h-12 rounded-[1rem] object-cover shadow-sm" alt="" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-black text-indigo-900 truncate">{p.name}</p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{p.headline || 'Member'}</p>
+                        </div>
+                        <ArrowRight size={16} className="text-gray-300" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreateGroup && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
@@ -451,7 +630,7 @@ const Inbox: React.FC = () => {
               <div className="flex items-center gap-6">
                 <div
                   className="relative cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => navigate(`/profile/${activeChat.otherUser?.uid || activeChat.id}`)}
+                  onClick={handleGroupHeaderClick}
                 >
                   <img src={activeChat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={activeChat.name} className="w-14 h-14 rounded-2xl object-cover shadow-xl" />
                   {activeChat.online && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#7cc142] border-[3px] border-white rounded-full"></div>}

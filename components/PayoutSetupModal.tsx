@@ -137,7 +137,7 @@ const PayoutSetupModal: React.FC<PayoutSetupModalProps> = ({ onClose, onComplete
                         {/* Country with Search & Phone Prefix Logic */}
                         <div className="space-y-3 relative" ref={countryRef}>
                             <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">COUNTRY</label>
-                            <div className="relative group">
+                            <div className="relative">
                                 <input
                                     type="text"
                                     value={countrySearch}
@@ -161,7 +161,7 @@ const PayoutSetupModal: React.FC<PayoutSetupModalProps> = ({ onClose, onComplete
                                                 className="w-full text-left px-6 py-4 rounded-2xl hover:bg-gray-50 text-indigo-900 font-bold text-sm flex items-center justify-between group transition-all"
                                             >
                                                 {country.name}
-                                                <Check size={16} className="text-[#c1e60d] opacity-0 group-hover:opacity-100" />
+                                                <Check size={16} className={`text-[#c1e60d] transition-opacity ${selectedCountry?.name === country.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
                                             </button>
                                         ))}
                                         {filteredCountries.length === 0 && (
@@ -196,7 +196,7 @@ const PayoutSetupModal: React.FC<PayoutSetupModalProps> = ({ onClose, onComplete
                                                 className="w-full text-left px-6 py-4 rounded-2xl hover:bg-gray-50 text-indigo-900 font-bold text-sm flex items-center justify-between group transition-all"
                                             >
                                                 {bank}
-                                                <Check size={16} className="text-[#c1e60d] opacity-0 group-hover:opacity-100" />
+                                                <Check size={16} className={`text-[#c1e60d] transition-opacity ${bankSearch === bank ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
                                             </button>
                                         ))}
                                         {filteredBanks.length === 0 && (

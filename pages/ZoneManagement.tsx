@@ -295,7 +295,7 @@ const ZoneManagement: React.FC = () => {
   const handleCreateExam = async () => {
     if (!zoneId) return;
 
-    const newExam: Exam = {
+    const newExam: any = {
       id: Date.now().toString(),
       title: newExamTitle,
       date: newExamDate,
@@ -305,9 +305,14 @@ const ZoneManagement: React.FC = () => {
       maxMark: parseInt(newExamMaxMark),
       minMark: parseInt(newExamMinMark),
       questions: newExamType === 'online-mcq' ? newExamQuestions : [],
-      pdfUrl: newExamType === 'online-test' && newExamFile ? URL.createObjectURL(newExamFile) : undefined, // Mock URL for now
-      excelTemplateUrl: newExamType === 'offline' && newExamFile ? URL.createObjectURL(newExamFile) : undefined
     };
+
+    if (newExamType === 'online-test' && newExamFile) {
+      newExam.pdfUrl = URL.createObjectURL(newExamFile);
+    }
+    if (newExamType === 'offline' && newExamFile) {
+      newExam.pdfUrl = URL.createObjectURL(newExamFile); // Save as pdf URL for download
+    }
 
     try {
       await addDoc(collection(db, 'zones', zoneId, 'exams'), newExam);
@@ -1374,15 +1379,15 @@ const ZoneManagement: React.FC = () => {
                       <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center p-10 space-y-6">
                         {newExamType === 'offline' ? (
                           <>
-                            <FileSpreadsheet size={40} className="mb-4 opacity-50 text-green-500" />
+                            <FileText size={40} className="mb-4 opacity-50 text-green-500" />
                             <p className="font-bold">Offline Assessment Mode</p>
-                            <p className="text-xs text-gray-400">Upload a template Excel sheet for students to download (Optional).<br />After the exam, upload the filled sheet here to auto-grade.</p>
+                            <p className="text-xs text-gray-400">Upload a PDF question paper for students to download.<br />After the exam, upload the students' marks via an Excel sheet in the gradebook.</p>
                             <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-green-200 hover:border-green-400 rounded-2xl cursor-pointer bg-green-50 transition-all">
                               <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                 <Upload size={24} className="mb-2 text-green-500" />
-                                <p className="text-xs font-bold text-green-600">{newExamFile ? newExamFile.name : 'Upload Template (.xlsx)'}</p>
+                                <p className="text-xs font-bold text-green-600">{newExamFile ? newExamFile.name : 'Upload Question Paper (.pdf)'}</p>
                               </div>
-                              <input type="file" className="hidden" accept=".xlsx, .xls" onChange={(e) => e.target.files && setNewExamFile(e.target.files[0])} />
+                              <input type="file" className="hidden" accept=".pdf" onChange={(e) => e.target.files && setNewExamFile(e.target.files[0])} />
                             </label>
                           </>
                         ) : (

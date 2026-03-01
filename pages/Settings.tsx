@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { functions } from '../utils/firebase';
+import { httpsCallable } from 'firebase/functions';
 
 const COUNTRIES = [
   { name: 'United Kingdom', code: '+44', banks: ['HSBC UK', 'Barclays', 'NatWest', 'Lloyds Bank', 'Standard Chartered'] },
@@ -163,6 +165,7 @@ const Billings = () => {
   const [accountNumber, setAccountNumber] = useState('');
   const [ifsc, setIfsc] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [downloadingTx, setDownloadingTx] = useState<string | null>(null);
 
   // Country search and selection
   const [countrySearch, setCountrySearch] = useState('');
@@ -216,6 +219,35 @@ const Billings = () => {
     { id: 'T-8341', date: 'Sep 28, 2025', amount: '+$49.00', status: 'Completed', service: 'Earnings: Zone Access (User Alpha)', type: 'inbound' },
     { id: 'P-990', date: 'Sep 20, 2025', amount: '-$121.00', status: 'Completed', service: 'Payout to Bank (Domestic)', type: 'payout' },
   ];
+
+  const handleDownloadInvoice = async (transaction: any) => {
+    setDownloadingTx(transaction.id);
+    try {
+      const getInvoice = httpsCallable(functions, 'downloadInvoice');
+      const response: any = await getInvoice({
+        transactionId: transaction.id,
+        amount: transaction.amount,
+        service: transaction.service,
+        date: transaction.date,
+        status: transaction.status
+      });
+
+      if (response.data.success) {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(response.data.html);
+          printWindow.document.close();
+        } else {
+          alert('Please allow popups to view your invoice.');
+        }
+      }
+    } catch (e: any) {
+      console.error('Invoice download failed:', e);
+      alert('Failed to generate invoice.');
+    } finally {
+      setDownloadingTx(null);
+    }
+  };
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500">
@@ -460,9 +492,20 @@ const Billings = () => {
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{t.id} • {t.date}</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className={`text-2xl font-black ${t.amount.startsWith('+') ? 'text-[#7cc142]' : 'text-indigo-900'}`}>{t.amount}</p>
-                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{t.status}</p>
+              <div className="text-right flex flex-col items-end gap-2">
+                <div>
+                  <p className={`text-2xl font-black ${t.amount.startsWith('+') ? 'text-[#7cc142]' : 'text-indigo-900'}`}>{t.amount}</p>
+                  <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{t.status}</p>
+                </div>
+                <button
+                  onClick={() => handleDownloadInvoice(t)}
+                  disabled={downloadingTx === t.id}
+                  className="px-4 py-2 mt-2 bg-indigo-50 text-indigo-900 rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-[#c1e60d] hover:text-[#1A1A4E] transition-all disabled:opacity-50"
+                  title="Download Invoice"
+                >
+                  <Download size={12} />
+                  {downloadingTx === t.id ? 'Generating...' : 'Invoice'}
+                </button>
               </div>
             </div>
           ))}
