@@ -88,31 +88,66 @@ const Security = () => (
 );
 
 const PricingPlans = () => {
-  const [currentPlan, setCurrentPlan] = useState('Pro');
+  const { user } = useAuth();
+  const currentTier = (user as any)?.current_tier || 'STARTER';
 
   const plans = [
     {
+      id: 'STARTER',
       name: 'Starter',
-      price: '$0',
-      period: 'Forever',
-      features: ['Unlimited Students', 'Basic Analytics', '3 Active Zones', '5% Platform Fee'],
-      recommended: false
+      price: '₹0',
+      period: '/ month',
+      features: [
+        '10% Platform Fee',
+        'Max 100 Students',
+        '10 Live Streams / month',
+        '3 GB Storage',
+        'Basic Analytics'
+      ],
+      recommended: false,
+      buttonText: 'Current Plan',
+      zohoUrl: null
     },
     {
-      name: 'Pro',
-      price: '$29',
+      id: 'STANDARD',
+      name: 'Standard',
+      price: '₹1,499',
       period: '/ month',
-      features: ['Everything in Starter', 'Advanced Analytics', 'Unlimited Zones', 'Certificates', '0% Platform Fee'],
-      recommended: true
+      features: [
+        '5% Platform Fee',
+        'Max 250 Students',
+        '25 Live Streams / month',
+        '15 GB Storage',
+        'Add-ons Available'
+      ],
+      recommended: true,
+      buttonText: 'Upgrade to Standard',
+      zohoUrl: 'https://billing.zoho.in/subscribe/standard_plan' // Placeholder Zoho URL
     },
     {
-      name: 'Elite',
-      price: '$99',
+      id: 'PREMIUM',
+      name: 'Premium',
+      price: '₹4,999',
       period: '/ month',
-      features: ['Everything in Pro', 'White-label Domain', 'Priority Support', 'API Access', 'Custom Branding'],
-      recommended: false
+      features: [
+        '2% Platform Fee',
+        'Max 1,000 Students',
+        '60 Live Streams / month',
+        '30 GB Storage',
+        'Add-ons Available'
+      ],
+      recommended: false,
+      buttonText: 'Upgrade to Premium',
+      zohoUrl: 'https://billing.zoho.in/subscribe/premium_plan' // Placeholder Zoho URL
     }
   ];
+
+  const handleUpgrade = (plan: typeof plans[0]) => {
+    if (plan.id === currentTier) return;
+    if (plan.zohoUrl) {
+      window.open(plan.zohoUrl, '_blank');
+    }
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -122,36 +157,51 @@ const PricingPlans = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {plans.map((plan) => (
-          <div key={plan.name} className={`relative p-8 rounded-[2.5rem] border-2 flex flex-col ${plan.recommended ? 'bg-[#1A1A4E] text-white border-[#1A1A4E] shadow-2xl scale-105 z-10' : 'bg-white border-gray-100 text-[#1A1A4E] hover:border-[#1A1A4E]/20 transition-all'}`}>
-            {plan.recommended && (
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#c1e60d] text-[#1A1A4E] px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
-                Recommended
-              </div>
-            )}
-            <h3 className="text-xl font-black mb-2">{plan.name}</h3>
-            <div className="flex items-baseline gap-1 mb-8">
-              <span className={`text-4xl font-black ${plan.recommended ? 'text-[#c1e60d]' : 'text-[#1A1A4E]'}`}>{plan.price}</span>
-              <span className="text-xs font-bold opacity-60">{plan.period}</span>
-            </div>
-            <div className="space-y-4 mb-8 flex-1">
-              {plan.features.map((feature, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center ${plan.recommended ? 'bg-white/10 text-[#c1e60d]' : 'bg-gray-100 text-[#1A1A4E]'}`}>
-                    <Check size={12} strokeWidth={3} />
-                  </div>
-                  <span className="text-xs font-bold opacity-80">{feature}</span>
+        {plans.map((plan) => {
+          const isCurrent = plan.id === currentTier;
+          return (
+            <div key={plan.name} className={`relative p-8 rounded-[2.5rem] border-2 flex flex-col ${plan.recommended && !isCurrent ? 'bg-[#1A1A4E] text-white border-[#1A1A4E] shadow-2xl scale-105 z-10' : 'bg-white border-gray-100 text-[#1A1A4E] hover:border-[#1A1A4E]/20 transition-all'}`}>
+              {plan.recommended && !isCurrent && (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#c1e60d] text-[#1A1A4E] px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
+                  Recommended
                 </div>
-              ))}
+              )}
+              {isCurrent && (
+                <div className="absolute top-4 right-4 bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
+                  Current
+                </div>
+              )}
+              <h3 className="text-xl font-black mb-2">{plan.name}</h3>
+              <div className="flex items-baseline gap-1 mb-8">
+                <span className={`text-4xl font-black ${plan.recommended && !isCurrent ? 'text-[#c1e60d]' : 'text-[#1A1A4E]'}`}>{plan.price}</span>
+                <span className="text-xs font-bold opacity-60">{plan.period}</span>
+              </div>
+              <div className="space-y-4 mb-8 flex-1">
+                {plan.features.map((feature, i) => {
+                  let isFee = feature.includes('Platform Fee');
+                  let feeColor = isFee && plan.id === 'PREMIUM' ? 'text-green-500' : isFee && plan.id === 'STANDARD' ? 'text-indigo-500' : '';
+                  return (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center ${plan.recommended && !isCurrent ? 'bg-white/10 text-[#c1e60d]' : 'bg-gray-100 text-[#1A1A4E]'}`}>
+                        <Check size={12} strokeWidth={3} />
+                      </div>
+                      <span className={`text-xs font-bold ${feeColor ? feeColor : 'opacity-80'}`}>
+                        {feature}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => handleUpgrade(plan)}
+                disabled={isCurrent}
+                className={`w-full py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${isCurrent ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : plan.recommended ? 'bg-[#c1e60d] text-[#1A1A4E] hover:scale-105 shadow-md hover:shadow-xl hover:shadow-[#c1e60d]/20' : 'bg-[#1A1A4E] text-white hover:bg-black shadow-md'}`}
+              >
+                {isCurrent ? 'Current Plan' : plan.buttonText}
+              </button>
             </div>
-            <button
-              onClick={() => setCurrentPlan(plan.name)}
-              className={`w-full py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${plan.name === currentPlan ? 'bg-gray-100 text-gray-400 cursor-default' : plan.recommended ? 'bg-[#c1e60d] text-[#1A1A4E] hover:scale-105' : 'bg-[#1A1A4E] text-white hover:bg-black'}`}
-            >
-              {plan.name === currentPlan ? 'Current Plan' : 'Upgrade'}
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -199,10 +249,47 @@ const Billings = () => {
     return selectedCountry.banks.filter(b => b.toLowerCase().includes(bankSearch.toLowerCase()));
   }, [bankSearch, selectedCountry]);
 
-  // Restrict phone to digits and leading +
+  // Format phone to +XX XXXXX XXXXX
   const handlePhoneChange = (val: string) => {
-    const cleaned = val.replace(/[^\d+]/g, '');
-    setPhoneNumber(cleaned);
+    // Only allow digits and plus sign
+    let cleaned = val.replace(/[^\d+]/g, '');
+
+    // Ensure it starts with +
+    if (cleaned.length > 0 && !cleaned.startsWith('+')) {
+      cleaned = '+' + cleaned;
+    }
+
+    // Extract country code (assuming +XX) and the rest
+    // A more robust implementation would parse the specific country's code length, 
+    // but we'll use a simple format based on the prompt: +91 89023 59125
+
+    // Remove spaces for processing
+    let digitsOnly = cleaned.replace(/\s+/g, '');
+
+    let formatted = digitsOnly;
+
+    // Format: +CC NNNNN NNNNN
+    if (digitsOnly.length > 3) {
+      // Find where the country code ends (usually after 2-3 chars incl '+')
+      // Let's assume the user typed a country code from the dropdown (+1, +44, +91)
+      // For simplicity, we'll put a space after the country code if it matches one
+      let ccLength = 3; // default for +XX
+      if (digitsOnly.startsWith('+1')) ccLength = 2; // +1
+
+      if (digitsOnly.length > ccLength) {
+        const cc = digitsOnly.substring(0, ccLength);
+        const rest = digitsOnly.substring(ccLength);
+
+        formatted = cc + ' ' + rest;
+
+        // Add second space after 5 digits of the actual number
+        if (rest.length > 5) {
+          formatted = cc + ' ' + rest.substring(0, 5) + ' ' + rest.substring(5);
+        }
+      }
+    }
+
+    setPhoneNumber(formatted);
   };
 
   const handleCountrySelect = (country: typeof COUNTRIES[0]) => {
@@ -341,7 +428,7 @@ const Billings = () => {
                         className="w-full text-left px-6 py-4 rounded-2xl hover:bg-gray-50 text-indigo-900 font-bold text-sm flex items-center justify-between group transition-all"
                       >
                         {country.name}
-                        <Check size={16} className="text-[#c1e60d] opacity-0 group-hover:opacity-100" />
+                        <Check size={16} className={`text-[#c1e60d] transition-opacity ${selectedCountry?.name === country.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
                       </button>
                     ))}
                     {filteredCountries.length === 0 && (
@@ -390,7 +477,7 @@ const Billings = () => {
                         className="w-full text-left px-6 py-4 rounded-2xl hover:bg-gray-50 text-indigo-900 font-bold text-sm flex items-center justify-between group transition-all"
                       >
                         {bank}
-                        <Check size={16} className="text-[#c1e60d] opacity-0 group-hover:opacity-100" />
+                        <Check size={16} className={`text-[#c1e60d] transition-opacity ${bankSearch === bank ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
                       </button>
                     ))}
                     {filteredBanks.length === 0 && (

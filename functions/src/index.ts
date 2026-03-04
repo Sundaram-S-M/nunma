@@ -1,127 +1,56 @@
 import * as functions from "firebase-functions";
+import { onRequest, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import { AccessToken } from "livekit-server-sdk";
 import * as crypto from "crypto";
-import * as corsLib from "cors";
 import * as nodemailer from "nodemailer";
-
-const cors = (corsLib as any)({ origin: true });
+import * as jwt from "jsonwebtoken";
 
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 
-/**
- * Diagnostic function to check if LiveKit keys are visible to the server.
- * EXPLICIT CORS handling for re-wired version.
- */
-export const checkLiveKitConfig = functions.https.onRequest(async (req, res) => {
-    return cors(req, res, async () => {
-        res.status(200).send({
-            hasApiKey: !!process.env.LIVEKIT_API_KEY,
-            apiKeyPrefix: process.env.LIVEKIT_API_KEY ? process.env.LIVEKIT_API_KEY.substring(0, 4) : 'none',
-            hasApiSecret: !!process.env.LIVEKIT_API_SECRET,
-            envKeys: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
-        });
-    });
-});
+// --- 100ms LIVE INTEGRATION ---
 
 /**
- * Re-wired Token Generation using onRequest with Security.
+ * Generates a signed JWT for the 100ms SDK.
+ * Reads HMS_ACCESS_KEY and HMS_SECRET from Firebase environment secrets.
  */
-export const generateLiveKitToken = functions.https.onRequest(async (req, res) => {
-    return cors(req, res, async () => {
-        try {
-            if (req.method !== 'POST') {
-                res.status(405).send({ error: 'Method Not Allowed' });
-                return;
-            }
+export const get100msToken = onCall(
+    { secrets: ["HMS_ACCESS_KEY", "HMS_SECRET"] },
+    async (request) => {
+        const accessKey = process.env.HMS_ACCESS_KEY;
+        const secret = process.env.HMS_SECRET;
 
-            // 1. Authenticate Request
-            const authHeader = req.headers.authorization;
-            if (!authHeader || !authHeader.startsWith('Bearer ')) {
-                res.status(401).send({ error: 'Unauthorized: Missing or malformed token' });
-                return;
-            }
-
-            const idToken = authHeader.split('Bearer ')[1];
-            let decodedToken;
-            try {
-                decodedToken = await admin.auth().verifyIdToken(idToken);
-            } catch (e) {
-                res.status(401).send({ error: 'Unauthorized: Invalid token' });
-                return;
-            }
-
-            const uid = decodedToken.uid;
-            const { roomName, zoneId } = req.body;
-
-            if (!roomName || !zoneId) {
-                res.status(400).send({ error: 'roomName and zoneId are required' });
-                return;
-            }
-
-            // 2. Authorize User
-            const zoneRef = admin.firestore().collection('zones').doc(zoneId);
-            const zoneDoc = await zoneRef.get();
-
-            if (!zoneDoc.exists) {
-                res.status(404).send({ error: 'Zone not found' });
-                return;
-            }
-
-            const zoneData = zoneDoc.data()!;
-            const isCreator = zoneData.createdBy === uid;
-
-            let isAuthorized = isCreator;
-
-            if (!isAuthorized) {
-                // Check if enrolled as student
-                const studentDoc = await zoneRef.collection('students').doc(uid).get();
-                if (studentDoc.exists) {
-                    isAuthorized = true;
-                }
-            }
-
-            if (!isAuthorized) {
-                res.status(403).send({ error: 'Forbidden: You are not authorized to join this room' });
-                return;
-            }
-
-            const apiKey = (process.env.LIVEKIT_API_KEY || '').trim();
-            const apiSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
-
-            if (!apiKey || !apiSecret) {
-                console.error("LiveKit configuration missing on server");
-                res.status(500).send({ error: 'LiveKit keys missing on server' });
-                return;
-            }
-
-            const identity = uid;
-            const name = decodedToken.name || decodedToken.email || uid;
-            const isTutor = isCreator; // Only the creator gets publisher rights for now
-
-            const at = new AccessToken(apiKey, apiSecret, {
-                identity: identity,
-                name: name,
-            });
-
-            at.addGrant({
-                roomJoin: true,
-                room: roomName,
-                canPublish: isTutor,
-                canSubscribe: true,
-                canPublishData: true,
-            });
-
-            const token = at.toJwt();
-            res.status(200).send({ token, isTutor, roomName });
-        } catch (error: any) {
-            console.error("Token Generation Error:", error);
-            res.status(500).send({ error: error.message || 'Token generation failed' });
+        if (!accessKey || !secret) {
+            console.error("[100ms] HMS_ACCESS_KEY or HMS_SECRET secrets are not configured.");
+            throw new functions.https.HttpsError(
+                "failed-precondition",
+                "100ms credentials are not configured on the server."
+            );
         }
-    });
-});
+
+        const now = Math.floor(Date.now() / 1000);
+
+        const payload = {
+            access_key: accessKey,
+            type: "app",
+            version: 2,
+            role: "broadcaster",
+            room_id: "sandbox-test-room",
+            user_id: "test-user-id",
+            iat: now,
+            nbf: now,
+        };
+
+        const token = jwt.sign(payload, secret, {
+            algorithm: "HS256",
+            expiresIn: "24h",
+        });
+
+        console.log("[100ms] Token generated successfully.");
+        return { token };
+    }
+);
 
 // --- BUNNY STREAM INTEGRATION ---
 
@@ -130,7 +59,9 @@ const BUNNY_API_KEY = process.env.BUNNY_API_KEY;
 const BUNNY_HOSTNAME = process.env.BUNNY_HOSTNAME || 'video.bunnycdn.com';
 const BUNNY_TOKEN_KEY = process.env.BUNNY_TOKEN_KEY; // From Pull Zone Security
 
-export const createBunnyVideo = functions.https.onCall(async (data, context) => {
+export const createBunnyVideo = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     // 1. Auth Check
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "User must be logged in.");
 
@@ -180,7 +111,9 @@ export const createBunnyVideo = functions.https.onCall(async (data, context) => 
     }
 });
 
-export const generateBunnyToken = functions.https.onCall(async (data, context) => {
+export const generateBunnyToken = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { videoId } = data;
@@ -241,7 +174,9 @@ export const handleBunnyWebhook = functions.https.onRequest(async (req, res) => 
     res.status(200).send('OK');
 });
 
-export const sendWhitelistInvite = functions.https.onCall(async (data, context) => {
+export const sendWhitelistInvite = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { email, zoneTitle } = data;
@@ -271,7 +206,8 @@ const transporter = nodemailer.createTransport({
  * Generates and stores a 6-digit OTP for a given email.
  * Sends the OTP via email.
  */
-export const requestOTP = functions.https.onCall(async (data) => {
+export const requestOTP = functions.https.onCall(async (request) => {
+    const data = request.data;
     const { email } = data;
     if (!email) {
         throw new functions.https.HttpsError("invalid-argument", "Email is required.");
@@ -325,7 +261,8 @@ export const requestOTP = functions.https.onCall(async (data) => {
  * Verifies OTP and returns a custom token for client sign-in.
  * If user doesn't exist, it creates a profile in Firestore only IF password is provided.
  */
-export const verifyOTPAndSignIn = functions.https.onCall(async (data) => {
+export const verifyOTPAndSignIn = functions.https.onCall(async (request) => {
+    const data = request.data;
     const { email, otp, registrationData, password } = data;
 
     if (!email || !otp) {
@@ -408,7 +345,9 @@ export const verifyOTPAndSignIn = functions.https.onCall(async (data) => {
 
 // --- SECURE BOOKING SYSTEM ---
 
-export const createMentorshipBooking = functions.https.onCall(async (data, context) => {
+export const createMentorshipBooking = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { tutorId, productId, date, slotId, time, studentCountry } = data;
@@ -481,7 +420,9 @@ export const createMentorshipBooking = functions.https.onCall(async (data, conte
 
 // --- ZOHO PAYMENTS INTEGRATION ---
 
-export const createZohoCheckoutSession = functions.https.onCall(async (data, context) => {
+export const createZohoCheckoutSession = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { productId, title, amount, currency, returnUrl } = data;
@@ -549,7 +490,9 @@ export const createZohoCheckoutSession = functions.https.onCall(async (data, con
 
 // --- INVOICING & BILLING SYSTEM ---
 
-export const sendInvoiceEmail = functions.https.onCall(async (data, context) => {
+export const sendInvoiceEmail = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { transactionId, amount, service, date, recipientEmail, recipientName } = data;
@@ -599,7 +542,9 @@ export const sendInvoiceEmail = functions.https.onCall(async (data, context) => 
     }
 });
 
-export const downloadInvoice = functions.https.onCall(async (data, context) => {
+export const downloadInvoice = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { transactionId, amount, service, date, status } = data;
@@ -660,4 +605,47 @@ export const downloadInvoice = functions.https.onCall(async (data, context) => {
     `;
 
     return { success: true, html: htmlInvoice };
+});
+
+// --- BUNNY STREAM WEBHOOK (v2) ---
+
+/**
+ * Receives processing status updates from Bunny Stream.
+ * Status 3 = Finished → sets document status to 'ready'
+ * Status 5 = Failed   → sets document status to 'failed'
+ * Always returns 200 so Bunny does not aggressively retry.
+ */
+export const bunnyStreamWebhook = onRequest(async (req, res) => {
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+
+    const { VideoGuid, Status } = req.body;
+
+    if (VideoGuid && (Status === 3 || Status === 5)) {
+        const newStatus = Status === 3 ? 'ready' : 'failed';
+        try {
+            const db = admin.firestore();
+            const snapshot = await db
+                .collection('tutor_videos')
+                .where('bunnyVideoId', '==', VideoGuid)
+                .get();
+
+            if (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => batch.update(doc.ref, { status: newStatus }));
+                await batch.commit();
+                console.log(`[BunnyWebhook] Video ${VideoGuid} → status '${newStatus}'`);
+            } else {
+                console.warn(`[BunnyWebhook] No tutor_videos doc found for bunnyVideoId=${VideoGuid}`);
+            }
+        } catch (error) {
+            // Log but do NOT propagate — we must return 200 regardless.
+            console.error('[BunnyWebhook] Firestore update failed:', error);
+        }
+    }
+
+    // Crucial: always acknowledge receipt to prevent Bunny retry storms.
+    res.status(200).send('Webhook received');
 });

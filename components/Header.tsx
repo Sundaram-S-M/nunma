@@ -12,6 +12,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import PayoutSetupModal from './PayoutSetupModal';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../utils/firebase';
 
 interface HeaderProps {
   onToggleRole: () => void;
@@ -23,6 +25,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
   const { user, logout } = useAuth();
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -43,6 +46,52 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showProfileMenu]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    let calendarCount = 0;
+    let messageCount = 0;
+
+    const updateBadge = () => setUnreadCount(calendarCount + messageCount);
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = `${tomorrow.getFullYear()}-${(tomorrow.getMonth() + 1).toString().padStart(2, '0')}-${tomorrow.getDate().toString().padStart(2, '0')}`;
+
+    const qCalendar = query(
+      collection(db, 'users', user.uid, 'calendar_events'),
+      where('dateKey', '==', tomorrowKey)
+    );
+
+    const unsubCalendar = onSnapshot(qCalendar, (snap) => {
+      calendarCount = snap.docs.length;
+      updateBadge();
+    });
+
+    const qConversations = query(
+      collection(db, 'conversations'),
+      where('participants', 'array-contains', user.uid)
+    );
+
+    const unsubMessages = onSnapshot(qConversations, (snap) => {
+      const now = new Date();
+      messageCount = snap.docs.filter(d => {
+        const data = d.data();
+        if (!data.lastMessageTime) return false;
+        try {
+          const msgTime = data.lastMessageTime.toDate();
+          return (now.getTime() - msgTime.getTime()) < 24 * 60 * 60 * 1000;
+        } catch (e) { return false; }
+      }).length;
+      updateBadge();
+    });
+
+    return () => {
+      unsubCalendar();
+      unsubMessages();
+    };
+  }, [user]);
+
   if (!user) return null;
 
   return (
@@ -51,8 +100,13 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
         <Link to="/search" className="p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group">
           <Search className="text-gray-400 group-hover:text-[#1A1A4E] transition-colors" size={20} />
         </Link>
-        <Link to="/notifications" className="p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group">
+        <Link to="/notifications" className="p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group relative">
           <Bell className="text-gray-400 group-hover:text-[#1A1A4E] transition-colors" size={20} />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[9px] font-black flex items-center justify-center border-2 border-white shadow-sm">
+              {unreadCount}
+            </span>
+          )}
         </Link>
 
       </div>

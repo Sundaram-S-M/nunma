@@ -23,6 +23,24 @@ const Payment: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [item, setItem] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [termsAccepted, setTermsAccepted] = useState(false);
+
+    const getRefundDeadline = () => {
+        let startDate = new Date(); // Fallback
+        if (bookingDate) {
+            startDate = new Date(`${bookingDate}T${bookingTime || '00:00:00'}`);
+        } else if (item?.startDate) {
+            startDate = new Date(item.startDate);
+        } else {
+            // For instant access without a start date, standard 24 hour refund window from now
+            startDate = new Date(Date.now() + 48 * 60 * 60 * 1000);
+        }
+
+        // 24 hours before start time
+        return new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+    };
+
+    const refundDeadline = item ? getRefundDeadline() : null;
 
     useEffect(() => {
         const fetchItem = async () => {
@@ -56,6 +74,10 @@ const Payment: React.FC = () => {
 
 
     const handlePayment = async () => {
+        if (!termsAccepted) {
+            alert("Please scroll down and agree to the Refund Policy to continue.");
+            return;
+        }
         if (!user || !zoneId || !item) return;
         setIsProcessing(true);
 
@@ -71,7 +93,8 @@ const Payment: React.FC = () => {
                 title: item.title,
                 amount: displayPrice,
                 currency: displayCurrency,
-                returnUrl: returnUrl
+                returnUrl: returnUrl,
+                refund_cutoff_time: refundDeadline?.toISOString()
             });
 
             const data = result.data as any;
@@ -148,6 +171,20 @@ const Payment: React.FC = () => {
                                     )}
                                 </div>
                             </div>
+
+                            {refundDeadline && (
+                                <div className="mt-8 p-6 bg-red-500/10 border border-red-500/20 rounded-3xl">
+                                    <h4 className="text-red-400 font-black text-xs uppercase tracking-widest mb-2 flex items-center gap-2">
+                                        <ShieldCheck size={16} /> Safe-Guard Policy
+                                    </h4>
+                                    <p className="text-sm text-indigo-100 font-medium">
+                                        Refunds available until:<br />
+                                        <span className="text-white font-bold text-base bg-red-500/20 px-3 py-1 rounded-lg inline-block mt-2">
+                                            {refundDeadline.toLocaleDateString()} {refundDeadline.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-[#c1e60d]/10 rounded-full blur-[80px]"></div>
@@ -180,6 +217,24 @@ const Payment: React.FC = () => {
                                 <p className="font-black text-gray-400">PayPal Checkout</p>
                             </div>
                         </div>
+                    </div>
+
+                    <div className="bg-gray-50 border border-gray-100 rounded-3xl p-6">
+                        <label className="flex items-start gap-4 cursor-pointer group">
+                            <div className="relative flex items-center justify-center mt-0.5">
+                                <input
+                                    type="checkbox"
+                                    className="appearance-none w-6 h-6 border-2 border-indigo-900 rounded-lg checked:bg-[#c1e60d] checked:border-[#c1e60d] transition-colors peer"
+                                    checked={termsAccepted}
+                                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                                />
+                                <Check size={14} className="absolute text-indigo-900 opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm font-bold text-indigo-900">I agree to the Terms of Service & Refund Policy.</p>
+                                <p className="text-xs text-gray-500 mt-1">I acknowledge that if I dispute or request a refund after the deadline ({refundDeadline?.toLocaleDateString()}), it may be denied.</p>
+                            </div>
+                        </label>
                     </div>
 
                     <button

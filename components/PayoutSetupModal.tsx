@@ -58,8 +58,32 @@ const PayoutSetupModal: React.FC<PayoutSetupModalProps> = ({ onClose, onComplete
     }, [bankSearch, selectedCountry]);
 
     const handlePhoneChange = (val: string) => {
-        const cleaned = val.replace(/[^\d+]/g, '');
-        setPhoneNumber(cleaned);
+        let cleaned = val.replace(/[^\d+]/g, '');
+
+        if (cleaned.length > 0 && !cleaned.startsWith('+')) {
+            cleaned = '+' + cleaned;
+        }
+
+        let digitsOnly = cleaned.replace(/\s+/g, '');
+        let formatted = digitsOnly;
+
+        if (digitsOnly.length > 3) {
+            let ccLength = 3;
+            if (digitsOnly.startsWith('+1')) ccLength = 2;
+
+            if (digitsOnly.length > ccLength) {
+                const cc = digitsOnly.substring(0, ccLength);
+                const rest = digitsOnly.substring(ccLength);
+
+                formatted = cc + ' ' + rest;
+
+                if (rest.length > 5) {
+                    formatted = cc + ' ' + rest.substring(0, 5) + ' ' + rest.substring(5);
+                }
+            }
+        }
+
+        setPhoneNumber(formatted);
     };
 
     const handleCountrySelect = (country: typeof COUNTRIES[0]) => {

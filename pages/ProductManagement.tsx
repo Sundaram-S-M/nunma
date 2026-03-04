@@ -420,7 +420,7 @@ const ProductManagement: React.FC = () => {
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none" /></div>
+                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none" /></div>
                                 <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label><select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none"><option value="INR">INR (₹)</option><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option></select></div>
                             </div>
                             <button onClick={handleListProduct} disabled={isListingProduct} className="w-full py-7 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-70">
@@ -447,11 +447,11 @@ const ProductManagement: React.FC = () => {
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Price (USD Tier)</label>
-                                    <input type="number" value={editingProduct.priceUSD || ''} onChange={e => setEditingProduct({ ...editingProduct, priceUSD: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
+                                    <input type="number" min="0" value={editingProduct.priceUSD || ''} onChange={e => setEditingProduct({ ...editingProduct, priceUSD: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
                                 </div>
                                 <div className="space-y-3">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Price (INR Tier)</label>
-                                    <input type="number" value={editingProduct.priceINR || ''} onChange={e => setEditingProduct({ ...editingProduct, priceINR: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
+                                    <input type="number" min="0" value={editingProduct.priceINR || ''} onChange={e => setEditingProduct({ ...editingProduct, priceINR: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
                                 </div>
                             </div>
                             <div className="space-y-3">

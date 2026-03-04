@@ -13,7 +13,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../utils/firebase';
-import { UserRole } from '../types';
+import { UserRole, StudentProfileData, TutorProfileData } from '../types';
 
 export interface UserProfile {
   uid: string;
@@ -34,9 +34,16 @@ export interface UserProfile {
   studentsCount?: number;
   onboardingCompleted?: boolean;
   bankingDetailsProvided?: boolean;
+  studentProfile?: StudentProfileData;
+  tutorProfile?: TutorProfileData;
   linkedin?: string;
   expertise?: string[];
   availability?: any[];
+  subscription_entitlements?: {
+    storageLimit: number;
+    storageUsed: number;
+    studentLimit: number;
+  };
 }
 
 interface AuthContextType {
@@ -72,16 +79,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
           if (userDoc.exists()) {
             const data = userDoc.data() as UserProfile;
+            if (!data.subscription_entitlements) {
+              data.subscription_entitlements = { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 };
+            }
             setUser({ ...data, uid: firebaseUser.uid }); // Ensure UID is always present from auth
             setIsAuthenticated(true);
           } else {
             // New user signed in but no profile doc yet (edge case)
-            const newUserProfile = {
+            const newUserProfile: UserProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               name: firebaseUser.displayName || 'New User',
               avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
-              role: UserRole.STUDENT
+              role: UserRole.STUDENT,
+              subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+              studentProfile: { isComplete: false },
+              tutorProfile: { isComplete: false }
             };
             setUser(newUserProfile);
             setIsAuthenticated(true);
@@ -102,7 +115,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: firebaseUser.email || '',
               name: firebaseUser.displayName || 'Developer',
               avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
-              role: UserRole.STUDENT
+              role: UserRole.STUDENT,
+              subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+              studentProfile: { isComplete: false },
+              tutorProfile: { isComplete: false }
             });
             setIsAuthenticated(true);
           } else {
@@ -130,7 +146,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const userCredential = await createUserWithEmailAndPassword(auth, profile.email, password);
     const uid = userCredential.user.uid;
-    const fullProfile: UserProfile = { ...profile, uid };
+    const fullProfile: UserProfile = {
+      ...profile,
+      uid,
+      studentProfile: { isComplete: false },
+      tutorProfile: { isComplete: false }
+    };
 
     try {
       await setDoc(doc(db, 'users', uid), fullProfile);

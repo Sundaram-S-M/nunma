@@ -16,9 +16,13 @@ import {
   MousePointer2,
   Calendar,
   Clock,
-  Database
+  Database,
+  Users,
+  TrendingUp,
+  Download,
+  Check
 } from 'lucide-react';
-import ClassroomStream from '../components/ClassroomStream';
+import { VideoUploadModal } from '../components/VideoUploadModal';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 
 import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
@@ -31,6 +35,7 @@ const Workplace: React.FC = () => {
   const [productSubTab, setProductSubTab] = useState<'material' | 'service' | 'mentorship'>('material');
   const [showProductModal, setShowProductModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showLibraryUpload, setShowLibraryUpload] = useState(false);
 
   // List Product State
   const [productTitle, setProductTitle] = useState('');
@@ -53,8 +58,34 @@ const Workplace: React.FC = () => {
   const [zonesList, setZonesList] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
+  const [allStudents, setAllStudents] = useState<any[]>([]);
+
+  // Static transactions for Payments tab (inbound earnings)
+  const transactions = [
+    { id: 'T-8392', date: 'Oct 12, 2025', amount: '+$150.00', status: 'Completed', service: 'Earnings: Mentorship (Sachin S)', type: 'inbound' },
+    { id: 'T-8341', date: 'Sep 28, 2025', amount: '+$49.00', status: 'Completed', service: 'Earnings: Zone Access (User Alpha)', type: 'inbound' },
+    { id: 'T-8220', date: 'Sep 10, 2025', amount: '+$199.00', status: 'Completed', service: 'Earnings: Pro Course Bundle', type: 'inbound' },
+  ];
 
   const { user } = useAuth();
+  const currentTier = (user as any)?.current_tier || 'STARTER';
+  const tierLimits = {
+    'STARTER': 10,
+    'STANDARD': 25,
+    'PREMIUM': 60
+  };
+  const streamLimit = tierLimits[currentTier as keyof typeof tierLimits] || 10;
+
+  const currentMonthIdx = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
+  const streamsUsed = liveSessions.filter(s => {
+    if (!s.createdAt) return false;
+    const d = new Date(s.createdAt);
+    return d.getMonth() === currentMonthIdx && d.getFullYear() === currentYear;
+  }).length;
+
+  const streamsPercent = Math.min(Math.round((streamsUsed / streamLimit) * 100), 100);
 
   useEffect(() => {
     if (!user) return;
@@ -90,16 +121,27 @@ const Workplace: React.FC = () => {
     const unsubs: (() => void)[] = [];
 
     zonesList.forEach(zone => {
-      const q = query(collection(db, 'zones', zone.id, 'sessions'));
-      const un = onSnapshot(q, (snap) => {
+      // Sessions
+      const qS = query(collection(db, 'zones', zone.id, 'sessions'));
+      const unS = onSnapshot(qS, (snap) => {
         const sessions = snap.docs.map(d => ({ id: d.id, zoneId: zone.id, ...d.data() }));
         setLiveSessions(prev => {
-          // Merge logic: Remove old sessions for this zone and add new ones
           const otherSessions = prev.filter(s => s.zoneId !== zone.id);
           return [...otherSessions, ...sessions];
         });
       });
-      unsubs.push(un);
+      unsubs.push(unS);
+
+      // Students
+      const qSt = query(collection(db, 'zones', zone.id, 'students'));
+      const unSt = onSnapshot(qSt, (snap) => {
+        const students = snap.docs.map(d => ({ id: d.id, zoneId: zone.id, ...d.data() }));
+        setAllStudents(prev => {
+          const otherStudents = prev.filter(s => s.zoneId !== zone.id);
+          return [...otherStudents, ...students];
+        });
+      });
+      unsubs.push(unSt);
     });
 
     return () => unsubs.forEach(u => u());
@@ -139,6 +181,11 @@ const Workplace: React.FC = () => {
     if (!liveZoneId || !liveTitle) return;
     if (!goLiveNow && (!liveDate || !liveTime)) return;
 
+    if (streamsUsed >= streamLimit) {
+      alert(`You have reached your monthly limit of ${streamLimit} live streams on the ${currentTier} plan. Please upgrade to schedule more.`);
+      return;
+    }
+
     setIsSchedulingLive(true);
 
     try {
@@ -162,7 +209,7 @@ const Workplace: React.FC = () => {
 
       if (goLiveNow) {
         setActiveSession({ id: docRef.id, ...sessionData, zoneId: liveZoneId });
-        setShowStreamRoom(true);
+        navigate(`/live/${liveZoneId}/${docRef.id}`);
       } else {
         alert('Live session scheduled successfully!');
       }
@@ -193,21 +240,33 @@ const Workplace: React.FC = () => {
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-20 overflow-x-hidden">
       {/* Stream Room Overlay */}
-      {showStreamRoom && activeSession && (
-        <ClassroomStream
-          sessionId={activeSession.id}
-          zoneId={activeSession.zoneId}
-          role="TUTOR"
-          title={activeSession.title}
-          onClose={handleCloseStream}
-        />
-      )}
+      {/* Stream Room Overlay Removed (Using Sandbox) */}
 
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
         <div>
           <h1 className="text-4xl font-extrabold text-[#040457] mb-2 tracking-tighter text-balance">My Workplace</h1>
           <p className="text-gray-400 font-medium text-sm">Design, manage, and scale your professional offerings.</p>
         </div>
+
+        {/* Monthly Stream Meter */}
+        <div className="hidden md:flex bg-white border border-gray-100 p-4 rounded-2xl shadow-sm items-center gap-6 mr-auto xl:mr-0 xl:ml-8 animate-in zoom-in duration-500">
+          <div className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0">
+            <Radio size={24} className={streamsUsed >= streamLimit ? "" : "animate-pulse"} />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#040457]">Live Streams Used</span>
+              <span className="text-xs font-bold text-gray-400">{streamsUsed} / {streamLimit}</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-1000 ${streamsPercent >= 100 ? 'bg-red-500' : 'bg-[#c2f575]'}`}
+                style={{ width: `${streamsPercent}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto">
           <button
             onClick={() => setShowScheduleModal(true)}
@@ -215,6 +274,13 @@ const Workplace: React.FC = () => {
           >
             <Radio size={18} className="text-red-500 group-hover:scale-110 transition-transform" />
             Schedule Live Class
+          </button>
+          <button
+            onClick={() => setShowLibraryUpload(true)}
+            className="bg-white border border-gray-100 text-[#040457] font-bold px-5 py-3 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 group"
+          >
+            <Video size={18} className="text-[#c2f575] group-hover:scale-110 transition-transform" />
+            Upload to Library
           </button>
           <button
             onClick={() => navigate('/certificate-engine')}
@@ -284,7 +350,7 @@ const Workplace: React.FC = () => {
                         </div>
                         {session.status === 'live' ? (
                           <button
-                            onClick={() => { setActiveSession(session); setShowStreamRoom(true); }}
+                            onClick={() => { setActiveSession(session); navigate(`/live/${session.zoneId}/${session.id}`); }}
                             className="w-full mt-8 py-5 bg-red-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-red-700 transition-all shadow-xl shadow-red-600/20 flex items-center justify-center gap-3"
                           >
                             Return to Stream <Radio size={16} />
@@ -294,7 +360,7 @@ const Workplace: React.FC = () => {
                             onClick={() => {
                               // update to live
                               setActiveSession({ ...session, status: 'live' });
-                              setShowStreamRoom(true);
+                              navigate(`/live/${session.zoneId}/${session.id}`);
                             }}
                             className="w-full mt-8 py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-900/20"
                           >
@@ -367,6 +433,85 @@ const Workplace: React.FC = () => {
               </div>
             </div>
           )}
+
+          {activeTab === 'students' && (
+            <div className="space-y-12 animate-in fade-in duration-500">
+              <div className="flex justify-between items-center">
+                <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Enrolled Minds</h3>
+                <div className="flex items-center gap-4 text-sm font-bold text-gray-400">
+                  <Users size={20} /> {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} Students Total
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).map(student => (
+                  <div key={`${student.id}-${student.zoneId}`} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
+                    <div className="relative">
+                      <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
+                        <img src={student.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} className="w-full h-full object-cover" alt="" />
+                      </div>
+                      <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
+                        <Check size={16} strokeWidth={3} />
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-black text-[#040457] mb-1">{student.name}</h4>
+                      <p className="text-xs text-gray-400 font-medium">{student.email}</p>
+                    </div>
+                    <div className="pt-4 border-t border-gray-50 w-full flex justify-around">
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Score</p>
+                        <p className="font-bold text-[#040457]">{student.engagementScore || 100}%</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Attendance</p>
+                        <p className="font-bold text-[#040457]">{student.attendanceRate || 100}%</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Time</p>
+                        <p className="font-bold text-[#040457]">{student.durationInSession || 60}m</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'payments' && (
+            <div className="space-y-12 animate-in fade-in duration-500">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Transaction Registry</h3>
+                  <p className="text-sm text-gray-400 mt-1 font-medium">Inclusive ledger of earnings.</p>
+                </div>
+                <button className="text-[10px] font-black text-[#040457] uppercase tracking-widest flex items-center gap-2 px-6 py-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white transition-all shadow-sm active:scale-95">
+                  <Download size={14} className="text-[#c2f575]" /> EXPORT STATEMENT
+                </button>
+              </div>
+              <div className="space-y-4">
+                {transactions.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between p-8 bg-white rounded-[2.5rem] border border-gray-100 group hover:shadow-xl transition-all hover:-translate-y-1">
+                    <div className="flex items-center gap-6">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm bg-[#c2f575]/20 text-[#7cc142]`}>
+                        <TrendingUp size={24} />
+                      </div>
+                      <div>
+                        <p className="text-lg font-black text-[#040457]">{t.service}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{t.id} • {t.date}</p>
+                      </div>
+                    </div>
+                    <div className="text-right flex flex-col items-end gap-2">
+                      <div>
+                        <p className={`text-2xl font-black text-[#7cc142]`}>{t.amount}</p>
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{t.status}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -418,6 +563,16 @@ const Workplace: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showLibraryUpload && (
+        <VideoUploadModal
+          isOpen={showLibraryUpload}
+          onClose={() => setShowLibraryUpload(false)}
+          onUploadSuccess={() => {
+            setShowLibraryUpload(false);
+          }}
+        />
       )}
     </div>
   );

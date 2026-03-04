@@ -427,7 +427,7 @@ const ListProductFlow: React.FC = () => {
                                     <div className="space-y-4">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Price (USD Tier)</label>
                                         <input
-                                            type="number"
+                                            type="number" min="0"
                                             placeholder="10"
                                             value={productPriceUSD}
                                             onChange={(e) => setProductPriceUSD(e.target.value)}
@@ -439,7 +439,7 @@ const ListProductFlow: React.FC = () => {
                                 <div className="space-y-4">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Price (INR Tier)</label>
                                     <input
-                                        type="number"
+                                        type="number" min="0"
                                         placeholder="500"
                                         value={productPriceINR}
                                         onChange={(e) => setProductPriceINR(e.target.value)}

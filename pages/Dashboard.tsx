@@ -4,7 +4,7 @@ import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import {
   collection, query, where, onSnapshot, orderBy,
-  getDocs, limit, doc, getDoc, addDoc, deleteDoc
+  getDocs, limit, doc, getDoc, addDoc, deleteDoc, updateDoc
 } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import {
@@ -30,12 +30,12 @@ import {
   BookOpen,
   Users
 } from 'lucide-react';
-import ClassroomStream from '../components/ClassroomStream';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showEventModal, setShowEventModal] = useState(false);
@@ -49,6 +49,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   const [sessionsMap, setSessionsMap] = useState<Record<string, any[]>>({});
 
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [newEvenTitle, setNewEventTitle] = useState('');
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventIsImportant, setNewEventIsImportant] = useState(false);
@@ -229,11 +230,16 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
     };
 
     try {
-      await addDoc(collection(db, 'users', user.uid, 'calendar_events'), newEvent);
+      if (editingEventId) {
+        await updateDoc(doc(db, 'users', user.uid, 'calendar_events', editingEventId), newEvent);
+      } else {
+        await addDoc(collection(db, 'users', user.uid, 'calendar_events'), newEvent);
+      }
       setNewEventTitle('');
       setNewEventTime('');
       setNewEventIsImportant(false);
       setIsCreatingEvent(false);
+      setEditingEventId(null);
       setShowClockPicker(false);
       setSelectedHour(12);
       setSelectedMinute(0);
@@ -274,16 +280,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-20 relative">
-      {/* ... Live Room Overlay ... */}
-      {activeLiveRoom && (
-        <ClassroomStream
-          sessionId={activeLiveRoom.id}
-          zoneId={activeLiveRoom.zoneId}
-          role={role === UserRole.TUTOR ? 'TUTOR' : 'STUDENT'}
-          title={activeLiveRoom.title}
-          onClose={() => setActiveLiveRoom(null)}
-        />
-      )}
+      {/* ... Live Room Overlay Removed ... */}
 
       {/* ... Event Modal ... */}
       {showEventModal && (
@@ -294,7 +291,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                 <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-[0.2em] mb-1">Agenda for</p>
                 <h3 className="text-2xl font-black text-[#1A1A4E]">{monthName} {modalDate}, {year}</h3>
               </div>
-              <button onClick={() => { setShowEventModal(false); setIsCreatingEvent(false); }} className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-red-500 transition-all shadow-sm">
+              <button onClick={() => { setShowEventModal(false); setIsCreatingEvent(false); setEditingEventId(null); setNewEventTitle(''); setNewEventTime(''); }} className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-red-500 transition-all shadow-sm">
                 <X size={20} />
               </button>
             </div>
@@ -368,9 +365,39 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                               })}
 
                               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div className="text-center">
-                                  <div className="text-4xl font-black text-[#1A1A4E] tracking-tight">
-                                    {selectedHour}:{selectedMinute.toString().padStart(2, '0')}
+                                <div className="text-center pointer-events-auto">
+                                  <div className="text-4xl font-black text-[#1A1A4E] tracking-tight flex justify-center items-center">
+                                    <input
+                                      type="number"
+                                      min="1" max="12"
+                                      value={selectedHour}
+                                      onChange={(e) => {
+                                        let val = parseInt(e.target.value);
+                                        if (isNaN(val)) val = 1;
+                                        if (val > 12) val = 12;
+                                        if (val < 1) val = 1;
+                                        setSelectedHour(val);
+                                        setNewEventTime(`${val}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
+                                      }}
+                                      className="w-16 bg-transparent text-center focus:outline-none focus:bg-white/50 rounded-xl appearance-none m-0"
+                                      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                                    />
+                                    :
+                                    <input
+                                      type="number"
+                                      min="0" max="59"
+                                      value={selectedMinute.toString().padStart(2, '0')}
+                                      onChange={(e) => {
+                                        let val = parseInt(e.target.value);
+                                        if (isNaN(val)) val = 0;
+                                        if (val > 59) val = 59;
+                                        if (val < 0) val = 0;
+                                        setSelectedMinute(val);
+                                        setNewEventTime(`${selectedHour}:${val.toString().padStart(2, '0')} ${selectedPeriod}`);
+                                      }}
+                                      className="w-16 bg-transparent text-center focus:outline-none focus:bg-white/50 rounded-xl appearance-none m-0"
+                                      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                                    />
                                   </div>
                                   <div className="text-sm font-black text-gray-400 uppercase tracking-widest mt-2">
                                     {clockMode === 'hour' ? 'Select Hour' : 'Select Minute'}
@@ -426,7 +453,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
               ) : (
                 <div className="space-y-4">
                   {eventsForModal.length > 0 ? eventsForModal.map((event) => (
-                    <div key={event.id} className="flex items-center gap-4 p-5 rounded-[2rem] bg-indigo-50/50 border border-indigo-100 hover:bg-white transition-all group">
+                    <div key={event.docId || event.id || Math.random()} className="flex items-center gap-4 p-5 rounded-[2rem] bg-indigo-50/50 border border-indigo-100 hover:bg-white transition-all group">
                       <div className={`w-2 h-12 rounded-full ${event.color === 'lime' ? 'bg-[#c2f575]' : event.color === 'indigo' ? 'bg-indigo-600' : 'bg-gray-200'}`} />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
@@ -439,11 +466,38 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                         </div>
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{event.time} {event.session?.zoneTitle && `• ${event.session.zoneTitle}`}</p>
                       </div>
+
+                      {!isModalDatePast && !event.isLive && (
+                        <button
+                          onClick={() => {
+                            setEditingEventId(event.docId);
+                            setNewEventTitle(event.title);
+                            if (event.time) {
+                              setNewEventTime(event.time);
+                              const parts = event.time.split(' ');
+                              if (parts.length === 2) {
+                                const [time, period] = parts;
+                                const timeParts = time.split(':');
+                                if (timeParts.length === 2) {
+                                  setSelectedHour(parseInt(timeParts[0]) || 12);
+                                  setSelectedMinute(parseInt(timeParts[1]) || 0);
+                                  setSelectedPeriod(period as 'AM' | 'PM');
+                                }
+                              }
+                            }
+                            setIsCreatingEvent(true);
+                          }}
+                          className="p-3 rounded-xl transition-all bg-indigo-50 text-indigo-900 border border-indigo-100 hover:bg-indigo-100 opacity-0 group-hover:opacity-100 uppercase text-[10px] font-black tracking-widest shadow-sm"
+                        >
+                          Edit
+                        </button>
+                      )}
+
                       {event.isLive && (
                         <button
                           onClick={() => {
                             if (event.session?.status === 'live') {
-                              setActiveLiveRoom(event.session);
+                              navigate(`/live/${event.session.zoneId}/${event.session.id}`);
                               setShowEventModal(false);
                             } else {
                               // Link to zone or show alert
@@ -621,7 +675,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                             </p>
                           </div>
                           <button
-                            onClick={() => setActiveLiveRoom(activeSessions[0])}
+                            onClick={() => navigate(`/live/${activeSessions[0].zoneId}/${activeSessions[0].id}`)}
                             className="px-12 py-6 bg-[#c2f575] text-[#1A1A4E] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
                           >
                             Enter Room

@@ -82,10 +82,10 @@ const ProfileHeader = ({
         <div className="absolute top-6 right-6 z-30">
           <button
             onClick={() => bannerInputRef.current?.click()}
-            className="px-4 py-2 bg-black/30 backdrop-blur-md border border-white/20 rounded-lg text-white hover:bg-white hover:text-[#1A1A4E] transition-all shadow-lg flex items-center gap-2"
+            className="px-6 py-2.5 bg-black/30 backdrop-blur-md border border-white/20 rounded-lg text-white hover:bg-white hover:text-[#1A1A4E] transition-all shadow-lg flex items-center gap-2"
           >
-            <Camera size={14} />
-            <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Update Banner</span>
+            <Camera size={16} />
+            <span className="text-xs font-bold uppercase tracking-widest">Update Banner</span>
           </button>
           <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'banner')} />
         </div>
@@ -865,6 +865,7 @@ const ProfileView: React.FC = () => {
       {adjustingImage && (
         <PhotoAdjustModal
           image={adjustingImage}
+          type={adjustType || 'avatar'}
           onSave={handleSavePhoto}
           onClose={() => { setAdjustingImage(null); setAdjustType(null); }}
           onChangePhoto={() => {
@@ -885,7 +886,7 @@ const ProfileView: React.FC = () => {
         handleViewFollowers={handleViewFollowers} tutorStudentsCount={tutorStudentsCount}
       />
 
-      <div className="max-w-7xl mx-auto -mt-16 px-10 relative z-20">
+      <div className="max-w-7xl mx-auto mt-8 px-10 relative z-20">
         <AboutSection isEditing={isEditing} editBio={editBio} setEditBio={setEditBio} profileUser={profileUser} />
         {role === UserRole.STUDENT ? (
           <StudentProfile
@@ -962,7 +963,7 @@ const ProfileView: React.FC = () => {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none" /></div>
+                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none" /></div>
                 <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label><select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none"><option value="INR">INR (₹)</option><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option></select></div>
               </div>
               <button onClick={handleListProduct} disabled={isListingProduct} className="w-full py-7 bg-indigo-900 text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-70">

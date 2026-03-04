@@ -4,12 +4,14 @@ import { X, Camera, Move } from 'lucide-react';
 
 interface PhotoAdjustModalProps {
     image: string;
+    type?: 'avatar' | 'banner';
     onSave: (croppedImage: string) => void;
     onClose: () => void;
     onChangePhoto: () => void;
 }
 
-const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, onSave, onClose, onChangePhoto }) => {
+const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, type = 'avatar', onSave, onClose, onChangePhoto }) => {
+    const isBanner = type === 'banner';
     const [scale, setScale] = useState(1);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
@@ -79,7 +81,7 @@ const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, onSave, onCl
 
                             {/* Cropping Frame */}
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div className="w-80 h-80 border-4 border-lime shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] relative">
+                                <div className={`border-4 border-lime shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] relative ${isBanner ? 'w-[480px] h-[160px]' : 'w-80 h-80'}`}>
                                     <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-white -translate-x-1 -translate-y-1"></div>
                                     <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-white translate-x-1 -translate-y-1"></div>
                                     <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-white -translate-x-1 translate-y-1"></div>
@@ -120,7 +122,7 @@ const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, onSave, onCl
                             <p className="text-gray-400 font-medium text-sm">This is how your photo will look.</p>
 
                             <div className="mt-16 flex justify-center">
-                                <div className="w-64 h-64 rounded-full overflow-hidden border-8 border-white shadow-2xl bg-gray-200 relative">
+                                <div className={`overflow-hidden border-8 border-white shadow-2xl bg-gray-200 relative ${isBanner ? 'w-[300px] h-[100px] rounded-2xl' : 'w-64 h-64 rounded-full'}`}>
                                     <div
                                         className="absolute inset-0 flex items-center justify-center"
                                         style={{
@@ -130,7 +132,7 @@ const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, onSave, onCl
                                         <img
                                             src={image}
                                             alt="Preview"
-                                            className="max-w-none w-[320px] h-auto"
+                                            className={`max-w-none ${isBanner ? 'w-[250px]' : 'w-[320px]'} h-auto`}
                                         />
                                     </div>
                                 </div>

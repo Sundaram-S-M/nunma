@@ -31,10 +31,17 @@ const DOMAINS = [
   "Project Management",
   "Supply Chain Management",
   "UI/UX Design",
+  "Industrial Design",
   "Data Science",
   "Digital Marketing",
   "Software Engineering",
-  "Business Strategy"
+  "Business Strategy",
+  "K-12 Education",
+  "Higher Education",
+  "Corporate Training",
+  "Vocational Training",
+  "Manufacturing & Engineering",
+  "Healthcare & Life Sciences"
 ];
 
 const LaunchZone: React.FC = () => {
@@ -277,7 +284,7 @@ const LaunchZone: React.FC = () => {
                       {zoneCurrency === 'EUR' && <Euro size={24} />}
                     </div>
                     <input
-                      type="number"
+                      type="number" min="0"
                       placeholder="0.00"
                       value={zonePrice}
                       onChange={e => setZonePrice(e.target.value)}

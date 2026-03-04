@@ -13,6 +13,24 @@ export interface NavItem {
   path: string;
 }
 
+export interface StudentProfileData {
+  isComplete: boolean;
+  phoneNumber?: string;
+  educationLevel?: string;
+  primaryInterests?: string[];
+}
+
+export interface TutorProfileData {
+  isComplete: boolean;
+  phoneNumber?: string;
+  primarySubject?: string;
+  academyName?: string;
+  payoutInfo?: {
+    accountHolderName: string;
+    bankIdentifier: string;
+  };
+}
+
 export interface StatCardData {
   label: string;
   value: string | number;
@@ -141,4 +159,29 @@ export interface Student {
   email?: string;
   phone?: string;
   attendanceHistory?: AttendanceHistory[];
+  current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
+  subscription_entitlements?: {
+    storageLimit: number;
+    storageUsed: number;
+    studentCapacity: number;
+    studentsEnrolled: number;
+  };
+}
+
+export interface Addon {
+  id: string;
+  name: string;
+  monthlyPrice: number;
+  startDate: string; // ISO string
+  quantity: number;
+}
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  basePrice: number;
+  billing_cycle_anchor: number; // 1-31
+  active_addons: Addon[];
+  next_billing_amount: number; // For the upcoming automated charge
+  currency: string;
 }

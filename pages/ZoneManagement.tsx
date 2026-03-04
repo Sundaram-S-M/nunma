@@ -50,15 +50,18 @@ import {
   ExternalLink,
   Search,
   Star,
-  Trophy
+  Trophy,
+  Loader2, Calendar as CalendarIcon, Settings, MoreVertical, ShieldAlert, FileSearch, HelpCircle
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
+import { VideoUploadModal } from '../components/VideoUploadModal';
 import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
 import * as XLSX from 'xlsx';
 import PDFViewer from '../components/PDFViewer'; // Import added for grading
 import { QRCodeSVG } from 'qrcode.react';
+import ZoneCapacityMeter from '../components/ZoneCapacityMeter';
 
 import { Student, AttendanceHistory, UserRole } from '../types';
 
@@ -140,6 +143,7 @@ const ZoneManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'attendance' | 'curriculum' | 'exams' | 'schedule' | 'students' | 'landing' | 'post-session'>('exams');
   const [view, setView] = useState<'management' | 'review' | 'grading'>('management');
   const [zone, setZone] = useState<any>(null);
+  const [activeSession, setActiveSession] = useState<any>(null);
 
   // Landing Page State
   const [lpPaid, setLpPaid] = useState(false);
@@ -238,7 +242,8 @@ const ZoneManagement: React.FC = () => {
   const [activeClusterId, setActiveClusterId] = useState<string | null>(null);
   const [generatedFeedback, setGeneratedFeedback] = useState('');
   const [isCopying, setIsCopying] = useState(false);
-  const [activeSession, setActiveSession] = useState<any>(null);
+  const [activeSegmentIndex, setActiveSegmentIndex] = useState<number>(0);
+  const [showVideoUploadModal, setShowVideoUploadModal] = useState(false);
 
   // Data States
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -692,7 +697,13 @@ const ZoneManagement: React.FC = () => {
   // --- Handlers ---
   // Firestore-based Add Segment
   const handleAddSegment = async (chapterId: string, type: 'video' | 'pdf' | 'reading' | 'quiz') => {
-    if (type === 'video' || type === 'pdf' || type === 'reading') {
+    if (type === 'video') {
+      setActiveChapterForUpload(chapterId);
+      setShowVideoUploadModal(true);
+      return;
+    }
+
+    if (type === 'pdf' || type === 'reading') {
       setActiveChapterForUpload(chapterId);
       setActiveTypeForUpload(type);
       fileInputRef.current?.click();
@@ -719,78 +730,6 @@ const ZoneManagement: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !activeChapterForUpload || !activeTypeForUpload || !zoneId) return;
 
-    // Special Handling for Video Uploads via Bunny Stream
-    if (activeTypeForUpload === 'video') {
-      try {
-        setIsUploading(true);
-        setUploadProgress(0);
-
-        // 1. Get Presigned Upload URL from Cloud Function
-        const createBunnyVideoNode = httpsCallable(functions, 'createBunnyVideo');
-        const { data }: any = await createBunnyVideoNode({ title: file.name });
-
-        const { videoId, authorizationSignature, uploadUrl, expirationTime } = data;
-
-        // 2. Upload to Bunny (using XHR for progress)
-        await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('PUT', uploadUrl, true);
-          xhr.setRequestHeader('AccessKey', authorizationSignature); // Secure signature
-          xhr.setRequestHeader('Expiration', expirationTime.toString());
-          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-
-          xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-              const percentComplete = (event.loaded / event.total) * 100;
-              setUploadProgress(Math.round(percentComplete));
-            }
-          };
-
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve(xhr.response);
-            } else {
-              reject(new Error(`Upload failed: ${xhr.statusText}`));
-            }
-          };
-
-          xhr.onerror = () => reject(new Error("Network Error during upload"));
-          xhr.send(file);
-        });
-
-        // 3. Save to Firestore
-        const newSeg: Segment = {
-          id: `s${Date.now()}`,
-          title: file.name,
-          type: 'video',
-          // @ts-ignore
-          videoId: videoId,
-          status: 'processing' // Will be updated by Webhook or Polling
-        };
-
-        const chapter = chapters.find(c => c.id === activeChapterForUpload);
-        if (chapter) {
-          const updatedSegments = [...chapter.segments, newSeg];
-          await updateDoc(doc(db, 'zones', zoneId, 'chapters', activeChapterForUpload), {
-            segments: updatedSegments
-          });
-        }
-
-        alert("Video uploaded successfully! It is now processing.");
-
-      } catch (error: any) {
-        console.error("Video Upload Failed:", error);
-        alert(`Upload Failed: ${error.message}`);
-      } finally {
-        setIsUploading(false);
-        setUploadProgress(0);
-        setActiveChapterForUpload(null);
-        setActiveTypeForUpload(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-      return;
-    }
-
     // Standard File Upload (PDF/Reading - preserved logic usually mock or different storage)
     const newSeg: Segment = {
       id: `s${Date.now()}`,
@@ -813,6 +752,34 @@ const ZoneManagement: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
 
     alert(`Item "${file.name}" uploaded and added to chapter!`);
+  };
+
+  const handleVideoUploadSuccess = async (videoData: { videoId: string, title: string }) => {
+    if (!activeChapterForUpload || !zoneId) return;
+
+    try {
+      const newSeg: Segment = {
+        id: `s${Date.now()}`,
+        title: videoData.title,
+        type: 'video',
+        // @ts-ignore
+        videoId: videoData.videoId,
+        status: 'processing' // Processing managed by Bunny CDN Webhook or assumed ready later
+      };
+
+      const chapter = chapters.find(c => c.id === activeChapterForUpload);
+      if (chapter) {
+        const updatedSegments = [...chapter.segments, newSeg];
+        await updateDoc(doc(db, 'zones', zoneId, 'chapters', activeChapterForUpload), {
+          segments: updatedSegments
+        });
+      }
+      setActiveChapterForUpload(null);
+      // Removed the alert here, VideoUploadModal has its own confetti and success state
+    } catch (error) {
+      console.error("Failed to append video segment to chapter:", error);
+      alert("Video was uploaded, but failed to link to chapter. Please refresh and try again.");
+    }
   };
 
   // Drag & Drop Handlers
@@ -1060,6 +1027,14 @@ const ZoneManagement: React.FC = () => {
           </div>
         )}
 
+        {/* EXTERNAL MODALS */}
+        <VideoUploadModal
+          isOpen={showVideoUploadModal}
+          onClose={() => setShowVideoUploadModal(false)}
+          zoneId={zoneId}
+          onUploadSuccess={handleVideoUploadSuccess}
+        />
+
         {/* SCHEDULE SESSION MODAL */}
         {showScheduleModal && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
@@ -1201,7 +1176,7 @@ const ZoneManagement: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Duration (Mins)</label>
                   <input
-                    type="number"
+                    type="number" min="0"
                     value={scheduleDuration}
                     onChange={e => setScheduleDuration(e.target.value)}
                     className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
@@ -1323,11 +1298,11 @@ const ZoneManagement: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">Max Marks</label>
-                      <input type="number" value={newExamMaxMark} onChange={e => setNewExamMaxMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all" />
+                      <input type="number" min="0" value={newExamMaxMark} onChange={e => setNewExamMaxMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">Min (Pass) Marks</label>
-                      <input type="number" value={newExamMinMark} onChange={e => setNewExamMinMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all" />
+                      <input type="number" min="0" value={newExamMinMark} onChange={e => setNewExamMinMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all" />
                     </div>
                   </div>
                 </div>
@@ -1480,7 +1455,7 @@ const ZoneManagement: React.FC = () => {
                           </div>
                           <div className="flex justify-center">
                             <input
-                              type="number"
+                              type="number" min="0"
                               placeholder="0"
                               value={result?.marks || ''}
                               onChange={e => {
@@ -1632,6 +1607,15 @@ const ZoneManagement: React.FC = () => {
                             };
 
                             await setDoc(doc(db, 'zones', zoneId, 'students', userId), newStudent);
+
+                            // Add to user's enrollments
+                            await setDoc(doc(db, 'users', userId, 'enrollments', zoneId), {
+                              zoneId: zoneId,
+                              title: zone.title || 'Learning Zone',
+                              type: zone.zoneType || 'zone',
+                              enrolledAt: new Date().toISOString()
+                            });
+
                             alert(`User ${newStudent.name} enrolled directly!`);
                           } else {
                             // User doesn't exist - Whitelist email and invite
@@ -1707,6 +1691,15 @@ const ZoneManagement: React.FC = () => {
                               email: email,
                               addedAt: new Date().toISOString()
                             });
+
+                            // Add to user's enrollments
+                            await setDoc(doc(usersRef, userId, 'enrollments', zoneId), {
+                              zoneId: zoneId,
+                              title: zone.title || 'Learning Zone',
+                              type: zone.zoneType || 'zone',
+                              enrolledAt: new Date().toISOString()
+                            });
+
                             results.enrolled++;
                           } else {
                             await updateDoc(zoneRef, {
@@ -1891,6 +1884,7 @@ const ZoneManagement: React.FC = () => {
             </div>
           </div>
           <div className="flex gap-4">
+            <ZoneCapacityMeter zoneId={zoneId!} />
             <button onClick={() => setShowAddStudentModal(true)} className="px-10 py-5 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-[#040457]/20">
               <UserPlus size={20} /> Whitelist
             </button>
@@ -2747,7 +2741,7 @@ const ZoneManagement: React.FC = () => {
                   <div className="absolute bottom-10 right-10 flex items-center gap-8 bg-white/5 backdrop-blur-3xl border border-white/10 p-8 rounded-[3rem] shadow-2xl">
                     <div>
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Score for Batch</p>
-                      <input type="number" value={scriptScore} onChange={e => setScriptScore(e.target.value)} className="bg-transparent text-5xl font-black text-[#c2f575] w-32 outline-none border-b-4 border-transparent focus:border-[#c2f575]/20 transition-all" />
+                      <input type="number" min="0" value={scriptScore} onChange={e => setScriptScore(e.target.value)} className="bg-transparent text-5xl font-black text-[#c2f575] w-32 outline-none border-b-4 border-transparent focus:border-[#c2f575]/20 transition-all" />
                     </div>
                     <div className="w-[1.5px] h-16 bg-white/10"></div>
                     <div className="text-right">

@@ -35,7 +35,6 @@ import {
   Upload,
   Calendar
 } from 'lucide-react';
-import ClassroomStream from '../components/ClassroomStream';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 import { generateOpenBadgeVC, downloadVCAsJSON } from '../utils/vcUtils';
 import { useAuth } from '../context/AuthContext';
@@ -112,7 +111,7 @@ const StudentZoneView: React.FC = () => {
       const sessionId = params.get('session');
       if (sessionId) {
         const found = sessions.find((s: any) => s.id === sessionId);
-        if (found) setActiveLiveRoom(found);
+        if (found) navigate(`/live/${zoneId}/${found.id}`);
       }
     });
 
@@ -198,6 +197,15 @@ const StudentZoneView: React.FC = () => {
             email: authUser.email
           };
           await setDoc(doc(db, 'zones', zoneId, 'students', authUser.uid), newStudent);
+
+          // Add to user's enrollments
+          await setDoc(doc(db, 'users', authUser.uid, 'enrollments', zoneId), {
+            zoneId: zoneId,
+            title: zone.title || 'Learning Zone',
+            type: zone.zoneType || 'zone',
+            enrolledAt: new Date().toISOString()
+          });
+
           // studentData will be updated via onSnapshot listener
           return;
         } catch (e) {
@@ -612,15 +620,7 @@ const StudentZoneView: React.FC = () => {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-12 animate-in fade-in duration-500 pb-20 pr-10">
-      {activeLiveRoom && (
-        <ClassroomStream
-          sessionId={activeLiveRoom.id}
-          zoneId={zoneId || ''}
-          role="STUDENT"
-          title={activeLiveRoom.title}
-          onClose={() => setActiveLiveRoom(null)}
-        />
-      )}
+      {/* ClassroomStream overlay removed */}
 
       <div className="flex flex-col md:flex-row justify-between items-center gap-8">
         <div className="flex items-center gap-6 w-full">
@@ -645,7 +645,7 @@ const StudentZoneView: React.FC = () => {
                 className="bg-[#c2f575]/10 border-[#c2f575]/20 text-[#c2f575]"
               />
               <button
-                onClick={() => setActiveLiveRoom(currentZoneLive)}
+                onClick={() => navigate(`/live/${zoneId}/${currentZoneLive.id}`)}
                 className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-[1.75rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
               >
                 Join Live Classroom <ArrowRight size={16} />

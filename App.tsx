@@ -23,11 +23,13 @@ import ListProductFlow from './pages/ListProductFlow';
 import VerificationPortal from './pages/VerificationPortal';
 import Auth from './pages/Auth';
 import BookingPage from './pages/BookingPage';
+import PricingPage from './pages/PricingPage';
+import OnboardingSystem from './pages/OnboardingSystem';
+import SandboxLive from './pages/SandboxLive';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 
-import LiveRoom from './components/LiveRoom';
 import Payment from './pages/Payment';
 import LiveNotification from './components/LiveNotification';
 
@@ -42,12 +44,24 @@ const AppContent: React.FC = () => {
 
   const isPublicRoute = location.pathname.startsWith('/verify/') || location.pathname.startsWith('/u/');
   const isAuthRoute = location.pathname === '/auth';
+  const isSandboxRoute = location.pathname.startsWith('/sandbox/');
   const isLiveRoute = location.pathname.startsWith('/live/');
-  const hideHeader = isLiveRoute;
-  const hideSidebar = isLiveRoute;
+  const isOnboardingRoute = location.pathname === '/onboarding';
+  const hideHeader = isSandboxRoute || isOnboardingRoute;
+  const hideSidebar = isSandboxRoute || isOnboardingRoute;
 
   if (!isAuthenticated && !isPublicRoute && !isAuthRoute) {
     return <Navigate to="/auth" replace />;
+  }
+
+  const role = user?.role || UserRole.STUDENT;
+  const needsOnboarding =
+    (role === UserRole.STUDENT && !user?.studentProfile?.isComplete) ||
+    (role === UserRole.TUTOR && !user?.tutorProfile?.isComplete);
+
+  if (isAuthenticated && needsOnboarding && !isOnboardingRoute && !isPublicRoute) {
+    const targetRole = role === UserRole.TUTOR ? 'tutor' : 'student';
+    return <Navigate to={`/onboarding?role=${targetRole}`} replace />;
   }
 
   if (isPublicRoute || isAuthRoute) {
@@ -63,8 +77,6 @@ const AppContent: React.FC = () => {
     );
   }
 
-  const role = user?.role || UserRole.STUDENT;
-
   return (
     <div className="flex h-screen overflow-hidden bg-[#fbfbfb]">
       {!hideSidebar && <Sidebar isOpen={isSidebarOpen} onToggle={toggleSidebar} />}
@@ -74,6 +86,7 @@ const AppContent: React.FC = () => {
         <main className={`flex-1 overflow-y-auto ${isLiveRoute ? 'p-0' : 'p-4 md:p-8'} custom-scrollbar relative`}>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/onboarding" element={<OnboardingSystem />} />
             <Route path="/dashboard" element={<Dashboard role={role} />} />
             <Route path="/classroom" element={role === UserRole.STUDENT ? <Classroom /> : <Navigate to="/workplace" />} />
             <Route path="/classroom/zone/:zoneId" element={role === UserRole.STUDENT ? <StudentZoneView /> : <Navigate to="/dashboard" />} />
@@ -82,7 +95,8 @@ const AppContent: React.FC = () => {
             <Route path="/workplace/launch" element={role === UserRole.TUTOR ? <LaunchZone /> : <Navigate to="/dashboard" />} />
             <Route path="/certificate-engine" element={role === UserRole.TUTOR ? <CertificateEngine /> : <Navigate to="/dashboard" />} />
             <Route path="/list-product/flow" element={role === UserRole.TUTOR ? <ListProductFlow /> : <Navigate to="/dashboard" />} />
-            <Route path="/live/:zoneId/:sessionId" element={<LiveRoom />} />
+            <Route path="/live/:zoneId/:sessionId" element={<SandboxLive />} />
+            <Route path="/sandbox/live" element={<SandboxLive />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/search" element={<Search />} />
             <Route path="/explore" element={<Explore />} />
@@ -94,6 +108,7 @@ const AppContent: React.FC = () => {
             <Route path="/u/:id" element={<ProfileView />} />
             <Route path="/payment/:zoneId" element={<Payment />} />
             <Route path="/booking/:productId" element={<BookingPage />} />
+            <Route path="/billing" element={<PricingPage />} />
           </Routes>
         </main>
       </div>

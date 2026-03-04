@@ -18,7 +18,6 @@ import {
    CheckCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import ClassroomStream from '../components/ClassroomStream';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 
 import {
@@ -208,22 +207,7 @@ const Classroom: React.FC = () => {
    return (
       <div className="space-y-12 max-w-[1600px] mx-auto animate-in fade-in duration-700 pb-20 pr-10">
 
-         {/* Live Room Overlay */}
-         {activeLiveRoom && (
-            <ClassroomStream
-               sessionId={activeLiveRoom.id}
-               zoneId={activeLiveRoom.zoneId}
-               role={activeLiveRoom.coHosts?.includes(user?.uid) ? 'COHOST' : 'STUDENT'}
-               title={activeLiveRoom.title}
-               onClose={() => {
-                  setActiveLiveRoom(null);
-                  const activeZone = enrolledZones.find(z => z.id === activeLiveRoom.zoneId);
-                  if (activeZone?.postSessionSurvey?.enabled) {
-                     setSurveyForRoom({ room: activeLiveRoom, config: activeZone.postSessionSurvey });
-                  }
-               }}
-            />
-         )}
+         {/* Live Room Overlay Removed (replaced by sandbox navigation) */}
 
          {/* Post-Session Survey Modal */}
          {surveyForRoom && (
@@ -330,7 +314,7 @@ const Classroom: React.FC = () => {
                         </div>
                         {session.status === 'live' ? (
                            <button
-                              onClick={() => setActiveLiveRoom(session)}
+                              onClick={() => navigate(`/live/${session.zoneId}/${session.id}`)}
                               className="w-full mt-8 py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-900/20"
                            >
                               Enter Living Room

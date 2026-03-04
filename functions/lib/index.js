@@ -23,119 +23,54 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createMentorshipBooking = exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.generateLiveKitToken = exports.checkLiveKitConfig = void 0;
+exports.bunnyStreamWebhook = exports.downloadInvoice = exports.sendInvoiceEmail = exports.createZohoCheckoutSession = exports.createMentorshipBooking = exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.get100msToken = void 0;
 const functions = __importStar(require("firebase-functions"));
+const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
-const livekit_server_sdk_1 = require("livekit-server-sdk");
 const crypto = __importStar(require("crypto"));
-const corsLib = __importStar(require("cors"));
 const nodemailer = __importStar(require("nodemailer"));
-const cors = corsLib({ origin: true });
+const jwt = __importStar(require("jsonwebtoken"));
 if (!admin.apps.length) {
     admin.initializeApp();
 }
+// --- 100ms LIVE INTEGRATION ---
 /**
- * Diagnostic function to check if LiveKit keys are visible to the server.
- * EXPLICIT CORS handling for re-wired version.
+ * Generates a signed JWT for the 100ms SDK.
+ * Reads HMS_ACCESS_KEY and HMS_SECRET from Firebase environment secrets.
  */
-exports.checkLiveKitConfig = functions.https.onRequest(async (req, res) => {
-    return cors(req, res, async () => {
-        res.status(200).send({
-            hasApiKey: !!process.env.LIVEKIT_API_KEY,
-            apiKeyPrefix: process.env.LIVEKIT_API_KEY ? process.env.LIVEKIT_API_KEY.substring(0, 4) : 'none',
-            hasApiSecret: !!process.env.LIVEKIT_API_SECRET,
-            envKeys: Object.keys(process.env).filter(k => k.includes('LIVEKIT'))
-        });
+exports.get100msToken = (0, https_1.onCall)({ secrets: ["HMS_ACCESS_KEY", "HMS_SECRET"] }, async (request) => {
+    const accessKey = process.env.HMS_ACCESS_KEY;
+    const secret = process.env.HMS_SECRET;
+    if (!accessKey || !secret) {
+        console.error("[100ms] HMS_ACCESS_KEY or HMS_SECRET secrets are not configured.");
+        throw new functions.https.HttpsError("failed-precondition", "100ms credentials are not configured on the server.");
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+        access_key: accessKey,
+        type: "app",
+        version: 2,
+        role: "broadcaster",
+        room_id: "sandbox-test-room",
+        user_id: "test-user-id",
+        iat: now,
+        nbf: now,
+    };
+    const token = jwt.sign(payload, secret, {
+        algorithm: "HS256",
+        expiresIn: "24h",
     });
-});
-/**
- * Re-wired Token Generation using onRequest with Security.
- */
-exports.generateLiveKitToken = functions.https.onRequest(async (req, res) => {
-    return cors(req, res, async () => {
-        try {
-            if (req.method !== 'POST') {
-                res.status(405).send({ error: 'Method Not Allowed' });
-                return;
-            }
-            // 1. Authenticate Request
-            const authHeader = req.headers.authorization;
-            if (!authHeader || !authHeader.startsWith('Bearer ')) {
-                res.status(401).send({ error: 'Unauthorized: Missing or malformed token' });
-                return;
-            }
-            const idToken = authHeader.split('Bearer ')[1];
-            let decodedToken;
-            try {
-                decodedToken = await admin.auth().verifyIdToken(idToken);
-            }
-            catch (e) {
-                res.status(401).send({ error: 'Unauthorized: Invalid token' });
-                return;
-            }
-            const uid = decodedToken.uid;
-            const { roomName, zoneId } = req.body;
-            if (!roomName || !zoneId) {
-                res.status(400).send({ error: 'roomName and zoneId are required' });
-                return;
-            }
-            // 2. Authorize User
-            const zoneRef = admin.firestore().collection('zones').doc(zoneId);
-            const zoneDoc = await zoneRef.get();
-            if (!zoneDoc.exists) {
-                res.status(404).send({ error: 'Zone not found' });
-                return;
-            }
-            const zoneData = zoneDoc.data();
-            const isCreator = zoneData.createdBy === uid;
-            let isAuthorized = isCreator;
-            if (!isAuthorized) {
-                // Check if enrolled as student
-                const studentDoc = await zoneRef.collection('students').doc(uid).get();
-                if (studentDoc.exists) {
-                    isAuthorized = true;
-                }
-            }
-            if (!isAuthorized) {
-                res.status(403).send({ error: 'Forbidden: You are not authorized to join this room' });
-                return;
-            }
-            const apiKey = (process.env.LIVEKIT_API_KEY || '').trim();
-            const apiSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
-            if (!apiKey || !apiSecret) {
-                console.error("LiveKit configuration missing on server");
-                res.status(500).send({ error: 'LiveKit keys missing on server' });
-                return;
-            }
-            const identity = uid;
-            const name = decodedToken.name || decodedToken.email || uid;
-            const isTutor = isCreator; // Only the creator gets publisher rights for now
-            const at = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
-                identity: identity,
-                name: name,
-            });
-            at.addGrant({
-                roomJoin: true,
-                room: roomName,
-                canPublish: isTutor,
-                canSubscribe: true,
-                canPublishData: true,
-            });
-            const token = at.toJwt();
-            res.status(200).send({ token, isTutor, roomName });
-        }
-        catch (error) {
-            console.error("Token Generation Error:", error);
-            res.status(500).send({ error: error.message || 'Token generation failed' });
-        }
-    });
+    console.log("[100ms] Token generated successfully.");
+    return { token };
 });
 // --- BUNNY STREAM INTEGRATION ---
 const BUNNY_LIBRARY_ID = process.env.BUNNY_LIBRARY_ID;
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY;
 const BUNNY_HOSTNAME = process.env.BUNNY_HOSTNAME || 'video.bunnycdn.com';
 const BUNNY_TOKEN_KEY = process.env.BUNNY_TOKEN_KEY; // From Pull Zone Security
-exports.createBunnyVideo = functions.https.onCall(async (data, context) => {
+exports.createBunnyVideo = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     // 1. Auth Check
     if (!context.auth)
         throw new functions.https.HttpsError("unauthenticated", "User must be logged in.");
@@ -179,7 +114,9 @@ exports.createBunnyVideo = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError("internal", error.message);
     }
 });
-exports.generateBunnyToken = functions.https.onCall(async (data, context) => {
+exports.generateBunnyToken = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     if (!context.auth)
         throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { videoId } = data;
@@ -228,7 +165,9 @@ exports.handleBunnyWebhook = functions.https.onRequest(async (req, res) => {
     }
     res.status(200).send('OK');
 });
-exports.sendWhitelistInvite = functions.https.onCall(async (data, context) => {
+exports.sendWhitelistInvite = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     if (!context.auth)
         throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { email, zoneTitle } = data;
@@ -253,7 +192,8 @@ const transporter = nodemailer.createTransport({
  * Generates and stores a 6-digit OTP for a given email.
  * Sends the OTP via email.
  */
-exports.requestOTP = functions.https.onCall(async (data) => {
+exports.requestOTP = functions.https.onCall(async (request) => {
+    const data = request.data;
     const { email } = data;
     if (!email) {
         throw new functions.https.HttpsError("invalid-argument", "Email is required.");
@@ -302,7 +242,8 @@ exports.requestOTP = functions.https.onCall(async (data) => {
  * Verifies OTP and returns a custom token for client sign-in.
  * If user doesn't exist, it creates a profile in Firestore only IF password is provided.
  */
-exports.verifyOTPAndSignIn = functions.https.onCall(async (data) => {
+exports.verifyOTPAndSignIn = functions.https.onCall(async (request) => {
+    const data = request.data;
     const { email, otp, registrationData, password } = data;
     if (!email || !otp) {
         throw new functions.https.HttpsError("invalid-argument", "Email and OTP are required.");
@@ -321,20 +262,24 @@ exports.verifyOTPAndSignIn = functions.https.onCall(async (data) => {
         if (storedOtp !== otp) {
             throw new functions.https.HttpsError("permission-denied", "Invalid OTP.");
         }
-        // OTP is valid, delete it
-        await otpRef.delete();
+        // OTP is valid, but we delay deleting until full sign-up or sign-in is complete to allow intermediate password step
+        // If password is not provided, this is just the intermediate verification step.
+        if (!password) {
+            return { verified: true, message: "OTP verified. Please proceed to provide a password." };
+        }
         // Get or Create Firebase User
         let userRecord;
         try {
             userRecord = await admin.auth().getUserByEmail(email);
+            // If user exists and password IS provided, update their password (e.g. forgot password flow) 
+            // OR we are just confirming their sign in. For security, if they provide a password with OTP, we can set it.
+            await admin.auth().updateUser(userRecord.uid, {
+                password: password
+            });
         }
         catch (error) {
             if (error.code === 'auth/user-not-found') {
-                // Register new user
-                if (!password) {
-                    // This is the intermediate step where we only verify OTP
-                    return { verified: true, message: "OTP verified. Please proceed to set a password." };
-                }
+                // Register new user since we have the password
                 userRecord = await admin.auth().createUser({
                     email,
                     password: password
@@ -356,8 +301,10 @@ exports.verifyOTPAndSignIn = functions.https.onCall(async (data) => {
                 throw error;
             }
         }
-        // Generate Custom Token
+        // Generate Custom Token for successful sign in
         const customToken = await admin.auth().createCustomToken(userRecord.uid);
+        // Security: Delete the OTP only after successful token generation
+        await otpRef.delete();
         return { customToken, uid: userRecord.uid };
     }
     catch (error) {
@@ -368,7 +315,9 @@ exports.verifyOTPAndSignIn = functions.https.onCall(async (data) => {
     }
 });
 // --- SECURE BOOKING SYSTEM ---
-exports.createMentorshipBooking = functions.https.onCall(async (data, context) => {
+exports.createMentorshipBooking = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
     if (!context.auth)
         throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { tutorId, productId, date, slotId, time, studentCountry } = data;
@@ -427,5 +376,218 @@ exports.createMentorshipBooking = functions.https.onCall(async (data, context) =
         console.error("createMentorshipBooking error:", error);
         throw new functions.https.HttpsError("internal", error.message || "Failed to create booking.");
     }
+});
+// --- ZOHO PAYMENTS INTEGRATION ---
+exports.createZohoCheckoutSession = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
+    if (!context.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { productId, title, amount, currency, returnUrl } = data;
+    if (!productId || !amount) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing required product details for checkout.");
+    }
+    const ZOHO_API_KEY = process.env.ZOHO_API_KEY;
+    const ZOHO_DOMAIN = process.env.ZOHO_DOMAIN || 'checkout.zoho.in'; // typically checkout.zoho.in or checkout.zoho.com
+    if (!ZOHO_API_KEY) {
+        console.warn("ZOHO_API_KEY is missing. Returning a simulated checkout URL for development.");
+        // Simulated response for development when keys aren't added yet
+        return {
+            success: true,
+            checkoutUrl: `${returnUrl}?simulated_zoho_success=true&product_id=${productId}`,
+            message: "Simulated Zoho Checkout URL (Configure ZOHO_API_KEY in .env for live)"
+        };
+    }
+    try {
+        // Standard payload scaffolding for Zoho Checkout API (Hosted Pages)
+        // Adjust endpoint and payload specific to the exact Zoho product (Checkout, Subscriptions, Invoice)
+        const payload = {
+            amount: parseFloat(amount),
+            currency: currency || 'INR',
+            reference_id: productId,
+            description: title || 'Nunma Session Checkout',
+            redirect_url: returnUrl,
+            customer: {
+                name: context.auth.token.name || 'Student',
+                email: context.auth.token.email || ''
+            }
+        };
+        const response = await fetch(`https://${ZOHO_DOMAIN}/api/v1/checkout`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Zoho-oauthtoken ${ZOHO_API_KEY}` // Ensure correct Auth scheme is used depending on Zoho Product
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Zoho Checkout API Error:", errorText);
+            throw new Error(`Zoho API Error: ${response.status}`);
+        }
+        const responseData = await response.json();
+        // Assuming Zoho responds with a hosted page URL
+        return {
+            success: true,
+            checkoutUrl: responseData.hosted_page_url || responseData.url || returnUrl
+        };
+    }
+    catch (error) {
+        console.error("createZohoCheckoutSession error:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to initiate Zoho Checkout.");
+    }
+});
+// --- INVOICING & BILLING SYSTEM ---
+exports.sendInvoiceEmail = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
+    if (!context.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { transactionId, amount, service, date, recipientEmail, recipientName } = data;
+    if (!transactionId || !amount || !recipientEmail) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing invoice data.");
+    }
+    try {
+        const mailOptions = {
+            from: `"Nunma Billing" <${process.env.SMTP_USER}>`,
+            to: recipientEmail,
+            subject: `Invoice for ${service} (${transactionId})`,
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; color: #040457;">
+                    <h2 style="color: #040457;">Payment Receipt</h2>
+                    <p>Hi ${recipientName || 'User'},</p>
+                    <p>Thank you for your payment. Here are the details of your transaction:</p>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                        <tr style="background: #f4f4f4;">
+                            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Transaction ID</th>
+                            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Date</th>
+                            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Service</th>
+                            <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Amount</th>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${transactionId}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${date}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${service}</td>
+                            <td style="padding: 10px; text-align: right; border: 1px solid #ddd; font-weight: bold;">${amount}</td>
+                        </tr>
+                    </table>
+                    <p style="margin-top: 30px; font-size: 12px; color: #666;">This is an automated receipt from Nunma Academy.</p>
+                </div>
+            `,
+        };
+        if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+            await transporter.sendMail(mailOptions);
+            return { success: true, message: "Invoice sent successfully." };
+        }
+        else {
+            console.warn("SMTP credentials missing. Invoice email not sent.");
+            return { success: false, message: "SMTP credentials missing. Logging only." };
+        }
+    }
+    catch (error) {
+        console.error("sendInvoiceEmail error:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to send invoice email.");
+    }
+});
+exports.downloadInvoice = functions.https.onCall(async (request) => {
+    const data = request.data;
+    const context = request;
+    if (!context.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { transactionId, amount, service, date, status } = data;
+    if (!transactionId) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing transactionId.");
+    }
+    // Return a raw HTML string that the client can open in a new tab and print/save as PDF.
+    const htmlInvoice = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Invoice - ${transactionId}</title>
+        <style>
+            body { font-family: 'Inter', sans-serif; padding: 40px; color: #1A1A4E; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f4f4f4; padding-bottom: 20px; margin-bottom: 40px; }
+            .title { font-size: 32px; font-weight: 900; margin: 0; }
+            .meta { text-align: right; color: #666; font-size: 14px; }
+            .details { margin-bottom: 40px; }
+            .table { width: 100%; border-collapse: collapse; }
+            .table th, .table td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+            .table th { background: #f8fafc; font-weight: bold; text-transform: uppercase; font-size: 12px; color: #888; }
+            .table .amount { text-align: right; font-weight: bold; color: #1A1A4E; }
+            .footer { margin-top: 60px; font-size: 12px; color: #aaa; text-align: center; }
+            @media print { .no-print { display: none; } }
+        </style>
+    </head>
+    <body onload="window.print()">
+        <div class="header">
+            <h1 class="title">NUNMA INVOICE</h1>
+            <div class="meta">
+                <p>Transaction ID: <strong>${transactionId}</strong></p>
+                <p>Date: ${date}</p>
+                <p>Status: <span style="color: ${status === 'Completed' ? 'green' : 'inherit'};">${status}</span></p>
+            </div>
+        </div>
+        <div class="details">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th class="amount">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>${service}</td>
+                        <td class="amount">${amount}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="footer">
+            <p>Thank you for your business. For any queries, contact support@nunma.in.</p>
+        </div>
+    </body>
+    </html>
+    `;
+    return { success: true, html: htmlInvoice };
+});
+// --- BUNNY STREAM WEBHOOK (v2) ---
+/**
+ * Receives processing status updates from Bunny Stream.
+ * Status 3 = Finished → sets document status to 'ready'
+ * Status 5 = Failed   → sets document status to 'failed'
+ * Always returns 200 so Bunny does not aggressively retry.
+ */
+exports.bunnyStreamWebhook = (0, https_1.onRequest)(async (req, res) => {
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+    const { VideoGuid, Status } = req.body;
+    if (VideoGuid && (Status === 3 || Status === 5)) {
+        const newStatus = Status === 3 ? 'ready' : 'failed';
+        try {
+            const db = admin.firestore();
+            const snapshot = await db
+                .collection('tutor_videos')
+                .where('bunnyVideoId', '==', VideoGuid)
+                .get();
+            if (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => batch.update(doc.ref, { status: newStatus }));
+                await batch.commit();
+                console.log(`[BunnyWebhook] Video ${VideoGuid} → status '${newStatus}'`);
+            }
+            else {
+                console.warn(`[BunnyWebhook] No tutor_videos doc found for bunnyVideoId=${VideoGuid}`);
+            }
+        }
+        catch (error) {
+            // Log but do NOT propagate — we must return 200 regardless.
+            console.error('[BunnyWebhook] Firestore update failed:', error);
+        }
+    }
+    // Crucial: always acknowledge receipt to prevent Bunny retry storms.
+    res.status(200).send('Webhook received');
 });
 //# sourceMappingURL=index.js.map
