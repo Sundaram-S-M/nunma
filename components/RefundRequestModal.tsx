@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../utils/firebase';
+import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
-import { X, Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface RefundRequestModalProps {
     transactionId: string;
@@ -27,7 +26,6 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
     const { user } = useAuth();
     const [reason, setReason] = useState('');
     const [details, setDetails] = useState('');
-    const [file, setFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -55,15 +53,6 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
         setError(null);
 
         try {
-            let evidenceUrl = null;
-
-            // 1. Upload evidence to Firebase Storage if provided
-            if (file) {
-                const fileRef = ref(storage, `disputes/${transactionId}/${file.name}`);
-                const snapshot = await uploadBytes(fileRef, file);
-                evidenceUrl = await getDownloadURL(snapshot.ref);
-            }
-
             // 2. Create dispute document
             const disputeRef = await addDoc(collection(db, 'disputes'), {
                 transactionId,
@@ -74,7 +63,6 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
                 currency,
                 reason,
                 details,
-                evidenceUrl,
                 status: 'Under Review',
                 request_timestamp: serverTimestamp(),
                 refund_cutoff_time: refundCutoffTime.toISOString()
@@ -180,25 +168,6 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
                                     onChange={(e) => setDetails(e.target.value)}
                                     required
                                 />
-                            </div>
-
-                            <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1 mb-2">Evidence Upload (Optional)</label>
-                                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 hover:border-indigo-400 rounded-2xl cursor-pointer bg-gray-50 hover:bg-indigo-50/50 transition-all">
-                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                        <Upload size={24} className="mb-2 text-gray-400" />
-                                        <p className="text-xs font-bold text-gray-500">
-                                            {file ? file.name : 'Upload screenshots, logs, or chat exports'}
-                                        </p>
-                                    </div>
-                                    <input
-                                        type="file"
-                                        className="hidden"
-                                        accept="image/png, image/jpeg, application/pdf"
-                                        onChange={(e) => e.target.files && setFile(e.target.files[0])}
-                                    />
-                                </label>
-                                <p className="text-[9px] font-bold text-gray-300 mt-2 px-2">Max file size: 5MB. Formats: PNG, JPG, PDF.</p>
                             </div>
                         </div>
 

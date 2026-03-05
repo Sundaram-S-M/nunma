@@ -12,9 +12,10 @@ interface VideoUploadModalProps {
     onClose: () => void;
     onUploadSuccess: (videoData: { videoId: string, title: string }) => void;
     zoneId?: string; // Optional context if uploading for a specific zone
+    chapterId?: string; // Optional context if uploading for a specific chapter
 }
 
-export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onClose, onUploadSuccess, zoneId }) => {
+export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onClose, onUploadSuccess, zoneId, chapterId }) => {
     const [dragActive, setDragActive] = useState(false);
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -122,12 +123,26 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                 tutorId: user.uid,
                                 bunnyVideoId: videoId,
                                 title: file.name || "Untitled Video",
+                                sizeBytes: file.size, // Track size for storage metering
                                 status: "processing",
                                 createdAt: serverTimestamp()
                             });
-                            alert("Video saved to your Library.");
+
+                            // If chapterId and zoneId are present, add it directly to the chapter's "lessons" subcollection
+                            if (zoneId && chapterId) {
+                                await addDoc(collection(db, 'zones', zoneId, 'chapters', chapterId, 'lessons'), {
+                                    title: file.name || "Untitled Video",
+                                    type: 'video',
+                                    videoId: videoId,
+                                    sizeBytes: file.size, // Optional: helpful for UI
+                                    status: 'processing',
+                                    createdAt: serverTimestamp()
+                                });
+                            }
+
+                            alert("Video uploaded successfully.");
                         } catch (err: any) {
-                            console.error("Failed to save to tutor_videos:", err);
+                            console.error("Failed to save video metadata:", err);
                         }
                     }
 

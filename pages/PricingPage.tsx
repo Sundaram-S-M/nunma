@@ -83,7 +83,6 @@ const PricingPage: React.FC = () => {
                     </h1>
                     <p className="text-xl text-gray-500 font-medium">
                         Choose the perfect plan to grow your audience and maximize your earnings.
-                        Transparent pricing, no hidden fees.
                     </p>
                 </div>
 

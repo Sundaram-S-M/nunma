@@ -35,7 +35,6 @@ const Workplace: React.FC = () => {
   const [productSubTab, setProductSubTab] = useState<'material' | 'service' | 'mentorship'>('material');
   const [showProductModal, setShowProductModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [showLibraryUpload, setShowLibraryUpload] = useState(false);
 
   // List Product State
   const [productTitle, setProductTitle] = useState('');
@@ -274,13 +273,6 @@ const Workplace: React.FC = () => {
           >
             <Radio size={18} className="text-red-500 group-hover:scale-110 transition-transform" />
             Schedule Live Class
-          </button>
-          <button
-            onClick={() => setShowLibraryUpload(true)}
-            className="bg-white border border-gray-100 text-[#040457] font-bold px-5 py-3 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 group"
-          >
-            <Video size={18} className="text-[#c2f575] group-hover:scale-110 transition-transform" />
-            Upload to Library
           </button>
           <button
             onClick={() => navigate('/certificate-engine')}
@@ -565,15 +557,6 @@ const Workplace: React.FC = () => {
         </div>
       )}
 
-      {showLibraryUpload && (
-        <VideoUploadModal
-          isOpen={showLibraryUpload}
-          onClose={() => setShowLibraryUpload(false)}
-          onUploadSuccess={() => {
-            setShowLibraryUpload(false);
-          }}
-        />
-      )}
     </div>
   );
 };

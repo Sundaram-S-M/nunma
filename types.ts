@@ -160,6 +160,7 @@ export interface Student {
   phone?: string;
   attendanceHistory?: AttendanceHistory[];
   current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
+  storage_used_bytes?: number;
   subscription_entitlements?: {
     storageLimit: number;
     storageUsed: number;

@@ -43,8 +43,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showAddonModal, setShowAddonModal] = useState(false);
 
-  const storageLimitRaw = user?.subscription_entitlements?.storageLimit || 104857600;
-  const storageUsedRaw = user?.subscription_entitlements?.storageUsed || 0;
+  const storageUsedRaw = (user as any)?.storage_used_bytes || 0;
+
+  let storageLimitRaw = 3221225472; // 3GB for STARTER
+  if (currentTier === 'STANDARD') {
+    storageLimitRaw = 16106127360; // 15GB
+  } else if (currentTier === 'PREMIUM') {
+    storageLimitRaw = 32212254720; // 30GB
+  }
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -158,7 +164,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   </div>
                   <p className="text-[10px] text-gray-400 font-medium mb-3">{storageUsedStr} of {storageLimitStr} used</p>
                   <button
-                    onClick={() => currentTier === 'STARTER' ? setShowUpgradeModal(true) : setShowAddonModal(true)}
+                    onClick={() => navigate('/settings/pricing')}
                     className="text-[10px] text-[#c2f575] font-black uppercase tracking-widest hover:brightness-110 transition-all border-b border-transparent hover:border-[#c2f575] inline-block"
                   >
                     Buy Addons

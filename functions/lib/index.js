@@ -22,14 +22,18 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.bunnyStreamWebhook = exports.downloadInvoice = exports.sendInvoiceEmail = exports.createZohoCheckoutSession = exports.createMentorshipBooking = exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.get100msToken = void 0;
+exports.zohoBillingWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.bunnyStreamWebhook = exports.downloadInvoice = exports.sendInvoiceEmail = exports.createZohoCheckoutSession = exports.createMentorshipBooking = exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.get100msToken = void 0;
 const functions = __importStar(require("firebase-functions"));
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const crypto = __importStar(require("crypto"));
 const nodemailer = __importStar(require("nodemailer"));
 const jwt = __importStar(require("jsonwebtoken"));
+const axios_1 = __importDefault(require("axios"));
 if (!admin.apps.length) {
     admin.initializeApp();
 }
@@ -588,6 +592,219 @@ exports.bunnyStreamWebhook = (0, https_1.onRequest)(async (req, res) => {
         }
     }
     // Crucial: always acknowledge receipt to prevent Bunny retry storms.
+    res.status(200).send('Webhook received');
+});
+// --- ZOHO BILLING SUBSCRIPTION INTEGRATION ---
+/**
+ * Helper function to generate a fresh Zoho Access Token.
+ * Zoho requires exchanging a refresh token for an access token.
+ */
+async function getZohoAccessToken() {
+    const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
+    const clientId = process.env.ZOHO_CLIENT_ID;
+    const clientSecret = process.env.ZOHO_CLIENT_SECRET;
+    if (!refreshToken || !clientId || !clientSecret) {
+        throw new Error("Zoho authentication secrets are missing.");
+    }
+    const response = await axios_1.default.post("https://accounts.zoho.in/oauth/v2/token", null, {
+        params: {
+            refresh_token: refreshToken,
+            client_id: clientId,
+            client_secret: clientSecret,
+            grant_type: "refresh_token"
+        }
+    });
+    if (response.data && response.data.error) {
+        throw new Error(`Zoho Token Error: ${response.data.error}`);
+    }
+    return response.data.access_token;
+}
+// --- RAZORPAY ROUTE INTEGRATION ---
+const razorpay_1 = __importDefault(require("razorpay"));
+exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] }, async (request) => {
+    const { amount, tutorId } = request.data;
+    const context = request;
+    if (!context.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    if (!amount || !tutorId) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing amount or tutorId.");
+    }
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (!keyId || !keySecret) {
+        throw new functions.https.HttpsError("failed-precondition", "Razorpay secrets missing.");
+    }
+    try {
+        const db = admin.firestore();
+        const tutorDoc = await db.collection("users").doc(tutorId).get();
+        if (!tutorDoc.exists) {
+            throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
+        }
+        const tutorData = tutorDoc.data();
+        const tutorAccountId = tutorData.razorpayAccountId;
+        if (!tutorAccountId) {
+            throw new functions.https.HttpsError("failed-precondition", "Tutor has not connected their Razorpay account.");
+        }
+        // Determine commission rate based on subscription plan
+        let commissionRate = 0.10; // Default Starter: 10%
+        const userPlan = tutorData.subscriptionPlan || "starter";
+        if (userPlan === "standard") {
+            commissionRate = 0.05;
+        }
+        else if (userPlan === "premium") {
+            commissionRate = 0.02;
+        }
+        // Calculations in paise
+        const totalAmount = parseInt(amount); // amount should be in paise from frontend
+        const platformCommission = Math.floor(totalAmount * commissionRate);
+        const tutorTransferAmount = totalAmount - platformCommission;
+        const razorpay = new razorpay_1.default({
+            key_id: keyId,
+            key_secret: keySecret,
+        });
+        const orderOptions = {
+            amount: totalAmount,
+            currency: "INR",
+            receipt: `receipt_${Date.now()}`,
+            transfers: [
+                {
+                    account: tutorAccountId,
+                    amount: tutorTransferAmount,
+                    currency: "INR",
+                    notes: {
+                        purpose: "Nunma Tutor Payout",
+                        plan: userPlan
+                    },
+                    on_hold: 0,
+                }
+            ]
+        };
+        const order = await razorpay.orders.create(orderOptions);
+        return {
+            id: order.id,
+            amount: order.amount,
+            currency: order.currency
+        };
+    }
+    catch (error) {
+        console.error("createRazorpayOrder error:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to create Razorpay Order.");
+    }
+});
+exports.razorpayRouteWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBHOOK_SECRET"] }, async (req, res) => {
+    var _a, _b;
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+        console.error("RAZORPAY_WEBHOOK_SECRET is missing.");
+        res.status(500).send("Server Error");
+        return;
+    }
+    const signature = req.headers['x-razorpay-signature'];
+    try {
+        const hmac = crypto.createHmac('sha256', webhookSecret);
+        hmac.update(JSON.stringify(req.body));
+        const expectedSignature = hmac.digest('hex');
+        if (expectedSignature !== signature) {
+            res.status(400).send('Invalid Signature');
+            return;
+        }
+        const event = req.body.event;
+        if (event === 'payment.captured') {
+            const payment = req.body.payload.payment.entity;
+            const transfers = ((_a = req.body.payload.transfer) === null || _a === void 0 ? void 0 : _a.entity) || req.body.transfers; // Depending on Route webhook structure
+            let platformCommission = 0;
+            // Simplistic calculation: If we have the order, we subtract transfers from payment total
+            // Usually Route webhooks for payment.captured include transfer details, or we just calculate from the payment base minus sum of transfers.
+            // To be safe and precise for the Zoho Invoice, we calculate total payment - total transferred
+            let totalTransferred = 0;
+            if (payment.transfers) {
+                // If the transfers array is included on the payment entity directly
+                payment.transfers.forEach((t) => { totalTransferred += t.amount; });
+            }
+            else if (Array.isArray(transfers)) {
+                transfers.forEach((t) => { totalTransferred += t.amount; });
+            }
+            else if (transfers && transfers.amount) {
+                totalTransferred = transfers.amount;
+            }
+            else {
+                // Fallback: This requires knowing the plan, which is risky in a webhook without db lookup.
+                // Ideally transfer amount is available in webhook payload. Let's assume we fetch it if not present,
+                // or for MVP just log it. Let's use a safe fallback of 10% if transfer info isn't cleanly in the payload.
+                platformCommission = Math.floor(payment.amount * 0.10);
+                console.warn("Could not find transfer records in webhook, defaulting to 10% fallback for invoice draft.");
+            }
+            if (totalTransferred > 0) {
+                platformCommission = payment.amount - totalTransferred;
+            }
+            // Create Zoho Invoice
+            const accessToken = await getZohoAccessToken();
+            const orgId = process.env.ZOHO_ORG_ID;
+            if (orgId && platformCommission > 0) {
+                const commissionInRupees = platformCommission / 100;
+                const invoicePayload = {
+                    customer_id: "DUMMY_CUSTOMER_ID",
+                    items: [
+                        {
+                            name: "Platform Usage Fee",
+                            description: `Nunma Platform Commission for payment ID: ${payment.id}`,
+                            rate: commissionInRupees,
+                            quantity: 1
+                        }
+                    ],
+                    status: "draft"
+                };
+                await axios_1.default.post(`https://www.zohoapis.in/books/v3/invoices?organization_id=${orgId}`, invoicePayload, {
+                    headers: {
+                        "Authorization": `Zoho-oauthtoken ${accessToken}`,
+                        "Content-Type": "application/json"
+                    }
+                });
+                console.log(`[RazorpayWebhook] Draft invoice created for ₹${commissionInRupees}`);
+            }
+        }
+        res.status(200).send('OK');
+    }
+    catch (error) {
+        console.error("Razorpay webhook error:", ((_b = error.response) === null || _b === void 0 ? void 0 : _b.data) || error.message);
+        res.status(500).send("Webhook Error");
+    }
+});
+/**
+ * Webhook Listener to process Zoho Billing events.
+ * It queries Firestore for the user by email and updates their document to reflect an active subscription.
+ */
+exports.zohoBillingWebhook = (0, https_1.onRequest)(async (req, res) => {
+    var _a, _b, _c;
+    try {
+        const eventType = req.body.event_type;
+        const customerEmail = (_c = (_b = (_a = req.body.data) === null || _a === void 0 ? void 0 : _a.subscription) === null || _b === void 0 ? void 0 : _b.customer) === null || _c === void 0 ? void 0 : _c.email;
+        // Check for subscription created or payment success events
+        if ((eventType === "subscription_created" || eventType === "payment_success") && customerEmail) {
+            const db = admin.firestore();
+            const usersRef = db.collection("users");
+            const snapshot = await usersRef.where("email", "==", customerEmail).get();
+            if (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => {
+                    batch.update(doc.ref, { subscriptionActive: true });
+                });
+                await batch.commit();
+                console.log(`[ZohoWebhook] User ${customerEmail} subscription activated.`);
+            }
+            else {
+                console.warn(`[ZohoWebhook] No user found with email ${customerEmail}.`);
+            }
+        }
+    }
+    catch (error) {
+        console.error("[ZohoWebhook] Error processing webhook:", error.message);
+    }
+    // Always securely return 200 OK so Zoho stops retrying
     res.status(200).send('Webhook received');
 });
 //# sourceMappingURL=index.js.map

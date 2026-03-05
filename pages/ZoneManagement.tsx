@@ -55,6 +55,8 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { VideoUploadModal } from '../components/VideoUploadModal';
+import DocumentModuleUploader from '../components/DocumentModuleUploader';
+import TextModuleEditor from '../components/TextModuleEditor';
 import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
@@ -231,6 +233,8 @@ const ZoneManagement: React.FC = () => {
   // Curriculum Upload State
   const [activeChapterForUpload, setActiveChapterForUpload] = useState<string | null>(null);
   const [activeTypeForUpload, setActiveTypeForUpload] = useState<'video' | 'pdf' | 'reading' | null>(null);
+  const [showTextModuleEditor, setShowTextModuleEditor] = useState(false);
+  const [showDocumentUploader, setShowDocumentUploader] = useState(false);
 
   // Drag and Drop State
   const [draggedChapterIndex, setDraggedChapterIndex] = useState<number | null>(null);
@@ -703,10 +707,15 @@ const ZoneManagement: React.FC = () => {
       return;
     }
 
-    if (type === 'pdf' || type === 'reading') {
+    if (type === 'reading') {
       setActiveChapterForUpload(chapterId);
-      setActiveTypeForUpload(type);
-      fileInputRef.current?.click();
+      setShowTextModuleEditor(true);
+      return;
+    }
+
+    if (type === 'pdf') {
+      setActiveChapterForUpload(chapterId);
+      setShowDocumentUploader(true);
       return;
     }
 
@@ -752,6 +761,52 @@ const ZoneManagement: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
 
     alert(`Item "${file.name}" uploaded and added to chapter!`);
+  };
+
+  const handleTextModuleSuccess = async (lessonData: { id: string; title: string; content: string }) => {
+    if (!activeChapterForUpload || !zoneId) return;
+    try {
+      const newSeg: Segment = {
+        id: `s${Date.now()}`,
+        title: lessonData.title,
+        type: 'reading',
+      };
+      const chapter = chapters.find(c => c.id === activeChapterForUpload);
+      if (chapter) {
+        const updatedSegments = [...chapter.segments, newSeg];
+        await updateDoc(doc(db, 'zones', zoneId, 'chapters', activeChapterForUpload), {
+          segments: updatedSegments
+        });
+      }
+    } catch (error) {
+      console.error('Failed to link text module to chapter:', error);
+    } finally {
+      setActiveChapterForUpload(null);
+      setShowTextModuleEditor(false);
+    }
+  };
+
+  const handleDocumentUploadSuccess = async (docData: { id: string; title: string; fileUrl: string; fileSize: number }) => {
+    if (!activeChapterForUpload || !zoneId) return;
+    try {
+      const newSeg: Segment = {
+        id: `s${Date.now()}`,
+        title: docData.title,
+        type: 'pdf',
+      };
+      const chapter = chapters.find(c => c.id === activeChapterForUpload);
+      if (chapter) {
+        const updatedSegments = [...chapter.segments, newSeg];
+        await updateDoc(doc(db, 'zones', zoneId, 'chapters', activeChapterForUpload), {
+          segments: updatedSegments
+        });
+      }
+    } catch (error) {
+      console.error('Failed to link document module to chapter:', error);
+    } finally {
+      setActiveChapterForUpload(null);
+      setShowDocumentUploader(false);
+    }
   };
 
   const handleVideoUploadSuccess = async (videoData: { videoId: string, title: string }) => {
@@ -1032,8 +1087,27 @@ const ZoneManagement: React.FC = () => {
           isOpen={showVideoUploadModal}
           onClose={() => setShowVideoUploadModal(false)}
           zoneId={zoneId}
+          chapterId={activeChapterForUpload || undefined}
           onUploadSuccess={handleVideoUploadSuccess}
         />
+
+        {showDocumentUploader && activeChapterForUpload && zoneId && (
+          <DocumentModuleUploader
+            courseId={zoneId}
+            chapterId={activeChapterForUpload}
+            onClose={() => { setShowDocumentUploader(false); setActiveChapterForUpload(null); }}
+            onSuccess={() => { }}
+          />
+        )}
+
+        {showTextModuleEditor && activeChapterForUpload && zoneId && (
+          <TextModuleEditor
+            courseId={zoneId}
+            chapterId={activeChapterForUpload}
+            onClose={() => { setShowTextModuleEditor(false); setActiveChapterForUpload(null); }}
+            onSuccess={() => { }}
+          />
+        )}
 
         {/* SCHEDULE SESSION MODAL */}
         {showScheduleModal && (
@@ -2120,21 +2194,35 @@ const ZoneManagement: React.FC = () => {
                             />
                           </div>
                           <div className="flex gap-4">
-                            <div className="flex gap-2">
-                              {(['video', 'pdf', 'reading', 'quiz'] as const).map(type => (
-                                <button
-                                  key={type}
-                                  onClick={() => handleAddSegment(chapter.id, type)}
-                                  className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:bg-[#c2f575] hover:text-[#040457] transition-all flex flex-col items-center gap-1 group/btn"
-                                  title={`Add ${type}`}
-                                >
-                                  {type === 'video' && <FileVideo size={16} />}
-                                  {type === 'pdf' && <FileText size={16} />}
-                                  {type === 'reading' && <FileText size={16} />}
-                                  {type === 'quiz' && <Radio size={16} />}
-                                  <span className="text-[8px] font-black uppercase opacity-0 group-hover/btn:opacity-100 transition-opacity">{type}</span>
-                                </button>
-                              ))}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button
+                                onClick={() => handleAddSegment(chapter.id, 'video')}
+                                className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-xl hover:bg-green-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                                title="Add Video"
+                              >
+                                <FileVideo size={14} /> Video
+                              </button>
+                              <button
+                                onClick={() => handleAddSegment(chapter.id, 'reading')}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl hover:bg-indigo-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                                title="Add Text Module"
+                              >
+                                <FileText size={14} /> Text
+                              </button>
+                              <button
+                                onClick={() => handleAddSegment(chapter.id, 'pdf')}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                                title="Add Document"
+                              >
+                                <FileDown size={14} /> Document
+                              </button>
+                              <button
+                                onClick={() => handleAddSegment(chapter.id, 'quiz')}
+                                className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                                title="Add Quiz"
+                              >
+                                <Radio size={14} /> Quiz
+                              </button>
                             </div>
                             <button
                               onClick={() => setChapters(chapters.filter(c => c.id !== chapter.id))}

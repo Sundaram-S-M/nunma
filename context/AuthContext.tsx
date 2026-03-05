@@ -39,6 +39,7 @@ export interface UserProfile {
   linkedin?: string;
   expertise?: string[];
   availability?: any[];
+  storage_used_bytes?: number;
   subscription_entitlements?: {
     storageLimit: number;
     storageUsed: number;
@@ -93,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
               role: UserRole.STUDENT,
               subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+              storage_used_bytes: 0,
               studentProfile: { isComplete: false },
               tutorProfile: { isComplete: false }
             };
@@ -117,6 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
               role: UserRole.STUDENT,
               subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+              storage_used_bytes: 0,
               studentProfile: { isComplete: false },
               tutorProfile: { isComplete: false }
             });

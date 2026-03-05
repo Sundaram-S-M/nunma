@@ -26,7 +26,8 @@ import {
   ChevronDown,
   Search,
   X,
-  Gem
+  Gem,
+  Crown
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -89,119 +90,184 @@ const Security = () => (
 
 const PricingPlans = () => {
   const { user } = useAuth();
-  const currentTier = (user as any)?.current_tier || 'STARTER';
+  const navigate = useNavigate();
+  const currentTier = (user as any)?.current_tier?.toUpperCase() || 'STARTER';
 
-  const plans = [
+  const STRIPE_STANDARD_URL = '#';
+  const STRIPE_PREMIUM_URL = '#';
+
+  const tiers = [
     {
       id: 'STARTER',
       name: 'Starter',
+      badge: 'The Trojan Horse',
       price: '₹0',
       period: '/ month',
+      description: 'Get hooked on the platform. Perfect for trying out the core features.',
+      icon: <ShieldCheck className="w-6 h-6 text-gray-400" />,
+      color: 'gray',
       features: [
-        '10% Platform Fee',
-        'Max 100 Students',
-        '10 Live Streams / month',
-        '3 GB Storage',
-        'Basic Analytics'
+        { name: '10% Platform Fee per transaction', included: true, highlight: true },
+        { name: 'Max 100 Students', included: true },
+        { name: '10 Streams / month (Up to 150 hours!)', included: true },
+        { name: '3 GB Persistent Storage', included: true },
+        { name: 'Add-ons Available', included: false },
       ],
-      recommended: false,
-      buttonText: 'Current Plan',
-      zohoUrl: null
+      buttonText: currentTier === 'STARTER' ? 'Current Plan' : 'Downgrade',
+      buttonAction: () => navigate('/dashboard'),
+      buttonVariant: currentTier === 'STARTER' ? 'outline' : 'outline',
     },
     {
       id: 'STANDARD',
       name: 'Standard',
+      badge: 'The Profit Engine',
       price: '₹1,499',
       period: '/ month',
+      description: 'The sweet spot for the serious, everyday tutor.',
+      icon: <Zap className="w-6 h-6 text-[#c2f575]" />,
+      color: 'lime',
+      popular: true,
       features: [
-        '5% Platform Fee',
-        'Max 250 Students',
-        '25 Live Streams / month',
-        '15 GB Storage',
-        'Add-ons Available'
+        { name: '5% Platform Fee per transaction', included: true, highlight: true },
+        { name: 'Max 250 Students', included: true },
+        { name: '25 Streams / month (Up to 375 hours!)', included: true },
+        { name: '15 GB Persistent Storage', included: true },
+        { name: 'Add-ons Available', included: true },
       ],
-      recommended: true,
-      buttonText: 'Upgrade to Standard',
-      zohoUrl: 'https://billing.zoho.in/subscribe/standard_plan' // Placeholder Zoho URL
+      buttonText: currentTier === 'STANDARD' ? 'Current Plan' : 'Upgrade to Standard',
+      buttonAction: () => window.open(STRIPE_STANDARD_URL, '_blank'),
+      buttonVariant: currentTier === 'STANDARD' ? 'outline' : 'primary',
     },
     {
       id: 'PREMIUM',
       name: 'Premium',
+      badge: 'The Heavyweight',
       price: '₹4,999',
       period: '/ month',
+      description: 'For established coaching centers running daily batches.',
+      icon: <Crown className="w-6 h-6 text-purple-400" />,
+      color: 'purple',
       features: [
-        '2% Platform Fee',
-        'Max 1,000 Students',
-        '60 Live Streams / month',
-        '30 GB Storage',
-        'Add-ons Available'
+        { name: '2% Platform Fee per transaction', included: true, highlight: true },
+        { name: 'Max 1,000 Students', included: true },
+        { name: '60 Streams / month (Up to 900 hours!)', included: true },
+        { name: '30 GB Persistent Storage', included: true },
+        { name: 'Add-ons Available', included: true },
       ],
-      recommended: false,
-      buttonText: 'Upgrade to Premium',
-      zohoUrl: 'https://billing.zoho.in/subscribe/premium_plan' // Placeholder Zoho URL
+      buttonText: currentTier === 'PREMIUM' ? 'Current Plan' : 'Upgrade to Premium',
+      buttonAction: () => window.open(STRIPE_PREMIUM_URL, '_blank'),
+      buttonVariant: currentTier === 'PREMIUM' ? 'outline' : 'dark',
     }
   ];
 
-  const handleUpgrade = (plan: typeof plans[0]) => {
-    if (plan.id === currentTier) return;
-    if (plan.zohoUrl) {
-      window.open(plan.zohoUrl, '_blank');
-    }
-  };
-
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="text-center max-w-2xl mx-auto mb-10">
-        <h2 className="text-3xl font-black text-[#1A1A4E] mb-2">Upgrade Your Teaching Impact</h2>
-        <p className="text-gray-400 font-medium">Choose the plan that fits your growth stage.</p>
+    <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+      <div className="text-center max-w-3xl mx-auto mb-16">
+        <h2 className="text-[#c2f575] font-black tracking-widest uppercase text-sm mb-4">Pricing Plans</h2>
+        <h1 className="text-4xl md:text-6xl font-black text-[#040457] tracking-tighter mb-6">
+          Scale Your Teaching Empire
+        </h1>
+        <p className="text-xl text-gray-500 font-medium">
+          Choose the perfect plan to grow your audience and maximize your earnings.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {plans.map((plan) => {
-          const isCurrent = plan.id === currentTier;
-          return (
-            <div key={plan.name} className={`relative p-8 rounded-[2.5rem] border-2 flex flex-col ${plan.recommended && !isCurrent ? 'bg-[#1A1A4E] text-white border-[#1A1A4E] shadow-2xl scale-105 z-10' : 'bg-white border-gray-100 text-[#1A1A4E] hover:border-[#1A1A4E]/20 transition-all'}`}>
-              {plan.recommended && !isCurrent && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#c1e60d] text-[#1A1A4E] px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
-                  Recommended
-                </div>
-              )}
-              {isCurrent && (
-                <div className="absolute top-4 right-4 bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
-                  Current
-                </div>
-              )}
-              <h3 className="text-xl font-black mb-2">{plan.name}</h3>
-              <div className="flex items-baseline gap-1 mb-8">
-                <span className={`text-4xl font-black ${plan.recommended && !isCurrent ? 'text-[#c1e60d]' : 'text-[#1A1A4E]'}`}>{plan.price}</span>
-                <span className="text-xs font-bold opacity-60">{plan.period}</span>
+      <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
+        {tiers.map((tier) => (
+          <div
+            key={tier.id}
+            className={`
+      relative flex flex-col rounded-[2.5rem] bg-white p-8 
+      ${tier.popular && currentTier !== tier.id ? 'border-2 border-[#c2f575] shadow-2xl scale-105 z-10' : 'border border-gray-100 shadow-xl'}
+      hover:shadow-2xl transition-all duration-300
+    `}
+          >
+            {tier.popular && currentTier !== tier.id && (
+              <div className="absolute top-0 right-10 -translate-y-1/2">
+                <span className="bg-[#c2f575] text-[#040457] text-xs font-black uppercase tracking-widest py-2 px-4 rounded-full shadow-lg">
+                  Most Popular
+                </span>
               </div>
-              <div className="space-y-4 mb-8 flex-1">
-                {plan.features.map((feature, i) => {
-                  let isFee = feature.includes('Platform Fee');
-                  let feeColor = isFee && plan.id === 'PREMIUM' ? 'text-green-500' : isFee && plan.id === 'STANDARD' ? 'text-indigo-500' : '';
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center ${plan.recommended && !isCurrent ? 'bg-white/10 text-[#c1e60d]' : 'bg-gray-100 text-[#1A1A4E]'}`}>
-                        <Check size={12} strokeWidth={3} />
-                      </div>
-                      <span className={`text-xs font-bold ${feeColor ? feeColor : 'opacity-80'}`}>
-                        {feature}
-                      </span>
-                    </div>
-                  );
-                })}
+            )}
+            {currentTier === tier.id && (
+              <div className="absolute top-0 right-10 -translate-y-1/2">
+                <span className="bg-gray-100 text-gray-500 text-xs font-black uppercase tracking-widest py-2 px-4 rounded-full shadow-sm">
+                  Current Plan
+                </span>
               </div>
-              <button
-                onClick={() => handleUpgrade(plan)}
-                disabled={isCurrent}
-                className={`w-full py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${isCurrent ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : plan.recommended ? 'bg-[#c1e60d] text-[#1A1A4E] hover:scale-105 shadow-md hover:shadow-xl hover:shadow-[#c1e60d]/20' : 'bg-[#1A1A4E] text-white hover:bg-black shadow-md'}`}
-              >
-                {isCurrent ? 'Current Plan' : plan.buttonText}
-              </button>
+            )}
+
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-2xl font-black text-[#040457]">{tier.name}</h3>
+                <div className={`
+          w-12 h-12 rounded-2xl flex items-center justify-center
+          ${tier.color === 'lime' ? 'bg-[#c2f575]/20' :
+                    tier.color === 'purple' ? 'bg-purple-100' : 'bg-gray-100'}
+        `}>
+                  {tier.icon}
+                </div>
+              </div>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                "{tier.badge}"
+              </div>
+              <div className="flex items-baseline gap-2 mb-4">
+                <span className="text-5xl font-black text-[#040457] tracking-tight">{tier.price}</span>
+                <span className="text-gray-400 font-medium">{tier.period}</span>
+              </div>
+              <p className="text-sm text-gray-500 font-medium min-h-[40px]">
+                {tier.description}
+              </p>
             </div>
-          );
-        })}
+
+            <div className="flex-1 space-y-4 mb-8">
+              {tier.features.map((feature, index) => (
+                <div key={index} className="flex items-start gap-3">
+                  <div className={`mt-1 shrink-0 ${feature.included ? 'text-green-500' : 'text-gray-300'}`}>
+                    {feature.included ? <Check size={18} strokeWidth={3} /> : <X size={18} strokeWidth={3} />}
+                  </div>
+                  <span className={`text-sm ${feature.included ? 'text-gray-700 font-medium' : 'text-gray-400 line-through'} ${feature.highlight ? 'font-black text-[#040457]' : ''}`}>
+                    {feature.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={tier.buttonAction}
+              disabled={currentTier === tier.id}
+              className={`
+        w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all
+        ${currentTier === tier.id ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
+                  tier.buttonVariant === 'primary' ? 'bg-[#c2f575] text-[#040457] hover:bg-[#b0eb54] shadow-xl hover:shadow-[#c2f575]/40 hover:-translate-y-1' :
+                    tier.buttonVariant === 'dark' ? 'bg-[#040457] text-white hover:bg-black shadow-xl hover:shadow-[#040457]/40 hover:-translate-y-1' :
+                      'bg-white border-2 border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'}
+      `}
+            >
+              {tier.buttonText}
+              {tier.buttonVariant !== 'outline' && currentTier !== tier.id && <ArrowRight size={16} />}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-20 max-w-4xl mx-auto bg-indigo-50/50 rounded-[3rem] p-10 text-center border border-indigo-100">
+        <h3 className="text-2xl font-black text-[#040457] mb-4">Need more resources?</h3>
+        <p className="text-gray-600 font-medium mb-8 max-w-2xl mx-auto">
+          Standard and Premium users can easily purchase add-ons at any time to expand their limits without jumping to the next tier.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-6 justify-center">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex-1">
+            <h4 className="font-black text-[#040457] mb-2">Extra Storage Block</h4>
+            <p className="text-lg font-bold text-[#c2f575] mb-2">₹499 <span className="text-xs text-gray-400 font-normal">/ month</span></p>
+            <p className="text-sm text-gray-500">+50 GB Persistent Storage</p>
+          </div>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex-1">
+            <h4 className="font-black text-[#040457] mb-2">Extra Student Block</h4>
+            <p className="text-lg font-bold text-[#c2f575] mb-2">₹999 <span className="text-xs text-gray-400 font-normal">/ month</span></p>
+            <p className="text-sm text-gray-500">+50 Student Slots</p>
+          </div>
+        </div>
       </div>
     </div>
   );
