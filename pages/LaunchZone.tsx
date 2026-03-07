@@ -51,7 +51,7 @@ const LaunchZone: React.FC = () => {
   const [zoneDescription, setZoneDescription] = useState('');
   const [zoneLevel, setZoneLevel] = useState<'Beginner' | 'Intermediate' | 'Expert'>('Beginner');
   const [zonePrice, setZonePrice] = useState('');
-  const [zoneCurrency, setZoneCurrency] = useState<'USD' | 'INR' | 'EUR'>('USD');
+  const [zoneCurrency, setZoneCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
   const [zoneDomain, setZoneDomain] = useState(DOMAINS[0]);
   const [provideCertificate, setProvideCertificate] = useState(true);
   const [zoneImage, setZoneImage] = useState<string | null>(null);
@@ -100,7 +100,7 @@ const LaunchZone: React.FC = () => {
         domain: zoneDomain,
         provideCertificate: provideCertificate,
         price: zonePrice,
-        currency: zoneCurrency,
+        currency: 'INR',
         type: 'course',
         status: 'In Progress',
         createdAt: serverTimestamp(),
@@ -299,9 +299,9 @@ const LaunchZone: React.FC = () => {
                     onChange={e => setZoneCurrency(e.target.value as any)}
                     className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-8 py-5 font-black text-xl text-indigo-900 outline-none shadow-sm focus:ring-4 focus:ring-[#c1e60d]/20 transition-all"
                   >
-                    <option value="USD">USD ($)</option>
                     <option value="INR">INR (₹)</option>
-                    <option value="EUR">EUR (€)</option>
+                    <option value="USD" disabled>USD ($) - Coming Soon</option>
+                    <option value="EUR" disabled>EUR (€) - Coming Soon</option>
                   </select>
                 </div>
               </div>

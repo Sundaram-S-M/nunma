@@ -442,144 +442,99 @@ const Billings = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
-            {/* Account Holder Name */}
-            <div className="space-y-3">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">ACCOUNT HOLDER NAME</label>
-              <input
-                type="text"
-                value={accountHolder}
-                onChange={(e) => setAccountHolder(e.target.value)}
-                className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all"
-                placeholder="Full name as per bank"
-              />
-            </div>
+          {!(user as any)?.razorpay_account_id ? (
+            <div className="bg-orange-50 border border-orange-200 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 shrink-0">
+                  <ShieldCheck size={24} />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black text-orange-900">Action Required: Complete your KYC</h4>
+                  <p className="text-sm font-medium text-orange-700/80 mt-1">
+                    Complete your KYC to receive payouts and publish paid zones. Verification is securely handled by Razorpay.
+                  </p>
+                </div>
+              </div>
 
-            {/* Account Number */}
-            <div className="space-y-3">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">ACCOUNT NUMBER</label>
-              <input
-                type="text"
-                value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
-                className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all"
-                placeholder="••••••••••••"
-              />
-            </div>
+              <button
+                onClick={async (e) => {
+                  try {
+                    const btn = e.currentTarget;
+                    const originalText = btn.innerText;
+                    btn.innerText = "REDIRECTING...";
+                    btn.disabled = true;
 
-            {/* Country with Search & Phone Prefix Logic */}
-            <div className="space-y-3 relative" ref={countryRef}>
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">COUNTRY</label>
-              <div className="relative group">
-                <input
-                  type="text"
-                  value={countrySearch}
-                  onChange={(e) => {
-                    setCountrySearch(e.target.value);
-                    setShowCountryResults(true);
-                    if (selectedCountry) setSelectedCountry(null);
+                    const createAccount = httpsCallable(functions, 'createTutorLinkedAccount');
+                    const result: any = await createAccount();
+
+                    if (result.data.success && result.data.onboardingUrl) {
+                      window.location.href = result.data.onboardingUrl;
+                    } else {
+                      alert('Failed to generate onboarding URL.');
+                      btn.innerText = originalText;
+                      btn.disabled = false;
+                    }
+                  } catch (err: any) {
+                    console.error("KYC Init Error:", err);
+                    alert("Error initiating KYC: " + err.message);
+                    const btn = e.currentTarget;
+                    btn.innerText = "VERIFY IDENTITY & BANK DETAILS";
+                    btn.disabled = false;
+                  }
+                }}
+                className="w-full md:w-auto px-8 py-4 bg-orange-500 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-600 transition-all whitespace-nowrap active:scale-95 disabled:opacity-50"
+              >
+                VERIFY IDENTITY & BANK DETAILS
+              </button>
+            </div>
+          ) : (
+            <div className="bg-[#f8fafc] border border-gray-100 rounded-3xl p-8 flex flex-col sm:flex-row items-center gap-8 shadow-inner">
+              <div className="flex items-center gap-6 flex-1">
+                <div className="w-16 h-16 bg-[#c2f575]/20 rounded-full flex items-center justify-center text-[#7cc142] shrink-0 border border-[#c2f575]/30">
+                  <Check size={32} />
+                </div>
+                <div>
+                  <h4 className="text-xl font-black text-indigo-900 leading-tight">KYC Verified & Active</h4>
+                  <p className="text-sm font-medium text-gray-500 mt-2 max-w-sm">
+                    Your account is securely linked. You are ready to receive direct automated bank payouts.
+                  </p>
+                </div>
+              </div>
+
+              <div className="sm:ml-auto w-full sm:w-auto shrink-0">
+                <button
+                  onClick={async (e) => {
+                    try {
+                      const btn = e.currentTarget;
+                      const originalText = btn.innerText;
+                      btn.innerText = "LOADING...";
+                      btn.disabled = true;
+
+                      const createAccount = httpsCallable(functions, 'createTutorLinkedAccount');
+                      const result: any = await createAccount();
+
+                      if (result.data.success && result.data.onboardingUrl) {
+                        window.location.href = result.data.onboardingUrl;
+                      } else {
+                        alert('Failed to launch Razorpay dashboard.');
+                        btn.innerText = originalText;
+                        btn.disabled = false;
+                      }
+                    } catch (err: any) {
+                      console.error("KYC Dashboard Error:", err);
+                      alert("Error loading dashboard: " + err.message);
+                      const btn = e.currentTarget;
+                      btn.innerText = "MANAGE ON RAZORPAY";
+                      btn.disabled = false;
+                    }
                   }}
-                  onFocus={() => setShowCountryResults(true)}
-                  className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all"
-                  placeholder="Search country..."
-                />
-                <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={20} />
-
-                {showCountryResults && (
-                  <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-gray-100 rounded-3xl shadow-2xl z-50 p-2 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-top-2">
-                    {filteredCountries.map(country => (
-                      <button
-                        key={country.name}
-                        onClick={() => handleCountrySelect(country)}
-                        className="w-full text-left px-6 py-4 rounded-2xl hover:bg-gray-50 text-indigo-900 font-bold text-sm flex items-center justify-between group transition-all"
-                      >
-                        {country.name}
-                        <Check size={16} className={`text-[#c1e60d] transition-opacity ${selectedCountry?.name === country.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
-                      </button>
-                    ))}
-                    {filteredCountries.length === 0 && (
-                      <div className="p-6 text-center text-gray-400 text-xs font-bold uppercase tracking-widest">No results</div>
-                    )}
-                  </div>
-                )}
+                  className="text-[11px] font-black text-indigo-900 uppercase tracking-[0.1em] hover:text-[#c2f575] bg-white border-2 border-indigo-50 hover:border-indigo-900 hover:bg-indigo-900 transition-all px-8 py-4 rounded-2xl shadow-sm hover:shadow-xl w-full sm:w-auto active:scale-95 disabled:opacity-50"
+                >
+                  MANAGE ON RAZORPAY
+                </button>
               </div>
             </div>
-
-            {/* Phone Number - Numeric Only */}
-            <div className="space-y-3">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">PHONE NUMBER</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={phoneNumber}
-                  onChange={(e) => handlePhoneChange(e.target.value)}
-                  className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all"
-                  placeholder="+1 ..."
-                />
-              </div>
-            </div>
-
-            {/* Bank Name with Contextual Search */}
-            <div className="space-y-3 relative" ref={bankRef}>
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">BANK NAME</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={bankSearch}
-                  onChange={(e) => { setBankSearch(e.target.value); setShowBankResults(true); }}
-                  onFocus={() => setShowBankResults(true)}
-                  disabled={!selectedCountry}
-                  className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all disabled:opacity-40"
-                  placeholder={selectedCountry ? `Search banks in ${selectedCountry.name}` : "Select country first..."}
-                />
-                <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={20} />
-
-                {showBankResults && selectedCountry && (
-                  <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white border border-gray-100 rounded-3xl shadow-2xl z-50 p-2 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-top-2">
-                    {filteredBanks.map(bank => (
-                      <button
-                        key={bank}
-                        onClick={() => { setBankSearch(bank); setShowBankResults(false); }}
-                        className="w-full text-left px-6 py-4 rounded-2xl hover:bg-gray-50 text-indigo-900 font-bold text-sm flex items-center justify-between group transition-all"
-                      >
-                        {bank}
-                        <Check size={16} className={`text-[#c1e60d] transition-opacity ${bankSearch === bank ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
-                      </button>
-                    ))}
-                    {filteredBanks.length === 0 && (
-                      <div className="p-6 text-center text-gray-400 text-xs font-bold uppercase tracking-widest">No results</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* IFSC / SWIFT CODE */}
-            <div className="space-y-3">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">IFSC / SWIFT CODE</label>
-              <input
-                type="text"
-                value={ifsc}
-                onChange={(e) => setIfsc(e.target.value)}
-                className="w-full bg-[#f8fafc] border border-gray-100 rounded-2xl px-8 py-5 font-bold text-[#1A1A4E] placeholder:text-gray-300 focus:outline-none focus:ring-4 focus:ring-indigo-900/5 transition-all uppercase"
-                placeholder="HDFC0001234"
-              />
-            </div>
-          </div>
-
-          <div className="mt-14 flex flex-col sm:flex-row justify-between items-center gap-6">
-            <button
-              onClick={() => {
-                setAccountHolder(''); setAccountNumber(''); setIfsc(''); setPhoneNumber(''); setCountrySearch(''); setBankSearch(''); setSelectedCountry(null);
-              }}
-              className="w-full sm:w-auto px-12 py-5 bg-white border border-gray-100 rounded-2xl font-black text-[11px] text-gray-400 uppercase tracking-widest hover:bg-gray-50 transition-all active:scale-95"
-            >
-              CANCEL
-            </button>
-            <button className="w-full sm:w-auto px-16 py-6 bg-[#2D2D70] text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.2em] shadow-xl hover:bg-[#1A1A4E] transition-all flex items-center justify-center gap-3 active:scale-95">
-              SECURELY SAVE ACCOUNT
-            </button>
-          </div>
+          )}
         </div>
       )}
 

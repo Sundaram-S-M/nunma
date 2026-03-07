@@ -89,7 +89,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         // Note: Use simple query without compound index requirements if possible
         // A. Created Zones (Tutor)
         if (role === UserRole.TUTOR) {
-          const q = query(collection(db, 'zones'), where('createdBy', '==', user.uid));
+          const q = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
           const snap = await getDocs(q);
           snap.forEach(d => zonesList.push({ id: d.id, ...d.data(), role: 'tutor' }));
         }
@@ -111,13 +111,10 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
         // C. Calculate Basic Stats based on Zones
         let totalStudents = 0;
-        let totalEarnings = 0; // Mock calculation or real if fields exist
+        let totalEarnings = (user as any).earnings || 0; // Use user.earnings if available, fallback to 0
         zonesList.forEach(z => {
           if (z.role === 'tutor') {
-            // If we have a 'studentCount' field or similar. 
-            // For now, allow 0 or mock.
-            totalStudents += (z.studentCount || 0);
-            totalEarnings += (parseFloat(z.price || '0') * (z.studentCount || 0));
+            totalStudents += (z.students || 0); // Use z.students array count or number
           }
         });
 
@@ -134,7 +131,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
             { label: 'Active Zones', value: zonesList.filter(z => z.role === 'tutor').length },
             { label: 'Total Students', value: totalStudents },
             { label: 'Hours Streamed', value: '124' }, // Placeholder
-            { label: 'Earnings', value: `$${totalEarnings}` }
+            { label: 'Earnings', value: `₹${totalEarnings.toLocaleString('en-IN')}` }
           ]);
         }
 

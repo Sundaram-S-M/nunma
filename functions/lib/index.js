@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.zohoBillingWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.bunnyStreamWebhook = exports.downloadInvoice = exports.sendInvoiceEmail = exports.createZohoCheckoutSession = exports.createMentorshipBooking = exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.get100msToken = void 0;
+exports.zohoBillingWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.bunnyStreamWebhook = exports.downloadInvoice = exports.sendInvoiceEmail = exports.createZohoCheckoutSession = exports.createMentorshipBooking = exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.get100msToken = void 0;
 const functions = __importStar(require("firebase-functions"));
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
@@ -578,7 +578,19 @@ exports.bunnyStreamWebhook = (0, https_1.onRequest)(async (req, res) => {
                 .get();
             if (!snapshot.empty) {
                 const batch = db.batch();
-                snapshot.docs.forEach((doc) => batch.update(doc.ref, { status: newStatus }));
+                snapshot.docs.forEach((doc) => {
+                    batch.update(doc.ref, { status: newStatus });
+                    // Increment storage usage if video is newly ready
+                    if (newStatus === 'ready') {
+                        const data = doc.data();
+                        if (data.tutorId && data.sizeBytes) {
+                            const tutorRef = db.collection('users').doc(data.tutorId);
+                            batch.update(tutorRef, {
+                                storage_used_bytes: admin.firestore.FieldValue.increment(data.sizeBytes)
+                            });
+                        }
+                    }
+                });
                 await batch.commit();
                 console.log(`[BunnyWebhook] Video ${VideoGuid} → status '${newStatus}'`);
             }
@@ -621,6 +633,69 @@ async function getZohoAccessToken() {
 }
 // --- RAZORPAY ROUTE INTEGRATION ---
 const razorpay_1 = __importDefault(require("razorpay"));
+exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] }, async (request) => {
+    var _a;
+    const context = request;
+    if (!context.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (!keyId || !keySecret) {
+        throw new functions.https.HttpsError("failed-precondition", "Razorpay secrets missing.");
+    }
+    try {
+        const db = admin.firestore();
+        const tutorRef = db.collection("users").doc(context.auth.uid);
+        const tutorDoc = await tutorRef.get();
+        if (!tutorDoc.exists) {
+            throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
+        }
+        const tutorData = tutorDoc.data();
+        let accountId = tutorData === null || tutorData === void 0 ? void 0 : tutorData.razorpay_account_id;
+        const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
+        // 1. Create a Linked Account if one doesn't exist
+        if (!accountId) {
+            const createPayload = {
+                email: (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || context.auth.token.email,
+                phone: (tutorData === null || tutorData === void 0 ? void 0 : tutorData.phone) || "9999999999",
+                type: "route",
+                reference_id: context.auth.uid,
+                legal_business_name: (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor",
+                business_type: "individual",
+                profile: {
+                    category: "education",
+                    subcategory: "e_learning",
+                    addresses: {
+                        registered: {
+                            street1: "Online",
+                            city: "Online",
+                            state: "Online",
+                            postal_code: "111111",
+                            country: "IN"
+                        }
+                    }
+                }
+            };
+            const response = await axios_1.default.post('https://api.razorpay.com/v2/accounts', createPayload, {
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
+            });
+            accountId = response.data.id;
+            await tutorRef.update({ razorpay_account_id: accountId });
+        }
+        // 2. Generate Account Onboarding/Login Link
+        const linkResponse = await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/login_links`, {}, {
+            headers: { 'Authorization': authHeader }
+        });
+        return {
+            success: true,
+            onboardingUrl: linkResponse.data.short_url || linkResponse.data.url
+        };
+    }
+    catch (error) {
+        console.error("createTutorLinkedAccount error:", ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) || error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to create Razorpay Account.");
+    }
+});
 exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] }, async (request) => {
     const { amount, tutorId } = request.data;
     const context = request;

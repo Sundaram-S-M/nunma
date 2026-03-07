@@ -247,8 +247,52 @@ const Workplace: React.FC = () => {
           <p className="text-gray-400 font-medium text-sm">Design, manage, and scale your professional offerings.</p>
         </div>
 
+        {/* Cumulative Students Meter */}
+        <div className="hidden md:flex bg-white border border-gray-100 p-4 rounded-2xl shadow-sm items-center gap-6 mr-auto xl:mr-0 animate-in zoom-in duration-500 delay-100">
+          <div className="w-12 h-12 bg-indigo-50 text-[#040457] rounded-xl flex items-center justify-center shrink-0">
+            <Users size={24} />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#040457]">Cumulative Students</span>
+              <span className="text-xs font-bold text-gray-400">
+                {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} / {(user as any)?.subscription_entitlements?.studentLimit || (
+                  (
+                    currentTier === 'starter' ? 100 :
+                      currentTier === 'standard' ? 250 :
+                        currentTier === 'premium' ? 1000 : 100
+                  ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+                )}
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-1000 ${(allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
+                    ((user as any)?.subscription_entitlements?.studentLimit || (
+                      (
+                        currentTier === 'starter' ? 100 :
+                          currentTier === 'standard' ? 250 :
+                            currentTier === 'premium' ? 1000 : 100
+                      ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+                    ))) >= 1 ? 'bg-red-500' : 'bg-[#c2f575]'
+                  }`}
+                style={{
+                  width: `${Math.min(100, (allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
+                    ((user as any)?.subscription_entitlements?.studentLimit || (
+                      (
+                        currentTier === 'starter' ? 100 :
+                          currentTier === 'standard' ? 250 :
+                            currentTier === 'premium' ? 1000 : 100
+                      ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+                    ))) * 100)}%`
+                }}
+              ></div>
+            </div>
+          </div>
+        </div>
+
         {/* Monthly Stream Meter */}
-        <div className="hidden md:flex bg-white border border-gray-100 p-4 rounded-2xl shadow-sm items-center gap-6 mr-auto xl:mr-0 xl:ml-8 animate-in zoom-in duration-500">
+        <div className="hidden md:flex bg-white border border-gray-100 p-4 rounded-2xl shadow-sm items-center gap-6 xl:ml-8 animate-in zoom-in duration-500">
           <div className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0">
             <Radio size={24} className={streamsUsed >= streamLimit ? "" : "animate-pulse"} />
           </div>

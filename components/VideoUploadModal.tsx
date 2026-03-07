@@ -80,7 +80,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
             setErrorMessage('');
 
             // 1. Get Bunny Stream Signature from our Cloud Function
-            const getSignatureNode = httpsCallable(functions, 'getBunnyUploadSignature');
+            const getSignatureNode = httpsCallable(functions, 'createBunnyVideo');
             const result = await getSignatureNode({ title: file.name, zoneId });
             const { videoId, signature, expirationTime, libraryId } = result.data as any;
 
@@ -159,7 +159,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
             upload.start();
 
         } catch (error: any) {
-            console.error('Backend Signature Failed:', error);
+            console.error('Bunny Session Error:', error.message, error.details);
             setUploadStatus('error');
             setErrorMessage('Failed to initiate secure upload session. Please try again.');
             setIsUploading(false);

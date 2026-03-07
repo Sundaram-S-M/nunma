@@ -188,9 +188,9 @@ const ProfileHeader = ({
           </div>
 
           {/* User Stats on the White Part */}
-          <div className="flex flex-wrap items-center justify-center md:justify-start gap-12 mt-2 md:mt-5 w-full">
-            <div className="flex items-center gap-2">
-              <MapPin size={16} className="text-[#c2f575]" />
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-8 mt-4 md:mt-5 w-full">
+            <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-full border border-gray-100">
+              <MapPin size={14} className="text-[#c2f575]" />
               {isEditing ? (
                 <input
                   value={editLocation}
@@ -199,32 +199,34 @@ const ProfileHeader = ({
                   className="bg-transparent text-gray-500 font-bold text-xs outline-none border-b border-gray-300 w-24"
                 />
               ) : (
-                <span className="text-gray-300 font-bold text-[10px] uppercase tracking-[0.2em]">{profileUser.location || 'Global'}</span>
+                <span className="text-gray-500 font-bold text-[10px] uppercase tracking-[0.2em]">{profileUser.location || 'Global'}</span>
               )}
             </div>
 
             {role === UserRole.TUTOR ? (
-              <>
-                <div className="flex flex-col items-center">
-                  <p className="text-xl font-black text-indigo-900 leading-none mb-1">{tutorStudentsCount || 0}</p>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Students</p>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-black text-indigo-900">{tutorStudentsCount || 0}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Students</span>
                 </div>
-                <button onClick={handleViewFollowers} className="flex flex-col items-center hover:scale-105 transition-transform group">
-                  <p className="text-xl font-black text-indigo-900 group-hover:text-indigo-600 leading-none mb-1">{profileUser.followersCount || 0}</p>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Followers</p>
+                <div className="w-1 h-1 rounded-full bg-gray-300"></div>
+                <button onClick={handleViewFollowers} className="flex items-center gap-2 hover:scale-105 transition-transform group">
+                  <span className="text-lg font-black text-indigo-900 group-hover:text-indigo-600">{profileUser.followersCount || 0}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Followers</span>
                 </button>
-              </>
+              </div>
             ) : (
-              <>
-                <button onClick={handleViewFollowers} className="flex flex-col items-center hover:scale-105 transition-transform group">
-                  <p className="text-xl font-black text-indigo-900 group-hover:text-indigo-600 leading-none mb-1">{profileUser.followersCount || 0}</p>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Followers</p>
+              <div className="flex items-center gap-6">
+                <button onClick={handleViewFollowers} className="flex items-center gap-2 hover:scale-105 transition-transform group">
+                  <span className="text-lg font-black text-indigo-900 group-hover:text-indigo-600">{profileUser.followersCount || 0}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Followers</span>
                 </button>
-                <div className="flex flex-col items-center">
-                  <p className="text-xl font-black text-indigo-900 leading-none mb-1">{profileUser.followingCount || 0}</p>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Following</p>
+                <div className="w-1 h-1 rounded-full bg-gray-300"></div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-black text-indigo-900">{profileUser.followingCount || 0}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Following</span>
                 </div>
-              </>
+              </div>
             )}
           </div>
 
@@ -653,7 +655,7 @@ const ProfileView: React.FC = () => {
 
     let studentsCount = 0;
     zonesData.forEach((z: any) => {
-      studentsCount += (z.students || 0);
+      studentsCount += (z.students?.length || 0);
     });
     setTutorStudentsCount(studentsCount);
 
@@ -756,7 +758,7 @@ const ProfileView: React.FC = () => {
         title: productTitle,
         type: productType,
         price: productPrice,
-        currency: productCurrency,
+        currency: 'INR',
         createdAt: serverTimestamp()
       });
 
@@ -964,7 +966,11 @@ const ProfileView: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none" /></div>
-                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label><select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none"><option value="INR">INR (₹)</option><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option></select></div>
+                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label>                  <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none">
+                  <option value="INR">INR (₹)</option>
+                  <option value="USD" disabled>USD ($) - Coming Soon</option>
+                  <option value="EUR" disabled>EUR (€) - Coming Soon</option>
+                </select></div>
               </div>
               <button onClick={handleListProduct} disabled={isListingProduct} className="w-full py-7 bg-indigo-900 text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-70">
                 {isListingProduct ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div> : <>CONFIRM LISTING <ArrowRight size={20} className="text-[#c2f575]" /></>}

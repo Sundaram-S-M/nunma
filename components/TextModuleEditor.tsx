@@ -13,6 +13,16 @@ interface TextModuleEditorProps {
 }
 
 const TextModuleEditor: React.FC<TextModuleEditorProps> = ({ courseId, chapterId, onClose, onSuccess }) => {
+    if (!courseId || !chapterId) {
+        return (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl">
+                <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold flex items-center gap-3">
+                    <AlertCircle size={16} /> Error: Missing Chapter Data
+                </div>
+            </div>
+        );
+    }
+
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [isSaving, setIsSaving] = useState(false);

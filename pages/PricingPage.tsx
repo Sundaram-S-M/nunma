@@ -1,13 +1,71 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, X, Shield, Zap, Crown, ArrowRight } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../utils/firebase';
 
 const PricingPage: React.FC = () => {
     const navigate = useNavigate();
+    const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+    const razorpayScriptReady = useRef(false);
 
-    // Placeholder URLs for now - will be replaced with actual Zoho Hosted Payment Page URLs
-    const STRIPE_STANDARD_URL = '#';
-    const STRIPE_PREMIUM_URL = '#';
+    // Dynamically load Razorpay checkout script and track when it's ready
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => { razorpayScriptReady.current = true; };
+        script.onerror = () => {
+            alert('Failed to load Razorpay payment script. Check your connection.');
+        };
+        document.body.appendChild(script);
+        return () => {
+            razorpayScriptReady.current = false;
+            document.body.removeChild(script);
+        };
+    }, []);
+
+    const handleCheckout = async (e: React.MouseEvent, planId: string, amountPaise: number) => {
+        e.preventDefault();
+        setCheckoutLoading(planId);
+        try {
+            if (!razorpayScriptReady.current || !(window as any).Razorpay) {
+                throw new Error('Razorpay payment script has not loaded yet. Please wait and try again.');
+            }
+            const createOrder = httpsCallable(functions, 'createRazorpayOrder');
+            const result = await createOrder({ amount: String(amountPaise), planId });
+            const orderData = result.data as any;
+            if (!orderData || !orderData.id) {
+                throw new Error('Failed to create Razorpay order. The server returned an invalid response.');
+            }
+            const options = {
+                key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'TEST_KEY_ID',
+                amount: orderData.amount,
+                currency: orderData.currency,
+                name: 'Nunma Academy',
+                description: `${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan Subscription`,
+                image: 'https://nunma.app/logo.png',
+                order_id: orderData.id,
+                handler: function (response: any) {
+                    alert(`Payment Successful! Payment ID: ${response.razorpay_payment_id}`);
+                    console.log('Razorpay Success Response:', response);
+                },
+                prefill: { name: '', email: '', contact: '' },
+                theme: { color: '#040457' },
+            };
+            const rzp = new (window as any).Razorpay(options);
+            rzp.on('payment.failed', function (response: any) {
+                console.error('Payment Failed:', response.error);
+                alert(`Payment failed: ${response.error.description}`);
+            });
+            rzp.open();
+        } catch (err: any) {
+            console.error('Razorpay Order Error:', err);
+            alert(`Checkout failed to initialize. Check the console for details.\n\nError: ${err.message || 'Unknown error'}`);
+        } finally {
+            setCheckoutLoading(null);
+        }
+    };
 
     const tiers = [
         {
@@ -27,7 +85,7 @@ const PricingPage: React.FC = () => {
                 { name: 'Add-ons Available', included: false },
             ],
             buttonText: 'Current Plan',
-            buttonAction: () => navigate('/dashboard'),
+            buttonAction: (e: React.MouseEvent) => { e.preventDefault(); navigate('/dashboard'); },
             buttonVariant: 'outline',
         },
         {
@@ -47,8 +105,8 @@ const PricingPage: React.FC = () => {
                 { name: '15 GB Persistent Storage', included: true },
                 { name: 'Add-ons Available', included: true },
             ],
-            buttonText: 'Upgrade to Standard',
-            buttonAction: () => window.open(STRIPE_STANDARD_URL, '_blank'),
+            buttonText: checkoutLoading === 'standard' ? 'Processing...' : 'Upgrade to Standard',
+            buttonAction: (e: React.MouseEvent) => handleCheckout(e, 'standard', 149900), // ₹1,499 in paise
             buttonVariant: 'primary',
         },
         {
@@ -67,8 +125,8 @@ const PricingPage: React.FC = () => {
                 { name: '30 GB Persistent Storage', included: true },
                 { name: 'Add-ons Available', included: true },
             ],
-            buttonText: 'Upgrade to Premium',
-            buttonAction: () => window.open(STRIPE_PREMIUM_URL, '_blank'),
+            buttonText: checkoutLoading === 'premium' ? 'Processing...' : 'Upgrade to Premium',
+            buttonAction: (e: React.MouseEvent) => handleCheckout(e, 'premium', 499900), // ₹4,999 in paise
             buttonVariant: 'dark',
         }
     ];

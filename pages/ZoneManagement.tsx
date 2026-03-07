@@ -57,7 +57,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { VideoUploadModal } from '../components/VideoUploadModal';
 import DocumentModuleUploader from '../components/DocumentModuleUploader';
 import TextModuleEditor from '../components/TextModuleEditor';
-import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
 import * as XLSX from 'xlsx';
@@ -1698,17 +1698,21 @@ const ZoneManagement: React.FC = () => {
                             });
 
                             // Call invitation function
-                            const sendInvite = httpsCallable(functions, 'sendWhitelistInvite');
-                            await sendInvite({ email: newStudentEmail, zoneTitle: zone.title });
-
-                            alert(`Email ${newStudentEmail} whitelisted. Invitation sent!`);
+                            try {
+                              const sendInvite = httpsCallable(functions, 'sendWhitelistInvite');
+                              await sendInvite({ email: newStudentEmail, zoneTitle: zone.title });
+                              alert(`Email ${newStudentEmail} whitelisted. Invitation sent!`);
+                            } catch (inviteError) {
+                              console.warn("Failed to send invitation email, but email was whitelisted:", inviteError);
+                              alert(`Email ${newStudentEmail} whitelisted. However, the invitation email failed to send. They can still log in.`);
+                            }
                           }
 
                           setNewStudentEmail('');
                           setShowUserSuggestions(false);
                         } catch (e) {
-                          console.error("Error grants access:", e);
-                          alert("Failed to grant access. Please try again.");
+                          console.error("Error granting access:", e);
+                          alert("Failed to grant access to the zone. Please check your connection and try again.");
                         }
                       }}
                       className="px-8 py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
@@ -2161,9 +2165,23 @@ const ZoneManagement: React.FC = () => {
                         }
                       />
                       <button
-                        onClick={() => {
-                          const newChapter: Chapter = { id: `c${Date.now()}`, title: 'New Chapter', segments: [] };
-                          setChapters([...chapters, newChapter]);
+                        onClick={async () => {
+                          try {
+                            const newOrder = chapters.length;
+                            const newTitle = 'New Chapter';
+                            const chaptersRef = collection(db, 'zones', zoneId!, 'chapters');
+                            const docRef = await addDoc(chaptersRef, {
+                              title: newTitle,
+                              order: newOrder,
+                              createdAt: serverTimestamp()
+                            });
+
+                            const newChapter: Chapter = { id: docRef.id, title: newTitle, segments: [] };
+                            setChapters([...chapters, newChapter]);
+                          } catch (error: any) {
+                            console.error("Error creating chapter:", error);
+                            alert("Failed to create chapter. Please try again.");
+                          }
                         }}
                         className="px-8 py-5 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
                       >
@@ -2547,8 +2565,42 @@ const ZoneManagement: React.FC = () => {
                             </button>
                           ) : (
                             <div className="flex gap-2">
-                              <button className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all"><Edit3 size={18} /></button>
-                              <button onClick={() => setExams(exams.filter(e => e.id !== exam.id))} className="p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all"><Trash2 size={18} /></button>
+                              <button
+                                onClick={(e) => {
+                                  const examDateObj = new Date(`${exam.date} ${exam.time}`);
+                                  const timeDiff = examDateObj.getTime() - Date.now();
+                                  if (timeDiff <= 60 * 60 * 1000 && timeDiff > 0) {
+                                    alert("Exams cannot be edited within 1 hour of commencement to ensure a stable testing environment for students.");
+                                    e.preventDefault();
+                                    return;
+                                  }
+                                  // TODO: Add edit exam logic here
+                                }}
+                                className={`p-4 rounded-2xl transition-all ${new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() <= 60 * 60 * 1000 && new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() > 0
+                                    ? 'bg-gray-50 text-gray-400 opacity-50 cursor-not-allowed'
+                                    : 'bg-gray-50 text-gray-400 hover:bg-black hover:text-white'
+                                  }`}
+                              >
+                                <Edit3 size={18} />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (window.confirm("Are you sure you want to permanently delete this exam?")) {
+                                    try {
+                                      if (zoneId) {
+                                        await deleteDoc(doc(db, 'zones', zoneId, 'exams', exam.id));
+                                      }
+                                      setExams(exams.filter(e => e.id !== exam.id));
+                                    } catch (error) {
+                                      console.error("Error deleting exam:", error);
+                                      alert("Failed to delete exam from database.");
+                                    }
+                                  }
+                                }}
+                                className="p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
+                              >
+                                <Trash2 size={18} />
+                              </button>
                             </div>
                           )}
                         </div>

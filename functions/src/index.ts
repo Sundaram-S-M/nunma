@@ -699,6 +699,82 @@ async function getZohoAccessToken() {
 
 import Razorpay from "razorpay";
 
+export const createTutorLinkedAccount = onCall(
+    { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] },
+    async (request) => {
+        const context = request;
+        if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+
+        const keyId = process.env.RAZORPAY_KEY_ID;
+        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+        if (!keyId || !keySecret) {
+            throw new functions.https.HttpsError("failed-precondition", "Razorpay secrets missing.");
+        }
+
+        try {
+            const db = admin.firestore();
+            const tutorRef = db.collection("users").doc(context.auth.uid);
+            const tutorDoc = await tutorRef.get();
+
+            if (!tutorDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
+            }
+
+            const tutorData = tutorDoc.data();
+            let accountId = tutorData?.razorpay_account_id;
+
+            const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
+
+            // 1. Create a Linked Account if one doesn't exist
+            if (!accountId) {
+                const createPayload = {
+                    email: tutorData?.email || context.auth.token.email,
+                    phone: tutorData?.phone || "9999999999", // Fallback required by Razorpay
+                    type: "route",
+                    reference_id: context.auth.uid,
+                    legal_business_name: tutorData?.name || "Independent Tutor",
+                    business_type: "individual",
+                    profile: {
+                        category: "education",
+                        subcategory: "e_learning",
+                        addresses: {
+                            registered: {
+                                street1: "Online",
+                                city: "Online",
+                                state: "Online",
+                                postal_code: "111111",
+                                country: "IN"
+                            }
+                        }
+                    }
+                };
+
+                const response = await axios.post('https://api.razorpay.com/v2/accounts', createPayload, {
+                    headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
+                });
+
+                accountId = response.data.id;
+                await tutorRef.update({ razorpay_account_id: accountId });
+            }
+
+            // 2. Generate Account Onboarding/Login Link
+            const linkResponse = await axios.post(`https://api.razorpay.com/v2/accounts/${accountId}/login_links`, {}, {
+                headers: { 'Authorization': authHeader }
+            });
+
+            return {
+                success: true,
+                onboardingUrl: linkResponse.data.short_url || linkResponse.data.url
+            };
+
+        } catch (error: any) {
+            console.error("createTutorLinkedAccount error:", error.response?.data || error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to create Razorpay Account.");
+        }
+    }
+);
+
 export const createRazorpayOrder = onCall(
     { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] },
     async (request) => {

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CreditCard, ShieldCheck, Zap, Check, Globe, Video, Clock } from 'lucide-react';
 import { usePPPPrice } from '../hooks/usePPPPrice';
@@ -24,6 +24,23 @@ const Payment: React.FC = () => {
     const [item, setItem] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [termsAccepted, setTermsAccepted] = useState(false);
+    const razorpayScriptReady = useRef(false);
+
+    // Dynamically load Razorpay checkout script and track when it's ready
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => { razorpayScriptReady.current = true; };
+        script.onerror = () => {
+            alert('Failed to load Razorpay payment script. Please check your internet connection and try again.');
+        };
+        document.body.appendChild(script);
+        return () => {
+            razorpayScriptReady.current = false;
+            document.body.removeChild(script);
+        };
+    }, []);
 
     const getRefundDeadline = () => {
         let startDate = new Date(); // Fallback
@@ -82,32 +99,76 @@ const Payment: React.FC = () => {
         setIsProcessing(true);
 
         try {
+            if (!razorpayScriptReady.current || !(window as any).Razorpay) {
+                throw new Error('Razorpay payment script has not loaded yet. Please wait a moment and try again.');
+            }
             if (!functions) throw new Error("Functions not initialized");
 
-            const createZohoCheckoutSession = httpsCallable(functions, 'createZohoCheckoutSession');
+            const createOrder = httpsCallable(functions, 'createRazorpayOrder');
 
-            const returnUrl = `${window.location.origin}${isMentorship ? '/dashboard' : `/classroom/zone/${zoneId}`}`;
+            // Razorpay amount expects smallest currency unit (paise/cents)
+            const amountInSmallestUnit = Math.round(parseFloat(displayPrice.toString()) * 100).toString();
 
-            const result = await createZohoCheckoutSession({
-                productId: zoneId,
-                title: item.title,
-                amount: displayPrice,
+            const result = await createOrder({
+                amount: amountInSmallestUnit,
                 currency: displayCurrency,
-                returnUrl: returnUrl,
-                refund_cutoff_time: refundDeadline?.toISOString()
+                tutorId: item.tutorId || tutorId,
+                productId: zoneId,
+                isMentorship: isMentorship,
+                slotId: slotId,
+                bookingDate: bookingDate,
+                bookingTime: bookingTime
             });
 
-            const data = result.data as any;
+            const orderData = result.data as any;
 
-            if (data.success && data.checkoutUrl) {
-                window.location.href = data.checkoutUrl;
-            } else {
-                throw new Error(data.message || "Failed to retrieve checkout URL");
+            if (!orderData || !orderData.id) {
+                throw new Error('Failed to create Razorpay order. The server returned an invalid response.');
             }
-        } catch (error) {
+
+            const options = {
+                key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'TEST_KEY_ID',
+                amount: orderData.amount,
+                currency: orderData.currency,
+                name: 'Nunma Academy',
+                description: item.title,
+                order_id: orderData.id,
+                handler: function (response: any) {
+                    console.log('Razorpay Success Response:', response);
+                    if (isMentorship) {
+                        navigate('/dashboard');
+                    } else {
+                        navigate(`/classroom/zone/${zoneId}`);
+                    }
+                },
+                prefill: {
+                    name: user.name || 'Student',
+                    email: user.email || '',
+                },
+                theme: {
+                    color: '#040457'
+                },
+                modal: {
+                    ondismiss: function () {
+                        setIsProcessing(false);
+                    }
+                }
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+
+            rzp.on('payment.failed', function (response: any) {
+                console.error('Payment Failed:', response.error);
+                alert(`Payment Failed: ${response.error.description}`);
+                setIsProcessing(false);
+            });
+
+            rzp.open();
+
+        } catch (error: any) {
             console.error("Payment failed:", error);
             setIsProcessing(false);
-            alert("Payment initiation failed. Please try again.");
+            alert(`Payment initiation failed. ${error.message || 'Please try again.'}`);
         }
     };
 
@@ -217,6 +278,30 @@ const Payment: React.FC = () => {
                                 <p className="font-black text-gray-400">PayPal Checkout</p>
                             </div>
                         </div>
+                    </div>
+
+                    <div className="p-6 bg-indigo-50/50 border border-indigo-100/50 rounded-3xl">
+                        {!isMentorship ? (
+                            <div>
+                                <h4 className="flex items-center gap-2 font-black text-indigo-900 text-sm mb-1.5">
+                                    <ShieldCheck size={18} className="text-[#c1e60d]" />
+                                    ✓ 5-Day Money-Back Guarantee
+                                </h4>
+                                <p className="text-xs text-gray-400 font-medium leading-relaxed pl-6">
+                                    * Eligible for a full refund within 5 days of purchase, subject to our fair-learning policy.
+                                </p>
+                            </div>
+                        ) : (
+                            <div>
+                                <h4 className="flex items-center gap-2 font-black text-indigo-900 text-sm mb-1.5">
+                                    <span>🗓️</span>
+                                    Live Session Booking
+                                </h4>
+                                <p className="text-xs text-gray-400 font-medium leading-relaxed pl-6">
+                                    * Please note: Mentorship sessions secure the tutor's live calendar time and are non-refundable.
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <div className="bg-gray-50 border border-gray-100 rounded-3xl p-6">

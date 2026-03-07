@@ -156,7 +156,7 @@ const Explore: React.FC = () => {
             <div
               key={zone.id}
               className="group bg-white rounded-[3.5rem] border border-gray-100 shadow-[0_20px_60px_rgba(0,0,0,0.03)] hover:shadow-[0_40px_100px_rgba(0,0,0,0.08)] transition-all duration-700 overflow-hidden cursor-pointer flex flex-col"
-              onClick={() => navigate(`/zone/${zone.id}`)}
+              onClick={() => navigate(`/payment/${zone.id}`)}
             >
               <div className="aspect-[4/3] relative overflow-hidden">
                 <img

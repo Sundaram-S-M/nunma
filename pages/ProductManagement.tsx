@@ -151,7 +151,7 @@ const ProductManagement: React.FC = () => {
                 title: productTitle,
                 type: productType,
                 price: productPrice,
-                currency: productCurrency,
+                currency: 'INR',
                 createdAt: serverTimestamp()
             });
 
@@ -421,7 +421,11 @@ const ProductManagement: React.FC = () => {
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none" /></div>
-                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label><select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none"><option value="INR">INR (₹)</option><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option></select></div>
+                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label>                  <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none">
+                                    <option value="INR">INR (₹)</option>
+                                    <option value="USD" disabled>USD ($) - Coming Soon</option>
+                                    <option value="EUR" disabled>EUR (€) - Coming Soon</option>
+                                </select></div>
                             </div>
                             <button onClick={handleListProduct} disabled={isListingProduct} className="w-full py-7 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-70">
                                 {isListingProduct ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div> : <>CONFIRM LISTING <ArrowRight size={20} className="text-[#c2f575]" /></>}
