@@ -58,7 +58,7 @@ const StudentZoneView: React.FC = () => {
   const [activeExam, setActiveExam] = useState<any>(null);
   const [examCurrentQuestion, setExamCurrentQuestion] = useState(0);
   const [examAnswers, setExamAnswers] = useState<Record<string, number>>({});
-  const [examWarnings, setExamWarnings] = useState(0);
+  const [cheatViolations, setCheatViolations] = useState(0);
   const [isExamTerminated, setIsExamTerminated] = useState(false);
   const [showExamRules, setShowExamRules] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'off' | 'on' | 'denied'>('off');
@@ -233,7 +233,7 @@ const StudentZoneView: React.FC = () => {
       const foundExam = exams.find(e => e.id === studentData.activeExamId);
       if (foundExam) {
         setActiveExam(foundExam);
-        setExamWarnings(studentData.currentExamWarnings || 0);
+        setCheatViolations(studentData.currentExamWarnings || 0);
         // Continue but maybe show a message
         console.log("Resuming active exam session...");
       }
@@ -257,12 +257,13 @@ const StudentZoneView: React.FC = () => {
     }
   }, [curriculum, studentData, activeContent, expandedChapters, exams, activeExam]);
 
-  // Cheating Detection: Window Blur
+  // Cheating Detection: Window Visibility
   useEffect(() => {
     if (activeExam && !isExamTerminated && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq')) {
-      const handleBlur = async () => {
+      const handleVisibilityChange = async () => {
+        if (!document.hidden) return; // Only trigger when the document becomes hidden
         let newWarningCount = 0;
-        setExamWarnings(prev => {
+        setCheatViolations(prev => {
           newWarningCount = prev + 1;
           return newWarningCount;
         });
@@ -280,13 +281,13 @@ const StudentZoneView: React.FC = () => {
 
         if (newWarningCount >= 3) {
           handleTerminateExam('failed');
-          alert('Exam terminated due to multiple tab switches.');
+          alert('Exam terminated due to leaving the exam tab multiple times.');
         } else {
-          alert(`WARNING: Window focus lost. Warning ${newWarningCount}/2. Next time your exam will be reported.`);
+          alert(`WARNING: You left the exam tab. Violation ${newWarningCount}/2. Next time your exam will be reported or terminated.`);
         }
       };
-      window.addEventListener('blur', handleBlur);
-      return () => window.removeEventListener('blur', handleBlur);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
   }, [activeExam, isExamTerminated, zoneId, studentData]);
 
@@ -294,7 +295,7 @@ const StudentZoneView: React.FC = () => {
     setActiveExam(exam);
     setExamCurrentQuestion(0);
     setExamAnswers({});
-    setExamWarnings(0);
+    setCheatViolations(0);
     setIsExamTerminated(false);
     setCameraStatus(exam.type === 'online-test' ? 'on' : 'off');
     setShowExamRules(false);
@@ -369,12 +370,12 @@ const StudentZoneView: React.FC = () => {
       studentName: authUser?.name || 'Anonymous',
       marks: status === 'passed' ? Math.floor(activeExam.maxMark * 0.8) : 0, // Mock scoring logic for now
       status: status,
-      warnings: examWarnings,
+      cheatViolations: cheatViolations,
       completedAt: new Date().toISOString()
     };
 
     try {
-      await addDoc(collection(db, 'zones', zoneId, 'exam_results'), result);
+      await setDoc(doc(db, 'zones', zoneId, 'exams', activeExam.id, 'submissions', authUser?.uid || 'anon'), result);
       // Update student doc to clear active exam
       await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
         activeExamId: null,
@@ -424,13 +425,13 @@ const StudentZoneView: React.FC = () => {
       studentName: authUser?.name || 'Anonymous',
       marks: 0, // Pending grading
       status: 'ongoing',
-      warnings: examWarnings,
+      cheatViolations: cheatViolations,
       completedAt: new Date().toISOString(),
       answerSheetUrl: URL.createObjectURL(uploadedAnswerFiles) // Mock URL
     };
 
     try {
-      await addDoc(collection(db, 'zones', zoneId, 'exam_results'), result);
+      await setDoc(doc(db, 'zones', zoneId, 'exams', activeExam.id, 'submissions', authUser?.uid || 'anon'), result);
       await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
         activeExamId: null,
         currentExamWarnings: 0
@@ -1081,7 +1082,12 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {activeExam && (
-        <div className="fixed inset-0 z-[500] bg-white flex flex-col p-10 animate-in slide-in-from-bottom-10 duration-700">
+        <div
+          className="fixed inset-0 z-[500] bg-white flex flex-col p-10 animate-in slide-in-from-bottom-10 duration-700"
+          onContextMenu={(e) => e.preventDefault()}
+          onCopy={(e) => e.preventDefault()}
+          onPaste={(e) => e.preventDefault()}
+        >
           <div className="flex justify-between items-center mb-12">
             <div className="flex items-center gap-6">
               <div className="w-16 h-16 bg-[#1A1A4E] rounded-2xl flex items-center justify-center text-white shadow-xl">
@@ -1103,7 +1109,7 @@ const StudentZoneView: React.FC = () => {
               <div className="w-[1.5px] h-12 bg-gray-100" />
               <div className="text-right">
                 <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Warnings</p>
-                <p className={`font-black text-2xl ${examWarnings > 0 ? 'text-red-500' : 'text-indigo-900'}`}>{examWarnings}/2</p>
+                <p className={`font-black text-2xl ${cheatViolations > 0 ? 'text-red-500' : 'text-indigo-900'}`}>{cheatViolations}/2</p>
               </div>
             </div>
           </div>

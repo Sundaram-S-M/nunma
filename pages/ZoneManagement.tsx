@@ -57,21 +57,27 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { VideoUploadModal } from '../components/VideoUploadModal';
 import DocumentModuleUploader from '../components/DocumentModuleUploader';
 import TextModuleEditor from '../components/TextModuleEditor';
+import QuizModuleEditor from '../components/QuizModuleEditor';
 import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
 import * as XLSX from 'xlsx';
 import PDFViewer from '../components/PDFViewer'; // Import added for grading
+import GradingHub from '../components/GradingHub';
+import ExamAnalytics from '../components/ExamAnalytics';
+import MCQBuilder from '../components/MCQBuilder';
 import { QRCodeSVG } from 'qrcode.react';
 import ZoneCapacityMeter from '../components/ZoneCapacityMeter';
 
 import { Student, AttendanceHistory, UserRole } from '../types';
 
-interface MCQ {
+export interface MCQ {
   id: string;
   question: string;
   options: string[];
   correctAnswer: number; // Index of the correct option
+  timerSeconds?: number;
+  marks?: number;
 }
 
 interface Exam {
@@ -232,9 +238,10 @@ const ZoneManagement: React.FC = () => {
 
   // Curriculum Upload State
   const [activeChapterForUpload, setActiveChapterForUpload] = useState<string | null>(null);
-  const [activeTypeForUpload, setActiveTypeForUpload] = useState<'video' | 'pdf' | 'reading' | null>(null);
+  const [activeTypeForUpload, setActiveTypeForUpload] = useState<'video' | 'pdf' | 'reading' | 'quiz' | null>(null);
   const [showTextModuleEditor, setShowTextModuleEditor] = useState(false);
   const [showDocumentUploader, setShowDocumentUploader] = useState(false);
+  const [showQuizModuleEditor, setShowQuizModuleEditor] = useState(false);
 
   // Drag and Drop State
   const [draggedChapterIndex, setDraggedChapterIndex] = useState<number | null>(null);
@@ -279,7 +286,12 @@ const ZoneManagement: React.FC = () => {
 
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [examSearchQuery, setExamSearchQuery] = useState('');
+  const [showExamAnalytics, setShowExamAnalytics] = useState(false);
   const [selectedExamForMarks, setSelectedExamForMarks] = useState<Exam | null>(null);
+
+  // Grading Hub State
+  const [showGradingHubModal, setShowGradingHubModal] = useState(false);
+  const [selectedExamForGrading, setSelectedExamForGrading] = useState<Exam | null>(null);
 
   // New Exam Modal State
   const [newExamTitle, setNewExamTitle] = useState('');
@@ -719,9 +731,15 @@ const ZoneManagement: React.FC = () => {
       return;
     }
 
+    if (type === 'quiz') {
+      setActiveChapterForUpload(chapterId);
+      setShowQuizModuleEditor(true);
+      return;
+    }
+
     const newSeg: Segment = {
       id: `s${Date.now()}`,
-      title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+      title: `New ${(type as string).charAt(0).toUpperCase() + (type as string).slice(1)}`,
       type
     };
 
@@ -767,9 +785,11 @@ const ZoneManagement: React.FC = () => {
     if (!activeChapterForUpload || !zoneId) return;
     try {
       const newSeg: Segment = {
-        id: `s${Date.now()}`,
+        id: lessonData.id,
         title: lessonData.title,
         type: 'reading',
+        // In a real implementation this would hold the content or a reference to it
+        // content: lessonData.content 
       };
       const chapter = chapters.find(c => c.id === activeChapterForUpload);
       if (chapter) {
@@ -783,6 +803,31 @@ const ZoneManagement: React.FC = () => {
     } finally {
       setActiveChapterForUpload(null);
       setShowTextModuleEditor(false);
+    }
+  };
+
+  const handleQuizModuleSuccess = async (quizData: { title: string; maxMark: number; minMark: number; questions: any[] }) => {
+    if (!activeChapterForUpload || !zoneId) return;
+    try {
+      const newSeg: Segment = {
+        id: `s${Date.now()}`,
+        title: quizData.title,
+        type: 'quiz',
+        // In a full implementation we would store quizData into a subcollection,
+        // but for UI simulation we can treat it similarly to text modules.
+      };
+      const chapter = chapters.find(c => c.id === activeChapterForUpload);
+      if (chapter) {
+        const updatedSegments = [...chapter.segments, newSeg];
+        await updateDoc(doc(db, 'zones', zoneId, 'chapters', activeChapterForUpload), {
+          segments: updatedSegments
+        });
+      }
+    } catch (error) {
+      console.error('Failed to link quiz module to chapter:', error);
+    } finally {
+      setActiveChapterForUpload(null);
+      setShowQuizModuleEditor(false);
     }
   };
 
@@ -1105,7 +1150,16 @@ const ZoneManagement: React.FC = () => {
             courseId={zoneId}
             chapterId={activeChapterForUpload}
             onClose={() => { setShowTextModuleEditor(false); setActiveChapterForUpload(null); }}
-            onSuccess={() => { }}
+            onSuccess={handleTextModuleSuccess}
+          />
+        )}
+
+        {showQuizModuleEditor && activeChapterForUpload && zoneId && (
+          <QuizModuleEditor
+            courseId={zoneId}
+            chapterId={activeChapterForUpload}
+            onClose={() => { setShowQuizModuleEditor(false); setActiveChapterForUpload(null); }}
+            onSuccess={handleQuizModuleSuccess}
           />
         )}
 
@@ -1384,46 +1438,10 @@ const ZoneManagement: React.FC = () => {
                 <div className="bg-gray-50 rounded-[2.5rem] p-8 overflow-hidden flex flex-col">
                   <div className="flex justify-between items-center mb-6">
                     <h4 className="font-black text-[#040457] uppercase text-[11px] tracking-widest">{newExamType === 'offline' ? 'Settings (No Questions)' : 'Questions'}</h4>
-                    {newExamType === 'online-mcq' && <button onClick={handleAddQuestion} className="p-2 bg-[#c2f575] text-[#040457] rounded-lg hover:scale-110 transition-all"><Plus size={16} /></button>}
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
                     {newExamType === 'online-mcq' ? (
-                      newExamQuestions.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-300 italic text-sm text-center p-10">
-                          <Radio size={40} className="mb-4 opacity-20" />
-                          No questions added yet.<br />Online exams require at least one MCQ.
-                        </div>
-                      ) : (
-                        newExamQuestions.map((q, idx) => (
-                          <div key={q.id} className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
-                            <div className="flex justify-between">
-                              <span className="text-[10px] font-black text-gray-300 uppercase">Q {idx + 1}</span>
-                              <button onClick={() => setNewExamQuestions(newExamQuestions.filter(x => x.id !== q.id))} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
-                            </div>
-                            <input placeholder="Question text..." value={q.question} onChange={e => {
-                              const updated = [...newExamQuestions];
-                              updated[idx].question = e.target.value;
-                              setNewExamQuestions(updated);
-                            }} className="w-full font-bold text-[#040457] p-0 border-none outline-none focus:ring-0 text-sm" />
-                            <div className="grid grid-cols-2 gap-3">
-                              {q.options.map((opt, oIdx) => (
-                                <div key={oIdx} className="flex items-center gap-2">
-                                  <input type="radio" checked={q.correctAnswer === oIdx} onChange={() => {
-                                    const updated = [...newExamQuestions];
-                                    updated[idx].correctAnswer = oIdx;
-                                    setNewExamQuestions(updated);
-                                  }} />
-                                  <input placeholder={`Option ${oIdx + 1}`} value={opt} onChange={e => {
-                                    const updated = [...newExamQuestions];
-                                    updated[idx].options[oIdx] = e.target.value;
-                                    setNewExamQuestions(updated);
-                                  }} className="bg-gray-50 border-none rounded-lg px-3 py-2 text-[10px] font-bold w-full" />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      )
+                      <MCQBuilder questions={newExamQuestions} setQuestions={setNewExamQuestions} />
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center p-10 space-y-6">
                         {newExamType === 'offline' ? (
@@ -1568,6 +1586,18 @@ const ZoneManagement: React.FC = () => {
         {/* PDF Viewer for Grading */}
         {viewingPdfUrl && (
           <PDFViewer url={viewingPdfUrl} onClose={() => setViewingPdfUrl(null)} />
+        )}
+
+        {/* GRADING HUB MODAL */}
+        {showGradingHubModal && selectedExamForGrading && zoneId && (
+          <GradingHub
+            zoneId={zoneId}
+            exam={selectedExamForGrading}
+            onClose={() => {
+              setShowGradingHubModal(false);
+              setSelectedExamForGrading(null);
+            }}
+          />
         )}
 
         {/* WHITELIST MODAL */}
@@ -1977,7 +2007,7 @@ const ZoneManagement: React.FC = () => {
             <div className="flex bg-gray-50/50 p-4 border-b border-gray-100 gap-2 overflow-x-auto no-scrollbar">
               {[
                 { id: 'attendance', label: 'ATTENDANCE', icon: <CheckCircle2 size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' },
-                { id: 'curriculum', label: 'CURRICULUM', icon: <Layers size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course' },
+                { id: 'curriculum', label: 'COURSE', icon: <Layers size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course' },
                 { id: 'exams', label: 'EXAM STREAMS', icon: <GraduationCap size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' },
                 { id: 'schedule', label: 'SCHEDULE LIVE', icon: <Video size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Workshop' },
                 { id: 'students', label: 'STUDENTS', icon: <Users size={16} />, visible: true },
@@ -2511,112 +2541,137 @@ const ZoneManagement: React.FC = () => {
                       <h3 className="text-5xl font-black text-[#040457] tracking-tighter">Achievement Gating</h3>
                       <p className="text-sm text-gray-400 font-bold mt-2">Manage online proctored exams and offline certifications.</p>
                     </div>
-                    <button
-                      onClick={() => setShowAddExamModal(true)}
-                      className="px-10 py-5 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl"
-                    >
-                      <Plus size={20} /> Create Exam
-                    </button>
-                  </div>
-
-                  <div className="flex gap-6 items-center">
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                      <input
-                        type="text"
-                        placeholder="Find exam by name or status..."
-                        value={examSearchQuery}
-                        onChange={(e) => setExamSearchQuery(e.target.value)}
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[2rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
-                      />
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => setShowExamAnalytics(!showExamAnalytics)}
+                        className={`px-8 py-5 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 transition-all ${showExamAnalytics
+                          ? 'bg-indigo-100 text-indigo-700 shadow-inner'
+                          : 'bg-white border border-gray-100 text-[#040457] hover:shadow-xl'
+                          }`}
+                      >
+                        <FileSpreadsheet size={20} /> {showExamAnalytics ? 'Exams List' : 'Analytics & Export'}
+                      </button>
+                      <button
+                        onClick={() => setShowAddExamModal(true)}
+                        className="px-10 py-5 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl"
+                      >
+                        <Plus size={20} /> Create Exam
+                      </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                    {exams.filter(e => e.title.toLowerCase().includes(examSearchQuery.toLowerCase())).map(exam => (
-                      <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-10 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group">
-                        <div className="flex justify-between items-start">
-                          <div className={`p-5 rounded-[1.75rem] shadow-sm ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                            {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
-                          </div>
-                          <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${exam.status === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : 'bg-green-50 text-green-500'}`}>
-                            {exam.status}
-                          </span>
+                  {showExamAnalytics ? (
+                    <ExamAnalytics zoneId={zoneId!} />
+                  ) : (
+                    <>
+                      <div className="flex gap-6 items-center">
+                        <div className="flex-1 relative">
+                          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                          <input
+                            type="text"
+                            placeholder="Find exam by name or status..."
+                            value={examSearchQuery}
+                            onChange={(e) => setExamSearchQuery(e.target.value)}
+                            className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[2rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                          />
                         </div>
+                      </div>
 
-                        <div className="space-y-3">
-                          <h4 className="text-2xl font-black text-[#040457] tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{exam.title}</h4>
-                          <div className="flex items-center gap-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
-                            <Calendar size={14} /> {exam.date} @ {exam.time}
-                          </div>
-                        </div>
-
-                        <div className="pt-8 border-t border-gray-50 flex justify-between items-center">
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Target Marks</p>
-                            <p className="font-bold text-[#040457]">{exam.minMark}/{exam.maxMark} <span className="text-[10px] text-gray-400">(Pass)</span></p>
-                          </div>
-                          {exam.status === 'CONDUCTED' ? (
-                            <button
-                              onClick={() => { setSelectedExamForMarks(exam); setShowMarkEntryModal(true); }}
-                              className="bg-[#040457] text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all"
-                            >
-                              Open Gradebook
-                            </button>
-                          ) : (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={(e) => {
-                                  const examDateObj = new Date(`${exam.date} ${exam.time}`);
-                                  const timeDiff = examDateObj.getTime() - Date.now();
-                                  if (timeDiff <= 60 * 60 * 1000 && timeDiff > 0) {
-                                    alert("Exams cannot be edited within 1 hour of commencement to ensure a stable testing environment for students.");
-                                    e.preventDefault();
-                                    return;
-                                  }
-                                  // TODO: Add edit exam logic here
-                                }}
-                                className={`p-4 rounded-2xl transition-all ${new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() <= 60 * 60 * 1000 && new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() > 0
-                                    ? 'bg-gray-50 text-gray-400 opacity-50 cursor-not-allowed'
-                                    : 'bg-gray-50 text-gray-400 hover:bg-black hover:text-white'
-                                  }`}
-                              >
-                                <Edit3 size={18} />
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (window.confirm("Are you sure you want to permanently delete this exam?")) {
-                                    try {
-                                      if (zoneId) {
-                                        await deleteDoc(doc(db, 'zones', zoneId, 'exams', exam.id));
-                                      }
-                                      setExams(exams.filter(e => e.id !== exam.id));
-                                    } catch (error) {
-                                      console.error("Error deleting exam:", error);
-                                      alert("Failed to delete exam from database.");
-                                    }
-                                  }
-                                }}
-                                className="p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
-                              >
-                                <Trash2 size={18} />
-                              </button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                        {exams.filter(e => e.title.toLowerCase().includes(examSearchQuery.toLowerCase())).map(exam => (
+                          <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-10 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group">
+                            <div className="flex justify-between items-start">
+                              <div className={`p-5 rounded-[1.75rem] shadow-sm ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
+                              </div>
+                              <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${exam.status === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : 'bg-green-50 text-green-500'}`}>
+                                {exam.status}
+                              </span>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
 
-                    <button
-                      onClick={() => setShowAddExamModal(true)}
-                      className="bg-gray-50/50 border-4 border-dashed border-gray-100 rounded-[3.5rem] p-10 flex flex-col items-center justify-center text-center space-y-6 hover:border-[#c2f575] hover:text-[#c2f575] transition-all group"
-                    >
-                      <div className="w-20 h-20 rounded-[2rem] bg-white shadow-xl flex items-center justify-center group-hover:scale-110 transition-all">
-                        <Plus size={40} className="text-gray-300 group-hover:text-[#c2f575]" />
+                            <div className="space-y-3">
+                              <h4 className="text-2xl font-black text-[#040457] tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{exam.title}</h4>
+                              <div className="flex items-center gap-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
+                                <Calendar size={14} /> {exam.date} @ {exam.time}
+                              </div>
+                            </div>
+
+                            <div className="pt-8 border-t border-gray-50 flex justify-between items-center">
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Target Marks</p>
+                                <p className="font-bold text-[#040457]">{exam.minMark}/{exam.maxMark} <span className="text-[10px] text-gray-400">(Pass)</span></p>
+                              </div>
+                              {exam.status === 'CONDUCTED' ? (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => { setSelectedExamForGrading(exam); setShowGradingHubModal(true); }}
+                                    className="bg-[#c2f575] text-[#040457] px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
+                                  >
+                                    Grade Submissions
+                                  </button>
+                                  <button
+                                    onClick={() => { setSelectedExamForMarks(exam); setShowMarkEntryModal(true); }}
+                                    className="bg-[#040457] text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all"
+                                  >
+                                    Open Gradebook
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={(e) => {
+                                      const examDateObj = new Date(`${exam.date} ${exam.time}`);
+                                      const timeDiff = examDateObj.getTime() - Date.now();
+                                      if (timeDiff <= 60 * 60 * 1000 && timeDiff > 0) {
+                                        alert("Exams cannot be edited within 1 hour of commencement to ensure a stable testing environment for students.");
+                                        e.preventDefault();
+                                        return;
+                                      }
+                                      // TODO: Add edit exam logic here
+                                    }}
+                                    className={`p-4 rounded-2xl transition-all ${new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() <= 60 * 60 * 1000 && new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() > 0
+                                      ? 'bg-gray-50 text-gray-400 opacity-50 cursor-not-allowed'
+                                      : 'bg-gray-50 text-gray-400 hover:bg-black hover:text-white'
+                                      }`}
+                                  >
+                                    <Edit3 size={18} />
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (window.confirm("Are you sure you want to permanently delete this exam?")) {
+                                        try {
+                                          if (zoneId) {
+                                            await deleteDoc(doc(db, 'zones', zoneId, 'exams', exam.id));
+                                          }
+                                          setExams(exams.filter(e => e.id !== exam.id));
+                                        } catch (error) {
+                                          console.error("Error deleting exam:", error);
+                                          alert("Failed to delete exam from database.");
+                                        }
+                                      }
+                                    }}
+                                    className="p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+
+                        <button
+                          onClick={() => setShowAddExamModal(true)}
+                          className="bg-gray-50/50 border-4 border-dashed border-gray-100 rounded-[3.5rem] p-10 flex flex-col items-center justify-center text-center space-y-6 hover:border-[#c2f575] hover:text-[#c2f575] transition-all group"
+                        >
+                          <div className="w-20 h-20 rounded-[2rem] bg-white shadow-xl flex items-center justify-center group-hover:scale-110 transition-all">
+                            <Plus size={40} className="text-gray-300 group-hover:text-[#c2f575]" />
+                          </div>
+                          <span className="font-black uppercase text-[11px] tracking-[0.3em] text-gray-300">Schedule New Gate</span>
+                        </button>
                       </div>
-                      <span className="font-black uppercase text-[11px] tracking-[0.3em] text-gray-300">Schedule New Gate</span>
-                    </button>
-                  </div>
+                    </>
+                  )}
                 </div>
               )}
               {activeTab === 'landing' && (

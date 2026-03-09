@@ -98,6 +98,7 @@ const Notifications: React.FC = () => {
       const recent = snap.docs.filter(d => {
         const data = d.data();
         if (!data.lastMessageTime) return false;
+        if (data.lastMessageSenderId === user.uid) return false;
         try {
           const msgTime = data.lastMessageTime.toDate();
           return (now.getTime() - msgTime.getTime()) < 24 * 60 * 60 * 1000;

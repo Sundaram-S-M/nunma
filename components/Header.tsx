@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   User,
   Settings as SettingsIcon,
@@ -25,7 +25,15 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
   const { user, logout } = useAuth();
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (location.pathname === '/notifications' && user) {
+      localStorage.setItem(`lastNotificationsView_${user.uid}`, Date.now().toString());
+      setUnreadCount(0);
+    }
+  }, [location.pathname, user]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -64,7 +72,16 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
     );
 
     const unsubCalendar = onSnapshot(qCalendar, (snap) => {
-      calendarCount = snap.docs.length;
+      const lastViewTimeStr = localStorage.getItem(`lastNotificationsView_${user.uid}`);
+      const lastViewTime = lastViewTimeStr ? parseInt(lastViewTimeStr) : 0;
+      const now = new Date();
+
+      // If notifications were viewed within the last 12 hours, assume calendar notifications are read
+      if ((now.getTime() - lastViewTime) < 12 * 60 * 60 * 1000) {
+        calendarCount = 0;
+      } else {
+        calendarCount = snap.docs.length;
+      }
       updateBadge();
     });
 
@@ -75,11 +92,16 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
 
     const unsubMessages = onSnapshot(qConversations, (snap) => {
       const now = new Date();
+      const lastViewTimeStr = localStorage.getItem(`lastNotificationsView_${user.uid}`);
+      const lastViewTime = lastViewTimeStr ? parseInt(lastViewTimeStr) : 0;
+
       messageCount = snap.docs.filter(d => {
         const data = d.data();
         if (!data.lastMessageTime) return false;
+        if (data.lastMessageSenderId === user.uid) return false;
         try {
           const msgTime = data.lastMessageTime.toDate();
+          if (msgTime.getTime() <= lastViewTime) return false;
           return (now.getTime() - msgTime.getTime()) < 24 * 60 * 60 * 1000;
         } catch (e) { return false; }
       }).length;

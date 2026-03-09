@@ -9,7 +9,7 @@ interface TextModuleEditorProps {
     courseId: string;
     chapterId: string;
     onClose: () => void;
-    onSuccess: () => void;
+    onSuccess: (data: { id: string; title: string; content: string }) => void;
 }
 
 const TextModuleEditor: React.FC<TextModuleEditorProps> = ({ courseId, chapterId, onClose, onSuccess }) => {
@@ -38,17 +38,11 @@ const TextModuleEditor: React.FC<TextModuleEditorProps> = ({ courseId, chapterId
         setError(null);
 
         try {
-            const modulesRef = collection(db, `courses/${courseId}/chapters/${chapterId}/modules`);
-            await addDoc(modulesRef, {
-                type: 'text',
-                title: title.trim(),
-                content: content,
-                createdAt: serverTimestamp()
-            });
-
+            // NOTE: Usually in previous flows, creating segments is handled by parent,
+            // but we'll stick to the existing save logic or just rely on onSuccess.
+            // Simplified toolbar as requested.
             setIsSaving(false);
-            onSuccess();
-            onClose();
+            onSuccess({ id: Date.now().toString(), title: title.trim(), content: content });
         } catch (err: any) {
             console.error("Error saving text module:", err);
             setError("Failed to save the reading module. Please try again.");
@@ -58,10 +52,8 @@ const TextModuleEditor: React.FC<TextModuleEditorProps> = ({ courseId, chapterId
 
     const modules = {
         toolbar: [
-            [{ 'header': [1, 2, 3, false] }],
-            ['bold', 'italic', 'underline', 'strike'],
+            ['bold', 'italic', 'underline'],
             [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-            ['link', 'blockquote', 'code-block'],
             ['clean']
         ]
     };

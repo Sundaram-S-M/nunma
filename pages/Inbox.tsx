@@ -270,7 +270,8 @@ const Inbox: React.FC = () => {
 
       await updateDoc(doc(db, 'conversations', selectedChatId), {
         lastMessage: msgText,
-        lastMessageTime: serverTimestamp()
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: user.uid
       });
     } catch (err) {
       console.error("Error sending message:", err);
@@ -515,6 +516,7 @@ const Inbox: React.FC = () => {
                       createdAt: serverTimestamp(),
                       lastMessage: 'Group created',
                       lastMessageTime: serverTimestamp(),
+                      lastMessageSenderId: user?.uid,
                       unreadCounts: {},
                       name: 'New Collab Group', // Users can edit this later
                       avatar: 'https://picsum.photos/seed/collab/80/80',
