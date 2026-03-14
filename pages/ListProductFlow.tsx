@@ -8,7 +8,6 @@ import {
     X,
     Clock,
     Briefcase,
-    Linkedin,
     Rocket,
     CheckCircle2,
     Sparkles,
@@ -39,10 +38,12 @@ const ListProductFlow: React.FC = () => {
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Step 1: Expertise & LinkedIn
-    const [linkedinUrl, setLinkedinUrl] = useState('');
+    // Step 1: Expertise
     const [selectedExpertise, setSelectedExpertise] = useState<string[]>([]);
     const [customLink, setCustomLink] = useState('');
+    const [bio, setBio] = useState('');
+    const [experience, setExperience] = useState<any[]>([]);
+    const [education, setEducation] = useState<any[]>([]);
 
     // Step 2: Availability
     const [schedule, setSchedule] = useState<any[]>(
@@ -63,57 +64,15 @@ const ListProductFlow: React.FC = () => {
             if (user.onboardingCompleted) {
                 setStep(3); // Go straight to product creation if already onboarded
             }
-            if (user.linkedin) setLinkedinUrl(user.linkedin);
             if (user.expertise) setSelectedExpertise(user.expertise);
             if (user.availability) setSchedule(user.availability);
+            if (user.bio) setBio(user.bio);
+            if (user.experience) setExperience(user.experience);
+            if (user.education) setEducation(user.education);
         }
     }, [user]);
 
-    const handleImportLinkedIn = async () => {
-        if (!linkedinUrl || !user || !db) return;
-        setIsLoading(true);
 
-        try {
-            const userName = user.name || "Professional";
-            const importedData = {
-                bio: `${userName} is a results-driven professional specialized in delivering high-quality solutions. Deeply committed to professional growth and exploring innovations in digital workspace management.`,
-                experience: [
-                    {
-                        title: "Senior Strategic Lead",
-                        company: "Innovative Tech Hub",
-                        location: "Remote",
-                        startDate: "2023-01",
-                        endDate: "Present",
-                        description: `Leading cross-functional teams at Innovative Tech Hub to optimize digital workflows.`
-                    }
-                ],
-                education: [
-                    {
-                        school: "Leading Global University",
-                        degree: "Master of Professional Excellence",
-                        startDate: "2019",
-                        endDate: "2021"
-                    }
-                ]
-            };
-
-            await updateDoc(doc(db, 'users', user.uid), {
-                bio: importedData.bio,
-                experience: importedData.experience,
-                education: importedData.education,
-                linkedinImported: true,
-                linkedin: linkedinUrl,
-                headline: `${importedData.experience[0].title} at ${importedData.experience[0].company}`
-            });
-
-            alert("LinkedIn data synced successfully!");
-        } catch (e) {
-            console.error("Error importing from LinkedIn", e);
-            alert("Failed to sync LinkedIn data.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     useEffect(() => {
         if (step === 4 && user?.uid) {
@@ -124,7 +83,23 @@ const ListProductFlow: React.FC = () => {
         }
     }, [step, user, navigate]);
 
-    const handleNext = () => setStep(prev => prev + 1);
+    const handleNext = () => {
+        if (step === 1) {
+            if (!bio.trim()) {
+                alert("Please share a short professional bio.");
+                return;
+            }
+            if (experience.length === 0) {
+                alert("Please add at least one experience item.");
+                return;
+            }
+            if (education.length === 0) {
+                alert("Please add at least one education item.");
+                return;
+            }
+        }
+        setStep(prev => prev + 1);
+    };
     const handleBack = () => setStep(prev => prev - 1);
 
     const toggleExpertise = (tag: string) => {
@@ -132,6 +107,22 @@ const ListProductFlow: React.FC = () => {
             prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
         );
     };
+
+    const addExp = () => setExperience([...experience, { title: '', company: '', location: '', startDate: '', endDate: '', description: '' }]);
+    const updateExp = (idx: number, field: string, val: string) => {
+        const newEx = [...experience];
+        newEx[idx] = { ...newEx[idx], [field]: val };
+        setExperience(newEx);
+    };
+    const removeExp = (idx: number) => setExperience(experience.filter((_, i) => i !== idx));
+
+    const addEdu = () => setEducation([...education, { school: '', degree: '', startDate: '', endDate: '', description: '' }]);
+    const updateEdu = (idx: number, field: string, val: string) => {
+        const newEd = [...education];
+        newEd[idx] = { ...newEd[idx], [field]: val };
+        setEducation(newEd);
+    };
+    const removeEdu = (idx: number) => setEducation(education.filter((_, i) => i !== idx));
 
     const addSlot = (dayIdx: number) => {
         const newSched = [...schedule];
@@ -179,12 +170,20 @@ const ListProductFlow: React.FC = () => {
 
         try {
             // 1. Update user profile
-            await updateDoc(doc(db, 'users', user.uid), {
+            const profileUpdates: any = {
                 expertise: selectedExpertise,
-                linkedin: linkedinUrl,
+                bio: bio.slice(0, 200),
+                experience,
+                education,
                 availability: schedule,
                 onboardingCompleted: true
-            });
+            };
+
+            if (experience.length > 0) {
+                profileUpdates.headline = `${experience[0].title} at ${experience[0].company}`;
+            }
+
+            await updateDoc(doc(db, 'users', user.uid), profileUpdates);
 
             // 2. Add product
             await addDoc(collection(db, 'products'), {
@@ -253,30 +252,7 @@ const ListProductFlow: React.FC = () => {
                             </div>
 
                             <div className="bg-white p-12 rounded-[3.5rem] border border-gray-100 shadow-[0_40px_100px_rgba(0,0,0,0.02)] space-y-10">
-                                <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2 flex items-center gap-2">
-                                        <Linkedin size={14} className="text-[#0077B5]" /> Connect your LinkedIn
-                                    </label>
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex-1 flex items-center bg-gray-50 border-2 border-transparent focus-within:border-[#c2f575] focus-within:bg-white rounded-2xl px-6 py-4 transition-all group shadow-inner">
-                                            <input
-                                                type="text"
-                                                placeholder="https://linkedin.com/in/username"
-                                                value={linkedinUrl}
-                                                onChange={(e) => setLinkedinUrl(e.target.value)}
-                                                className="flex-1 bg-transparent font-bold text-[#040457] outline-none placeholder:text-gray-200"
-                                            />
-                                        </div>
-                                        <button
-                                            onClick={handleImportLinkedIn}
-                                            disabled={!linkedinUrl || isLoading}
-                                            className="px-6 py-4 bg-[#0077b5] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50 flex items-center gap-2"
-                                        >
-                                            {isLoading ? 'Syncing...' : 'Sync Data'}
-                                        </button>
-                                    </div>
-                                    <p className="text-[10px] text-gray-400 font-medium ml-2">Tip: Syncing will automatically populate your bio, experience, and education.</p>
-                                </div>
+
 
                                 <div className="space-y-4">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Your Nunma page link</label>
@@ -301,6 +277,63 @@ const ListProductFlow: React.FC = () => {
                                             >
                                                 {opt}
                                             </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Professional Bio</label>
+                                    <textarea
+                                        placeholder="A short professional summary (max 200 chars)..."
+                                        maxLength={200}
+                                        value={bio}
+                                        onChange={(e) => setBio(e.target.value)}
+                                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all resize-none h-32"
+                                    />
+                                    <p className="text-[10px] text-gray-400 font-medium ml-2">{bio.length}/200</p>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Experience</label>
+                                        <button onClick={addExp} className="p-3 bg-[#040457] text-[#c2f575] rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2">
+                                            <Plus size={14} /> Add Experience
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {experience.map((exp, idx) => (
+                                            <div key={idx} className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 space-y-4 relative group">
+                                                <button onClick={() => removeExp(idx)} className="absolute top-6 right-6 text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <input value={exp.title} onChange={(e) => updateExp(idx, 'title', e.target.value)} placeholder="Job Title" className="bg-white border-none rounded-xl px-4 py-3 font-bold text-[#040457] outline-none" />
+                                                    <input value={exp.company} onChange={(e) => updateExp(idx, 'company', e.target.value)} placeholder="Company" className="bg-white border-none rounded-xl px-4 py-3 font-bold text-[#040457] outline-none" />
+                                                    <input value={exp.startDate} onChange={(e) => updateExp(idx, 'startDate', e.target.value)} placeholder="Start Date" className="bg-white border-none rounded-xl px-4 py-3 font-bold text-[#040457] outline-none" />
+                                                    <input value={exp.endDate} onChange={(e) => updateExp(idx, 'endDate', e.target.value)} placeholder="End Date" className="bg-white border-none rounded-xl px-4 py-3 font-bold text-[#040457] outline-none" />
+                                                </div>
+                                                <textarea value={exp.description} onChange={(e) => updateExp(idx, 'description', e.target.value)} placeholder="Describe your role..." className="w-full bg-white border-none rounded-xl px-4 py-3 text-sm font-medium text-gray-500 outline-none resize-none h-24" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Education</label>
+                                        <button onClick={addEdu} className="p-3 bg-[#040457] text-[#c2f575] rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2">
+                                            <Plus size={14} /> Add Education
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {education.map((edu, idx) => (
+                                            <div key={idx} className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 space-y-4 relative group">
+                                                <button onClick={() => removeEdu(idx)} className="absolute top-6 right-6 text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <input value={edu.school} onChange={(e) => updateEdu(idx, 'school', e.target.value)} placeholder="School/University" className="bg-white border-none rounded-xl px-4 py-3 font-bold text-[#040457] outline-none" />
+                                                    <input value={edu.degree} onChange={(e) => updateEdu(idx, 'degree', e.target.value)} placeholder="Degree/Course" className="bg-white border-none rounded-xl px-4 py-3 font-bold text-[#040457] outline-none" />
+                                                    <input value={edu.startDate} onChange={(e) => updateEdu(idx, 'startDate', e.target.value)} placeholder="Start Year" className="bg-white border-none rounded-xl px-4 py-3 font-bold text-[#040457] outline-none" />
+                                                    <input value={edu.endDate} onChange={(e) => updateEdu(idx, 'endDate', e.target.value)} placeholder="End Year" className="bg-white border-none rounded-xl px-4 py-3 font-bold text-[#040457] outline-none" />
+                                                </div>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>

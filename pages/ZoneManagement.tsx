@@ -248,6 +248,33 @@ const ZoneManagement: React.FC = () => {
 
   // Smart Marker State
   const [isSmartMarking, setIsSmartMarking] = useState(false);
+  const [valuationContext, setValuationContext] = useState<{ examId: string; studentId: string } | null>(null);
+
+  const getExamStatus = (exam: Exam) => {
+    if (exam.status === 'CONDUCTED') return 'CONDUCTED';
+
+    // Parse exam date and time
+    const examDateParts = exam.date.split('-'); // Expected YYYY-MM-DD
+    const examTimeParts = exam.time.split(':'); // Expected HH:MM
+
+    if (examDateParts.length !== 3 || examTimeParts.length !== 2) return exam.status || 'UPCOMING';
+
+    const examStart = new Date(
+      parseInt(examDateParts[0]),
+      parseInt(examDateParts[1]) - 1,
+      parseInt(examDateParts[2]),
+      parseInt(examTimeParts[0]),
+      parseInt(examTimeParts[1])
+    );
+
+    const now = new Date();
+    const durationMs = 2 * 60 * 60 * 1000; // Default 2 hours duration
+    const examEnd = new Date(examStart.getTime() + durationMs);
+
+    if (now < examStart) return 'UPCOMING';
+    if (now > examEnd) return 'CONDUCTED';
+    return 'ONGOING';
+  };
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [clusters, setClusters] = useState<AnswerCluster[]>([]);
   const [activeClusterId, setActiveClusterId] = useState<string | null>(null);
@@ -316,8 +343,7 @@ const ZoneManagement: React.FC = () => {
   const handleCreateExam = async () => {
     if (!zoneId) return;
 
-    const newExam: any = {
-      id: Date.now().toString(),
+    const examData: any = {
       title: newExamTitle,
       date: newExamDate,
       time: newExamTime,
@@ -329,14 +355,14 @@ const ZoneManagement: React.FC = () => {
     };
 
     if (newExamType === 'online-test' && newExamFile) {
-      newExam.pdfUrl = URL.createObjectURL(newExamFile);
+      examData.pdfUrl = URL.createObjectURL(newExamFile);
     }
     if (newExamType === 'offline' && newExamFile) {
-      newExam.pdfUrl = URL.createObjectURL(newExamFile); // Save as pdf URL for download
+      examData.pdfUrl = URL.createObjectURL(newExamFile); // Save as pdf URL for download
     }
 
     try {
-      await addDoc(collection(db, 'zones', zoneId, 'exams'), newExam);
+      await addDoc(collection(db, 'zones', zoneId, 'exams'), examData);
       setShowAddExamModal(false);
       // Reset fields
       setNewExamTitle('');
@@ -496,7 +522,7 @@ const ZoneManagement: React.FC = () => {
     // 2. Chapters (Curriculum)
     const chaptersq = query(collection(db, 'zones', zoneId, 'chapters'));
     const chaptersUnsub = onSnapshot(chaptersq, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chapter));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Chapter));
       // Sort if needed, or rely on client-side order
       setChapters(data);
     });
@@ -504,13 +530,13 @@ const ZoneManagement: React.FC = () => {
     // 3. Exams
     const examsq = query(collection(db, 'zones', zoneId, 'exams'));
     const examsUnsub = onSnapshot(examsq, (snapshot) => {
-      setExams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Exam)));
+      setExams(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Exam)));
     });
 
     // 4. Students (Enrolled)
     const studentsq = query(collection(db, 'zones', zoneId, 'students'));
     const studentsUnsub = onSnapshot(studentsq, (snapshot) => {
-      setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student)));
+      setStudents(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student)));
     });
 
     // 5. Scheduled Sessions (unified sessions collection)
@@ -519,13 +545,13 @@ const ZoneManagement: React.FC = () => {
       where('status', '==', 'scheduled')
     );
     const sessionsUnsub = onSnapshot(sessionsq, (snapshot) => {
-      setScheduledSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setScheduledSessions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
     });
 
     // 6. Attendance Sessions
     const attSessionsq = query(collection(db, 'zones', zoneId, 'attendance_sessions'));
     const attSessionsUnsub = onSnapshot(attSessionsq, (snapshot) => {
-      setAttendanceSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceSession)));
+      setAttendanceSessions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AttendanceSession)));
     });
 
     return () => {
@@ -960,8 +986,32 @@ const ZoneManagement: React.FC = () => {
     }
   };
 
-  const handleSaveGrading = () => {
-    alert(`Batch Grade Applied to ${clusters.find(c => c.id === activeClusterId)?.studentIds.length} students.`);
+  const handleSaveGrading = async () => {
+    if (isSmartMarking && activeClusterId) {
+      alert(`Batch Grade Applied to ${clusters.find(c => c.id === activeClusterId)?.studentIds.length} students.`);
+    } else if (valuationContext && zoneId) {
+      try {
+        const { examId, studentId } = valuationContext;
+        // In this implementation, we assume a submission document exists or we create it
+        // Similar to GradingHub.tsx logic
+        await setDoc(doc(db, 'zones', zoneId, 'exams', examId, 'submissions', studentId), {
+          studentId,
+          marks: Number(scriptScore),
+          status: 'graded',
+          gradedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+
+        alert("Mark saved successfully!");
+        setView('management');
+        setValuationContext(null);
+        setScriptScore('');
+        setStrokes([]);
+      } catch (e) {
+        console.error("Error saving manual grade:", e);
+        alert("Failed to save mark.");
+      }
+    }
   };
 
   const handleLaunchLive = async () => {
@@ -987,6 +1037,14 @@ const ZoneManagement: React.FC = () => {
       console.error("Failed to launch session", e);
       alert("Failed to go live. Check connection.");
     }
+  };
+
+  const handleValuate = (studentId: string, scriptUrl: string) => {
+    setSelectedScript(scriptUrl);
+    setValuationContext({ examId: selectedExamForGrading?.id || '', studentId });
+    setIsSmartMarking(false);
+    setView('grading');
+    setShowGradingHubModal(false);
   };
 
   const handleEndLive = async () => {
@@ -1030,7 +1088,10 @@ const ZoneManagement: React.FC = () => {
 
       // 2. Remove from whitelistedEmails if present
       const zoneRef = doc(db, 'zones', zoneId);
-      const updatedWhitelist = (zone.whitelistedEmails || []).filter((e: string) => e !== student.email);
+      const updatedWhitelist = (zone.whitelistedEmails || []).filter((e: any) => {
+        const email = typeof e === 'string' ? e : e.email;
+        return email !== student.email;
+      });
       if (updatedWhitelist.length !== (zone.whitelistedEmails || []).length) {
         await updateDoc(zoneRef, { whitelistedEmails: updatedWhitelist });
       }
@@ -1095,7 +1156,7 @@ const ZoneManagement: React.FC = () => {
     setTimeout(() => setIsCopying(false), 2000);
   };
 
-  if (!zone) return <div className="p-20 text-center text-gray-400 font-bold uppercase tracking-widest animate-pulse">Loading Infrastructure...</div>;
+  if (!zone) return <div className="p-20 text-center text-gray-400 font-bold uppercase tracking-widest animate-pulse">Launching Infrastructure...</div>;
 
   return (
     <React.Fragment>
@@ -1121,7 +1182,21 @@ const ZoneManagement: React.FC = () => {
 
               <div className="flex gap-4">
                 <button onClick={() => setShowStartExamModal(false)} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
-                <button onClick={() => { setExams(exams.map(e => e.id === examToStart?.id ? { ...e, status: 'CONDUCTED' } : e)); setShowStartExamModal(false); }} className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95">Confirm Launch</button>
+                <button
+                  onClick={async () => {
+                    if (!examToStart || !zoneId) return;
+                    try {
+                      await updateDoc(doc(db, 'zones', zoneId, 'exams', examToStart.id), { status: 'CONDUCTED' });
+                      setShowStartExamModal(false);
+                    } catch (e) {
+                      console.error("Failed to launch exam:", e);
+                      alert("Database update failed.");
+                    }
+                  }}
+                  className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95"
+                >
+                  Confirm Launch
+                </button>
               </div>
             </div>
           </div>
@@ -1597,6 +1672,7 @@ const ZoneManagement: React.FC = () => {
               setShowGradingHubModal(false);
               setSelectedExamForGrading(null);
             }}
+            onValuate={handleValuate}
           />
         )}
 
@@ -1724,7 +1800,7 @@ const ZoneManagement: React.FC = () => {
                           } else {
                             // User doesn't exist - Whitelist email and invite
                             await updateDoc(doc(db, 'zones', zoneId), {
-                              whitelistedEmails: arrayUnion(newStudentEmail)
+                              whitelistedEmails: arrayUnion({ email: newStudentEmail, name: newStudentName })
                             });
 
                             // Call invitation function
@@ -1760,74 +1836,96 @@ const ZoneManagement: React.FC = () => {
 
                 <div className="space-y-4">
                   <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1 flex items-center gap-3">
-                    <FileSpreadsheet size={16} /> Bulk Upload (CSV / Emails)
+                    <FileSpreadsheet size={16} /> Bulk Whitelist (Excel/CSV)
                   </label>
-                  <textarea
-                    placeholder="Paste emails separated by commas or new lines..."
-                    value={bulkEmails}
-                    onChange={e => setBulkEmails(e.target.value)}
-                    className="w-full h-40 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[2.5rem] p-8 font-bold text-[#040457] outline-none transition-all resize-none custom-scrollbar"
-                  ></textarea>
-                  <p className="text-[10px] text-gray-300 font-bold px-2 italic">Tip: You can copy-paste a list from Excel or Google Sheets directly.</p>
-                  <button
-                    onClick={async () => {
-                      const emails = bulkEmails.split(/[,\n\s/]+/).map(e => e.trim().toLowerCase()).filter(e => e.includes('@'));
-                      if (!zoneId || emails.length === 0) return;
+                  <div className="relative group">
+                    <div className="w-full h-48 bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2.5rem] flex flex-col items-center justify-center text-center p-8 group-hover:border-[#c2f575] transition-all relative overflow-hidden">
+                      <div className="p-4 bg-white rounded-2xl shadow-sm mb-4">
+                        <Upload size={32} className="text-indigo-900" />
+                      </div>
+                      <p className="text-sm font-bold text-[#040457] mb-1">Upload Student List</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">
+                        Column A: Name · Column B: Email
+                      </p>
+                      <input
+                        type="file"
+                        accept=".xlsx, .xls, .csv"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !zoneId) return;
 
-                      try {
-                        const zoneRef = doc(db, 'zones', zoneId);
-                        const studentsRef = collection(db, 'zones', zoneId, 'students');
-                        const usersRef = collection(db, 'users');
+                          try {
+                            const data = await file.arrayBuffer();
+                            const workbook = XLSX.read(data);
+                            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                            const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 });
 
-                        const results = { enrolled: 0, whitelisted: 0 };
+                            // Skip header row if it seems to be one
+                            const startIdx = (rows[0]?.[0]?.toLowerCase() === 'name' || rows[0]?.[1]?.toLowerCase() === 'email') ? 1 : 0;
+                            const studentsToProcess = rows.slice(startIdx)
+                              .map(row => ({ name: row[0], email: row[1]?.toString().trim().toLowerCase() }))
+                              .filter(s => s.email && s.email.includes('@'));
 
-                        for (const email of emails) {
-                          // Check if exists
-                          const q = query(usersRef, where('email', '==', email), limit(1));
-                          const userSnap = await getDocs(q);
+                            if (studentsToProcess.length === 0) {
+                              alert("No valid student data found in the file.");
+                              return;
+                            }
 
-                          if (!userSnap.empty) {
-                            const userData = userSnap.docs[0].data();
-                            const userId = userSnap.docs[0].id;
-                            await setDoc(doc(studentsRef, userId), {
-                              id: userId,
-                              name: userData.name || email.split('@')[0],
-                              avatar: userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
-                              joinedAt: new Date().toLocaleDateString(),
-                              status: 'Present',
-                              engagementScore: 0,
-                              email: email,
-                              addedAt: new Date().toISOString()
-                            });
+                            const zoneRef = doc(db, 'zones', zoneId);
+                            const studentsRef = collection(db, 'zones', zoneId, 'students');
+                            const usersRef = collection(db, 'users');
 
-                            // Add to user's enrollments
-                            await setDoc(doc(usersRef, userId, 'enrollments', zoneId), {
-                              zoneId: zoneId,
-                              title: zone.title || 'Learning Zone',
-                              type: zone.zoneType || 'zone',
-                              enrolledAt: new Date().toISOString()
-                            });
+                            let enrolled = 0;
+                            let whitelisted = 0;
 
-                            results.enrolled++;
-                          } else {
-                            await updateDoc(zoneRef, {
-                              whitelistedEmails: arrayUnion(email)
-                            });
-                            results.whitelisted++;
+                            for (const s of studentsToProcess) {
+                              // Check if user exists
+                              const q = query(usersRef, where('email', '==', s.email), limit(1));
+                              const userSnap = await getDocs(q);
+
+                              if (!userSnap.empty) {
+                                const userData = userSnap.docs[0].data();
+                                const userId = userSnap.docs[0].id;
+                                await setDoc(doc(studentsRef, userId), {
+                                  id: userId,
+                                  name: s.name || userData.name || s.email.split('@')[0],
+                                  avatar: userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+                                  joinedAt: new Date().toLocaleDateString(),
+                                  status: 'Present',
+                                  engagementScore: 0,
+                                  email: s.email,
+                                  addedAt: new Date().toISOString()
+                                });
+
+                                await setDoc(doc(usersRef, userId, 'enrollments', zoneId), {
+                                  zoneId: zoneId,
+                                  title: zone.title || 'Learning Zone',
+                                  type: zone.zoneType || 'zone',
+                                  enrolledAt: new Date().toISOString()
+                                });
+                                enrolled++;
+                              } else {
+                                await updateDoc(zoneRef, {
+                                  whitelistedEmails: arrayUnion({ email: s.email, name: s.name })
+                                });
+                                whitelisted++;
+                              }
+                            }
+
+                            alert(`Processed ${studentsToProcess.length} students. Enrolled: ${enrolled}, Whitelisted: ${whitelisted}`);
+                            e.target.value = ''; // Reset file input
+                          } catch (err) {
+                            console.error("Error processing bulk upload:", err);
+                            alert("Failed to process file. Please ensure it's a valid Excel or CSV.");
                           }
-                        }
-
-                        setBulkEmails('');
-                        alert(`Successfully processed. Enrolled: ${results.enrolled}, Whitelisted: ${results.whitelisted}`);
-                      } catch (err) {
-                        console.error("Error in bulk whitelist:", err);
-                        alert("Failed to process bulk enrollment.");
-                      }
-                    }}
-                    className="w-full py-6 bg-[#c2f575] text-[#040457] rounded-3xl font-black uppercase text-xs tracking-[0.25em] hover:brightness-110 active:scale-[0.98] transition-all shadow-xl"
-                  >
-                    Confirm Bulk Whitelist
-                  </button>
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-300 font-bold px-4 italic leading-relaxed">
+                    Account-less emails will be granted access automatically when they register in the future.
+                  </p>
                 </div>
               </div>
             </div>
@@ -2180,7 +2278,7 @@ const ZoneManagement: React.FC = () => {
               {activeTab === 'curriculum' && (
                 <div className="space-y-12 animate-in fade-in duration-500">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Course Blueprint</h3>
+                    <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Build Course</h3>
                     <div className="flex gap-4">
                       <input
                         type="file"
@@ -2543,13 +2641,41 @@ const ZoneManagement: React.FC = () => {
                     </div>
                     <div className="flex gap-4">
                       <button
+                        onClick={() => {
+                          const conducts = exams.filter(e => getExamStatus(e) === 'CONDUCTED');
+                          if (conducts.length > 0) {
+                            setSelectedExamForMarks(conducts[conducts.length - 1]);
+                            setShowMarkEntryModal(true);
+                          } else {
+                            alert("No conducted exams found to upload marks for.");
+                          }
+                        }}
+                        className="px-6 py-5 bg-emerald-100 text-emerald-700 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:shadow-xl transition-all"
+                      >
+                        <FileSpreadsheet size={20} /> Upload Mark
+                      </button>
+                      <button
+                        onClick={() => {
+                          const conducts = exams.filter(e => getExamStatus(e) === 'CONDUCTED');
+                          if (conducts.length > 0) {
+                            setSelectedExamForGrading(conducts[conducts.length - 1]);
+                            setShowGradingHubModal(true);
+                          } else {
+                            alert("No conducted exams found for evaluation.");
+                          }
+                        }}
+                        className="px-6 py-5 bg-indigo-100 text-indigo-700 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:shadow-xl transition-all"
+                      >
+                        <Wand2 size={20} /> Evaluate Exams
+                      </button>
+                      <button
                         onClick={() => setShowExamAnalytics(!showExamAnalytics)}
                         className={`px-8 py-5 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 transition-all ${showExamAnalytics
                           ? 'bg-indigo-100 text-indigo-700 shadow-inner'
                           : 'bg-white border border-gray-100 text-[#040457] hover:shadow-xl'
                           }`}
                       >
-                        <FileSpreadsheet size={20} /> {showExamAnalytics ? 'Exams List' : 'Analytics & Export'}
+                        <Trophy size={20} /> {showExamAnalytics ? 'Exams List' : 'Download Analytics'}
                       </button>
                       <button
                         onClick={() => setShowAddExamModal(true)}
@@ -2584,8 +2710,8 @@ const ZoneManagement: React.FC = () => {
                               <div className={`p-5 rounded-[1.75rem] shadow-sm ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
                                 {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
                               </div>
-                              <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${exam.status === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : 'bg-green-50 text-green-500'}`}>
-                                {exam.status}
+                              <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${getExamStatus(exam) === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : getExamStatus(exam) === 'ONGOING' ? 'bg-red-50 text-red-500 animate-pulse' : 'bg-green-50 text-green-500'}`}>
+                                {getExamStatus(exam)}
                               </span>
                             </div>
 
@@ -2601,7 +2727,7 @@ const ZoneManagement: React.FC = () => {
                                 <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Target Marks</p>
                                 <p className="font-bold text-[#040457]">{exam.minMark}/{exam.maxMark} <span className="text-[10px] text-gray-400">(Pass)</span></p>
                               </div>
-                              {exam.status === 'CONDUCTED' ? (
+                              {getExamStatus(exam) === 'CONDUCTED' ? (
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => { setSelectedExamForGrading(exam); setShowGradingHubModal(true); }}
@@ -2693,7 +2819,7 @@ const ZoneManagement: React.FC = () => {
                         alert('Landing Page configuration saved!');
                       } catch (e) { alert('Failed to save config.'); }
                     }} className="px-8 py-4 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
-                      <Save size={18} className="inline mr-2" /> Save Config
+                      <Save size={18} className="inline mr-2" /> Save Settings
                     </button>
                   </div>
 
@@ -2839,7 +2965,7 @@ const ZoneManagement: React.FC = () => {
 
               <div className="flex items-center gap-6">
                 <button onClick={handleSaveGrading} className="bg-[#c2f575] text-[#040457] px-10 py-5 rounded-[1.5rem] font-black uppercase text-xs tracking-[0.3em] hover:brightness-110 shadow-2xl active:scale-95 transition-all">
-                  Apply & Save Progress
+                  Publish Grades
                 </button>
               </div>
             </div>

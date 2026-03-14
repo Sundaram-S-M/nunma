@@ -24,7 +24,7 @@ const Explore: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const [tutorData, setTutorData] = useState<Record<string, { name: string }>>({});
+  const [tutorData, setTutorData] = useState<Record<string, { name: string, photoURL?: string }>>({});
 
   useEffect(() => {
     let unsubscribe = () => { };
@@ -83,7 +83,7 @@ const Explore: React.FC = () => {
 
     const fetchTutors = async () => {
       const uniqueTutors = [...new Set(zones.map(z => z.tutorId))];
-      const newTutorData: Record<string, { name: string }> = {};
+      const newTutorData: Record<string, { name: string, photoURL?: string }> = {};
 
       await Promise.all(uniqueTutors.map(async (tutorId) => {
         if (!tutorId || tutorData[tutorId]) return;
@@ -91,7 +91,11 @@ const Explore: React.FC = () => {
         try {
           const userDoc = await getDoc(doc(db, 'users', tutorId));
           if (userDoc.exists()) {
-            newTutorData[tutorId] = { name: userDoc.data().name };
+            const data = userDoc.data();
+            newTutorData[tutorId] = {
+              name: data.name,
+              photoURL: data.photoURL || data.avatar || data.image || ''
+            };
           }
         } catch (error) {
           console.error("Error fetching tutor:", tutorId, error);
@@ -114,33 +118,50 @@ const Explore: React.FC = () => {
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700 pb-20">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 text-[#c2f575] bg-[#040457] w-fit px-4 py-1.5 rounded-full">
-            <Globe size={14} className="animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Global Discovery</span>
+      {/* Modern Banner Hero Section */}
+      <div className="relative overflow-hidden w-full bg-[#040457] rounded-[3.5rem] p-8 md:p-14 lg:p-20 shadow-2xl flex flex-col md:flex-row items-center md:items-start justify-between gap-12 group transition-all duration-700 hover:shadow-indigo-900/40">
+
+        {/* Decorative Gradients */}
+        <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none transform translate-x-1/3 -translate-y-1/3 mix-blend-screen transition-transform duration-[2s] group-hover:scale-110"></div>
+        <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-[#c2f575]/10 rounded-full blur-[100px] pointer-events-none transform -translate-x-1/2 translate-y-1/2 transition-transform duration-[2s] group-hover:scale-110"></div>
+        <div className="absolute top-1/2 left-1/4 w-[20rem] h-[20rem] bg-pink-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+
+        {/* Left Side Header Text */}
+        <div className="relative z-10 space-y-8 flex-1 w-full text-center md:text-left pt-6">
+          <div className="inline-flex items-center gap-3 bg-[#c2f575]/10 border border-[#c2f575]/30 shadow-[0_0_20px_rgba(194,245,117,0.15)] backdrop-blur-md px-5 py-2.5 rounded-full mx-auto md:mx-0 transition-transform duration-500 hover:scale-105 cursor-default">
+            <Globe size={16} className="text-[#c2f575] animate-[spin_4s_linear_infinite]" />
+            <span className="text-[11px] font-black text-[#c2f575] uppercase tracking-[0.25em]">Global Discovery</span>
           </div>
-          <h1 className="text-6xl font-black text-[#1A1A4E] tracking-tighter leading-none">
-            Explore <br />
-            <span className="text-gray-300">Knowledge Hub.</span>
+
+          <h1 className="text-5xl md:text-6xl lg:text-7xl xl:text-[5.5rem] font-black text-white tracking-tighter leading-[0.9] flex flex-col gap-2">
+            <span>Explore</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#c2f575] via-teal-300 to-indigo-300 drop-shadow-[0_2px_20px_rgba(194,245,117,0.3)] filter pb-4">
+              Knowledge Hub.
+            </span>
           </h1>
+
+          <p className="text-indigo-200/90 text-lg md:text-xl font-medium max-w-xl mx-auto md:mx-0 leading-relaxed drop-shadow-sm">
+            Discover premium masterclasses, immersive zones, and connect with top-tier tutors to elevate your expertise.
+          </p>
         </div>
 
-        <div className="flex items-center gap-4 bg-white p-2 rounded-[2rem] border border-gray-100 shadow-xl w-full max-w-md group focus-within:ring-4 focus-within:ring-indigo-50 transition-all">
-          <div className="pl-6 text-gray-300 group-focus-within:text-indigo-900 transition-colors">
-            <Search size={22} />
+        {/* Right Side Search Bar */}
+        <div className="relative z-10 w-full md:w-[420px] flex-shrink-0 mt-6 md:mt-12 group/search">
+          <div className="bg-white/10 backdrop-blur-2xl border border-white/20 p-2.5 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] focus-within:bg-white/15 focus-within:border-white/40 focus-within:shadow-[0_20px_60px_rgba(194,245,117,0.15)] transition-all duration-500 hover:border-white/30 flex items-center gap-3">
+            <div className="pl-6 text-white/50 group-focus-within/search:text-[#c2f575] group-hover/search:text-white/80 transition-colors duration-300">
+              <Search size={22} className="drop-shadow-sm" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search zones, tutors..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 w-full px-2 py-4 text-lg font-bold text-white placeholder:text-white/40 placeholder:font-medium outline-none bg-transparent"
+            />
+            <button className="bg-[#c2f575] p-4 rounded-[2rem] text-[#040457] hover:bg-white transition-all transform hover:scale-[1.05] hover:rotate-3 shadow-[0_10px_20px_rgba(194,245,117,0.3)] flex-shrink-0">
+              <Filter size={20} className="fill-current" />
+            </button>
           </div>
-          <input
-            type="text"
-            placeholder="Search zones, tutors, domains..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 px-4 py-4 font-bold text-indigo-900 placeholder:text-gray-300 outline-none bg-transparent"
-          />
-          <button className="bg-gray-50 p-4 rounded-2xl text-indigo-900 hover:bg-[#c2f575] transition-all">
-            <Filter size={20} />
-          </button>
         </div>
       </div>
 
@@ -172,12 +193,27 @@ const Explore: React.FC = () => {
                     </span>
                   </div>
                 </div>
-                <div className="absolute bottom-8 left-8 right-8 flex items-center justify-between opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500">
-                  <div className="flex items-center gap-3 bg-[#040457]/80 backdrop-blur-md p-2 pr-6 rounded-2xl border border-white/10">
-                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/20">
-                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${tutorData[zone.tutorId]?.name || zone.tutorName}`} alt="Tutor" />
+                <div className="absolute bottom-6 left-6 right-6 flex items-center justify-start opacity-0 group-hover:opacity-100 translate-y-6 group-hover:translate-y-0 transition-all duration-500 z-20 pointer-events-none">
+                  <div className="flex items-center gap-4 bg-white/95 backdrop-blur-xl p-2.5 pr-8 rounded-[2rem] border border-white shadow-[0_20px_40px_rgba(0,0,0,0.2)] transform origin-left hover:scale-[1.02] transition-transform duration-300 pointer-events-auto">
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-indigo-50 shadow-inner ring-4 ring-white shrink-0">
+                      <img
+                        src={tutorData[zone.tutorId]?.photoURL || tutorData[zone.tutorName]?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutorData[zone.tutorId]?.name || zone.tutorName}&backgroundColor=e2e8f0`}
+                        alt="Tutor avatar"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.tutorName}&backgroundColor=e2e8f0`;
+                        }}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">{tutorData[zone.tutorId]?.name || zone.tutorName}</span>
+                    <div>
+                      <span className="text-[9px] font-black text-indigo-500 uppercase tracking-[0.2em] leading-none mb-1.5 block">
+                        Master
+                      </span>
+                      <span className="text-sm font-black text-[#1A1A4E] uppercase tracking-wide leading-none block line-clamp-1">
+                        {tutorData[zone.tutorId]?.name || zone.tutorName}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

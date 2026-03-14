@@ -282,6 +282,7 @@ const Billings = () => {
   const [ifsc, setIfsc] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [downloadingTx, setDownloadingTx] = useState<string | null>(null);
+  const [agreedToServiceTerms, setAgreedToServiceTerms] = useState(false);
 
   // Country search and selection
   const [countrySearch, setCountrySearch] = useState('');
@@ -456,36 +457,56 @@ const Billings = () => {
                 </div>
               </div>
 
-              <button
-                onClick={async (e) => {
-                  try {
-                    const btn = e.currentTarget;
-                    const originalText = btn.innerText;
-                    btn.innerText = "REDIRECTING...";
-                    btn.disabled = true;
+              <div className="flex flex-col gap-6 w-full md:w-auto">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <div className="relative flex items-center mt-1">
+                    <input
+                      type="checkbox"
+                      checked={agreedToServiceTerms}
+                      onChange={(e) => setAgreedToServiceTerms(e.target.checked)}
+                      className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-orange-300 bg-white checked:bg-orange-500 checked:border-orange-500 transition-all hover:bg-orange-50"
+                    />
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100">
+                      <Check size={14} />
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black text-orange-900 uppercase tracking-widest leading-relaxed">
+                    I accept the dynamic commission structure and automated 0.1% TDS / 0.5% TCS deductions.
+                  </span>
+                </label>
 
-                    const createAccount = httpsCallable(functions, 'createTutorLinkedAccount');
-                    const result: any = await createAccount();
+                <button
+                  disabled={!agreedToServiceTerms}
+                  onClick={async (e) => {
+                    try {
+                      const btn = e.currentTarget;
+                      const originalText = btn.innerText;
+                      btn.innerText = "REDIRECTING...";
+                      btn.disabled = true;
 
-                    if (result.data.success && result.data.onboardingUrl) {
-                      window.location.href = result.data.onboardingUrl;
-                    } else {
-                      alert('Failed to generate onboarding URL.');
-                      btn.innerText = originalText;
-                      btn.disabled = false;
+                      const createAccount = httpsCallable(functions, 'createTutorLinkedAccount');
+                      const result: any = await createAccount();
+
+                      if (result.data.success && result.data.onboardingUrl) {
+                        window.location.href = result.data.onboardingUrl;
+                      } else {
+                        alert('Failed to generate onboarding URL.');
+                        btn.innerText = originalText;
+                        btn.disabled = !agreedToServiceTerms;
+                      }
+                    } catch (err: any) {
+                      console.error("KYC Init Error:", err);
+                      alert("Error initiating KYC: " + err.message);
+                      const btn = e.currentTarget;
+                      btn.innerText = "VERIFY IDENTITY & BANK DETAILS";
+                      btn.disabled = !agreedToServiceTerms;
                     }
-                  } catch (err: any) {
-                    console.error("KYC Init Error:", err);
-                    alert("Error initiating KYC: " + err.message);
-                    const btn = e.currentTarget;
-                    btn.innerText = "VERIFY IDENTITY & BANK DETAILS";
-                    btn.disabled = false;
-                  }
-                }}
-                className="w-full md:w-auto px-8 py-4 bg-orange-500 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-600 transition-all whitespace-nowrap active:scale-95 disabled:opacity-50"
-              >
-                VERIFY IDENTITY & BANK DETAILS
-              </button>
+                  }}
+                  className="w-full md:w-auto px-8 py-4 bg-orange-500 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-600 transition-all whitespace-nowrap active:scale-95 disabled:opacity-50 disabled:grayscale"
+                >
+                  VERIFY IDENTITY & BANK DETAILS
+                </button>
+              </div>
             </div>
           ) : (
             <div className="bg-[#f8fafc] border border-gray-100 rounded-3xl p-8 flex flex-col sm:flex-row items-center gap-8 shadow-inner">

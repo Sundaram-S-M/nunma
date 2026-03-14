@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.zohoBillingWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.bunnyStreamWebhook = exports.downloadInvoice = exports.sendInvoiceEmail = exports.createZohoCheckoutSession = exports.createMentorshipBooking = exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.get100msToken = void 0;
+exports.serveSecurePdf = exports.zohoBillingWebhook = exports.processZohoInvoice = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.bunnyStreamWebhook = exports.downloadInvoice = exports.sendInvoiceEmail = exports.createZohoCheckoutSession = exports.createMentorshipBooking = exports.verifyOTPAndSignIn = exports.requestOTP = exports.sendWhitelistInvite = exports.handleBunnyWebhook = exports.generateBunnyToken = exports.createBunnyVideo = exports.get100msToken = void 0;
 const functions = __importStar(require("firebase-functions"));
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
@@ -34,6 +34,9 @@ const crypto = __importStar(require("crypto"));
 const nodemailer = __importStar(require("nodemailer"));
 const jwt = __importStar(require("jsonwebtoken"));
 const axios_1 = __importDefault(require("axios"));
+const pdf_lib_1 = require("pdf-lib");
+const tasks_1 = require("@google-cloud/tasks");
+const tasksClient = new tasks_1.CloudTasksClient();
 if (!admin.apps.length) {
     admin.initializeApp();
 }
@@ -767,7 +770,7 @@ exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID",
     }
 });
 exports.razorpayRouteWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBHOOK_SECRET"] }, async (req, res) => {
-    var _a, _b;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     if (req.method !== 'POST') {
         res.status(405).send('Method Not Allowed');
         return;
@@ -788,65 +791,209 @@ exports.razorpayRouteWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBH
             return;
         }
         const event = req.body.event;
-        if (event === 'payment.captured') {
-            const payment = req.body.payload.payment.entity;
-            const transfers = ((_a = req.body.payload.transfer) === null || _a === void 0 ? void 0 : _a.entity) || req.body.transfers; // Depending on Route webhook structure
-            let platformCommission = 0;
-            // Simplistic calculation: If we have the order, we subtract transfers from payment total
-            // Usually Route webhooks for payment.captured include transfer details, or we just calculate from the payment base minus sum of transfers.
-            // To be safe and precise for the Zoho Invoice, we calculate total payment - total transferred
-            let totalTransferred = 0;
-            if (payment.transfers) {
-                // If the transfers array is included on the payment entity directly
-                payment.transfers.forEach((t) => { totalTransferred += t.amount; });
+        // Idempotency Check: Prevent duplicate processing of the same event
+        const eventId = req.body.id || ((_c = (_b = (_a = req.body.payload) === null || _a === void 0 ? void 0 : _a.payment) === null || _b === void 0 ? void 0 : _b.entity) === null || _c === void 0 ? void 0 : _c.id) || ((_e = (_d = req.body.payload) === null || _d === void 0 ? void 0 : _d.account) === null || _e === void 0 ? void 0 : _e.id);
+        if (eventId) {
+            const lockRef = admin.firestore().collection("system").doc("webhooks").collection("processed").doc(eventId);
+            const lockDoc = await lockRef.get();
+            if (lockDoc.exists) {
+                console.log(`[RazorpayWebhook] Event ${eventId} already processed. Skipping.`);
+                res.status(200).send('OK');
+                return;
             }
-            else if (Array.isArray(transfers)) {
-                transfers.forEach((t) => { totalTransferred += t.amount; });
-            }
-            else if (transfers && transfers.amount) {
-                totalTransferred = transfers.amount;
-            }
-            else {
-                // Fallback: This requires knowing the plan, which is risky in a webhook without db lookup.
-                // Ideally transfer amount is available in webhook payload. Let's assume we fetch it if not present,
-                // or for MVP just log it. Let's use a safe fallback of 10% if transfer info isn't cleanly in the payload.
-                platformCommission = Math.floor(payment.amount * 0.10);
-                console.warn("Could not find transfer records in webhook, defaulting to 10% fallback for invoice draft.");
-            }
-            if (totalTransferred > 0) {
-                platformCommission = payment.amount - totalTransferred;
-            }
-            // Create Zoho Invoice
-            const accessToken = await getZohoAccessToken();
-            const orgId = process.env.ZOHO_ORG_ID;
-            if (orgId && platformCommission > 0) {
-                const commissionInRupees = platformCommission / 100;
-                const invoicePayload = {
-                    customer_id: "DUMMY_CUSTOMER_ID",
-                    items: [
-                        {
-                            name: "Platform Usage Fee",
-                            description: `Nunma Platform Commission for payment ID: ${payment.id}`,
-                            rate: commissionInRupees,
-                            quantity: 1
-                        }
-                    ],
-                    status: "draft"
-                };
-                await axios_1.default.post(`https://www.zohoapis.in/books/v3/invoices?organization_id=${orgId}`, invoicePayload, {
-                    headers: {
-                        "Authorization": `Zoho-oauthtoken ${accessToken}`,
-                        "Content-Type": "application/json"
-                    }
+            await lockRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), event: event });
+        }
+        if (event === 'account.instantly_verified') {
+            const account = req.body.payload.account.entity;
+            const tutorId = account.reference_id;
+            const pan = (_f = account.legal_info) === null || _f === void 0 ? void 0 : _f.pan;
+            if (tutorId && pan) {
+                await admin.firestore().collection('users').doc(tutorId).update({
+                    "taxDetails.panNumber": pan,
+                    "taxDetails.legalName": account.legal_business_name || "Independent Tutor",
+                    // Note: gstin is optional and might be manually added or synced later if available
                 });
-                console.log(`[RazorpayWebhook] Draft invoice created for ₹${commissionInRupees}`);
+                console.log(`[RazorpayWebhook] KYC Sync: PAN updated for Tutor ${tutorId}`);
+            }
+        }
+        else if (event === 'payment.captured') {
+            const payment = req.body.payload.payment.entity;
+            const paymentId = payment.id;
+            // Extract metadata for invoicing
+            const amount = payment.amount;
+            const zoneId = (_g = payment.notes) === null || _g === void 0 ? void 0 : _g.zoneId;
+            const studentId = (_h = payment.notes) === null || _h === void 0 ? void 0 : _h.studentId;
+            const transfers = ((_j = req.body.payload.transfer) === null || _j === void 0 ? void 0 : _j.entity) || req.body.transfers;
+            let tutorAccountId = null;
+            if (Array.isArray(transfers) && transfers.length > 0) {
+                tutorAccountId = transfers[0].account;
+            }
+            else if (transfers && transfers.account) {
+                tutorAccountId = transfers.account;
+            }
+            // Enqueue Cloud Task for Asynchronous Zoho Invoicing
+            const project = process.env.GCLOUD_PROJECT || admin.instanceId().app.options.projectId;
+            const location = 'us-central1'; // Default Firebase region, should ideally be dynamic
+            const queue = 'generate-invoice-queue';
+            const queuePath = tasksClient.queuePath(project, location, queue);
+            const url = `https://${location}-${project}.cloudfunctions.net/processZohoInvoice`;
+            const payload = { paymentId, amount, zoneId, studentId, tutorAccountId };
+            const task = {
+                httpRequest: {
+                    httpMethod: 'POST',
+                    url: url,
+                    body: Buffer.from(JSON.stringify(payload)).toString('base64'),
+                    headers: { 'Content-Type': 'application/json' },
+                },
+                // Deterministic name for Cloud Tasks native deduplication
+                name: tasksClient.taskPath(project, location, queue, `task-${paymentId}`)
+            };
+            try {
+                await tasksClient.createTask({ parent: queuePath, task });
+                console.log(`[RazorpayWebhook] Enqueued invoice task for payment ${paymentId}`);
+            }
+            catch (enqueueError) {
+                if (enqueueError.code === 6) { // ALREADY_EXISTS
+                    console.log(`[RazorpayWebhook] Task for payment ${paymentId} already exists. Native deduplication active.`);
+                }
+                else {
+                    console.error(`[RazorpayWebhook] Failed to enqueue task:`, enqueueError);
+                }
             }
         }
         res.status(200).send('OK');
     }
     catch (error) {
-        console.error("Razorpay webhook error:", ((_b = error.response) === null || _b === void 0 ? void 0 : _b.data) || error.message);
+        console.error("Razorpay webhook error:", ((_k = error.response) === null || _k === void 0 ? void 0 : _k.data) || error.message);
         res.status(500).send("Webhook Error");
+    }
+});
+/**
+ * Worker function triggered by Cloud Tasks to process Zoho Invoicing asynchronously.
+ * Handles Student hydration, Zoho Customer creation, Invoice generation (Tax vs Bill of Supply),
+ * and email delivery via Zoho SMTP.
+ */
+exports.processZohoInvoice = (0, https_1.onRequest)(async (req, res) => {
+    var _a;
+    try {
+        const payload = req.body;
+        const { paymentId, amount, zoneId, studentId, tutorAccountId } = payload;
+        if (!paymentId || !amount) {
+            console.error("[processZohoInvoice] Missing required payload data.");
+            res.status(400).send("Bad Request");
+            return;
+        }
+        const db = admin.firestore();
+        // 1. Hydrate Student Data
+        const studentDoc = await db.collection('users').doc(studentId).get();
+        if (!studentDoc.exists) {
+            console.error(`[processZohoInvoice] Student ${studentId} not found.`);
+            res.status(404).send("Student Not Found");
+            return;
+        }
+        const studentData = studentDoc.data();
+        const studentEmail = studentData.email;
+        const studentName = studentData.name || "Student";
+        // 2. Hydrate Tutor Data to determine Invoice Type
+        const tutorsSnapshot = await db.collection('users')
+            .where('razorpay_account_id', '==', tutorAccountId)
+            .limit(1)
+            .get();
+        if (tutorsSnapshot.empty) {
+            console.error(`[processZohoInvoice] Tutor for account ${tutorAccountId} not found.`);
+            res.status(404).send("Tutor Not Found");
+            return;
+        }
+        const tutorData = tutorsSnapshot.docs[0].data();
+        const taxDetails = tutorData.taxDetails || {};
+        // 3. Authenticate with Zoho
+        const accessToken = await getZohoAccessToken();
+        const orgId = process.env.ZOHO_ORG_ID;
+        if (!orgId) {
+            throw new Error("ZOHO_ORG_ID is missing.");
+        }
+        const authHeader = {
+            "Authorization": `Zoho-oauthtoken ${accessToken}`,
+            "Content-Type": "application/json"
+        };
+        // 4. Search/Create Zoho Customer for the Student
+        let zohoCustomerId = "";
+        const searchResponse = await axios_1.default.get(`https://www.zohoapis.in/books/v3/contacts?organization_id=${orgId}&email=${studentEmail}`, { headers: authHeader });
+        if (searchResponse.data.contacts && searchResponse.data.contacts.length > 0) {
+            zohoCustomerId = searchResponse.data.contacts[0].contact_id;
+        }
+        else {
+            // Create new Zoho Contact
+            const contactPayload = {
+                contact_name: studentName,
+                company_name: "Individual",
+                contact_type: "customer",
+                emails: studentEmail,
+                email: studentEmail
+            };
+            const createContactResponse = await axios_1.default.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=${orgId}`, contactPayload, { headers: authHeader });
+            zohoCustomerId = createContactResponse.data.contact.contact_id;
+        }
+        // 5. Generate Dynamic Zoho Payload
+        const amountInRupees = amount / 100;
+        const isTaxInvoice = !!taxDetails.gstin;
+        const invoicePayload = {
+            customer_id: zohoCustomerId,
+            reference_number: paymentId,
+            date: new Date().toISOString().split('T')[0],
+            line_items: [
+                {
+                    name: "Tutoring Session Fee",
+                    description: `Course Payment for Zone: ${zoneId} | Payment ID: ${paymentId}`,
+                    rate: amountInRupees,
+                    quantity: 1
+                }
+            ],
+            notes: `Tutor: ${taxDetails.legalName || tutorData.name} | PAN: ${taxDetails.panNumber || "N/A"}`,
+        };
+        // Add custom fields for PAN/LegalName if needed by the template
+        if (!isTaxInvoice) {
+            invoicePayload.custom_fields = [
+                { label: "Invoice Type", value: "Bill of Supply" },
+                { label: "Tutor PAN", value: taxDetails.panNumber || "N/A" }
+            ];
+        }
+        const createInvoiceResponse = await axios_1.default.post(`https://www.zohoapis.in/books/v3/invoices?organization_id=${orgId}`, invoicePayload, { headers: authHeader });
+        const invoiceId = createInvoiceResponse.data.invoice.invoice_id;
+        // 6. Fetch PDF from Zoho
+        const pdfResponse = await axios_1.default.get(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=${orgId}&accept=pdf`, {
+            headers: authHeader,
+            responseType: 'arraybuffer'
+        });
+        // 7. Email Delivery via Zoho SMTP
+        const mailOptions = {
+            from: `"Nunma Academy" <${process.env.SMTP_USER}>`,
+            to: studentEmail,
+            subject: `Invoice for your payment (${paymentId})`,
+            text: `Hi ${studentName}, please find attached the invoice for your recent payment.`,
+            attachments: [
+                {
+                    filename: `Invoice_${paymentId}.pdf`,
+                    content: Buffer.from(pdfResponse.data)
+                }
+            ]
+        };
+        await transporter.sendMail(mailOptions);
+        // 8. Log Success in Firestore
+        await db.collection('users').doc(studentId).collection('invoices').doc(paymentId).set({
+            invoiceId: invoiceId,
+            paymentId: paymentId,
+            amount: amountInRupees,
+            date: admin.firestore.FieldValue.serverTimestamp(),
+            status: "sent",
+            invoiceType: isTaxInvoice ? "Tax Invoice" : "Bill of Supply"
+        });
+        console.log(`[processZohoInvoice] Success: Invoice ${invoiceId} sent to ${studentEmail}`);
+        res.status(200).send("OK");
+    }
+    catch (error) {
+        console.error("[processZohoInvoice] Error processing invoice:", ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) || error.message);
+        res.status(500).send("Internal Server Error");
     }
 });
 /**
@@ -881,5 +1028,81 @@ exports.zohoBillingWebhook = (0, https_1.onRequest)(async (req, res) => {
     }
     // Always securely return 200 OK so Zoho stops retrying
     res.status(200).send('Webhook received');
+});
+// --- PDF WATERMARKING ---
+exports.serveSecurePdf = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
+    var _a, _b;
+    // Handle CORS manually for robust preflight support
+    res.set('Access-Control-Allow-Origin', '*');
+    if (req.method === 'OPTIONS') {
+        res.set('Access-Control-Allow-Methods', 'GET, POST');
+        res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+        res.status(204).send('');
+        return;
+    }
+    try {
+        // 1. Extract and Verify Auth Token
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            res.status(401).send('Unauthorized: Missing Bearer Token');
+            return;
+        }
+        const idToken = authHeader.split('Bearer ')[1];
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const uid = decodedToken.uid;
+        const email = decodedToken.email || 'Unknown User';
+        // 2. Extract inputs (supporting both GET query and POST body)
+        const zoneId = req.query.zoneId || ((_a = req.body) === null || _a === void 0 ? void 0 : _a.zoneId);
+        const segmentId = req.query.segmentId || ((_b = req.body) === null || _b === void 0 ? void 0 : _b.segmentId);
+        if (!zoneId || !segmentId) {
+            res.status(400).send('Bad Request: Missing zoneId or segmentId');
+            return;
+        }
+        // 3. Verify Active Enrollment (O(1) Check)
+        const studentRef = admin.firestore().doc(`zones/${zoneId}/students/${uid}`);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) {
+            res.status(403).send('Forbidden: Not enrolled in this zone');
+            return;
+        }
+        // 4. Fetch raw PDF buffer from Firebase Storage
+        const bucket = admin.storage().bucket();
+        let file = bucket.file(`segments/pdfs/${segmentId}`);
+        let [exists] = await file.exists();
+        if (!exists) {
+            file = bucket.file(`segments/pdfs/${segmentId}.pdf`);
+            [exists] = await file.exists();
+            if (!exists) {
+                res.status(404).send('Not Found: PDF file missing');
+                return;
+            }
+        }
+        const [buffer] = await file.download();
+        // 5. Watermark with pdf-lib
+        const pdfDoc = await pdf_lib_1.PDFDocument.load(buffer);
+        const pages = pdfDoc.getPages();
+        const watermarkText = `${email} - ${uid}`;
+        for (const page of pages) {
+            const { width, height } = page.getSize();
+            // Draw watermark across the center
+            page.drawText(watermarkText, {
+                x: width / 2 - 150,
+                y: height / 2,
+                size: 24,
+                color: (0, pdf_lib_1.rgb)(0.75, 0.75, 0.75),
+                opacity: 0.1,
+                rotate: (0, pdf_lib_1.degrees)(45),
+            });
+        }
+        // 6. Return Binary Stream
+        const pdfBytes = await pdfDoc.save();
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Length', pdfBytes.length);
+        res.end(Buffer.from(pdfBytes));
+    }
+    catch (error) {
+        console.error('serveSecurePdf error:', error);
+        res.status(500).send('Internal Server Error');
+    }
 });
 //# sourceMappingURL=index.js.map

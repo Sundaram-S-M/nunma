@@ -241,33 +241,34 @@ const Workplace: React.FC = () => {
       {/* Stream Room Overlay */}
       {/* Stream Room Overlay Removed (Using Sandbox) */}
 
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-4xl font-extrabold text-[#040457] mb-2 tracking-tighter text-balance">My Workplace</h1>
           <p className="text-gray-400 font-medium text-sm">Design, manage, and scale your professional offerings.</p>
         </div>
 
-        {/* Cumulative Students Meter */}
-        <div className="hidden md:flex bg-white border border-gray-100 p-4 rounded-2xl shadow-sm items-center gap-6 mr-auto xl:mr-0 animate-in zoom-in duration-500 delay-100">
-          <div className="w-12 h-12 bg-indigo-50 text-[#040457] rounded-xl flex items-center justify-center shrink-0">
-            <Users size={24} />
-          </div>
-          <div className="flex-1 min-w-[200px]">
-            <div className="flex justify-between items-end mb-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-[#040457]">Cumulative Students</span>
-              <span className="text-xs font-bold text-gray-400">
-                {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} / {(user as any)?.subscription_entitlements?.studentLimit || (
-                  (
-                    currentTier === 'starter' ? 100 :
-                      currentTier === 'standard' ? 250 :
-                        currentTier === 'premium' ? 1000 : 100
-                  ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
-                )}
-              </span>
+        <div className="flex items-center gap-4 overflow-x-auto pb-4 w-full flex-nowrap [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {/* Cumulative Students Meter */}
+          <div className="flex shrink-0 bg-white border border-gray-100 p-4 h-[80px] rounded-2xl shadow-sm items-center gap-5 animate-in zoom-in duration-500 delay-100">
+            <div className="w-12 h-12 bg-indigo-50 text-[#040457] rounded-xl flex items-center justify-center shrink-0">
+              <Users size={24} />
             </div>
-            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-1000 ${(allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
+            <div className="flex-1 min-w-[160px]">
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#040457]">Cumulative Students</span>
+                <span className="text-xs font-bold text-gray-400">
+                  {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} / {(user as any)?.subscription_entitlements?.studentLimit || (
+                    (
+                      currentTier === 'starter' ? 100 :
+                        currentTier === 'standard' ? 250 :
+                          currentTier === 'premium' ? 1000 : 100
+                    ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+                  )}
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-1000 ${(allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
                     ((user as any)?.subscription_entitlements?.studentLimit || (
                       (
                         currentTier === 'starter' ? 100 :
@@ -275,72 +276,74 @@ const Workplace: React.FC = () => {
                             currentTier === 'premium' ? 1000 : 100
                       ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
                     ))) >= 1 ? 'bg-red-500' : 'bg-[#c2f575]'
-                  }`}
-                style={{
-                  width: `${Math.min(100, (allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
-                    ((user as any)?.subscription_entitlements?.studentLimit || (
-                      (
-                        currentTier === 'starter' ? 100 :
-                          currentTier === 'standard' ? 250 :
-                            currentTier === 'premium' ? 1000 : 100
-                      ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
-                    ))) * 100)}%`
-                }}
-              ></div>
+                    }`}
+                  style={{
+                    width: `${Math.min(100, (allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
+                      ((user as any)?.subscription_entitlements?.studentLimit || (
+                        (
+                          currentTier === 'starter' ? 100 :
+                            currentTier === 'standard' ? 250 :
+                              currentTier === 'premium' ? 1000 : 100
+                        ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+                      ))) * 100)}%`
+                  }}
+                ></div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Monthly Stream Meter */}
-        <div className="hidden md:flex bg-white border border-gray-100 p-4 rounded-2xl shadow-sm items-center gap-6 xl:ml-8 animate-in zoom-in duration-500">
-          <div className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0">
-            <Radio size={24} className={streamsUsed >= streamLimit ? "" : "animate-pulse"} />
-          </div>
-          <div className="flex-1 min-w-[200px]">
-            <div className="flex justify-between items-end mb-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-[#040457]">Live Streams Used</span>
-              <span className="text-xs font-bold text-gray-400">{streamsUsed} / {streamLimit}</span>
+          {/* Monthly Stream Meter */}
+          <div className="flex shrink-0 bg-white border border-gray-100 p-4 h-[80px] rounded-2xl shadow-sm items-center gap-5 animate-in zoom-in duration-500">
+            <div className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0">
+              <Radio size={24} className={streamsUsed >= streamLimit ? "" : "animate-pulse"} />
             </div>
-            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-1000 ${streamsPercent >= 100 ? 'bg-red-500' : 'bg-[#c2f575]'}`}
-                style={{ width: `${streamsPercent}%` }}
-              ></div>
+            <div className="flex-1 min-w-[160px]">
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#040457]">Live Streams Used</span>
+                <span className="text-xs font-bold text-gray-400">{streamsUsed} / {streamLimit}</span>
+              </div>
+              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-1000 ${streamsPercent >= 100 ? 'bg-red-500' : 'bg-[#c2f575]'}`}
+                  style={{ width: `${streamsPercent}%` }}
+                ></div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto">
           <button
             onClick={() => setShowScheduleModal(true)}
-            className="bg-white border border-gray-100 text-[#040457] font-bold px-5 py-3 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 group"
+            className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap"
           >
             <Radio size={18} className="text-red-500 group-hover:scale-110 transition-transform" />
             Schedule Live Class
           </button>
+
           <button
             onClick={() => navigate('/certificate-engine')}
-            className="bg-white border border-gray-100 text-[#040457] font-bold px-5 py-3 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 group"
+            className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap"
           >
             <Award size={18} className="text-[#c2f575] group-hover:scale-110 transition-transform" />
-            Certificate Issue
+            Issue Certificates
           </button>
+
           <button
             onClick={() => navigate('/list-product/flow')}
-            className="bg-[#040457] text-white font-bold px-6 py-3 rounded-2xl shadow-xl hover:bg-black transition-all flex items-center gap-2 group whitespace-nowrap"
+            className="shrink-0 bg-[#040457] text-white font-bold px-6 h-[80px] rounded-2xl shadow-xl hover:bg-black transition-all flex items-center gap-3 group whitespace-nowrap"
           >
             <ShoppingBag size={18} className="text-[#c2f575] group-hover:scale-110 transition-transform" />
             List Digital Product
           </button>
+
           <button
             onClick={() => navigate('/workplace/launch')}
-            className="bg-[#c2f575] text-[#040457] font-black p-2 pr-6 rounded-[1.25rem] shadow-xl shadow-[#c2f575]/20 hover:scale-[1.03] active:scale-95 transition-all flex items-center gap-4 whitespace-nowrap group"
+            className="shrink-0 bg-[#c2f575] text-[#040457] font-black p-2 pr-6 h-[80px] rounded-[1.25rem] shadow-xl shadow-[#c2f575]/20 hover:scale-[1.03] active:scale-95 transition-all flex items-center gap-4 whitespace-nowrap group"
           >
-            <div className="w-10 h-10 bg-[#040457] text-[#c2f575] rounded-xl flex items-center justify-center shrink-0 shadow-lg group-hover:rotate-90 transition-transform duration-500">
+            <div className="w-16 h-full bg-[#040457] text-[#c2f575] rounded-xl flex items-center justify-center shrink-0 shadow-lg group-hover:rotate-90 transition-transform duration-500">
               <Plus size={20} strokeWidth={3} />
             </div>
-            <div className="flex flex-col items-start leading-none">
-              <span className="uppercase text-[11px] font-bold tracking-widest mb-1">Launch New Zone</span>
+            <div className="flex flex-col items-start leading-none justify-center h-full">
+              <span className="uppercase text-[11px] font-bold tracking-widest mb-1.5">Launch New Zone</span>
               <span className="text-[9px] font-bold opacity-60 normal-case tracking-normal">Create professional learning stream</span>
             </div>
           </button>

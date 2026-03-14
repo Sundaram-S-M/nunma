@@ -26,6 +26,7 @@ import {
   Camera,
   Search,
   CircleCheck as CheckCircle,
+  ShieldCheck,
   X,
   Target,
   FileSpreadsheet,
@@ -64,6 +65,8 @@ const StudentZoneView: React.FC = () => {
   const [cameraStatus, setCameraStatus] = useState<'off' | 'on' | 'denied'>('off');
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [hasExplicitConsent, setHasExplicitConsent] = useState(false);
   const [postExamTimer, setPostExamTimer] = useState<number | null>(null);
   const [uploadedAnswerFiles, setUploadedAnswerFiles] = useState<File | null>(null);
   const [curriculum, setCurriculum] = useState<any[]>([]);
@@ -141,11 +144,27 @@ const StudentZoneView: React.FC = () => {
           setStudentData({ id: sDoc.id, ...sDoc.data() });
         }
       });
+
+      // 5.1 Fetch user consent state
+      const userDocUnsub = onSnapshot(doc(db, 'users', authUser.uid), (docSnap) => {
+        if (docSnap.exists()) {
+          setHasExplicitConsent(!!docSnap.data().aiProctoringConsent);
+        }
+      });
+
+      return () => {
+        zoneUnsub();
+        sessionsUnsub();
+        examsUnsub();
+        chaptersUnsub();
+        studentUnsub();
+        resultsUnsub();
+        allStudentsUnsub();
+        userDocUnsub();
+      };
     }
 
     // 6. Exam Results (My Results)
-    // Assuming we store results in a subcollection 'submissions' or global 'exam_results'
-    // Let's use a subcollection in zone for now: zones/{zoneId}/exam_results where studentId == uid
     const resultsQ = query(collection(db, 'zones', zoneId, 'exam_results'), where('studentId', '==', authUser?.uid || ''));
     const resultsUnsub = onSnapshot(resultsQ, (snapshot) => {
       setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -180,16 +199,21 @@ const StudentZoneView: React.FC = () => {
       // If a student is in 'students' collection, they have access.
       // If not, and zone.price > 0, redirect.
 
-      const isWhitelisted = zone.whitelistedEmails?.includes(authUser.email);
+      const whitelistEntry = zone.whitelistedEmails?.find((e: any) => {
+        const email = typeof e === 'string' ? e : e.email;
+        return email === authUser.email;
+      });
+      const isWhitelisted = !!whitelistEntry;
       // If we have studentData, we are good.
       if (studentData) return;
 
       // If whitelisted but no studentData, auto-enroll
       if (isWhitelisted) {
         try {
+          const whitelistedName = (typeof whitelistEntry === 'object' && whitelistEntry !== null) ? (whitelistEntry as any).name : null;
           const newStudent: Student = {
             id: authUser.uid,
-            name: authUser.name || authUser.email.split('@')[0],
+            name: whitelistedName || authUser.name || authUser.email.split('@')[0],
             avatar: authUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser.uid}`,
             joinedAt: new Date().toLocaleDateString(),
             status: 'Present',
@@ -292,13 +316,13 @@ const StudentZoneView: React.FC = () => {
   }, [activeExam, isExamTerminated, zoneId, studentData]);
 
   const handleStartExam = async (exam: any) => {
+    if (!hasExplicitConsent) {
+      setActiveExam(exam); // Store target exam
+      setShowConsentModal(true);
+      return;
+    }
     setActiveExam(exam);
     setExamCurrentQuestion(0);
-    setExamAnswers({});
-    setCheatViolations(0);
-    setIsExamTerminated(false);
-    setCameraStatus(exam.type === 'online-test' ? 'on' : 'off');
-    setShowExamRules(false);
 
     const now = new Date();
     // Use exam duration or default to 30 mins
@@ -496,6 +520,25 @@ const StudentZoneView: React.FC = () => {
       }
     };
   }, [cameraStatus]);
+
+  const handleSaveConsent = async () => {
+    if (!authUser) return;
+    try {
+      await updateDoc(doc(db, 'users', authUser.uid), {
+        aiProctoringConsent: true,
+        aiProctoringConsentAt: new Date().toISOString()
+      });
+      setHasExplicitConsent(true);
+      setShowConsentModal(false);
+      // If we had a pending exam, start it
+      if (activeExam) {
+        setShowExamRules(true);
+      }
+    } catch (e) {
+      console.error("Failed to save consent", e);
+      alert("Failed to save consent choice. Please try again.");
+    }
+  };
 
   const toggleChapter = (id: string) => {
     setExpandedChapters(prev =>
@@ -1071,10 +1114,60 @@ const StudentZoneView: React.FC = () => {
             <div className="flex gap-4">
               <button onClick={() => setShowExamRules(false)} className="flex-1 py-5 bg-gray-50 text-gray-300 rounded-3xl font-black uppercase text-[10px] tracking-widest">Decline</button>
               <button
-                onClick={() => handleStartExam(exams.find(e => e.id === studentData?.activeExamId) || exams[0])}
+                onClick={() => {
+                  setHasExplicitConsent(true); // Internal state bypass once modal is done
+                  handleStartExam(activeExam); // activeExam should be set
+                }}
                 className="flex-[2] py-5 bg-[#1A1A4E] text-white rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-2xl"
               >
                 Acknowledge & Start
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConsentModal && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-[#040457]/95 backdrop-blur-2xl p-6 animate-in fade-in duration-500">
+          <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 space-y-10 animate-in zoom-in-95 duration-500">
+            <div className="text-center space-y-4">
+              <div className="w-20 h-20 bg-[#c2f575]/20 rounded-[2rem] flex items-center justify-center text-indigo-900 mx-auto shadow-sm">
+                <ShieldCheck size={40} className="text-indigo-900" />
+              </div>
+              <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tight">AI & Proctoring Consent</h3>
+              <p className="text-gray-400 font-medium">To maintain assessment integrity, we require your explicit consent for the following:</p>
+            </div>
+            <div className="space-y-6">
+              <div className="flex gap-4 p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100">
+                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-900 shadow-sm shrink-0">
+                  <Radio size={20} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-indigo-900 mb-1">AI Audio Processing</h4>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-relaxed">
+                    Audio may be processed by AI (gemini-1.5-flash) for live engagement tools and proctoring analysis.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-4 p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100">
+                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-900 shadow-sm shrink-0">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-indigo-900 mb-1">Tab Monitoring</h4>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-relaxed">
+                    System monitors tab-switching and window visibility to ensure a fair testing environment.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-4 pt-4">
+              <button onClick={() => setShowConsentModal(false)} className="flex-1 py-5 bg-gray-50 text-gray-300 rounded-3xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
+              <button
+                onClick={handleSaveConsent}
+                className="flex-[2] py-5 bg-[#c2f575] text-indigo-900 rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-2xl shadow-[#c2f575]/20 hover:scale-105 active:scale-95 transition-all"
+              >
+                Accept & Proceed
               </button>
             </div>
           </div>

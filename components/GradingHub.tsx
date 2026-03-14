@@ -9,9 +9,10 @@ interface GradingHubProps {
     zoneId: string;
     exam: any; // Using the Exam type loosely
     onClose: () => void;
+    onValuate: (studentId: string, scriptUrl: string) => void;
 }
 
-const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose }) => {
+const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuate }) => {
     const [submissions, setSubmissions] = useState<any[]>([]);
     const [students, setStudents] = useState<any[]>([]);
     const [loadingSubmissions, setLoadingSubmissions] = useState(true);
@@ -303,10 +304,10 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose }) => {
                                     </div>
                                     {selectedSubmission?.answerSheetUrl && (
                                         <button
-                                            onClick={() => setViewingPdfUrl(selectedSubmission.answerSheetUrl)}
+                                            onClick={() => onValuate(selectedStudent.id, selectedSubmission.answerSheetUrl)}
                                             className="px-6 py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-black uppercase text-[12px] tracking-widest hover:bg-indigo-100 transition-colors flex items-center gap-2 border border-indigo-100"
                                         >
-                                            <Eye size={18} /> View Script
+                                            <Eye size={18} /> View & Valuate Script
                                         </button>
                                     )}
                                 </div>

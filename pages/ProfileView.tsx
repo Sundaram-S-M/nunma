@@ -48,12 +48,12 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
-  increment
+  increment,
+  getCountFromServer
 } from 'firebase/firestore';
 
 import PhotoAdjustModal from '../components/PhotoAdjustModal';
 import { UserRole } from '../types';
-import { useLinkedInParser } from '../utils/useLinkedInParser';
 
 
 // Sub-components moved outside to fix focus bug
@@ -63,7 +63,7 @@ const ProfileHeader = ({
   editHeadline, setEditHeadline, editLocation, setEditLocation,
   isFollowing, handleFollow, bannerInputRef, handleFileChange,
   avatarInputRef, setIsEditing, handleSaveProfile,
-  setShowLinkedInModal, setShowProductModal, navigate,
+  setShowProductModal, navigate,
   handleViewFollowers, tutorStudentsCount
 }: any) => (
   <div className="flex flex-col w-full relative">
@@ -93,23 +93,23 @@ const ProfileHeader = ({
 
       {/* Name and Action Buttons on Banner */}
       <div className="max-w-7xl mx-auto w-full px-6 md:px-10 relative z-10">
-        <div className="flex flex-col md:flex-row justify-between items-end gap-6 w-full">
-          {/* Avatar Space Offset */}
-          <div className="hidden md:block w-40 shrink-0 md:mr-8"></div>
+        <div className="flex items-end gap-6 w-full">
+          {/* Avatar Space Offset - to push name/headline away from left edge where avatar sits */}
+          <div className="hidden md:block w-40 md:w-44 shrink-0 md:mr-8"></div>
 
-          <div className="flex-1 w-full flex flex-col md:flex-row justify-between items-start md:items-end gap-6 text-white pl-1 md:pl-0">
+          <div className="flex-1 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 text-white">
             {/* User Details */}
-            <div className="mb-1 md:mb-0 w-full md:w-auto mt-4 md:mt-0">
+            <div className="flex-1">
               <div className="flex flex-wrap items-center gap-3 mb-1">
                 {isEditing ? (
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="Your Name"
-                    className="text-3xl md:text-[34px] font-black tracking-tight drop-shadow-md bg-transparent border-b border-white/20 outline-none w-full"
+                    className="text-3xl md:text-[42px] font-black tracking-tight drop-shadow-md bg-transparent border-b border-white/20 outline-none w-full"
                   />
                 ) : (
-                  <h1 className="text-3xl md:text-[34px] font-black tracking-tight drop-shadow-md">{profileUser.name}</h1>
+                  <h1 className="text-3xl md:text-[42px] font-black tracking-tight drop-shadow-md">{profileUser.name}</h1>
                 )}
                 {role === UserRole.TUTOR && (
                   <div className="bg-[#5c7a36]/40 border border-[#6b8e23] text-[#c2f575] px-2.5 py-1 rounded flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest backdrop-blur-sm">
@@ -122,42 +122,38 @@ const ProfileHeader = ({
                   value={editHeadline}
                   onChange={(e) => setEditHeadline(e.target.value)}
                   placeholder="Your Headline"
-                  className="text-indigo-100/90 text-[15px] italic max-w-xl bg-transparent border-b border-white/20 outline-none w-full"
+                  className="text-indigo-100/90 text-[16px] italic max-w-xl bg-transparent border-b border-white/20 outline-none w-full"
                 />
               ) : (
-                <p className="text-indigo-100/90 text-[15px] italic line-clamp-1">{profileUser.headline || (role === UserRole.TUTOR ? 'Expert Educator' : 'Aspiring Learner')}</p>
+                <p className="text-indigo-100/90 text-[16px] italic line-clamp-1">{profileUser.headline || (role === UserRole.TUTOR ? 'Expert Educator' : 'Aspiring Learner')}</p>
               )}
             </div>
 
             {/* Action Buttons Row */}
-            <div className="flex flex-row gap-3 mt-4 md:mt-0 w-full md:w-auto">
+            <div className="flex items-center gap-4 mb-2">
               {isMe ? (
                 <>
                   {isEditing ? (
-                    <button onClick={handleSaveProfile} className="flex-1 sm:flex-none px-6 py-2.5 bg-white/10 border border-white/20 text-white rounded-full font-bold uppercase text-[10px] tracking-widest hover:bg-white hover:text-indigo-900 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+                    <button onClick={handleSaveProfile} className="px-8 py-3 bg-white text-[#1A1A4E] rounded-xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
                       Save Profile
                     </button>
                   ) : (
-                    <button onClick={() => setIsEditing(true)} className="flex-1 sm:flex-none px-6 py-2.5 bg-[#403e6a]/80 border border-white/10 backdrop-blur-md text-white rounded-full font-bold uppercase text-[10px] tracking-widest hover:bg-white/20 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+                    <button onClick={() => setIsEditing(true)} className="px-8 py-3 bg-[#403e6a]/60 border border-white/10 backdrop-blur-md text-white rounded-xl font-black uppercase text-[11px] tracking-widest hover:bg-white hover:text-[#1A1A4E] transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
                       Edit Profile
                     </button>
                   )}
-                  {role === UserRole.STUDENT ? (
-                    <button onClick={() => setShowLinkedInModal(true)} className="flex-1 sm:flex-none px-5 py-2.5 bg-[#0077b5] text-white rounded-full font-bold uppercase text-[10px] tracking-widest hover:brightness-110 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
-                      Import in
-                    </button>
-                  ) : (
-                    <button onClick={() => setShowProductModal(true)} className="flex-1 sm:flex-none px-6 py-2.5 bg-[#c2f575] text-[#1A1A4E] rounded-full font-bold uppercase text-[10px] tracking-widest hover:brightness-105 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+                  {role === UserRole.TUTOR && (
+                    <button onClick={() => setShowProductModal(true)} className="px-8 py-3 bg-[#c2f575] text-[#1A1A4E] rounded-xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
                       <ShoppingBag size={14} /> List Product
                     </button>
                   )}
                 </>
               ) : (
                 <>
-                  <button onClick={() => navigate(`/inbox?userId=${profileUser.uid}`)} className="flex-1 sm:flex-none px-6 py-2.5 bg-[#403e6a]/80 border border-white/10 backdrop-blur-md text-white rounded-full font-bold uppercase text-[10px] tracking-widest hover:bg-white/20 transition-all shadow-lg flex justify-center items-center gap-2 whitespace-nowrap">
+                  <button onClick={() => navigate(`/inbox?userId=${profileUser.uid}`)} className="px-8 py-3 bg-[#403e6a]/60 border border-white/10 backdrop-blur-md text-white rounded-xl font-black uppercase text-[11px] tracking-widest hover:bg-white hover:text-[#1A1A4E] transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
                     <MessageSquare size={14} /> Message
                   </button>
-                  <button onClick={handleFollow} className={`flex-1 sm:flex-none px-8 py-2.5 rounded-full font-bold uppercase text-[10px] tracking-widest transition-all flex justify-center items-center gap-2 shadow-lg whitespace-nowrap ${isFollowing ? 'bg-white/10 text-white border border-white/20 hover:bg-red-500/80 hover:border-red-500' : 'bg-[#c2f575] text-[#1A1A4E] hover:brightness-105'}`}>
+                  <button onClick={handleFollow} className={`px-10 py-3 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all flex items-center gap-2 shadow-xl whitespace-nowrap ${isFollowing ? 'bg-white/10 text-white border border-white/20 hover:bg-red-500/80 hover:border-red-500' : 'bg-[#c2f575] text-[#1A1A4E] hover:brightness-110'}`}>
                     {isFollowing ? <><UserCheck size={14} /> Following</> : <><UserPlus size={14} /> Follow</>}
                   </button>
                 </>
@@ -166,6 +162,7 @@ const ProfileHeader = ({
           </div>
         </div>
       </div>
+
     </div>
 
     {/* White Bottom Strip & Avatar */}
@@ -188,43 +185,41 @@ const ProfileHeader = ({
           </div>
 
           {/* User Stats on the White Part */}
-          <div className="flex flex-wrap items-center justify-center md:justify-start gap-8 mt-4 md:mt-5 w-full">
-            <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-full border border-gray-100">
-              <MapPin size={14} className="text-[#c2f575]" />
+          <div className="flex-1 flex flex-wrap items-center justify-center md:justify-start gap-10 mt-4 md:mt-6">
+            <div className="flex items-center gap-2.5">
+              <MapPin size={18} className="text-[#c2f575]" />
               {isEditing ? (
                 <input
                   value={editLocation}
                   onChange={(e) => setEditLocation(e.target.value)}
                   placeholder="Location"
-                  className="bg-transparent text-gray-500 font-bold text-xs outline-none border-b border-gray-300 w-24"
+                  className="bg-transparent text-gray-400 font-black text-[11px] uppercase tracking-widest outline-none border-b border-gray-200"
                 />
               ) : (
-                <span className="text-gray-500 font-bold text-[10px] uppercase tracking-[0.2em]">{profileUser.location || 'Global'}</span>
+                <span className="text-gray-400 font-black text-[11px] uppercase tracking-[0.2em]">{profileUser.location || 'Global'}</span>
               )}
             </div>
 
             {role === UserRole.TUTOR ? (
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-black text-indigo-900">{tutorStudentsCount || 0}</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Students</span>
+              <div className="flex items-center gap-10">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl font-black text-indigo-900">{tutorStudentsCount || 0}</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Students</span>
                 </div>
-                <div className="w-1 h-1 rounded-full bg-gray-300"></div>
-                <button onClick={handleViewFollowers} className="flex items-center gap-2 hover:scale-105 transition-transform group">
-                  <span className="text-lg font-black text-indigo-900 group-hover:text-indigo-600">{profileUser.followersCount || 0}</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Followers</span>
+                <button onClick={handleViewFollowers} className="flex items-center gap-3 group">
+                  <span className="text-xl font-black text-indigo-900 group-hover:text-indigo-600 transition-colors">{profileUser.followersCount || 0}</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Followers</span>
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-6">
-                <button onClick={handleViewFollowers} className="flex items-center gap-2 hover:scale-105 transition-transform group">
-                  <span className="text-lg font-black text-indigo-900 group-hover:text-indigo-600">{profileUser.followersCount || 0}</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Followers</span>
+              <div className="flex items-center gap-10">
+                <button onClick={handleViewFollowers} className="flex items-center gap-3 group">
+                  <span className="text-xl font-black text-indigo-900 group-hover:text-indigo-600 transition-colors">{profileUser.followersCount || 0}</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Followers</span>
                 </button>
-                <div className="w-1 h-1 rounded-full bg-gray-300"></div>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-black text-indigo-900">{profileUser.followingCount || 0}</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Following</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xl font-black text-indigo-900">{profileUser.followingCount || 0}</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Following</span>
                 </div>
               </div>
             )}
@@ -551,7 +546,6 @@ const ProfileView: React.FC = () => {
   const [editEducation, setEditEducation] = useState<any[]>([]);
   const [editSkills, setEditSkills] = useState<string[]>([]);
 
-  const { parsePDF, isParsing: isParsingPDF } = useLinkedInParser();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Product/Zone Listing State (for Tutor Self-View)
@@ -561,11 +555,6 @@ const ProfileView: React.FC = () => {
   const [productPrice, setProductPrice] = useState('');
   const [productCurrency, setProductCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
   const [isListingProduct, setIsListingProduct] = useState(false);
-
-  // LinkedIn Import State
-  const [showLinkedInModal, setShowLinkedInModal] = useState(false);
-  const [linkedinUrl, setLinkedinUrl] = useState('');
-  const [isImporting, setIsImporting] = useState(false);
 
   // Data State
   const [zones, setZones] = useState<any[]>([]);
@@ -653,11 +642,22 @@ const ProfileView: React.FC = () => {
     const zonesData = zSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     setZones(zonesData);
 
+    // Fetch student count from each zone's students collection
     let studentsCount = 0;
-    zonesData.forEach((z: any) => {
-      studentsCount += (z.students?.length || 0);
-    });
+    for (const zone of zonesData) {
+      const coll = collection(db, 'zones', zone.id, 'students');
+      const snapshot = await getCountFromServer(coll);
+      studentsCount += snapshot.data().count;
+    }
     setTutorStudentsCount(studentsCount);
+
+    // Fetch accurate followers count
+    const followersColl = collection(db, 'followers');
+    const followersQuery = query(followersColl, where('followingId', '==', uid));
+    const followersSnap = await getCountFromServer(followersQuery);
+    const actualFollowersCount = followersSnap.data().count;
+
+    setProfileUser((prev: any) => prev ? { ...prev, followersCount: actualFollowersCount } : null);
 
     // 3. Products
     const qProds = query(collection(db, 'products'), where('tutorId', '==', uid));
@@ -776,34 +776,6 @@ const ProfileView: React.FC = () => {
     }
   };
 
-  const handleImportLinkedIn = async () => {
-    // Legacy URL import - keeping for now but replaced in UI
-  };
-
-  const handleImportLinkedInPDF = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUser || !db) return;
-    setIsImporting(true);
-
-    try {
-      const parsedData = await parsePDF(file);
-
-      // We populate the edit state so the user can review before saving
-      setEditBio(parsedData.bio || editBio);
-      setEditExperience(parsedData.experience || editExperience);
-      setEditEducation(parsedData.education || editEducation);
-      // User requested ONLY Bio, Experience, Education. Ignoring Name, Skills, Headline.
-
-      setIsImporting(false);
-      setShowLinkedInModal(false);
-      alert("LinkedIn PDF parsed! Review and click 'Save Changes' to update your profile.");
-    } catch (e) {
-      console.error("Error importing from LinkedIn PDF", e);
-      setIsImporting(false);
-      alert("Failed to parse LinkedIn PDF. Please ensure it's a valid LinkedIn profile PDF and try again.");
-    }
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner') => {
     const file = e.target.files?.[0];
     if (file) {
@@ -884,7 +856,7 @@ const ProfileView: React.FC = () => {
         editName={editName} setEditName={setEditName} editHeadline={editHeadline} setEditHeadline={setEditHeadline}
         editLocation={editLocation} setEditLocation={setEditLocation} isFollowing={isFollowing} handleFollow={handleFollow}
         bannerInputRef={bannerInputRef} handleFileChange={handleFileChange} avatarInputRef={avatarInputRef}
-        setIsEditing={setIsEditing} handleSaveProfile={handleSaveProfile} setShowLinkedInModal={setShowLinkedInModal} setShowProductModal={setShowProductModal} navigate={navigate}
+        setIsEditing={setIsEditing} handleSaveProfile={handleSaveProfile} setShowProductModal={setShowProductModal} navigate={navigate}
         handleViewFollowers={handleViewFollowers} tutorStudentsCount={tutorStudentsCount}
       />
 
@@ -903,45 +875,7 @@ const ProfileView: React.FC = () => {
         )}
       </div>
 
-      {/* LinkedIn Import Modal */}
-      {showLinkedInModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#000814]/60 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-[0_50px_100px_rgba(0,0,0,0.4)] border border-white/20 overflow-hidden animate-in zoom-in-95 duration-500">
-            <div className="bg-[#0077b5] p-12 text-white relative">
-              <div className="absolute top-8 right-8">
-                <button onClick={() => setShowLinkedInModal(false)} className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white hover:text-[#0077b5] transition-all"><X size={24} /></button>
-              </div>
-              <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mb-8 shadow-2xl">
-                <span className="text-[#0077b5] text-5xl font-black">in</span>
-              </div>
-              <h3 className="text-4xl font-black tracking-tighter mb-4">Import Data</h3>
-              <p className="text-blue-100 text-lg font-medium leading-relaxed">Upload your LinkedIn PDF to sync your professional profile instantly.</p>
-            </div>
-            <div className="p-12 space-y-10">
-              <div className="space-y-4">
-                <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em] ml-2">LinkedIn Profile PDF</label>
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2rem] px-10 py-12 flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-[#0077b5]/50 transition-all"
-                >
-                  <FileText size={48} className="text-gray-300" />
-                  <p className="text-indigo-900 font-bold">{isImporting ? 'Parsing PDF...' : 'Click to upload LinkedIn PDF'}</p>
-                  <p className="text-xs text-gray-400">PDF must be exported from your LinkedIn profile</p>
-                  <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleImportLinkedInPDF} />
-                </div>
-              </div>
-              <div className="bg-blue-50/50 p-8 rounded-[2rem] border border-blue-100 flex gap-6 items-start">
-                <div className="shrink-0 w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-[#0077b5] shadow-sm"><ShieldCheck size={24} /></div>
-                <div className="space-y-1">
-                  <p className="text-sm text-[#0077b5] font-black italic">How to get your PDF:</p>
-                  <p className="text-[11px] text-[#0077b5]/80 font-medium leading-relaxed">LinkedIn Profile → More → Save to PDF</p>
-                </div>
-              </div>
-            </div>
-            <div className="px-12 py-8 bg-gray-50 text-center"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-[#0077b5]">AI-POWERED SYNC READY</p></div>
-          </div>
-        </div>
-      )}
+
 
       {/* Product Listing Modal (for Tutor) */}
       {showProductModal && (
