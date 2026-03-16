@@ -26,6 +26,7 @@ import BookingPage from './pages/BookingPage';
 import PricingPage from './pages/PricingPage';
 import OnboardingSystem from './pages/OnboardingSystem';
 import SandboxLive from './pages/SandboxLive';
+import LandingPage from './pages/LandingPage';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
@@ -42,7 +43,7 @@ const AppContent: React.FC = () => {
     setIsSidebarOpen(prev => !prev);
   };
 
-  const isPublicRoute = location.pathname.startsWith('/verify/') || location.pathname.startsWith('/u/');
+  const isPublicRoute = location.pathname.startsWith('/verify/') || location.pathname.startsWith('/u/') || location.pathname === '/';
   const isAuthRoute = location.pathname === '/auth';
   const isSandboxRoute = location.pathname.startsWith('/sandbox/');
   const isLiveRoute = location.pathname.startsWith('/live/');
@@ -72,6 +73,7 @@ const AppContent: React.FC = () => {
           <Route path="/verify/:id" element={<VerificationPortal />} />
           <Route path="/u/:id" element={<ProfileView />} />
           <Route path="/profile/:id" element={<ProfileView />} />
+          <Route path="/" element={<LandingPage />} />
         </Routes>
       </main>
     );
@@ -85,7 +87,6 @@ const AppContent: React.FC = () => {
 
         <main className={`flex-1 overflow-y-auto ${isLiveRoute ? 'p-0' : 'p-4 md:p-8'} custom-scrollbar relative`}>
           <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/onboarding" element={<OnboardingSystem />} />
             <Route path="/dashboard" element={<Dashboard role={role} />} />
             <Route path="/classroom" element={role === UserRole.STUDENT ? <Classroom /> : <Navigate to="/workplace" />} />

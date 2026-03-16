@@ -39,7 +39,7 @@ const PricingPage: React.FC = () => {
                 throw new Error('Failed to create Razorpay order. The server returned an invalid response.');
             }
             const options = {
-                key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'TEST_KEY_ID',
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY || 'TEST_KEY_ID',
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: 'Nunma Academy',
