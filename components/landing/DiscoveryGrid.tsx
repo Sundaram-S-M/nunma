@@ -76,8 +76,8 @@ const DiscoveryGrid: React.FC = () => {
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Platform is Live
           </div>
-          <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6">
-            Discover Active <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500">Zones</span>
+          <h2 className="text-3xl md:text-5xl font-black text-brand-slate mb-6">
+            Discover Active <span className="text-brand-blue">Zones</span>
           </h2>
           <p className="text-xl text-slate-600 mb-2">
             Explore premium learning environments currently hosted on Nunma.
@@ -88,7 +88,7 @@ const DiscoveryGrid: React.FC = () => {
           {zones.map((zone) => (
             <div 
               key={zone.id} 
-              className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 border border-slate-200 flex flex-col h-full hover:-translate-y-1 cursor-pointer"
+              className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:border-slate-300 transition-all duration-300 border border-slate-200 flex flex-col h-full cursor-pointer"
               onClick={() => navigate(`/checkout/${zone.id}`)} // Redirects to a join/explore page
             >
               <div className="h-48 bg-slate-100 relative overflow-hidden flex-shrink-0">
@@ -99,7 +99,7 @@ const DiscoveryGrid: React.FC = () => {
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center opacity-90 group-hover:scale-105 transition-transform duration-500">
+                  <div className="w-full h-full bg-brand-blue flex items-center justify-center opacity-90 transition-transform duration-500">
                     <span className="text-white/50 font-black text-4xl">{zone.name.substring(0, 2).toUpperCase()}</span>
                   </div>
                 )}
@@ -115,12 +115,12 @@ const DiscoveryGrid: React.FC = () => {
                 
                 <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-brand-blue font-bold text-xs">
                       {zone.ownerName?.charAt(0) || 'T'}
                     </div>
                     <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">{zone.ownerName || 'Tutor'}</span>
                   </div>
-                  <button className="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center gap-1 transition-colors">
+                  <button className="text-brand-blue hover:text-blue-700 font-medium text-sm flex items-center gap-1 transition-colors">
                     <PlayCircle className="w-4 h-4" />
                     Enter
                   </button>

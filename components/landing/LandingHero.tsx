@@ -6,53 +6,49 @@ const LandingHero: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="relative overflow-hidden pt-32 pb-20 lg:pt-48 lg:pb-32">
+    <section className="relative overflow-hidden min-h-[90vh] flex flex-col justify-center py-20">
       {/* Background Decor */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-br from-indigo-100 to-violet-50 rounded-full blur-3xl opacity-60 -z-10 pointer-events-none"></div>
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-slate-50 rounded-full blur-3xl opacity-60 -z-10 pointer-events-none"></div>
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col items-center text-center">
         
         {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 font-medium text-sm mb-8 animate-fade-in-up">
-          <Zap className="w-4 h-4 text-indigo-500 fill-indigo-500" />
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 border border-slate-200 text-brand-blue font-medium text-sm mb-8">
+          <Zap className="w-4 h-4 text-brand-blue fill-brand-blue" />
           <span>The Next Generation OS for Educators</span>
         </div>
         
         {/* Main Headline */}
-        <h1 className="text-5xl md:text-7xl font-black text-slate-900 tracking-tight leading-[1.1] mb-8 max-w-5xl animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-          Build your teaching empire with a{' '}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 bg-300% animate-gradient">
-            premium platform.
-          </span>
+        <h1 className="text-5xl md:text-7xl font-black text-brand-slate tracking-tight leading-[1.1] mb-8 max-w-5xl">
+          Build your teaching empire with a <span className="text-brand-blue">premium platform.</span>
         </h1>
         
         {/* Subheadline */}
-        <p className="text-xl md:text-2xl text-slate-600 mb-12 max-w-3xl leading-relaxed animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+        <p className="text-xl md:text-2xl text-slate-600 mb-12 max-w-3xl leading-relaxed">
           We've moved beyond the traditional LMS. Deliver high-performance learning, leverage AI co-hosts, and issue cryptographically secure credentials.
         </p>
         
         {/* Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 items-center animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+        <div className="flex flex-col sm:flex-row gap-4 items-center">
           <button 
             onClick={() => navigate('/auth')}
-            className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 bg-slate-900 text-white rounded-full font-semibold text-lg hover:bg-indigo-600 transition-all shadow-xl hover:shadow-indigo-500/25 overflow-hidden w-full sm:w-auto hover:-translate-y-0.5"
+            className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 bg-brand-blue text-white rounded-full font-semibold text-lg hover:bg-blue-700 transition-colors shadow-sm overflow-hidden w-full sm:w-auto"
           >
             <span className="relative z-10">Start for Free</span>
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform relative z-10" />
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-violet-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           </button>
           
           <a 
             href="#demo"
-            className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-white text-slate-700 rounded-full font-semibold text-lg border-2 border-slate-100 hover:border-indigo-100 hover:bg-slate-50 transition-all w-full sm:w-auto"
+            className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-white text-slate-700 rounded-full font-semibold text-lg border-2 border-slate-100 hover:bg-slate-50 transition-colors w-full sm:w-auto"
           >
-            <PlayCircle className="w-5 h-5 text-indigo-600" />
+            <PlayCircle className="w-5 h-5 text-brand-blue" />
             <span>Watch Demo</span>
           </a>
         </div>
 
         {/* Social Proof metrics */}
-        <div className="mt-20 pt-10 border-t border-slate-200 w-full max-w-4xl grid grid-cols-2 md:grid-cols-4 gap-8 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+        <div className="mt-20 pt-10 border-t border-slate-200 w-full max-w-4xl grid grid-cols-2 md:grid-cols-4 gap-8">
           <div className="flex flex-col items-center">
             <span className="text-3xl font-black text-slate-900">2x</span>
             <span className="text-sm text-slate-500 font-medium">Faster Video Load</span>

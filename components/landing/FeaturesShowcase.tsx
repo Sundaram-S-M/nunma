@@ -3,16 +3,16 @@ import { Layers, BrainCircuit, ShieldAlert, Globe2, Fingerprint } from 'lucide-r
 
 const features = [
   {
-    icon: <Layers className="w-8 h-8 text-indigo-600" />,
+    icon: <Layers className="w-8 h-8 text-brand-blue" />,
     title: 'Adaptive Learning Zones',
     description: 'Your Digital Campus. Self-contained, premium learning environments. Secure video streaming with Bunny Stream integration prevents unauthorized hotlinking.',
-    color: 'bg-indigo-50 border-indigo-100',
+    color: 'bg-slate-50 border-slate-100',
   },
   {
-    icon: <BrainCircuit className="w-8 h-8 text-purple-600" />,
+    icon: <BrainCircuit className="w-8 h-8 text-brand-blue" />,
     title: 'AI-Driven Intelligence',
     description: 'Powered by Gemini. Upload a document to generate MCQs in seconds. In your LiveRoom, a Gemini co-host answers real-time questions and analyzes sentiment.',
-    color: 'bg-purple-50 border-purple-100',
+    color: 'bg-slate-50 border-slate-100',
   },
   {
     icon: <ShieldAlert className="w-8 h-8 text-rose-600" />,
@@ -39,8 +39,8 @@ const FeaturesShowcase: React.FC = () => {
     <section id="features" className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6">
-            The infrastructure to <span className="text-indigo-600">scale.</span>
+          <h2 className="text-3xl md:text-5xl font-black text-brand-slate mb-6">
+            The infrastructure to <span className="text-brand-blue">scale.</span>
           </h2>
           <p className="text-xl text-slate-600">
             Everything you need to deliver high-performance proof-of-work locked behind enterprise-grade security.
@@ -51,7 +51,7 @@ const FeaturesShowcase: React.FC = () => {
           {features.map((feature, idx) => (
             <div 
               key={idx}
-              className={`p-8 rounded-3xl border ${feature.color} hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group bg-white`}
+              className={`p-8 rounded-3xl border ${feature.color} hover:border-brand-blue/30 transition-all duration-300 group bg-white`}
             >
               <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                 {feature.icon}

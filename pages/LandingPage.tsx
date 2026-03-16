@@ -4,84 +4,98 @@ import LandingHero from '../components/landing/LandingHero';
 import FeaturesShowcase from '../components/landing/FeaturesShowcase';
 import DiscoveryGrid from '../components/landing/DiscoveryGrid';
 import DemoBookingWidget from '../components/landing/DemoBookingWidget';
+import BlogSection from '../components/landing/BlogSection';
 
 const LandingPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <>
+      {/* Main Content */}
+      <LandingHero />
+      <FeaturesShowcase />
+      <DiscoveryGrid />
+      <BlogSection />
       
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-indigo-100/50 transition-all duration-300">
+      {/* Call to Action & Demo Section */}
+      <section id="demo" className="py-24 bg-white relative overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-slate-50 rounded-full blur-3xl opacity-50 -z-10 pointer-events-none"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-2xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600">
-                Nunma
-              </span>
-            </div>
-            <div className="flex items-center gap-6">
-              <a href="#features" className="hidden md:block text-slate-600 hover:text-indigo-600 font-medium transition-colors">Features</a>
-              <a href="#discovery" className="hidden md:block text-slate-600 hover:text-indigo-600 font-medium transition-colors">Discover</a>
-              <a href="/#/auth" className="text-slate-600 hover:text-indigo-600 font-medium transition-colors">Sign In</a>
-              <a 
-                href="#demo"
-                className="bg-slate-900 hover:bg-indigo-600 text-white px-6 py-2.5 rounded-full font-medium transition-all shadow-md hover:shadow-xl hover:-translate-y-0.5"
-              >
-                Book Demo
-              </a>
-            </div>
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <h2 className="text-4xl md:text-5xl font-black text-brand-slate mb-6 tracking-tight">
+              Ready to build your <span className="text-brand-blue">empire?</span>
+            </h2>
+            <p className="text-xl text-slate-600">
+              See how Nunma transforms the way you teach, assess, and monetize globally. Book a personalized walkthrough.
+            </p>
+          </div>
+          
+          <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+            <DemoBookingWidget />
           </div>
         </div>
-      </nav>
+      </section>
 
-      {/* Main Content */}
-      <main className="pt-20">
-        <LandingHero />
-        <FeaturesShowcase />
-        <DiscoveryGrid />
-        
-        {/* Call to Action & Demo Section */}
-        <section id="demo" className="py-24 bg-white relative overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-indigo-50 rounded-full blur-3xl opacity-50 -z-10 pointer-events-none"></div>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center max-w-3xl mx-auto mb-16">
-              <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">
-                Ready to build your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">empire?</span>
-              </h2>
-              <p className="text-xl text-slate-600">
-                See how Nunma transforms the way you teach, assess, and monetize globally. Book a personalized walkthrough.
+      {/* 3-Column Footer */}
+      <footer className="bg-[#0f172a] text-slate-400 pt-20 pb-10 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-16">
+            
+            {/* Left Column */}
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 mb-6">
+                <Sparkles className="w-6 h-6 text-nunma-lime" />
+                <span className="text-2xl font-black tracking-tight text-white">Nunma</span>
+              </div>
+              <p className="text-slate-300 font-medium mb-4">
+                Building the Trust Layer for Education.
+              </p>
+              <p className="text-slate-400">
+                Empowering Thalas to teach, earn, and build a verifiable legacy. 🚀
               </p>
             </div>
+
+            {/* Middle Column - Product */}
+            <div>
+              <h3 className="text-white font-bold mb-6 text-lg">Product</h3>
+              <ul className="space-y-4">
+                <li><a href="#" className="hover:text-nunma-lime transition-colors">Create a Zone</a></li>
+                <li><a href="#" className="hover:text-nunma-lime transition-colors">Thala Pro Features</a></li>
+                <li><a href="#" className="hover:text-nunma-lime transition-colors">Proof-of-Work Portfolios</a></li>
+                <li><a href="#" className="hover:text-nunma-lime transition-colors">Institutional Licensing</a></li>
+              </ul>
+            </div>
+
+            {/* Right Column - Company */}
+            <div>
+              <h3 className="text-white font-bold mb-6 text-lg">Company</h3>
+              <ul className="space-y-4">
+                <li><a href="/#/about" className="hover:text-nunma-lime transition-colors">About Us (Founder Stories)</a></li>
+                <li><a href="/#/success" className="hover:text-nunma-lime transition-colors">Success Stories</a></li>
+                <li><a href="/#/legal" className="hover:text-nunma-lime transition-colors">Terms & Privacy</a></li>
+                <li><a href="/#/support" className="hover:text-nunma-lime transition-colors">Contact Support</a></li>
+              </ul>
+            </div>
             
-            <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden">
-              <DemoBookingWidget />
+          </div>
+          
+          {/* Bottom Bar */}
+          <div className="pt-8 border-t border-slate-800/50 flex flex-col md:flex-row items-center justify-between text-sm">
+            <p>&copy; {new Date().getFullYear()} Nunma. Built with vission</p>
+            <div className="flex items-center gap-4 mt-4 md:mt-0">
+              <span className="text-slate-500">Follow us on:</span>
+              <div className="flex gap-4">
+                <a href="#" className="hover:text-nunma-lime transition-colors">LinkedIn</a>
+                <span className="text-slate-700">|</span>
+                <a href="#" className="hover:text-nunma-lime transition-colors">Instagram</a>
+                <span className="text-slate-700">|</span>
+                <a href="#" className="hover:text-nunma-lime transition-colors">YouTube</a>
+                <span className="text-slate-700">|</span>
+                <a href="#" className="hover:text-nunma-lime transition-colors">X</a>
+              </div>
             </div>
           </div>
-        </section>
-      </main>
-
-      {/* Simplified Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center">
-            <div className="flex items-center gap-2 mb-6 opacity-50">
-              <Sparkles className="w-5 h-5 text-white" />
-              <span className="text-xl font-bold text-white tracking-tight">Nunma</span>
-            </div>
-            <p className="text-sm pb-8 border-b border-slate-800 w-full text-center">
-              The premium operating system for modern educators.
-            </p>
-            <div className="w-full flex justify-between items-center mt-8 text-xs">
-                <p>&copy; {new Date().getFullYear()} Nunma Platforms. All rights reserved.</p>
-                <div className="flex gap-4">
-                    <a href="#" className="hover:text-white transition-colors">Privacy</a>
-                    <a href="#" className="hover:text-white transition-colors">Terms</a>
-                </div>
-            </div>
         </div>
       </footer>
-    </div>
+    </>
   );
 };
 

@@ -43,8 +43,8 @@ const DemoBookingWidget: React.FC = () => {
     <div className="w-full bg-white relative">
       <div className="p-8 md:p-12">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
-            <CheckCircle2 className="w-6 h-6 text-indigo-600" />
+          <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center">
+            <CheckCircle2 className="w-6 h-6 text-brand-blue" />
           </div>
           <div>
             <h3 className="text-2xl font-black text-slate-900">Book your Demo</h3>
@@ -70,7 +70,7 @@ const DemoBookingWidget: React.FC = () => {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-11 pr-4 py-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all sm:text-sm bg-slate-50"
+                    className="block w-full pl-11 pr-4 py-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-blue focus:border-transparent transition-all sm:text-sm bg-slate-50"
                     placeholder="founder@empire.com"
                     disabled={widgetState === 'submitting'}
                   />
@@ -80,7 +80,7 @@ const DemoBookingWidget: React.FC = () => {
               <button
                 type="submit"
                 disabled={widgetState === 'submitting'}
-                className="w-full flex items-center justify-center gap-2 py-4 px-6 border border-transparent rounded-2xl shadow-sm text-base font-bold text-white bg-slate-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-70 disabled:cursor-not-allowed group hover:-translate-y-0.5"
+                className="w-full flex items-center justify-center gap-2 py-4 px-6 border border-transparent rounded-2xl shadow-sm text-base font-bold text-white bg-brand-blue hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors disabled:opacity-70 disabled:cursor-not-allowed group"
               >
                 {widgetState === 'submitting' ? (
                   <>

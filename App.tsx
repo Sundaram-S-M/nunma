@@ -27,6 +27,8 @@ import PricingPage from './pages/PricingPage';
 import OnboardingSystem from './pages/OnboardingSystem';
 import SandboxLive from './pages/SandboxLive';
 import LandingPage from './pages/LandingPage';
+import PublicLayout from './layouts/PublicLayout';
+import LegalPolicy from './pages/LegalPolicy';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
@@ -66,17 +68,16 @@ const AppContent: React.FC = () => {
   }
 
   if (isPublicRoute || isAuthRoute) {
-    return (
-      <main className="min-h-screen bg-[#fbfbfb]">
+      <main className="min-h-screen">
         <Routes>
           <Route path="/auth" element={!isAuthenticated ? <Auth /> : <Navigate to="/dashboard" />} />
           <Route path="/verify/:id" element={<VerificationPortal />} />
           <Route path="/u/:id" element={<ProfileView />} />
           <Route path="/profile/:id" element={<ProfileView />} />
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/legal" element={<PublicLayout><LegalPolicy /></PublicLayout>} />
+          <Route path="/" element={<PublicLayout><LandingPage /></PublicLayout>} />
         </Routes>
       </main>
-    );
   }
 
   return (
