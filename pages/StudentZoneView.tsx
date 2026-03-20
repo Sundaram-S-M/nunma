@@ -39,6 +39,7 @@ import {
 import LiveSessionStatus from '../components/LiveSessionStatus';
 import { generateOpenBadgeVC, downloadVCAsJSON } from '../utils/vcUtils';
 import { useAuth } from '../context/AuthContext';
+import { BunnyVideoPlayer } from '../components/BunnyVideoPlayer';
 
 
 
@@ -1334,74 +1335,4 @@ const StudentZoneView: React.FC = () => {
 
 export default StudentZoneView;
 
-const BunnyVideoPlayer: React.FC<{ videoId: string; title: string; onComplete?: () => void }> = ({ videoId, title, onComplete }) => {
-  const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      // Standard Bunny.net player events via postMessage
-      try {
-        const data = JSON.parse(e.data);
-        if (data.event === 'ended') {
-          console.log("Bunny: Video Finished");
-          if (onComplete) onComplete();
-        }
-      } catch (err) {
-        // Not a Bunny message or not JSON
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [onComplete]);
-
-  useEffect(() => {
-    const fetchToken = async () => {
-      try {
-        const generateToken = httpsCallable(functions, 'generateBunnyToken');
-        const { data }: any = await generateToken({ videoId });
-
-        // Construct Signed URL
-        const signedUrl = `https://iframe.bunny.net/embed/${videoId}?token=${data.token}&expires=${data.expires}`;
-        setUrl(signedUrl);
-      } catch (err: any) {
-        console.error("Token Generation Failed:", err);
-        setError("Secure playback authorization failed.");
-      }
-    };
-    fetchToken();
-  }, [videoId]);
-
-  if (error) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-12 text-center">
-        <AlertTriangle size={48} className="text-red-500 mb-4" />
-        <h3 className="text-indigo-900 font-black text-xl mb-2">Access Denied</h3>
-        <p className="text-gray-400 text-sm max-w-xs">{error}</p>
-      </div>
-    );
-  }
-
-  if (!url) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-6"></div>
-        <p className="text-xs font-black uppercase tracking-widest text-indigo-900">Authenticating Stream...</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full h-full rounded-[3rem] overflow-hidden bg-black shadow-2xl relative">
-      <iframe
-        src={url}
-        loading="lazy"
-        className="w-full h-full absolute inset-0 border-0"
-        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-        allowFullScreen={true}
-        title={title}
-      />
-    </div>
-  );
-};

@@ -4,7 +4,8 @@ import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import {
   collection, query, where, onSnapshot, orderBy,
-  getDocs, limit, doc, getDoc, addDoc, deleteDoc, updateDoc
+  getDocs, limit, doc, getDoc, addDoc, deleteDoc, updateDoc,
+  getCountFromServer // <-- Added to calculate exact student count
 } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import {
@@ -112,11 +113,16 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         // C. Calculate Basic Stats based on Zones
         let totalStudents = 0;
         let totalEarnings = (user as any).earnings || 0; // Use user.earnings if available, fallback to 0
-        zonesList.forEach(z => {
-          if (z.role === 'tutor') {
-            totalStudents += (z.students || 0); // Use z.students array count or number
+        
+        if (role === UserRole.TUTOR) {
+          for (const z of zonesList) {
+            if (z.role === 'tutor') {
+              const studentsColl = collection(db, 'zones', z.id, 'students');
+              const snap = await getCountFromServer(studentsColl);
+              totalStudents += snap.data().count;
+            }
           }
-        });
+        }
 
         if (role === UserRole.STUDENT) {
           const studentZonesCount = zonesList.filter(z => z.role === 'student').length;
@@ -130,7 +136,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
           setStats([
             { label: 'Active Zones', value: zonesList.filter(z => z.role === 'tutor').length },
             { label: 'Total Students', value: totalStudents },
-            { label: 'Hours Streamed', value: '124' }, // Placeholder
+            { label: 'Hours Streamed', value: '0' }, // Dynamically updated below
             { label: 'Earnings', value: `₹${totalEarnings.toLocaleString('en-IN')}` }
           ]);
         }
@@ -198,6 +204,31 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
   const monthName = currentMonth.toLocaleString('default', { month: 'long' }).toUpperCase();
   const year = currentMonth.getFullYear();
+
+  // 5. Calculate Streamed Hours for Current Month dynamically
+  useEffect(() => {
+    if (role !== UserRole.TUTOR) return;
+    const currentMonthStr = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}`;
+    let totalMinutes = 0;
+    
+    liveSessions.forEach(session => {
+      // Only count if session happened this month
+      if (session.date && session.date.startsWith(currentMonthStr)) {
+        totalMinutes += parseInt(session.duration || '60', 10);
+      }
+    });
+    
+    const totalHours = Math.round(totalMinutes / 60);
+
+    setStats(prevStats => {
+      const newStats = [...prevStats];
+      const hsIndex = newStats.findIndex(s => s.label === 'Hours Streamed');
+      if (hsIndex !== -1 && newStats[hsIndex].value !== totalHours.toString()) {
+        newStats[hsIndex].value = totalHours.toString();
+      }
+      return newStats;
+    });
+  }, [liveSessions, currentMonth, year, role]);
   const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
   const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m, 1).getDay();
   const daysCount = getDaysInMonth(year, currentMonth.getMonth());

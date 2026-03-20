@@ -1,4 +1,13 @@
-
+/**
+ * Workforce Component - Tutor Dashboard
+ * 
+ * Features:
+ * 1. REAL-TIME KYC GATING: Blocks high-level creation features (Zones, Live, Products) 
+ *    based on user.kycStatus (VERIFIED/PENDING/FAILED/null).
+ * 2. TIER-BASED METRICS: Displays limits for Storage, Streams, and Students based on 
+ *    the assigned 'current_tier'.
+ * 3. DYNAMIC STATUS BANNERS: Provides visual feedback on Razorpay onboarding progress.
+ */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -26,7 +35,8 @@ import { VideoUploadModal } from '../components/VideoUploadModal';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 
 import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { db } from '../utils/firebase';
+import { db, functions } from '../utils/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../context/AuthContext';
 
 const Workplace: React.FC = () => {
@@ -35,6 +45,24 @@ const Workplace: React.FC = () => {
   const [productSubTab, setProductSubTab] = useState<'material' | 'service' | 'mentorship'>('material');
   const [showProductModal, setShowProductModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [isDeployingKyc, setIsDeployingKyc] = useState(false);
+
+  const handleStartKyc = async () => {
+    setIsDeployingKyc(true);
+    try {
+      const onboard = httpsCallable(functions, 'createTutorLinkedAccount');
+      const res = await onboard();
+      const data = res.data as { onboardingUrl: string };
+      if (data.onboardingUrl) {
+        window.location.href = data.onboardingUrl;
+      }
+    } catch (e) {
+      console.error('KYC error:', e);
+      alert('Failed to start KYC onboarding. Ensure you have provided legal name under tax settings.');
+    } finally {
+      setIsDeployingKyc(false);
+    }
+  };
 
   // List Product State
   const [productTitle, setProductTitle] = useState('');
@@ -67,13 +95,13 @@ const Workplace: React.FC = () => {
   ];
 
   const { user } = useAuth();
-  const currentTier = (user as any)?.current_tier || 'STARTER';
+  const currentTier = user?.current_tier || 'STARTER';
   const tierLimits = {
     'STARTER': 10,
     'STANDARD': 25,
     'PREMIUM': 60
   };
-  const streamLimit = tierLimits[currentTier as keyof typeof tierLimits] || 10;
+  const streamLimit = tierLimits[currentTier] || 10;
 
   const currentMonthIdx = new Date().getMonth();
   const currentYear = new Date().getFullYear();
@@ -247,6 +275,65 @@ const Workplace: React.FC = () => {
           <p className="text-gray-400 font-medium text-sm">Design, manage, and scale your professional offerings.</p>
         </div>
 
+        {/* KYC Status Banner */}
+        {user?.role === 'TUTOR' && (
+          <div className="animate-in fade-in slide-in-from-top-4 duration-700">
+            {user.kycStatus === 'VERIFIED' && user.razorpay_account_id ? (
+              <div className="bg-[#c2f575]/10 border border-[#c2f575]/30 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
+                    <Check size={24} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black text-[#040457] tracking-tight">Ready to Sell</h4>
+                    <p className="text-xs font-bold text-[#040457]/60 uppercase tracking-widest">KYC VERIFIED & RAZORPAY ACTIVE</p>
+                  </div>
+                </div>
+                <div className="hidden md:block">
+                  <span className="text-[10px] font-black text-[#040457] uppercase tracking-[0.2em] bg-[#c2f575] px-4 py-2 rounded-full">LIVE ON PLATFORM</span>
+                </div>
+              </div>
+            ) : user.kycStatus === 'PENDING' ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 shadow-sm animate-pulse">
+                    <Clock size={24} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black text-amber-900 tracking-tight">Verification in Progress</h4>
+                    <p className="text-xs font-bold text-amber-800/60 uppercase tracking-widest">RAZORPAY IS REVIEWING YOUR DETAILS</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate('/settings/billing')}
+                  className="px-6 py-3 bg-white border border-amber-200 text-amber-900 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-100 transition-all shadow-sm"
+                >
+                  VIEW STATUS
+                </button>
+              </div>
+            ) : (
+              <div className="bg-red-50 border border-red-100 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center text-red-600 shadow-sm">
+                    <X size={24} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black text-red-900 tracking-tight">{user.kycStatus === 'FAILED' ? 'KYC Rejected - Please Update Details' : 'Complete KYC to Accept Payments'}</h4>
+                    <p className="text-xs font-bold text-red-800/60 uppercase tracking-widest">{user.kycStatus === 'FAILED' ? 'PLEASE RE-SUBMIT YOUR DETAILS ON RAZORPAY' : 'REQUIRED TO LAUNCH PAID ZONES & RECEIVE PAYOUTS'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleStartKyc}
+                  disabled={isDeployingKyc}
+                  className="px-8 py-4 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-xl shadow-red-600/20 active:scale-95 disabled:opacity-50"
+                >
+                  {isDeployingKyc ? 'REDIRECTING...' : user.kycStatus === 'FAILED' ? 'RE-VERIFY IDENTITY' : 'START VERIFICATION'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-4 overflow-x-auto pb-4 w-full flex-nowrap [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {/* Cumulative Students Meter */}
           <div className="flex shrink-0 bg-white border border-gray-100 p-4 h-[80px] rounded-2xl shadow-sm items-center gap-5 animate-in zoom-in duration-500 delay-100">
@@ -257,34 +344,34 @@ const Workplace: React.FC = () => {
               <div className="flex justify-between items-end mb-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-[#040457]">Cumulative Students</span>
                 <span className="text-xs font-bold text-gray-400">
-                  {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} / {(user as any)?.subscription_entitlements?.studentLimit || (
+                  {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} / {user?.subscription_entitlements?.studentLimit || (
                     (
-                      currentTier === 'starter' ? 100 :
-                        currentTier === 'standard' ? 250 :
-                          currentTier === 'premium' ? 1000 : 100
-                    ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+                      currentTier === 'STARTER' ? 100 :
+                        currentTier === 'STANDARD' ? 250 :
+                          currentTier === 'PREMIUM' ? 1000 : 100
+                    ) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
                   )}
                 </span>
               </div>
               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-1000 ${(allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
-                    ((user as any)?.subscription_entitlements?.studentLimit || (
+                    (user?.subscription_entitlements?.studentLimit || (
                       (
-                        currentTier === 'starter' ? 100 :
-                          currentTier === 'standard' ? 250 :
-                            currentTier === 'premium' ? 1000 : 100
-                      ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+                        currentTier === 'STARTER' ? 100 :
+                          currentTier === 'STANDARD' ? 250 :
+                            currentTier === 'PREMIUM' ? 1000 : 100
+                      ) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
                     ))) >= 1 ? 'bg-red-500' : 'bg-[#c2f575]'
                     }`}
                   style={{
                     width: `${Math.min(100, (allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
-                      ((user as any)?.subscription_entitlements?.studentLimit || (
+                      (user?.subscription_entitlements?.studentLimit || (
                         (
-                          currentTier === 'starter' ? 100 :
-                            currentTier === 'standard' ? 250 :
-                              currentTier === 'premium' ? 1000 : 100
-                        ) + (((user as any)?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+                          currentTier === 'STARTER' ? 100 :
+                            currentTier === 'STANDARD' ? 250 :
+                              currentTier === 'PREMIUM' ? 1000 : 100
+                        ) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
                       ))) * 100)}%`
                   }}
                 ></div>
@@ -310,34 +397,45 @@ const Workplace: React.FC = () => {
               </div>
             </div>
           </div>
-
+          {/* Feature: Live Classes (Gated by KYC) */}
           <button
             onClick={() => setShowScheduleModal(true)}
-            className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap"
+            disabled={user?.kycStatus !== 'VERIFIED'}
+            title={user?.kycStatus !== 'VERIFIED' ? "Verification required" : ""}
+            className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
-            <Radio size={18} className="text-red-500 group-hover:scale-110 transition-transform" />
+            <Radio size={18} className={`text-red-500 ${user?.kycStatus === 'VERIFIED' && streamsUsed < streamLimit ? "animate-pulse" : ""}`} />
             Schedule Live Class
           </button>
 
+          {/* Feature: Certificate Issuance (Gated by KYC) */}
           <button
             onClick={() => navigate('/certificate-engine')}
-            className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap"
+            disabled={user?.kycStatus !== 'VERIFIED'}
+            title={user?.kycStatus !== 'VERIFIED' ? "Verification required" : ""}
+            className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
             <Award size={18} className="text-[#c2f575] group-hover:scale-110 transition-transform" />
             Issue Certificates
           </button>
 
+          {/* Feature: Digital Products (Gated by KYC) */}
           <button
             onClick={() => navigate('/list-product/flow')}
-            className="shrink-0 bg-[#040457] text-white font-bold px-6 h-[80px] rounded-2xl shadow-xl hover:bg-black transition-all flex items-center gap-3 group whitespace-nowrap"
+            disabled={user?.kycStatus !== 'VERIFIED'}
+            title={user?.kycStatus !== 'VERIFIED' ? "Verification required" : ""}
+            className="shrink-0 bg-[#040457] text-white font-bold px-6 h-[80px] rounded-2xl shadow-xl hover:bg-black transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
             <ShoppingBag size={18} className="text-[#c2f575] group-hover:scale-110 transition-transform" />
             List Digital Product
           </button>
 
+          {/* CRITICAL: Launch New Zone Trigger (Strict KYC Gating) */}
           <button
             onClick={() => navigate('/workplace/launch')}
-            className="shrink-0 bg-[#c2f575] text-[#040457] font-black p-2 pr-6 h-[80px] rounded-[1.25rem] shadow-xl shadow-[#c2f575]/20 hover:scale-[1.03] active:scale-95 transition-all flex items-center gap-4 whitespace-nowrap group"
+            disabled={user?.kycStatus !== 'VERIFIED'}
+            title={user?.kycStatus !== 'VERIFIED' ? "Verification required" : ""}
+            className="shrink-0 bg-[#c2f575] text-[#040457] font-black p-2 pr-6 h-[80px] rounded-[1.25rem] shadow-xl shadow-[#c2f575]/20 hover:scale-[1.03] active:scale-95 transition-all flex items-center gap-4 whitespace-nowrap group disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             <div className="w-16 h-full bg-[#040457] text-[#c2f575] rounded-xl flex items-center justify-center shrink-0 shadow-lg group-hover:rotate-90 transition-transform duration-500">
               <Plus size={20} strokeWidth={3} />

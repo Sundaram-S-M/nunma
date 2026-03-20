@@ -7,7 +7,7 @@ import Confetti from 'react-confetti';
 import { toast, Toaster } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
-import { BookOpen, GraduationCap, ChevronRight, CheckCircle2, ShieldCheck, ArrowRight } from 'lucide-react';
+import { BookOpen, GraduationCap, ChevronRight, CheckCircle2, ShieldCheck, ArrowRight, X } from 'lucide-react';
 
 // Zod Schemas
 const studentSchema = z.object({
@@ -18,7 +18,9 @@ const studentSchema = z.object({
 
 const tutorSchema = z.object({
     phoneNumber: z.string().regex(/^\d{10}$/, "Phone number must be exactly 10 digits"),
-    primarySubject: z.string().min(1, "Primary subject is required"),
+    businessType: z.enum(["individual", "registered"]),
+    legalName: z.string().min(2, "Legal name must be at least 2 characters"),
+    expertise: z.array(z.string()).max(3, "Maximum 3 areas of expertise allowed"),
     academyName: z.string().min(1, "Academy name is required"),
     payoutInfo: z.object({
         accountHolderName: z.string().min(1, "Account holder name is required"),
@@ -43,6 +45,7 @@ const OnboardingSystem: React.FC = () => {
     );
     const [showConfetti, setShowConfetti] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [tagInput, setTagInput] = useState('');
 
     // Define forms
     const studentForm = useForm<StudentFormValues>({
@@ -58,7 +61,9 @@ const OnboardingSystem: React.FC = () => {
         resolver: zodResolver(tutorSchema),
         defaultValues: {
             phoneNumber: '',
-            primarySubject: '',
+            businessType: 'individual',
+            legalName: '',
+            expertise: [],
             academyName: '',
             payoutInfo: {
                 accountHolderName: '',
@@ -114,18 +119,34 @@ const OnboardingSystem: React.FC = () => {
             await updateProfile({
                 tutorProfile: {
                     isComplete: true,
-                    ...data
-                }
+                    phoneNumber: data.phoneNumber,
+                    academyName: data.academyName,
+                    payoutInfo: data.payoutInfo,
+                },
+                taxDetails: {
+                    businessType: data.businessType,
+                    legalName: data.legalName,
+                },
+                expertise: data.expertise
             });
-            setShowConfetti(true);
-            toast.success("Welcome to your new academy, Thala.", {
-                icon: '🏛️',
-                style: { borderRadius: '10px', background: '#333', color: '#fff' }
-            });
-            setTimeout(() => {
+            
+            toast.loading("Initiating Razorpay Verification...", { id: 'rzp' });
+            const { httpsCallable } = await import('firebase/functions');
+            const { functions } = await import('../utils/firebase');
+            
+            const initAccount = httpsCallable<{businessType: string, legalName: string}, {onboardingUrl: string}>(functions, 'createTutorLinkedAccount');
+            const res = await initAccount({ businessType: data.businessType, legalName: data.legalName });
+            
+            if (res.data?.onboardingUrl) {
+                toast.success("Redirecting to Razorpay...", { id: 'rzp' });
+                window.location.href = res.data.onboardingUrl;
+            } else {
+                toast.dismiss('rzp');
+                toast.error("Account created, but no onboarding URL returned.");
                 navigate('/workplace');
-            }, 3000);
+            }
         } catch (err) {
+            toast.dismiss('rzp');
             toast.error('Failed to complete onboarding. Please try again.');
             setIsSubmitting(false);
         }
@@ -297,6 +318,20 @@ const OnboardingSystem: React.FC = () => {
                         </div>
 
                         <form onSubmit={tutorForm.handleSubmit(onSubmitTutor)} className="space-y-6">
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Business Type</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <label className={`cursor-pointer border-2 rounded-2xl p-4 flex items-center gap-3 transition-all ${tutorForm.watch("businessType") === "individual" ? "border-[#c2f575] bg-[#c2f575]/10" : "border-gray-100 bg-white hover:border-gray-200"}`}>
+                                        <input type="radio" value="individual" {...tutorForm.register("businessType")} className="w-5 h-5 text-[#040457] border-gray-300 focus:ring-[#c2f575]" />
+                                        <span className="font-bold text-[#040457] text-sm">Individual Tutor (PAN)</span>
+                                    </label>
+                                    <label className={`cursor-pointer border-2 rounded-2xl p-4 flex items-center gap-3 transition-all ${tutorForm.watch("businessType") === "registered" ? "border-[#c2f575] bg-[#c2f575]/10" : "border-gray-100 bg-white hover:border-gray-200"}`}>
+                                        <input type="radio" value="registered" {...tutorForm.register("businessType")} className="w-5 h-5 text-[#040457] border-gray-300 focus:ring-[#c2f575]" />
+                                        <span className="font-bold text-[#040457] text-sm">Registered Academy (GST)</span>
+                                    </label>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Academy Name</label>
@@ -310,15 +345,54 @@ const OnboardingSystem: React.FC = () => {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Primary Subject</label>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">
+                                        {tutorForm.watch("businessType") === "individual" ? "Full Name (As per PAN)" : "Registered Business Name (As per GST)"}
+                                    </label>
                                     <input
                                         type="text"
-                                        placeholder="e.g. Advanced Calculus"
-                                        {...tutorForm.register('primarySubject')}
-                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.primarySubject ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                        placeholder="Legal Name"
+                                        {...tutorForm.register('legalName')}
+                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.legalName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                     />
-                                    {tutorForm.formState.errors.primarySubject && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.primarySubject.message}</p>}
+                                    {tutorForm.formState.errors.legalName && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.legalName.message}</p>}
                                 </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Areas of Expertise (Max 3)</label>
+                                <div className={`flex flex-wrap items-center gap-2 w-full bg-gray-50 border-2 focus-within:bg-white rounded-[1.25rem] px-4 py-3 min-h-[60px] transition-all ${tutorForm.formState.errors.expertise ? 'border-red-400' : 'border-transparent focus-within:border-[#c2f575]'}`}>
+                                    {tutorForm.watch("expertise").map((tag, i) => (
+                                        <div key={i} className="flex items-center gap-1 bg-[#040457] text-white px-3 py-1.5 rounded-full text-xs font-bold">
+                                            {tag}
+                                            <button type="button" onClick={() => {
+                                                const current = tutorForm.getValues("expertise");
+                                                tutorForm.setValue("expertise", current.filter((_, idx) => idx !== i));
+                                            }} className="hover:text-red-400"><X size={14}/></button>
+                                        </div>
+                                    ))}
+                                    {tutorForm.watch("expertise").length < 3 && (
+                                        <input
+                                            type="text"
+                                            value={tagInput}
+                                            onChange={(e) => setTagInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if(e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (tagInput.trim()) {
+                                                        const current = tutorForm.getValues("expertise");
+                                                        if (current.length < 3 && !current.includes(tagInput.trim())) {
+                                                            tutorForm.setValue("expertise", [...current, tagInput.trim()]);
+                                                            setTagInput('');
+                                                        }
+                                                    }
+                                                }
+                                            }}
+                                            placeholder={tutorForm.watch("expertise").length === 0 ? "Type and press Enter (e.g. Calculus)" : "Add another..."}
+                                            className="flex-1 bg-transparent min-w-[150px] outline-none text-[#040457] font-bold text-sm"
+                                        />
+                                    )}
+                                </div>
+                                {tutorForm.formState.errors.expertise && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.expertise.message}</p>}
                             </div>
 
                             <div className="space-y-2">

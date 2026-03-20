@@ -1,22 +1,34 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow users to read and write their own data
-    // Allow users to read and write their own data
+    
+    // --- USER PROFILE RULES ---
     match /users/{userId} {
+      // Allow general read for authenticated users (to view profile basic info)
       allow read: if request.auth != null;
-      // Allow user to edit their own profile OR others to update followers count
+      
+      // Strict ownership for profile management
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update: if request.auth != null && (request.auth.uid == userId || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']));
       allow delete: if request.auth != null && request.auth.uid == userId;
       
-      // Allow access to subcollections like enrollments
+      // CRITICAL SECURITY: SENSITIVE KYC DATA LOCKDOWN
+      // The 'taxDetails' subcollection contains PII/Financial data.
+      // This is EXPLICITLY LOCKED from client-side access.
+      // Only Admin SDK (Cloud Functions) can interact with this path.
+      match /taxDetails/{document=**} {
+        allow read, write: if false;
+      }
+      
+      // Allow access to other subcollections (orders, enrollments, etc.) 
+      // ONLY if they are NOT the sensitive taxDetails path.
       match /{allSubcollections=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if request.auth != null && request.auth.uid == userId 
+          && !('taxDetails' in request.path);
       }
     }
 
-    // Chat / Conversations Rules
+    // --- CHAT / CONVERSATIONS RULES ---
     match /conversations/{conversationId} {
       allow read: if request.auth != null && (request.auth.uid in resource.data.participants);
       allow create: if request.auth != null && (request.auth.uid in request.resource.data.participants);
@@ -27,18 +39,20 @@ service cloud.firestore {
       }
     }
     
-    // Allow reading zones for authenticated users
+    // --- ZONE & CONTENT RULES ---
     match /zones/{zoneId} {
+      // Zones are public/shared but content is gated
       allow read: if request.auth != null;
-      // Only the creator can update the zone
+      
+      // Only the creator/tutor can modify the zone config
       allow write: if request.auth != null && (resource == null || resource.data.createdBy == request.auth.uid || request.resource.data.createdBy == request.auth.uid);
       
-      // Student subcollections in zones
+      // Student-specific enrollment data within a zone
       match /students/{studentId} {
         allow read, write: if request.auth != null && (request.auth.uid == studentId || get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy == request.auth.uid);
       }
       
-      // Exam results
+      // Exam and results logic (Simplified for MVP)
       match /exams/{examId} {
         allow read, write: if request.auth != null;
       }
@@ -48,23 +62,28 @@ service cloud.firestore {
         allow create: if request.auth != null;
       }
       
-      // Allow all access to other subcollections inside zones for now to avoid blockers
+      // recursive catch-all for zone content (videos, segments, etc.)
       match /{allSubcollections=**} {
         allow read, write: if request.auth != null;
       }
     }
 
-    // Products Rules
+    // --- PRODUCTS & COMMERCE ---
     match /products/{productId} {
       allow read: if true;
       allow create: if request.auth != null && request.resource.data.tutorId == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.tutorId == request.auth.uid;
     }
 
-    // Followers Rules
+    // --- SOCIAL / FOLLOWERS ---
     match /followers/{followerDocId} {
       allow read: if true;
       allow write: if request.auth != null;
+    }
+    
+    // --- SYSTEM LOGS & IDEMPOTENCY ---
+    match /system/webhooks/processed/{eventId} {
+      allow read, write: if false; // Internal system path
     }
   }
 }

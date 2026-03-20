@@ -23,12 +23,19 @@ export interface StudentProfileData {
 export interface TutorProfileData {
   isComplete: boolean;
   phoneNumber?: string;
-  primarySubject?: string;
   academyName?: string;
+  taxDetails?: {
+    businessType: 'individual' | 'registered';
+    legalName: string;
+  };
+  expertise?: string[];
   payoutInfo?: {
     accountHolderName: string;
     bankIdentifier: string;
   };
+  kycStatus?: 'PENDING' | 'VERIFIED' | 'FAILED' | null;
+  razorpay_account_id?: string;
+  current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
 }
 
 export interface StatCardData {

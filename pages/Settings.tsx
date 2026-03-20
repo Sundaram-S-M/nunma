@@ -27,7 +27,8 @@ import {
   Search,
   X,
   Gem,
-  Crown
+  Crown,
+  Clock
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -47,46 +48,272 @@ const COUNTRIES = [
 // ProfileSettings component removed as editing now happens directly on the profile page.
 
 
-const Preferences = () => (
-  <div className="bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-sm animate-in fade-in duration-500">
-    <div className="flex justify-between items-start mb-12">
-      <h3 className="text-xl font-bold text-indigo-900">Preferences</h3>
-      <button className="bg-[#c1e60d] text-indigo-900 font-bold px-6 py-2 rounded-xl flex items-center gap-2 text-sm shadow-sm hover:shadow-md transition-all">
-        <Edit2 size={16} /> Edit
-      </button>
-    </div>
-    <div className="space-y-8">
-      <div>
-        <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Selected Fields</h5>
-        <div className="flex gap-2 flex-wrap">
-          <span className="px-4 py-2 bg-indigo-50 text-indigo-900 rounded-lg text-xs font-bold border border-indigo-100">
-            Project Management Tools
-          </span>
-          <span className="px-4 py-2 bg-indigo-50 text-indigo-900 rounded-lg text-xs font-bold border border-indigo-100">
-            Product Design
-          </span>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+const PREFERENCE_OPTIONS = [
+  'Web Development', 'Mobile App Development', 'Cloud Computing', 'Data Science', 
+  'Machine Learning', 'Artificial Intelligence', 'Cybersecurity', 'DevOps',
+  'UI/UX Design', 'Digital Marketing', 'Business Strategy', 'Product Management',
+  'Graphic Design', 'Video Editing', 'Content Writing', 'Soft Skills'
+];
 
-const Security = () => (
-  <div className="space-y-8 animate-in fade-in duration-500">
-    <div className="bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-sm">
-      <h3 className="text-xl font-bold mb-8 text-indigo-900">Password & Authentication</h3>
-      <div className="flex items-center justify-between p-6 bg-gray-50 rounded-2xl border border-gray-100">
-        <div className="flex flex-col">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Account Security</span>
-          <span className="text-sm font-bold text-indigo-900">Change Password</span>
+const Preferences = () => {
+  const { user, updateProfile } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(
+    user?.expertise || user?.studentProfile?.primaryInterests || []
+  );
+  const [isSaving, setIsSaving] = useState(false);
+
+  const toggleInterest = (interest: string) => {
+    setSelectedInterests(prev =>
+      prev.includes(interest) 
+        ? prev.filter(i => i !== interest) 
+        : [...prev, interest]
+    );
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const updates: any = {};
+      if (user?.role === UserRole.TUTOR) {
+        updates.expertise = selectedInterests;
+      } else {
+        updates.studentProfile = {
+          ...user?.studentProfile,
+          primaryInterests: selectedInterests
+        };
+      }
+      await updateProfile(updates);
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Failed to save preferences:", error);
+      alert("Failed to save preferences. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-sm animate-in fade-in duration-500">
+      <div className="flex justify-between items-start mb-12">
+        <div className="space-y-1">
+          <h3 className="text-xl font-bold text-indigo-900">Preferences</h3>
+          <p className="text-sm text-gray-400 font-medium">Select the topics and fields you are most interested in.</p>
         </div>
-        <button className="flex items-center gap-2 bg-white border border-gray-100 px-6 py-2 rounded-xl text-indigo-900 font-bold text-sm shadow-sm">
-          <RotateCw size={16} className="text-[#c1e60d]" /> Update
-        </button>
+        {!isEditing ? (
+          <button 
+            onClick={() => setIsEditing(true)}
+            className="bg-[#c1e60d] text-indigo-900 font-bold px-6 py-2 rounded-xl flex items-center gap-2 text-sm shadow-sm hover:shadow-md transition-all active:scale-95"
+          >
+            <Edit2 size={16} /> Edit
+          </button>
+        ) : (
+          <div className="flex gap-3">
+            <button 
+              onClick={() => {
+                setSelectedInterests(user?.expertise || user?.studentProfile?.primaryInterests || []);
+                setIsEditing(false);
+              }}
+              disabled={isSaving}
+              className="bg-gray-100 text-gray-500 font-bold px-6 py-2 rounded-xl text-sm transition-all active:scale-95 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSave}
+              disabled={isSaving}
+              className="bg-indigo-900 text-white font-bold px-6 py-2 rounded-xl flex items-center gap-2 text-sm shadow-sm hover:bg-black transition-all active:scale-95 disabled:opacity-50"
+            >
+              {isSaving ? 'Saving...' : <><Save size={16} /> Save Changes</>}
+            </button>
+          </div>
+        )}
+      </div>
+      
+      <div className="space-y-8">
+        <div>
+          <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Available Fields</h5>
+          <div className="flex gap-3 flex-wrap">
+            {isEditing ? (
+              PREFERENCE_OPTIONS.map(interest => (
+                <button
+                  key={interest}
+                  onClick={() => toggleInterest(interest)}
+                  className={`px-5 py-3 rounded-2xl text-xs font-bold transition-all border-2 ${
+                    selectedInterests.includes(interest)
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105'
+                      : 'bg-white border-gray-100 text-gray-400 hover:border-indigo-100 hover:text-indigo-900'
+                  }`}
+                >
+                  {interest}
+                </button>
+              ))
+            ) : (
+              selectedInterests.length > 0 ? (
+                selectedInterests.map(interest => (
+                  <span key={interest} className="px-5 py-3 bg-indigo-50 text-indigo-900 rounded-2xl text-xs font-bold border border-indigo-100">
+                    {interest}
+                  </span>
+                ))
+              ) : (
+                <p className="text-sm text-gray-400 italic">No preferences selected yet. Click edit to add some.</p>
+              )
+            )}
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
+
+
+const Security = () => {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handlePasswordUpdate = async () => {
+    if (!newPassword || newPassword !== confirmPassword) {
+      alert("Passwords do not match or are empty.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      alert("Password must be at least 6 characters.");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const { updatePassword, getAuth } = await import('firebase/auth');
+      const authInstance = getAuth();
+      if (authInstance.currentUser) {
+        await updatePassword(authInstance.currentUser, newPassword);
+        alert("Password updated successfully!");
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } catch (error: any) {
+      console.error("Password update error:", error);
+      if (error.code === 'auth/requires-recent-login') {
+        alert("This operation is sensitive and requires recent authentication. Please log out and log back in to change your password.");
+      } else {
+        alert("Failed to update password: " + error.message);
+      }
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      const deleteUserAccount = httpsCallable(functions, 'deleteUserAccount');
+      await deleteUserAccount();
+      alert("Your account has been permanently deleted.");
+      await logout();
+      navigate('/');
+    } catch (error: any) {
+      console.error("Account deletion error:", error);
+      alert("Failed to delete account: " + error.message);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-sm">
+        <h3 className="text-xl font-bold mb-8 text-indigo-900">Password & Authentication</h3>
+        
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">New Password</label>
+              <input 
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-indigo-900"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Confirm New Password</label>
+              <input 
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-indigo-900"
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <button 
+              onClick={handlePasswordUpdate}
+              disabled={isUpdating || !newPassword}
+              className="flex items-center gap-2 bg-indigo-900 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest uppercase shadow-xl hover:bg-black transition-all active:scale-95 disabled:opacity-50"
+            >
+              {isUpdating ? 'Updating...' : <><RotateCw size={16} className="text-[#c1e60d]" /> Update Password</>}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-red-50 rounded-[2.5rem] p-10 border border-red-100 shadow-sm">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="space-y-1">
+            <h3 className="text-xl font-bold text-red-900">Danger Zone</h3>
+            <p className="text-sm text-red-700/60 font-medium">Permanently delete your account and all associated data.</p>
+          </div>
+          <button 
+            onClick={() => setShowDeleteConfirm(true)}
+            className="px-8 py-4 bg-white border-2 border-red-100 text-red-600 rounded-2xl font-black text-xs tracking-widest uppercase hover:bg-red-600 hover:text-white hover:border-red-600 transition-all active:scale-95 shadow-sm"
+          >
+            Delete My Account
+          </button>
+        </div>
+      </div>
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-[#040457]/90 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden p-12 text-center relative">
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center text-red-600 mx-auto mb-8">
+              <ShieldCheck size={40} />
+            </div>
+            <h3 className="text-3xl font-black text-[#040457] tracking-tighter mb-4">Are you sure?</h3>
+            <p className="text-gray-500 font-medium mb-10 leading-relaxed">
+              This action is <span className="text-red-600 font-bold uppercase">permanent</span>. You will lose access to all your videos, PDFs, and courses. There is no way to recover your data.
+            </p>
+            <div className="flex flex-col gap-4">
+              <button 
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+                className="w-full py-5 bg-red-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl shadow-red-200 hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting Everything...' : 'Yes, Delete My Account'}
+              </button>
+              <button 
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="w-full py-5 bg-gray-50 text-gray-500 rounded-[2rem] font-black uppercase text-xs tracking-widest hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 const PricingPlans = () => {
   const { user } = useAuth();
@@ -443,16 +670,86 @@ const Billings = () => {
             </div>
           </div>
 
-          {!(user as any)?.razorpay_account_id ? (
+          {user?.kycStatus === 'VERIFIED' && (user as any)?.razorpay_account_id ? (
+            <div className="bg-[#f8fafc] border border-gray-100 rounded-3xl p-8 flex flex-col sm:flex-row items-center gap-8 shadow-inner">
+              <div className="flex items-center gap-6 flex-1">
+                <div className="w-16 h-16 bg-[#c2f575]/20 rounded-full flex items-center justify-center text-[#7cc142] shrink-0 border border-[#c2f575]/30">
+                  <Check size={32} />
+                </div>
+                <div>
+                  <h4 className="text-xl font-black text-indigo-900 leading-tight">KYC Verified & Active</h4>
+                  <p className="text-sm font-medium text-gray-500 mt-2 max-w-sm">
+                    Your account is securely linked. You are ready to receive direct automated bank payouts.
+                  </p>
+                </div>
+              </div>
+
+              <div className="sm:ml-auto w-full sm:w-auto shrink-0">
+                <button
+                  onClick={async (e) => {
+                    try {
+                      const btn = e.currentTarget;
+                      const originalText = btn.innerText;
+                      btn.innerText = "LOADING...";
+                      btn.disabled = true;
+
+                      const onboard = httpsCallable(functions, 'createTutorLinkedAccount');
+                      const result: any = await onboard();
+
+                      if (result.data.success && result.data.onboardingUrl) {
+                        window.location.href = result.data.onboardingUrl;
+                      } else {
+                        alert('Failed to launch Razorpay dashboard.');
+                        btn.innerText = originalText;
+                        btn.disabled = false;
+                      }
+                    } catch (err: any) {
+                      console.error("KYC Dashboard Error:", err);
+                      alert("Error loading dashboard: " + err.message);
+                      const btn = e.currentTarget;
+                      btn.innerText = "MANAGE ON RAZORPAY";
+                      btn.disabled = false;
+                    }
+                  }}
+                  className="text-[11px] font-black text-indigo-900 uppercase tracking-[0.1em] hover:text-[#c2f575] bg-white border-2 border-indigo-50 hover:border-indigo-900 hover:bg-indigo-900 transition-all px-8 py-4 rounded-2xl shadow-sm hover:shadow-xl w-full sm:w-auto active:scale-95 disabled:opacity-50"
+                >
+                  MANAGE ON RAZORPAY
+                </button>
+              </div>
+            </div>
+          ) : user?.kycStatus === 'PENDING' ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 shrink-0">
+                  <Clock size={24} />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black text-amber-900">Verification in Progress</h4>
+                  <p className="text-sm font-medium text-amber-700/80 mt-1">
+                    Razorpay is currently reviewing your identity and bank details. Payouts will be enabled once verified.
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                disabled
+                className="w-full md:w-auto px-8 py-4 bg-amber-200 text-amber-900 rounded-2xl font-black uppercase text-[11px] tracking-widest opacity-50 cursor-not-allowed"
+              >
+                PENDING APPROVAL
+              </button>
+            </div>
+          ) : (
             <div className="bg-orange-50 border border-orange-200 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 shrink-0">
                   <ShieldCheck size={24} />
                 </div>
                 <div>
-                  <h4 className="text-lg font-black text-orange-900">Action Required: Complete your KYC</h4>
+                  <h4 className="text-lg font-black text-orange-900">{user?.kycStatus === 'FAILED' ? 'KYC Verification Failed' : 'Action Required: Complete your KYC'}</h4>
                   <p className="text-sm font-medium text-orange-700/80 mt-1">
-                    Complete your KYC to receive payouts and publish paid zones. Verification is securely handled by Razorpay.
+                    {user?.kycStatus === 'FAILED' 
+                      ? 'Please re-submit your verification details. Razorpay could not verify the information provided.' 
+                      : 'Complete your KYC to receive payouts and publish paid zones. Verification is securely handled by Razorpay.'}
                   </p>
                 </div>
               </div>
@@ -484,8 +781,8 @@ const Billings = () => {
                       btn.innerText = "REDIRECTING...";
                       btn.disabled = true;
 
-                      const createAccount = httpsCallable(functions, 'createTutorLinkedAccount');
-                      const result: any = await createAccount();
+                      const onboard = httpsCallable(functions, 'createTutorLinkedAccount');
+                      const result: any = await onboard();
 
                       if (result.data.success && result.data.onboardingUrl) {
                         window.location.href = result.data.onboardingUrl;
@@ -504,54 +801,7 @@ const Billings = () => {
                   }}
                   className="w-full md:w-auto px-8 py-4 bg-orange-500 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-600 transition-all whitespace-nowrap active:scale-95 disabled:opacity-50 disabled:grayscale"
                 >
-                  VERIFY IDENTITY & BANK DETAILS
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-[#f8fafc] border border-gray-100 rounded-3xl p-8 flex flex-col sm:flex-row items-center gap-8 shadow-inner">
-              <div className="flex items-center gap-6 flex-1">
-                <div className="w-16 h-16 bg-[#c2f575]/20 rounded-full flex items-center justify-center text-[#7cc142] shrink-0 border border-[#c2f575]/30">
-                  <Check size={32} />
-                </div>
-                <div>
-                  <h4 className="text-xl font-black text-indigo-900 leading-tight">KYC Verified & Active</h4>
-                  <p className="text-sm font-medium text-gray-500 mt-2 max-w-sm">
-                    Your account is securely linked. You are ready to receive direct automated bank payouts.
-                  </p>
-                </div>
-              </div>
-
-              <div className="sm:ml-auto w-full sm:w-auto shrink-0">
-                <button
-                  onClick={async (e) => {
-                    try {
-                      const btn = e.currentTarget;
-                      const originalText = btn.innerText;
-                      btn.innerText = "LOADING...";
-                      btn.disabled = true;
-
-                      const createAccount = httpsCallable(functions, 'createTutorLinkedAccount');
-                      const result: any = await createAccount();
-
-                      if (result.data.success && result.data.onboardingUrl) {
-                        window.location.href = result.data.onboardingUrl;
-                      } else {
-                        alert('Failed to launch Razorpay dashboard.');
-                        btn.innerText = originalText;
-                        btn.disabled = false;
-                      }
-                    } catch (err: any) {
-                      console.error("KYC Dashboard Error:", err);
-                      alert("Error loading dashboard: " + err.message);
-                      const btn = e.currentTarget;
-                      btn.innerText = "MANAGE ON RAZORPAY";
-                      btn.disabled = false;
-                    }
-                  }}
-                  className="text-[11px] font-black text-indigo-900 uppercase tracking-[0.1em] hover:text-[#c2f575] bg-white border-2 border-indigo-50 hover:border-indigo-900 hover:bg-indigo-900 transition-all px-8 py-4 rounded-2xl shadow-sm hover:shadow-xl w-full sm:w-auto active:scale-95 disabled:opacity-50"
-                >
-                  MANAGE ON RAZORPAY
+                  {user?.kycStatus === 'FAILED' ? 'RE-VERIFY IDENTITY' : 'VERIFY IDENTITY & BANK DETAILS'}
                 </button>
               </div>
             </div>
@@ -652,7 +902,6 @@ const Settings: React.FC = () => {
   if (!user) return <Navigate to="/auth" />;
 
   const tabs = [
-    { label: 'MY PROFILE', path: '/profile/me', icon: <UserIcon size={14} /> },
     { label: 'PREFERENCES', path: '/settings/preferences', icon: <Sliders size={14} /> },
     { label: 'SECURITY OPTIONS', path: '/settings/security', icon: <ShieldCheck size={14} /> },
     ...(user.role === UserRole.TUTOR ? [

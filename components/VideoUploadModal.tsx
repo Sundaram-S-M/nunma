@@ -125,22 +125,12 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                 title: file.name || "Untitled Video",
                                 sizeBytes: file.size, // Track size for storage metering
                                 status: "processing",
-                                createdAt: serverTimestamp()
+                                createdAt: serverTimestamp(),
+                                zoneId: zoneId || null,
+                                chapterId: chapterId || null
                             });
 
-                            // If chapterId and zoneId are present, add it directly to the chapter's "lessons" subcollection
-                            if (zoneId && chapterId) {
-                                await addDoc(collection(db, 'zones', zoneId, 'chapters', chapterId, 'lessons'), {
-                                    title: file.name || "Untitled Video",
-                                    type: 'video',
-                                    videoId: videoId,
-                                    sizeBytes: file.size, // Optional: helpful for UI
-                                    status: 'processing',
-                                    createdAt: serverTimestamp()
-                                });
-                            }
-
-                            alert("Video uploaded successfully.");
+                            alert("Video upload started. It will appear once processed.");
                         } catch (err: any) {
                             console.error("Failed to save video metadata:", err);
                         }

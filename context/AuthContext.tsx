@@ -10,7 +10,7 @@ import {
   signInWithPopup,
   signInWithCustomToken
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../utils/firebase';
 import { UserRole, StudentProfileData, TutorProfileData } from '../types';
@@ -38,13 +38,21 @@ export interface UserProfile {
   tutorProfile?: TutorProfileData;
   linkedin?: string;
   expertise?: string[];
+  taxDetails?: {
+    businessType: 'individual' | 'registered';
+    legalName: string;
+  };
   availability?: any[];
   storage_used_bytes?: number;
   subscription_entitlements?: {
     storageLimit: number;
     storageUsed: number;
     studentLimit: number;
+    studentAddonBlocks?: number;
   };
+  kycStatus?: 'PENDING' | 'VERIFIED' | 'FAILED' | null;
+  razorpay_account_id?: string;
+  current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
 }
 
 interface AuthContextType {
@@ -74,69 +82,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data() as UserProfile;
-            if (!data.subscription_entitlements) {
-              data.subscription_entitlements = { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 };
-            }
-            setUser({ ...data, uid: firebaseUser.uid }); // Ensure UID is always present from auth
-            setIsAuthenticated(true);
-          } else {
-            // New user signed in but no profile doc yet (edge case)
-            const newUserProfile: UserProfile = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              name: firebaseUser.displayName || 'New User',
-              avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
-              role: UserRole.STUDENT,
-              subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
-              storage_used_bytes: 0,
-              studentProfile: { isComplete: false },
-              tutorProfile: { isComplete: false }
-            };
-            setUser(newUserProfile);
-            setIsAuthenticated(true);
+    let unsubscribeProfile: (() => void) | undefined;
 
-            // Auto-create doc if missing (for Google sign-in)
-            try {
-              await setDoc(doc(db, 'users', firebaseUser.uid), newUserProfile, { merge: true });
-            } catch (err) {
-              console.warn("AuthContext: Failed to auto-create profile doc", err);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Use onSnapshot for real-time updates (KYC status, storage, etc.)
+        unsubscribeProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), 
+          (userDoc) => {
+            if (userDoc.exists()) {
+              const data = userDoc.data() as UserProfile;
+              if (!data.subscription_entitlements) {
+                data.subscription_entitlements = { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 };
+              }
+              setUser({ ...data, uid: firebaseUser.uid });
+              setIsAuthenticated(true);
+            } else {
+              // New user signed in but no profile doc yet
+              const newUserProfile: UserProfile = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                name: firebaseUser.displayName || 'New User',
+                avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
+                role: UserRole.STUDENT,
+                subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+                storage_used_bytes: 0,
+                studentProfile: { isComplete: false },
+                tutorProfile: { isComplete: false }
+              };
+              setUser(newUserProfile);
+              setIsAuthenticated(true);
+
+              // Auto-create doc if missing
+              setDoc(doc(db, 'users', firebaseUser.uid), newUserProfile, { merge: true })
+                .catch(err => console.warn("AuthContext: Failed to auto-create profile doc", err));
             }
+            setLoading(false);
+          },
+          (error) => {
+            console.error("AuthContext: Error listening to user doc:", error);
+            setLoading(false);
           }
-        } catch (error: any) {
-          console.error("AuthContext: Error fetching user doc:", error);
-          if (error.code === 'permission-denied') {
-            console.warn("AuthContext: Permission denied for 'users' collection. Using minimal profile fallback.");
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              name: firebaseUser.displayName || 'Developer',
-              avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
-              role: UserRole.STUDENT,
-              subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
-              storage_used_bytes: 0,
-              studentProfile: { isComplete: false },
-              tutorProfile: { isComplete: false }
-            });
-            setIsAuthenticated(true);
-          } else {
-            setUser(null);
-            setIsAuthenticated(false);
-          }
-        }
+        );
       } else {
+        if (unsubscribeProfile) unsubscribeProfile();
         setUser(null);
         setIsAuthenticated(false);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {

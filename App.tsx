@@ -68,6 +68,7 @@ const AppContent: React.FC = () => {
   }
 
   if (isPublicRoute || isAuthRoute) {
+    return (
       <main className="min-h-screen">
         <Routes>
           <Route path="/auth" element={!isAuthenticated ? <Auth /> : <Navigate to="/dashboard" />} />
@@ -78,6 +79,7 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<PublicLayout><LandingPage /></PublicLayout>} />
         </Routes>
       </main>
+    );
   }
 
   return (
