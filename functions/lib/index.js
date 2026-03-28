@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.uploadExamScript = exports.deleteUserAccount = exports.serveSecurePdf = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.generateLiveToken = void 0;
+exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.uploadExamScript = exports.deleteUserAccount = exports.serveSecurePdf = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.generateLiveToken = void 0;
 const functions = __importStar(require("firebase-functions"));
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
@@ -39,6 +39,7 @@ const razorpay_1 = __importDefault(require("razorpay"));
 const zohoUtils_1 = require("./zohoUtils");
 const uuid_1 = require("uuid");
 const vcUtils_1 = require("./utils/vcUtils");
+const resend_1 = require("resend");
 if (!admin.apps.length) {
     admin.initializeApp();
 }
@@ -55,6 +56,7 @@ const transporter = nodemailer.createTransport({
     },
 });
 */
+const resend = new resend_1.Resend(process.env.RESEND_API_KEY);
 // --- LIVEKIT INTEGRATION ---
 exports.generateLiveToken = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"] }, async (request) => {
     if (!request.auth) {
@@ -697,5 +699,100 @@ exports.registerIssuance = (0, https_1.onCall)(async (request) => {
         status: "graduated"
     });
     return { certId };
+});
+// --- OTP AUTHENTICATION ---
+exports.requestOTP = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"] }, async (request) => {
+    const { email } = request.data;
+    if (!email) {
+        throw new functions.https.HttpsError("invalid-argument", "Email is required.");
+    }
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)); // 10 mins
+    await db.collection("otps").doc(email).set({
+        otp,
+        expiresAt,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    try {
+        await resend.emails.send({
+            from: "Nunma <support@nunma.in>",
+            to: email,
+            subject: "Your Nunma Verification Code",
+            html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                    <h2 style="color: #040457;">Verify your identity</h2>
+                    <p>Use the following 6-digit code to complete your sign-in to Nunma:</p>
+                    <div style="background: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #040457; border-radius: 8px;">
+                        ${otp}
+                    </div>
+                    <p style="margin-top: 20px; color: #666; font-size: 14px;">This code will expire in 10 minutes.</p>
+                </div>
+            `
+        });
+        return { success: true };
+    }
+    catch (error) {
+        console.error("Resend error:", error);
+        throw new functions.https.HttpsError("internal", "Failed to send OTP email.");
+    }
+});
+exports.verifyOTPAndSignIn = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"] }, async (request) => {
+    const { email, otp, registrationData, password } = request.data;
+    if (!email || !otp) {
+        throw new functions.https.HttpsError("invalid-argument", "Email and OTP are required.");
+    }
+    const otpDoc = await db.collection("otps").doc(email).get();
+    if (!otpDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "No OTP requested for this email.");
+    }
+    const data = otpDoc.data();
+    if (data.otp !== otp) {
+        throw new functions.https.HttpsError("permission-denied", "Invalid OTP.");
+    }
+    if (data.expiresAt.toDate() < new Date()) {
+        await otpDoc.ref.delete();
+        throw new functions.https.HttpsError("permission-denied", "OTP has expired.");
+    }
+    // OTP is valid, cleanup
+    await otpDoc.ref.delete();
+    // Find or create user
+    let user;
+    try {
+        user = await admin.auth().getUserByEmail(email);
+    }
+    catch (error) {
+        if (error.code === 'auth/user-not-found') {
+            // If registrationData and password are provided, create the user
+            if (registrationData && password) {
+                user = await admin.auth().createUser({
+                    email,
+                    password,
+                    displayName: registrationData.name
+                });
+                // Create Firestore profile
+                await db.collection("users").doc(user.uid).set({
+                    email,
+                    name: registrationData.name,
+                    role: registrationData.role || "STUDENT",
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
+                    subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+                    storage_used_bytes: 0,
+                    studentProfile: { isComplete: false },
+                    tutorProfile: { isComplete: false }
+                });
+            }
+            else {
+                // Verified but user doesn't exist and no registration data provided
+                return { verified: true };
+            }
+        }
+        else {
+            throw new functions.https.HttpsError("internal", error.message);
+        }
+    }
+    // Generate custom token
+    const customToken = await admin.auth().createCustomToken(user.uid);
+    return { verified: true, customToken };
 });
 //# sourceMappingURL=index.js.map
