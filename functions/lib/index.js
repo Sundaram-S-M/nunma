@@ -26,22 +26,23 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteUserAccount = exports.serveSecurePdf = exports.processZohoInvoice = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.onboardTutorToRazorpay = exports.createBunnyVideo = exports.get100msToken = void 0;
+exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.uploadExamScript = exports.deleteUserAccount = exports.serveSecurePdf = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.generateLiveToken = void 0;
 const functions = __importStar(require("firebase-functions"));
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const crypto = __importStar(require("crypto"));
 // import * as nodemailer from "nodemailer";
-const jwt = __importStar(require("jsonwebtoken"));
+const livekit_server_sdk_1 = require("livekit-server-sdk");
 const axios_1 = __importDefault(require("axios"));
 const pdf_lib_1 = require("pdf-lib");
-const tasks_1 = require("@google-cloud/tasks");
 const razorpay_1 = __importDefault(require("razorpay"));
+const zohoUtils_1 = require("./zohoUtils");
+const uuid_1 = require("uuid");
+const vcUtils_1 = require("./utils/vcUtils");
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 const db = admin.firestore();
-const tasksClient = new tasks_1.CloudTasksClient();
 // Global transporter for billing and OTP emails
 /*
 const transporter = nodemailer.createTransport({
@@ -54,18 +55,92 @@ const transporter = nodemailer.createTransport({
     },
 });
 */
-// --- 100ms LIVE INTEGRATION ---
-exports.get100msToken = (0, https_1.onCall)({ secrets: ["HMS_ACCESS_KEY", "HMS_SECRET"] }, async (request) => {
-    var _a;
-    const accessKey = process.env.HMS_ACCESS_KEY;
-    const secret = process.env.HMS_SECRET;
-    if (!accessKey || !secret) {
-        throw new functions.https.HttpsError("failed-precondition", "100ms credentials not configured.");
+// --- LIVEKIT INTEGRATION ---
+exports.generateLiveToken = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"] }, async (request) => {
+    if (!request.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
     }
-    const now = Math.floor(Date.now() / 1000);
-    const payload = { access_key: accessKey, type: "app", version: 2, role: "broadcaster", room_id: "sandbox", user_id: ((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid) || "guest", iat: now, nbf: now };
-    const token = jwt.sign(payload, secret, { algorithm: "HS256", expiresIn: "24h" });
-    return { token };
+    const { zoneId, sessionId } = request.data;
+    if (!zoneId || !sessionId) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or sessionId.");
+    }
+    const uid = request.auth.uid;
+    // Fetch user document to check role and name
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "User profile not found.");
+    }
+    const userData = userDoc.data();
+    const userName = (userData === null || userData === void 0 ? void 0 : userData.name) || "Anonymous";
+    const userRole = (userData === null || userData === void 0 ? void 0 : userData.role) || "STUDENT";
+    // Fetch zone to check if user is the creator
+    const zoneDoc = await db.collection("zones").doc(zoneId).get();
+    const zoneData = zoneDoc.data();
+    const isCreator = (zoneData === null || zoneData === void 0 ? void 0 : zoneData.createdBy) === uid;
+    const apiKey = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    const liveKitUrl = process.env.LIVEKIT_URL;
+    if (!apiKey || !apiSecret || !liveKitUrl) {
+        throw new functions.https.HttpsError("failed-precondition", "LiveKit secrets not configured.");
+    }
+    const at = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
+        identity: userName,
+        name: userName,
+    });
+    const isTutor = userRole === "TUTOR" || isCreator;
+    // Add matching grants
+    at.addGrant({
+        roomJoin: true,
+        room: sessionId,
+        canPublish: isTutor,
+        canSubscribe: true,
+        canPublishData: true,
+    });
+    return {
+        token: await at.toJwt(),
+        serverUrl: liveKitUrl
+    };
+});
+exports.toggleStudentAudio = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"] }, async (request) => {
+    var _a;
+    if (!request.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    }
+    const { zoneId, sessionId, studentIdentity, allowAudio } = request.data;
+    if (!zoneId || !sessionId || !studentIdentity) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing required parameters.");
+    }
+    const uid = request.auth.uid;
+    // Security Check: Ensure caller is the Creator or a Tutor of the zone
+    const zoneDoc = await db.collection("zones").doc(zoneId).get();
+    if (!zoneDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Zone not found.");
+    }
+    const zoneData = zoneDoc.data();
+    const isCreator = (zoneData === null || zoneData === void 0 ? void 0 : zoneData.createdBy) === uid;
+    // Also check if user is a TUTOR in the users collection
+    const userDoc = await db.collection("users").doc(uid).get();
+    const userRole = (_a = userDoc.data()) === null || _a === void 0 ? void 0 : _a.role;
+    const isTutor = userRole === "TUTOR";
+    if (!isCreator && !isTutor) {
+        throw new functions.https.HttpsError("permission-denied", "Only tutors can manage permissions.");
+    }
+    const apiKey = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    const liveKitUrl = process.env.LIVEKIT_URL;
+    if (!apiKey || !apiSecret || !liveKitUrl) {
+        throw new functions.https.HttpsError("failed-precondition", "LiveKit secrets not configured.");
+    }
+    const roomService = new livekit_server_sdk_1.RoomServiceClient(liveKitUrl, apiKey, apiSecret);
+    // Update participant permissions
+    // canPublish is the key here. We set canPublish: true for microphone.
+    // We keep video publish strictly false for students.
+    await roomService.updateParticipant(sessionId, studentIdentity, undefined, {
+        canPublish: allowAudio,
+        canPublishSources: allowAudio ? [livekit_server_sdk_1.TrackSource.MICROPHONE] : [],
+        canSubscribe: true,
+    });
+    return { success: true, message: `Student audio ${allowAudio ? 'enabled' : 'disabled'}` };
 });
 // --- BUNNY STREAM INTEGRATION ---
 exports.createBunnyVideo = (0, https_1.onCall)(async (request) => {
@@ -79,28 +154,86 @@ exports.createBunnyVideo = (0, https_1.onCall)(async (request) => {
     const response = await axios_1.default.post(`https://video.bunnycdn.com/library/${libraryId}/videos`, { title: title || 'Untitled' }, { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } });
     return { videoId: response.data.guid };
 });
+exports.bunnyStreamWebhook = (0, https_1.onRequest)({ secrets: ["BUNNY_WEBHOOK_SECRET"] }, async (req, res) => {
+    const signature = req.headers['x-bunnystream-signature'] || req.headers['x-bunny-signature'];
+    const secret = process.env.BUNNY_WEBHOOK_SECRET;
+    if (!signature || !secret || typeof signature !== 'string') {
+        res.status(401).send('Unauthorized: Invalid Signature');
+        return;
+    }
+    const expectedSignature = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex').toLowerCase();
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+    const signatureBuffer = Buffer.from(signature.toLowerCase(), 'utf8');
+    if (expectedBuffer.length !== signatureBuffer.length || !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)) {
+        res.status(401).send('Unauthorized: Invalid Signature');
+        return;
+    }
+    try {
+        const payload = JSON.parse(req.rawBody.toString('utf8'));
+        const videoGuid = payload.VideoGuid;
+        if (videoGuid && payload.Status === 3) {
+            const videosSnapshot = await db.collection("videos").where("bunnyVideoId", "==", videoGuid).get();
+            if (!videosSnapshot.empty) {
+                const batch = db.batch();
+                videosSnapshot.docs.forEach(doc => {
+                    batch.update(doc.ref, { status: "ready" });
+                });
+                await batch.commit();
+            }
+            else {
+                console.warn(`Bunny Webhook: Video ID not found in database: ${videoGuid}`);
+            }
+        }
+        res.status(200).send('OK');
+    }
+    catch (error) {
+        console.error("Webhook processing error:", error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+exports.generateBunnyToken = (0, https_1.onCall)({ secrets: ["BUNNY_TOKEN_KEY", "BUNNY_LIBRARY_ID"] }, async (request) => {
+    if (!request.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    }
+    const { videoId } = request.data;
+    if (!videoId) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing videoId.");
+    }
+    const tokenKey = process.env.BUNNY_TOKEN_KEY;
+    const libraryId = process.env.BUNNY_LIBRARY_ID;
+    if (!tokenKey || !libraryId) {
+        throw new functions.https.HttpsError("failed-precondition", "Bunny token configuration missing.");
+    }
+    const expires = Math.floor(Date.now() / 1000) + 21600; // 6 hours from now
+    // Bunny signature logic: Token Security Key + Video ID + Expiration Time
+    const hash = crypto.createHash('sha256').update(tokenKey + videoId + expires).digest('hex');
+    return { token: hash, expires, libraryId };
+});
 // --- RAZORPAY & KYC STATE MANAGEMENT ---
-exports.onboardTutorToRazorpay = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] }, async (request) => {
+exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] }, async (request) => {
+    var _a, _b;
     if (!request.auth)
         throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     const uid = request.auth.uid;
+    const { businessType: payloadBusinessType, legalName: payloadLegalName } = request.data || {};
     try {
-        const taxDetailsDoc = await db.collection("users").doc(uid).collection("taxDetails").doc("current").get();
-        const taxDetails = taxDetailsDoc.data() || {};
         const tutorRef = db.collection("users").doc(uid);
         const tutorDoc = await tutorRef.get();
         const tutorData = tutorDoc.data();
         let accountId = tutorData === null || tutorData === void 0 ? void 0 : tutorData.razorpay_account_id;
         const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
         if (!accountId) {
+            const bType = payloadBusinessType || ((_a = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _a === void 0 ? void 0 : _a.businessType) || "individual";
+            const mappedBusinessType = bType === "registered" ? "proprietorship" : "individual";
+            const mappedLegalName = payloadLegalName || ((_b = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _b === void 0 ? void 0 : _b.legalName) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor";
             const createPayload = {
                 email: (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || request.auth.token.email,
                 type: "standard",
                 reference_id: uid,
-                legal_business_name: taxDetails.legalName || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor",
-                business_type: "individual",
+                legal_business_name: mappedLegalName,
+                business_type: mappedBusinessType,
                 profile: { category: "education", subcategory: "e_learning" }
             };
             const response = await axios_1.default.post('https://api.razorpay.com/v2/accounts', createPayload, { headers: { 'Authorization': authHeader } });
@@ -119,7 +252,6 @@ exports.onboardTutorToRazorpay = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_I
     }
 });
 exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] }, async (request) => {
-    var _a;
     if (!request.auth)
         throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId } = request.data;
@@ -130,30 +262,55 @@ exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID",
         const zoneData = zoneDoc.data();
         const tutorDoc = await db.collection("users").doc(zoneData.createdBy).get();
         const tutorData = tutorDoc.data();
+        if (!tutorData.razorpay_account_id) {
+            throw new functions.https.HttpsError("invalid-argument", "Tutor has not completed KYC onboarding.");
+        }
         const gross_paise = Math.round(zoneData.price * 100);
-        const commissionRate = (_a = tutorData.commissionRate) !== null && _a !== void 0 ? _a : 0.10;
-        const platform_fee_paise = Math.round(gross_paise * commissionRate);
-        const statutory_tax_paise = Math.round(gross_paise * 0.006); // 0.1% TDS + 0.5% TCS
-        const tutor_transfer_paise = gross_paise - platform_fee_paise - statutory_tax_paise;
+        let commissionTierPercentage = 0.10; // Basic = 10%
+        if (tutorData.subscriptionPlan === 'Pro') {
+            commissionTierPercentage = 0.05;
+        }
+        else if (tutorData.subscriptionPlan === 'Elite') {
+            commissionTierPercentage = 0.02;
+        }
+        const platform_fee_paise = Math.round(gross_paise * commissionTierPercentage);
+        const tds_paise = Math.round(gross_paise * 0.001);
+        const tcs_paise = Math.round(gross_paise * 0.005);
+        const tutor_transfer_paise = gross_paise - (platform_fee_paise + tds_paise + tcs_paise);
         const razorpay = new razorpay_1.default({ key_id: keyId, key_secret: keySecret });
         const order = await razorpay.orders.create({
             amount: gross_paise,
             currency: "INR",
-            transfers: [{ account: tutorData.razorpay_account_id, amount: tutor_transfer_paise, currency: "INR" }],
+            transfers: [
+                {
+                    account: tutorData.razorpay_account_id,
+                    amount: Math.round(tutor_transfer_paise),
+                    currency: "INR",
+                    notes: {
+                        zoneId: zoneId,
+                        studentId: request.auth.uid
+                    },
+                    on_hold: true // Holds funds in escrow until we explicitly release them or standard settlement kicks in
+                }
+            ],
             notes: { zoneId, studentId: request.auth.uid }
         });
         return { id: order.id, amount: order.amount };
     }
     catch (error) {
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
         throw new functions.https.HttpsError("failed-precondition", error.message || "Razorpay order creation rejected");
     }
 });
 exports.razorpayRouteWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBHOOK_SECRET"] }, async (req, res) => {
+    var _a, _b, _c, _d, _e;
     const signature = req.headers['x-razorpay-signature'];
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    const hmac = crypto.createHmac('sha256', secret).update(JSON.stringify(req.body)).digest('hex');
+    const hmac = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
     if (hmac !== signature) {
-        res.status(400).send('Invalid Signature');
+        res.status(400).send('Invalid signature');
         return;
     }
     const event = req.body.event;
@@ -169,41 +326,75 @@ exports.razorpayRouteWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBH
             await db.collection('users').doc(tutorId).update({ kycStatus: "FAILED" });
     }
     else if (event === 'payment.captured') {
-        // Trigger Zoho Invoicing via Cloud Tasks
-        const project = process.env.GCLOUD_PROJECT;
-        const queue = 'zoho-invoicing-queue';
-        const location = 'us-central1';
-        const url = `https://${location}-${project}.cloudfunctions.net/processZohoInvoice`;
-        const parent = tasksClient.queuePath(project, location, queue);
-        await tasksClient.createTask({ parent, task: { httpRequest: { httpMethod: 'POST', url, body: Buffer.from(JSON.stringify(req.body)).toString('base64'), headers: { 'Content-Type': 'application/json' } } } });
+        const paymentEntity = payload.payment.entity;
+        const txRef = db.collection('transactions').doc(paymentEntity.id);
+        const isDuplicate = await db.runTransaction(async (transaction) => {
+            const txDoc = await transaction.get(txRef);
+            if (txDoc.exists) {
+                return true;
+            }
+            transaction.set(txRef, {
+                processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                eventId: req.body.id || 'unknown'
+            });
+            const { zoneId, studentId } = paymentEntity.notes || {};
+            if (zoneId && studentId) {
+                const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentId);
+                transaction.set(studentRef, {
+                    status: "active",
+                    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    completedSegments: []
+                });
+            }
+            return false;
+        });
+        if (!isDuplicate) {
+            // Generate Zoho Invoice directly inline
+            try {
+                let resolvedTutorId = (_a = paymentEntity.notes) === null || _a === void 0 ? void 0 : _a.tutorId;
+                const zoneId = (_b = paymentEntity.notes) === null || _b === void 0 ? void 0 : _b.zoneId;
+                if (!resolvedTutorId && zoneId) {
+                    const zoneDoc = await db.collection("zones").doc(zoneId).get();
+                    if (zoneDoc.exists) {
+                        resolvedTutorId = (_c = zoneDoc.data()) === null || _c === void 0 ? void 0 : _c.createdBy;
+                    }
+                }
+                if (resolvedTutorId) {
+                    const tutorDoc = await db.collection("users").doc(resolvedTutorId).get();
+                    let resolvedTutorName = "Tutor";
+                    let subscriptionPlan = "Basic";
+                    if (tutorDoc.exists) {
+                        const tutorData = tutorDoc.data();
+                        resolvedTutorName = tutorData.name || ((_d = tutorData.taxDetails) === null || _d === void 0 ? void 0 : _d.legalName) || "Tutor";
+                        subscriptionPlan = tutorData.subscriptionPlan || "Basic";
+                    }
+                    const gross_paise = paymentEntity.amount || 0;
+                    let commissionTierPercentage = 0.10;
+                    if (subscriptionPlan === 'Pro')
+                        commissionTierPercentage = 0.05;
+                    if (subscriptionPlan === 'Elite')
+                        commissionTierPercentage = 0.02;
+                    const platform_fee_paise = Math.round(gross_paise * commissionTierPercentage);
+                    const platformFeeAmount = platform_fee_paise / 100;
+                    const invoiceResponse = await (0, zohoUtils_1.generatePlatformFeeInvoice)(resolvedTutorId, resolvedTutorName, platformFeeAmount, paymentEntity.id);
+                    const invoiceId = ((_e = invoiceResponse === null || invoiceResponse === void 0 ? void 0 : invoiceResponse.invoice) === null || _e === void 0 ? void 0 : _e.invoice_id) || "unknown";
+                    await db.collection("users").doc(resolvedTutorId).collection("invoices").add({
+                        zohoInvoiceId: invoiceId,
+                        amount: platformFeeAmount,
+                        paymentId: paymentEntity.id,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                else {
+                    throw new Error("Could not resolve tutorId for invoicing");
+                }
+            }
+            catch (zohoError) {
+                console.error("Critical error generating Zoho invoice:", zohoError);
+            }
+        }
     }
     res.status(200).send('OK');
-});
-// --- ZOHO INVOICING WORKER ---
-exports.processZohoInvoice = (0, https_1.onRequest)(async (req, res) => {
-    const payment = req.body.payload.payment.entity;
-    const tutorId = payment.notes.tutorId;
-    const tutorDoc = await db.collection('users').doc(tutorId).get();
-    const tutorData = tutorDoc.data();
-    const platformFee = parseInt(payment.notes.platformFee || '0');
-    try {
-        const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
-        const clientId = process.env.ZOHO_CLIENT_ID;
-        const clientSecret = process.env.ZOHO_CLIENT_SECRET;
-        const authRes = await axios_1.default.post("https://accounts.zoho.in/oauth/v2/token", null, { params: { refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret, grant_type: "refresh_token" } });
-        const accessToken = authRes.data.access_token;
-        // Create Invoice in Zoho for Platform Commission
-        await axios_1.default.post('https://books.zoho.in/api/v3/invoices', {
-            customer_name: tutorData.name,
-            line_items: [{ name: "Platform Commission", rate: platformFee / 100, quantity: 1 }],
-            date: new Date().toISOString().split('T')[0]
-        }, { headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}`, 'X-com-zoho-invoice-organizationid': process.env.ZOHO_ORG_ID } });
-        res.status(200).send('Invoice Processed');
-    }
-    catch (error) {
-        console.error(error);
-        res.status(500).send('Invoicing Failed');
-    }
 });
 // --- PDF WATERMARKING ---
 exports.serveSecurePdf = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
@@ -240,7 +431,7 @@ exports.deleteUserAccount = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY"] }, 
     console.log(`Starting permanent deletion for user: ${uid}`);
     try {
         // 1. Cleanup Bunny.net Videos
-        const tutorVideosSnapshot = await db.collection("tutor_videos").where("tutorId", "==", uid).get();
+        const tutorVideosSnapshot = await db.collection("videos").where("tutorId", "==", uid).get();
         if (!tutorVideosSnapshot.empty && libraryId && apiKey) {
             console.log(`Deleting ${tutorVideosSnapshot.size} videos from Bunny.net...`);
             const deletePromises = tutorVideosSnapshot.docs.map(async (doc) => {
@@ -277,5 +468,234 @@ exports.deleteUserAccount = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY"] }, 
         console.error("Critical error during account deletion:", error);
         throw new functions.https.HttpsError("internal", `Deletion failed: ${error.message}`);
     }
+});
+// --- EXAM SUBMISSION LOGIC ---
+exports.uploadExamScript = (0, https_1.onCall)(async (request) => {
+    var _a;
+    if (!request.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { file, fileName, zoneId, examId } = request.data;
+    const uid = request.auth.uid;
+    const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(uid).get();
+    const studentData = studentDoc.data();
+    if (!studentData || studentData.activeExamId !== examId) {
+        throw new functions.https.HttpsError("failed-precondition", "No active exam found to upload.");
+    }
+    if (studentData.examEndsAt) {
+        const serverNow = Date.now();
+        const absoluteCutoff = new Date(studentData.examEndsAt).getTime() + (20 * 60 * 1000);
+        if (serverNow > absoluteCutoff) {
+            throw new functions.https.HttpsError("permission-denied", "Submission window has permanently closed.");
+        }
+    }
+    const bunnyApiKey = process.env.BUNNY_STORAGE_API_KEY;
+    const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
+    const pullZone = process.env.BUNNY_PULL_ZONE_URL;
+    if (!bunnyApiKey || !storageZone || !pullZone) {
+        throw new functions.https.HttpsError("internal", "Storage configuration missing");
+    }
+    const base64Data = file.replace(/^data:.*\/.*;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const fileSizeInBytes = buffer.length;
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storagePath = `exams/${zoneId}/${examId}/${uid}_${sanitizedFileName}`;
+    try {
+        await axios_1.default.put(`https://storage.bunnycdn.com/${storageZone}/${storagePath}`, buffer, {
+            headers: {
+                'AccessKey': bunnyApiKey,
+                'Content-Type': 'application/pdf',
+            }
+        });
+        const zoneDoc = await db.collection('zones').doc(zoneId).get();
+        const tutorUid = (_a = zoneDoc.data()) === null || _a === void 0 ? void 0 : _a.createdBy;
+        if (tutorUid) {
+            await db.collection("users").doc(tutorUid).update({
+                usedStorageBytes: admin.firestore.FieldValue.increment(fileSizeInBytes)
+            });
+        }
+        return { fileUrl: `https://${pullZone}/${storagePath}` };
+    }
+    catch (error) {
+        console.error("Upload error", error);
+        throw new functions.https.HttpsError("internal", "Failed to upload file to edge storage.");
+    }
+});
+exports.submitGradedScript = (0, https_1.onCall)(async (request) => {
+    var _a;
+    if (!request.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { zoneId, examId, studentId, score, feedback, mergedPdf, oldFileUrl } = request.data;
+    // Authorization
+    const zoneDoc = await db.collection('zones').doc(zoneId).get();
+    const tutorUid = (_a = zoneDoc.data()) === null || _a === void 0 ? void 0 : _a.createdBy;
+    if (request.auth.uid !== tutorUid) {
+        throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
+    }
+    const bunnyApiKey = process.env.BUNNY_STORAGE_API_KEY;
+    const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
+    const pullZone = process.env.BUNNY_PULL_ZONE_URL;
+    if (!bunnyApiKey || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
+        throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
+    }
+    try {
+        // Evaluate the new file size
+        const base64Data = mergedPdf.replace(/^data:.*\/.*;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const newFileSizeInBytes = buffer.length;
+        const newFileName = `graded_${studentId}_exam.pdf`;
+        const storagePath = `exams/${zoneId}/${examId}/${newFileName}`;
+        // Upload New
+        await axios_1.default.put(`https://storage.bunnycdn.com/${storageZone}/${storagePath}`, buffer, { headers: { 'AccessKey': bunnyApiKey, 'Content-Type': 'application/pdf' } });
+        // Delete Old
+        // oldFileUrl format: https://[pullzone]/exams/[zoneId]/[examId]/[studentId]_[fileName]
+        let oldFileSizeInBytes = 0;
+        try {
+            const oldPath = oldFileUrl.replace(`https://${pullZone}/`, '');
+            // Get original file size to maintain exact quota diff
+            const res = await axios_1.default.head(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
+                headers: { 'AccessKey': bunnyApiKey }
+            });
+            oldFileSizeInBytes = parseInt(res.headers['content-length'] || "0");
+            await axios_1.default.delete(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
+                headers: { 'AccessKey': bunnyApiKey }
+            });
+        }
+        catch (e) {
+            console.error("Failed to delete old storage file, continuing...", e);
+        }
+        const sizeDiff = newFileSizeInBytes - oldFileSizeInBytes;
+        await db.collection("users").doc(tutorUid).update({
+            usedStorageBytes: admin.firestore.FieldValue.increment(sizeDiff)
+        });
+        // Update DB
+        const newFileUrl = `https://${pullZone}/${storagePath}`;
+        await db.collection('zones').doc(zoneId).collection('exams').doc(examId).collection('submissions').doc(studentId).set({
+            status: "graded",
+            score: score,
+            marks: score,
+            feedback: feedback,
+            tutorFeedback: feedback,
+            answerSheetUrl: newFileUrl,
+            gradedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        // Update student doc for quick access if needed
+        await db.collection('zones').doc(zoneId).collection('students').doc(studentId).set({
+            activeExamGraded: true
+        }, { merge: true });
+        return { success: true, gradedUrl: newFileUrl };
+    }
+    catch (error) {
+        console.error("Grade submit error", error);
+        throw new functions.https.HttpsError("internal", "Failed to upload merged script to edge storage.");
+    }
+});
+exports.submitExam = (0, https_1.onCall)(async (request) => {
+    if (!request.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { zoneId, examId, answers, violationLogs, answerSheetUrl } = request.data;
+    const uid = request.auth.uid;
+    // Time Window Validation
+    const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(uid).get();
+    const studentData = studentDoc.data();
+    if (!studentData || studentData.activeExamId !== examId) {
+        throw new functions.https.HttpsError("failed-precondition", "No active exam found.");
+    }
+    if (studentData.examEndsAt) {
+        const serverNow = Date.now();
+        const absoluteCutoff = new Date(studentData.examEndsAt).getTime() + (20 * 60 * 1000);
+        if (serverNow > absoluteCutoff) {
+            throw new functions.https.HttpsError("permission-denied", "Submission window has permanently closed.");
+        }
+    }
+    const examDoc = await db.collection('zones').doc(zoneId).collection('exams').doc(examId).get();
+    const examData = examDoc.data();
+    if (!examData) {
+        throw new functions.https.HttpsError("not-found", "Exam not found.");
+    }
+    let marks = 0;
+    let status = 'ongoing';
+    const isTerminatedByCheat = violationLogs && violationLogs.length >= 3;
+    // Secure Scoring
+    if (examData.type === 'online-mcq' || examData.type === 'online-test') {
+        if (examData.questions && answers) {
+            let score = 0;
+            examData.questions.forEach((q) => {
+                if (answers[q.id] === q.correctAnswer)
+                    score++;
+            });
+            marks = Math.round((score / examData.questions.length) * (examData.maxMark || 100));
+            const minMark = examData.minMark || 0;
+            status = marks >= minMark ? 'passed' : 'failed';
+        }
+    }
+    if (isTerminatedByCheat) {
+        status = 'failed';
+        marks = 0;
+    }
+    const submissionPayload = {
+        examId,
+        studentId: uid,
+        studentName: request.auth.token.name || 'Student',
+        marks,
+        status,
+        cheatViolations: violationLogs || [],
+        completedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    if (answerSheetUrl) {
+        submissionPayload.answerSheetUrl = answerSheetUrl;
+    }
+    await db.collection('zones').doc(zoneId).collection('exams').doc(examId).collection('submissions').doc(uid).set(submissionPayload);
+    await studentDoc.ref.update({
+        activeExamId: admin.firestore.FieldValue.delete(),
+        examEndsAt: admin.firestore.FieldValue.delete(),
+        currentExamWarnings: admin.firestore.FieldValue.delete(),
+        violationLogs: admin.firestore.FieldValue.delete(),
+        examStartedAt: admin.firestore.FieldValue.delete()
+    });
+    return { success: true, marks, status };
+});
+exports.registerIssuance = (0, https_1.onCall)(async (request) => {
+    var _a, _b, _c;
+    if (!request.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { zoneId, studentId } = request.data;
+    // Security Check: Fetch student's enrollment document and the Zone's structure
+    const zoneDoc = await db.collection('zones').doc(zoneId).get();
+    const zoneData = zoneDoc.data();
+    if (!zoneData)
+        throw new functions.https.HttpsError("not-found", "Zone not found.");
+    const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(studentId).get();
+    const studentData = studentDoc.data();
+    if (!studentData)
+        throw new functions.https.HttpsError("not-found", "Student not enrolled.");
+    // Verify that completedSegments.length exactly matches the total number of segments in the Zone.
+    const completedSegmentsLength = ((_a = studentData.completedSegments) === null || _a === void 0 ? void 0 : _a.length) || 0;
+    const totalSegmentsLength = ((_b = zoneData.segments) === null || _b === void 0 ? void 0 : _b.length) || 0;
+    if (completedSegmentsLength !== totalSegmentsLength || totalSegmentsLength === 0) {
+        throw new functions.https.HttpsError("permission-denied", "Incomplete course requirements.");
+    }
+    // Generate unique urn:uuid
+    const certId = `urn:uuid:${(0, uuid_1.v4)()}`;
+    const studentUserDoc = await db.collection('users').doc(studentId).get();
+    const studentName = ((_c = studentUserDoc.data()) === null || _c === void 0 ? void 0 : _c.name) || 'Student';
+    const courseName = zoneData.title || zoneData.name || 'Course Completion';
+    const issueDate = new Date().toISOString();
+    const platformUrl = "https://nunma.in";
+    // Call generateOpenBadgePayload to create the credential data
+    const payload = (0, vcUtils_1.generateOpenBadgePayload)(studentName, courseName, issueDate, certId, platformUrl);
+    // Database Write: Create a new document in a root-level certificates collection
+    await db.collection('certificates').doc(certId).set({
+        payload,
+        studentId,
+        zoneId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    // Update the student's enrollment document
+    await studentDoc.ref.update({
+        certificateId: certId,
+        status: "graduated"
+    });
+    return { certId };
 });
 //# sourceMappingURL=index.js.map

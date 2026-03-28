@@ -43,7 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showAddonModal, setShowAddonModal] = useState(false);
 
-  const storageUsedRaw = (user as any)?.storage_used_bytes || 0;
+  const storageUsedRaw = (user as any)?.usedStorageBytes || 0;
 
   let storageLimitRaw = 3221225472; // 3GB for STARTER
   if (currentTier === 'STANDARD') {
@@ -62,7 +62,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
   const storageLimitStr = formatBytes(storageLimitRaw);
   const storageUsedStr = formatBytes(storageUsedRaw);
-  const storagePercent = storageLimitRaw > 0 ? Math.round((storageUsedRaw / storageLimitRaw) * 100) : 0;
+  const rawPercent = storageLimitRaw > 0 ? Math.round((storageUsedRaw / storageLimitRaw) * 100) : 0;
+  const storagePercent = Math.min(100, rawPercent);
+  const isOverLimit = storageUsedRaw > storageLimitRaw;
 
   const commonLinks = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', label: 'Dashboard' },
@@ -157,15 +159,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                 <div className="relative z-10">
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-[10px] font-black uppercase tracking-widest text-gray-200">Storage</span>
-                    <span className="text-xs font-bold text-[#c2f575]">{storagePercent}%</span>
+                    <span className={`text-xs font-bold ${isOverLimit ? 'text-red-500' : 'text-[#c2f575]'}`}>{rawPercent}%</span>
                   </div>
                   <div className="w-full h-1.5 bg-white/10 rounded-full mb-4">
-                    <div className={`h-full bg-[#c2f575] rounded-full transition-all duration-500`} style={{ width: `${storagePercent}%` }}></div>
+                    <div className={`h-full rounded-full transition-all duration-500 ${isOverLimit ? 'bg-red-500' : 'bg-[#c2f575]'}`} style={{ width: `${storagePercent}%` }}></div>
                   </div>
-                  <p className="text-[10px] text-gray-400 font-medium mb-3">{storageUsedStr} of {storageLimitStr} used</p>
+                  {isOverLimit ? (
+                    <p className="text-[10px] text-red-500 font-bold mb-3 animate-pulse">Upgrade Required: Limit Exceeded</p>
+                  ) : (
+                    <p className="text-[10px] text-gray-400 font-medium mb-3">{storageUsedStr} of {storageLimitStr} used</p>
+                  )}
                   <button
                     onClick={() => navigate('/settings/pricing')}
-                    className="text-[10px] text-[#c2f575] font-black uppercase tracking-widest hover:brightness-110 transition-all border-b border-transparent hover:border-[#c2f575] inline-block"
+                    className={`text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition-all border-b border-transparent inline-block ${isOverLimit ? 'text-red-400 hover:border-red-400' : 'text-[#c2f575] hover:border-[#c2f575]'}`}
                   >
                     Buy Addons
                   </button>

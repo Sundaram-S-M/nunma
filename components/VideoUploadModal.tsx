@@ -119,7 +119,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     // Save directly to Tutor Library
                     if (user) {
                         try {
-                            await addDoc(collection(db, 'tutor_videos'), {
+                            await addDoc(collection(db, 'videos'), {
                                 tutorId: user.uid,
                                 bunnyVideoId: videoId,
                                 title: file.name || "Untitled Video",

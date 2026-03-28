@@ -17,15 +17,9 @@ const studentSchema = z.object({
 });
 
 const tutorSchema = z.object({
-    phoneNumber: z.string().regex(/^\d{10}$/, "Phone number must be exactly 10 digits"),
     businessType: z.enum(["individual", "registered"]),
-    legalName: z.string().min(2, "Legal name must be at least 2 characters"),
-    expertise: z.array(z.string()).max(3, "Maximum 3 areas of expertise allowed"),
-    academyName: z.string().min(1, "Academy name is required"),
-    payoutInfo: z.object({
-        accountHolderName: z.string().min(1, "Account holder name is required"),
-        bankIdentifier: z.string().min(1, "Bank identifier is required"),
-    }),
+    legalName: z.string().min(2, "Name is required"),
+    expertise: z.array(z.string()).max(3).optional()
 });
 
 type StudentFormValues = z.infer<typeof studentSchema>;
@@ -60,15 +54,9 @@ const OnboardingSystem: React.FC = () => {
     const tutorForm = useForm<TutorFormValues>({
         resolver: zodResolver(tutorSchema),
         defaultValues: {
-            phoneNumber: '',
             businessType: 'individual',
             legalName: '',
             expertise: [],
-            academyName: '',
-            payoutInfo: {
-                accountHolderName: '',
-                bankIdentifier: '',
-            }
         }
     });
 
@@ -116,18 +104,19 @@ const OnboardingSystem: React.FC = () => {
     const onSubmitTutor = async (data: TutorFormValues) => {
         setIsSubmitting(true);
         try {
+            const payload = {
+                taxDetails: {
+                    businessType: data.businessType,
+                    legalName: data.legalName
+                },
+                expertise: data.expertise || []
+            };
+
             await updateProfile({
                 tutorProfile: {
                     isComplete: true,
-                    phoneNumber: data.phoneNumber,
-                    academyName: data.academyName,
-                    payoutInfo: data.payoutInfo,
                 },
-                taxDetails: {
-                    businessType: data.businessType,
-                    legalName: data.legalName,
-                },
-                expertise: data.expertise
+                ...payload
             });
             
             toast.loading("Initiating Razorpay Verification...", { id: 'rzp' });
@@ -135,19 +124,26 @@ const OnboardingSystem: React.FC = () => {
             const { functions } = await import('../utils/firebase');
             
             const initAccount = httpsCallable<{businessType: string, legalName: string}, {onboardingUrl: string}>(functions, 'createTutorLinkedAccount');
-            const res = await initAccount({ businessType: data.businessType, legalName: data.legalName });
             
-            if (res.data?.onboardingUrl) {
-                toast.success("Redirecting to Razorpay...", { id: 'rzp' });
-                window.location.href = res.data.onboardingUrl;
-            } else {
+            try {
+                const res = await initAccount({ businessType: data.businessType, legalName: data.legalName });
+                if (res.data?.onboardingUrl) {
+                    toast.success("Redirecting to Razorpay...", { id: 'rzp' });
+                    window.location.href = res.data.onboardingUrl;
+                } else {
+                    toast.dismiss('rzp');
+                    toast.error("Account created, but no onboarding URL returned.");
+                    navigate('/workplace');
+                }
+            } catch (error) {
+                console.error("Razorpay Onboarding Error:", error);
                 toast.dismiss('rzp');
-                toast.error("Account created, but no onboarding URL returned.");
-                navigate('/workplace');
+                toast.error("Account creation failed. Check console for details.");
             }
         } catch (err) {
             toast.dismiss('rzp');
             toast.error('Failed to complete onboarding. Please try again.');
+        } finally {
             setIsSubmitting(false);
         }
     };
@@ -332,30 +328,17 @@ const OnboardingSystem: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Academy Name</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. Meta Scholars"
-                                        {...tutorForm.register('academyName')}
-                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.academyName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
-                                    />
-                                    {tutorForm.formState.errors.academyName && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.academyName.message}</p>}
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">
-                                        {tutorForm.watch("businessType") === "individual" ? "Full Name (As per PAN)" : "Registered Business Name (As per GST)"}
-                                    </label>
-                                    <input
-                                        type="text"
-                                        placeholder="Legal Name"
-                                        {...tutorForm.register('legalName')}
-                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.legalName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
-                                    />
-                                    {tutorForm.formState.errors.legalName && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.legalName.message}</p>}
-                                </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">
+                                    {tutorForm.watch("businessType") === "individual" ? "Full Name (As per PAN)" : "Registered Business Name (As per GST)"}
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="Legal Name"
+                                    {...tutorForm.register('legalName')}
+                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.legalName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                />
+                                {tutorForm.formState.errors.legalName && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.legalName.message}</p>}
                             </div>
 
                             <div className="space-y-2">
@@ -395,52 +378,7 @@ const OnboardingSystem: React.FC = () => {
                                 {tutorForm.formState.errors.expertise && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.expertise.message}</p>}
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Phone Number</label>
-                                <input
-                                    type="text"
-                                    maxLength={10}
-                                    placeholder="10-digit number"
-                                    {...tutorForm.register('phoneNumber')}
-                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.phoneNumber ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
-                                />
-                                {tutorForm.formState.errors.phoneNumber && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.phoneNumber.message}</p>}
-                            </div>
 
-                            <div className="bg-[#fcfdfa] border-2 border-[#c2f575]/30 rounded-3xl p-6 relative overflow-hidden">
-                                <div className="absolute right-0 top-0 w-32 h-32 bg-[#c2f575]/20 blur-3xl rounded-full"></div>
-                                <div className="flex items-center gap-3 mb-6 relative z-10">
-                                    <ShieldCheck className="text-[#040457]" size={24} />
-                                    <div>
-                                        <h4 className="font-black text-[#040457] text-lg">Payout Details</h4>
-                                        <p className="text-xs text-gray-500 font-medium">We need this to securely process your earnings.</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-5 relative z-10">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Account Holder Name</label>
-                                        <input
-                                            type="text"
-                                            placeholder="Name exactly as on bank account"
-                                            {...tutorForm.register('payoutInfo.accountHolderName')}
-                                            className={`w-full bg-white border-2 focus:bg-white rounded-xl px-4 py-3 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.payoutInfo?.accountHolderName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#040457]'}`}
-                                        />
-                                        {tutorForm.formState.errors.payoutInfo?.accountHolderName && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.payoutInfo.accountHolderName.message}</p>}
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Bank Identifier / IFSC</label>
-                                        <input
-                                            type="text"
-                                            placeholder="Bank routing code"
-                                            {...tutorForm.register('payoutInfo.bankIdentifier')}
-                                            className={`w-full bg-white border-2 focus:bg-white rounded-xl px-4 py-3 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.payoutInfo?.bankIdentifier ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#040457]'}`}
-                                        />
-                                        {tutorForm.formState.errors.payoutInfo?.bankIdentifier && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.payoutInfo.bankIdentifier.message}</p>}
-                                    </div>
-                                </div>
-                            </div>
 
                             <div className="pt-4 mt-6 flex gap-4">
                                 {!requestedRole && (

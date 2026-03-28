@@ -61,6 +61,9 @@ const StudentZoneView: React.FC = () => {
   const [examCurrentQuestion, setExamCurrentQuestion] = useState(0);
   const [examAnswers, setExamAnswers] = useState<Record<string, number>>({});
   const [cheatViolations, setCheatViolations] = useState(0);
+  const [violationLogs, setViolationLogs] = useState<string[]>([]);
+  const [showCheatWarningModal, setShowCheatWarningModal] = useState(false);
+  const [terminatedByCheat, setTerminatedByCheat] = useState(false);
   const [isExamTerminated, setIsExamTerminated] = useState(false);
   const [showExamRules, setShowExamRules] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'off' | 'on' | 'denied'>('off');
@@ -70,6 +73,7 @@ const StudentZoneView: React.FC = () => {
   const [hasExplicitConsent, setHasExplicitConsent] = useState(false);
   const [postExamTimer, setPostExamTimer] = useState<number | null>(null);
   const [uploadedAnswerFiles, setUploadedAnswerFiles] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [curriculum, setCurriculum] = useState<any[]>([]);
   const [studentData, setStudentData] = useState<any>(null);
   const [examEndTime, setExamEndTime] = useState<Date | null>(null);
@@ -284,20 +288,29 @@ const StudentZoneView: React.FC = () => {
 
   // Cheating Detection: Window Visibility
   useEffect(() => {
-    if (activeExam && !isExamTerminated && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq')) {
+    if (activeExam && !isExamTerminated && !terminatedByCheat && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq')) {
       const handleVisibilityChange = async () => {
-        if (!document.hidden) return; // Only trigger when the document becomes hidden
+        if (document.visibilityState !== 'hidden') return;
+        
+        const timestamp = new Date().toISOString();
         let newWarningCount = 0;
+        let currentLogs: string[] = [];
+        
         setCheatViolations(prev => {
           newWarningCount = prev + 1;
           return newWarningCount;
         });
+        
+        setViolationLogs(prev => {
+          currentLogs = [...prev, timestamp];
+          return currentLogs;
+        });
 
-        // Persist to Firestore
         if (zoneId && studentData) {
           try {
             await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
-              currentExamWarnings: newWarningCount
+              currentExamWarnings: newWarningCount,
+              violationLogs: arrayUnion(timestamp)
             });
           } catch (e) {
             console.error("Failed to sync warning", e);
@@ -305,16 +318,16 @@ const StudentZoneView: React.FC = () => {
         }
 
         if (newWarningCount >= 3) {
-          handleTerminateExam('failed');
-          alert('Exam terminated due to leaving the exam tab multiple times.');
+          setTerminatedByCheat(true);
+          handleTerminateExam('failed', currentLogs);
         } else {
-          alert(`WARNING: You left the exam tab. Violation ${newWarningCount}/2. Next time your exam will be reported or terminated.`);
+          setShowCheatWarningModal(true);
         }
       };
       document.addEventListener('visibilitychange', handleVisibilityChange);
       return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
-  }, [activeExam, isExamTerminated, zoneId, studentData]);
+  }, [activeExam, isExamTerminated, terminatedByCheat, zoneId, studentData]);
 
   const handleStartExam = async (exam: any) => {
     if (!hasExplicitConsent) {
@@ -379,38 +392,49 @@ const StudentZoneView: React.FC = () => {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleTerminateExam = async (status: 'passed' | 'failed' | 'ongoing') => {
+  const UPLOAD_BUFFER_MS = 20 * 60 * 1000;
+
+  const handleTerminateExam = async (status: 'passed' | 'failed' | 'ongoing', logsOverride?: string[]) => {
     if (!zoneId || !activeExam || !studentData) return;
 
-    if (activeExam.type === 'online-test') {
-      // Start 20-minute upload countdown instead of immediate fail/pass
-      setPostExamTimer(20 * 60);
+    if (activeExam.type === 'online-test' && !terminatedByCheat && !logsOverride) {
+      if (studentData.examEndsAt) {
+        const endTime = new Date(studentData.examEndsAt).getTime();
+        const remainingMs = (endTime + UPLOAD_BUFFER_MS) - Date.now();
+        setPostExamTimer(Math.max(0, Math.ceil(remainingMs / 1000)));
+      } else {
+        setPostExamTimer(20 * 60);
+      }
       alert("Time is up! You have 20 minutes to scan and upload your answer sheet as a PDF.");
       return;
     }
 
-    const result = {
-      examId: activeExam.id,
-      studentId: authUser?.uid || 'anon',
-      studentName: authUser?.name || 'Anonymous',
-      marks: status === 'passed' ? Math.floor(activeExam.maxMark * 0.8) : 0, // Mock scoring logic for now
-      status: status,
-      cheatViolations: cheatViolations,
-      completedAt: new Date().toISOString()
-    };
+    const logsToSubmit = logsOverride || violationLogs;
 
     try {
-      await setDoc(doc(db, 'zones', zoneId, 'exams', activeExam.id, 'submissions', authUser?.uid || 'anon'), result);
-      // Update student doc to clear active exam
+      const submitFn = httpsCallable(functions, 'submitExam');
+      await submitFn({
+        zoneId,
+        examId: activeExam.id,
+        answers: examAnswers,
+        violationLogs: logsToSubmit
+      });
       await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
         activeExamId: null,
-        currentExamWarnings: 0
+        currentExamWarnings: 0,
+        violationLogs: []
       });
-      // Optimistic update
-      setExamResults(prev => [...prev, { id: 'temp-' + Date.now(), ...result }]);
+      setExamResults(prev => [...prev, { 
+        id: 'temp-' + Date.now(), 
+        examId: activeExam.id, 
+        studentId: authUser?.uid || 'anon', 
+        status: logsToSubmit.length >= 3 ? 'failed' : status, 
+        cheatViolations: logsToSubmit, 
+        completedAt: new Date().toISOString() 
+      }]);
     } catch (e) {
-      console.error("Failed to save exam result", e);
-      alert("Failed to submit exam result. Please contact support.");
+      console.error("Failed to save exam result via function", e);
+      alert("Failed to submit exam result. Time window may have closed.");
     }
 
     setActiveExam(null);
@@ -426,42 +450,64 @@ const StudentZoneView: React.FC = () => {
       handleTerminateExam('ongoing');
       return;
     }
-
-    // Basic scoring for MCQ
-    let score = 0;
-    activeExam.questions.forEach((q: any) => {
-      if (examAnswers[q.id] === q.correctAnswer) score++;
-    });
-    const finalMarks = Math.round((score / activeExam.questions.length) * activeExam.maxMark);
-    const status = finalMarks >= activeExam.minMark ? 'passed' : 'failed';
-
-    handleTerminateExam(status);
-    alert(`Exam submitted! Your score: ${finalMarks}/${activeExam.maxMark}. Status: ${status}`);
+    handleTerminateExam('ongoing');
+    if (!terminatedByCheat) {
+      alert("Exam submitted successfully. Scoring will be available soon.");
+    }
   };
 
   const handleUploadAnswerSheet = async () => {
     if (!uploadedAnswerFiles || !zoneId || !activeExam || !studentData) return;
-    // Mock upload logic
-    alert(`Uploading ${uploadedAnswerFiles.name}... Success!`);
-
-    const result = {
-      examId: activeExam.id,
-      studentId: authUser?.uid || 'anon',
-      studentName: authUser?.name || 'Anonymous',
-      marks: 0, // Pending grading
-      status: 'ongoing',
-      cheatViolations: cheatViolations,
-      completedAt: new Date().toISOString(),
-      answerSheetUrl: URL.createObjectURL(uploadedAnswerFiles) // Mock URL
-    };
+    
+    if (uploadedAnswerFiles.size > 5 * 1024 * 1024) {
+      alert("File is too large. Please compress your PDF to under 5MB.");
+      return;
+    }
 
     try {
-      await setDoc(doc(db, 'zones', zoneId, 'exams', activeExam.id, 'submissions', authUser?.uid || 'anon'), result);
+      setIsUploading(true);
+
+      const toBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
+      });
+
+      const base64File = await toBase64(uploadedAnswerFiles);
+
+      const uploadFn = httpsCallable(functions, 'uploadExamScript');
+      const uploadRes = await uploadFn({
+        file: base64File,
+        fileName: uploadedAnswerFiles.name,
+        zoneId,
+        examId: activeExam.id
+      });
+
+      const answerSheetUrl = (uploadRes.data as any).fileUrl;
+
+      const submitFn = httpsCallable(functions, 'submitExam');
+      await submitFn({
+        zoneId,
+        examId: activeExam.id,
+        answers: {}, 
+        violationLogs,
+        answerSheetUrl
+      });
       await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
         activeExamId: null,
-        currentExamWarnings: 0
+        currentExamWarnings: 0,
+        violationLogs: []
       });
-      setExamResults(prev => [...prev, { id: 'temp-' + Date.now(), ...result }]);
+      setExamResults(prev => [...prev, { 
+        id: 'temp-' + Date.now(),
+        examId: activeExam.id, 
+        studentId: authUser?.uid || 'anon', 
+        status: 'ongoing', 
+        cheatViolations: violationLogs,
+        answerSheetUrl,
+        completedAt: new Date().toISOString() 
+      }]);
       setPostExamTimer(null);
       setActiveExam(null);
       setCameraStatus('off');
@@ -471,27 +517,29 @@ const StudentZoneView: React.FC = () => {
       }
       alert("Answer sheet submitted successfully. Awaiting grading.");
     } catch (e) {
-      console.error("Failed to save exam result", e);
-      alert("Failed to submit exam result. Please try again.");
+      console.error("Failed to save exam result via function", e);
+      alert("Failed to submit exam result. Verify file limits and time window.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
   useEffect(() => {
-    if (postExamTimer !== null && postExamTimer > 0) {
-      const timerId = setInterval(() => setPostExamTimer(p => p !== null ? p - 1 : null), 1000);
+    if (postExamTimer !== null && postExamTimer > 0 && studentData?.examEndsAt) {
+      const timerId = setInterval(() => {
+        const endTime = new Date(studentData.examEndsAt).getTime();
+        const remainingMs = (endTime + UPLOAD_BUFFER_MS) - Date.now();
+        
+        if (remainingMs <= 0) {
+          clearInterval(timerId);
+          setPostExamTimer(0);
+        } else {
+          setPostExamTimer(Math.ceil(remainingMs / 1000));
+        }
+      }, 1000);
       return () => clearInterval(timerId);
-    } else if (postExamTimer === 0) {
-      alert("Upload time has expired. Exam marked as failed.");
-      // Ideally push a failed result here
-      setPostExamTimer(null);
-      setActiveExam(null);
-      setCameraStatus('off');
-      if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-        setVideoStream(null);
-      }
     }
-  }, [postExamTimer]);
+  }, [postExamTimer !== null, studentData?.examEndsAt]);
 
   useEffect(() => {
     if (cameraStatus === 'on') {
@@ -1175,7 +1223,39 @@ const StudentZoneView: React.FC = () => {
         </div>
       )}
 
-      {activeExam && (
+      {showCheatWarningModal && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-[#040457]/95 backdrop-blur-2xl p-6">
+          <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 text-center space-y-8 animate-in zoom-in-95 duration-300">
+            <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto animate-pulse">
+              <AlertTriangle size={48} />
+            </div>
+            <h3 className="text-3xl font-black text-[#1A1A4E]">Tab Switching Detected</h3>
+            <p className="text-gray-500 font-medium text-lg leading-relaxed">
+              You have {3 - cheatViolations} warning(s) left before your exam is automatically terminated.
+            </p>
+            <button
+              onClick={() => setShowCheatWarningModal(false)}
+              className="w-full py-5 bg-red-600 text-white rounded-3xl font-black uppercase tracking-widest hover:bg-red-700 transition-all"
+            >
+              I Understand
+            </button>
+          </div>
+        </div>
+      )}
+
+      {terminatedByCheat && (
+         <div className="fixed inset-0 z-[600] flex flex-col items-center justify-center bg-red-900/95 backdrop-blur-3xl p-6 text-white text-center animate-in fade-in duration-500">
+            <AlertTriangle size={80} className="mb-8" />
+            <h2 className="text-5xl font-black mb-4">Test Terminated</h2>
+            <p className="text-xl opacity-80 max-w-lg mb-12">Your assessment was forcefully concluded due to repeated tab switching or window evasion. Your attempt has been logged and submitted.</p>
+            <button onClick={() => {
+                setTerminatedByCheat(false);
+                setActiveExam(null);
+            }} className="px-10 py-4 bg-white text-red-900 rounded-3xl font-black uppercase text-sm tracking-widest hover:scale-105 transition-all">Return to Dashboard</button>
+         </div>
+      )}
+
+      {activeExam && !terminatedByCheat && (
         <div
           className="fixed inset-0 z-[500] bg-white flex flex-col p-10 animate-in slide-in-from-bottom-10 duration-700"
           onContextMenu={(e) => e.preventDefault()}
@@ -1305,26 +1385,54 @@ const StudentZoneView: React.FC = () => {
       {/* Post Exam Timer Modal for Online Test */}
       {postExamTimer !== null && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-in zoom-in-95 duration-500">
-          <div className="bg-white rounded-[3rem] max-w-lg w-full p-12 text-center shadow-2xl border border-white/10">
-            <div className="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
+          <div className="bg-white rounded-[3rem] max-w-lg w-full p-12 text-center shadow-2xl border border-white/10 relative overflow-hidden">
+            {postExamTimer === 0 && (
+              <div className="absolute inset-0 bg-red-900/95 flex flex-col items-center justify-center z-50 p-8 backdrop-blur-md animate-in fade-in duration-500">
+                <AlertTriangle size={64} className="text-white mb-6" />
+                <h2 className="text-4xl font-black text-white mb-4">Submission Window Closed</h2>
+                <p className="text-red-200 text-center font-bold">You failed to submit your answer sheet within the 20-minute buffer.</p>
+                <button 
+                  onClick={() => { 
+                    setPostExamTimer(null); 
+                    setActiveExam(null); 
+                    setCameraStatus('off');
+                    if (videoStream) {
+                      videoStream.getTracks().forEach(track => track.stop());
+                      setVideoStream(null);
+                    }
+                  }} 
+                  className="mt-8 px-8 py-4 bg-white text-red-900 rounded-full font-black uppercase text-[10px] tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            )}
+            <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8 ${postExamTimer > 0 && postExamTimer < 300 ? 'bg-red-500 text-white animate-pulse' : 'bg-red-100 text-red-600'}`}>
               <Clock size={48} />
             </div>
             <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tight mb-4">Exam Concluded</h3>
             <p className="text-gray-500 font-medium mb-8">Scan your answer sheets and upload them as a single PDF. You have strictly 20 minutes before submissions are locked.</p>
-            <div className="text-6xl font-black text-red-500 mb-10 tracking-tighter tabular-nums">
-              {Math.floor(postExamTimer / 60).toString().padStart(2, '0')}:{(postExamTimer % 60).toString().padStart(2, '0')}
+            
+            <div className={`p-6 rounded-3xl mb-10 transition-colors duration-1000 flex flex-col items-center ${postExamTimer > 0 && postExamTimer < 300 ? 'bg-red-500 animate-pulse text-white shadow-xl shadow-red-500/30' : 'bg-gray-100/50 text-indigo-900'}`}>
+              <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${postExamTimer > 0 && postExamTimer < 300 ? 'text-red-100' : 'text-gray-400'}`}>Submission Window Closes In:</p>
+              <div className="text-6xl font-black tracking-tighter tabular-nums drop-shadow-sm">
+                {Math.floor(postExamTimer / 60).toString().padStart(2, '0')}:{(postExamTimer % 60).toString().padStart(2, '0')}
+              </div>
             </div>
-            <label className="w-full py-6 bg-gray-50 border-2 border-dashed border-gray-300 text-indigo-900 rounded-3xl font-black uppercase text-[11px] tracking-widest hover:border-indigo-500 hover:bg-indigo-50 transition-all flex flex-col items-center justify-center gap-3 cursor-pointer shadow-sm mb-6 h-32">
-              <Upload size={24} className="text-indigo-400" />
+
+            <label className={`w-full py-6 border-2 border-dashed rounded-[2rem] font-black uppercase text-[11px] tracking-widest flex flex-col items-center justify-center gap-3 mb-6 h-32 transition-all ${postExamTimer === 0 || isUploading ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white border-gray-300 text-indigo-900 hover:border-[#c2f575] hover:bg-gray-50 cursor-pointer shadow-sm hover:shadow-md'}`}>
+              <Upload size={24} className={postExamTimer === 0 || isUploading ? 'text-gray-300' : 'text-indigo-400'} />
               {uploadedAnswerFiles ? uploadedAnswerFiles.name : 'Select PDF Answer Sheet'}
-              <input type="file" accept=".pdf" className="hidden" onChange={(e) => e.target.files && setUploadedAnswerFiles(e.target.files[0])} />
+              <input type="file" accept=".pdf" className="hidden" disabled={postExamTimer === 0 || isUploading} onChange={(e) => e.target.files && setUploadedAnswerFiles(e.target.files[0])} />
             </label>
+            <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mb-4 text-center">Max limit: 5MB</p>
             <button
-              disabled={!uploadedAnswerFiles}
+              disabled={!uploadedAnswerFiles || postExamTimer === 0 || isUploading}
               onClick={handleUploadAnswerSheet}
-              className="w-full py-6 bg-green-500 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="w-full py-6 bg-[#1A1A4E] text-white rounded-[2rem] font-black uppercase text-[11px] tracking-[0.2em] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
             >
-              Submit Answers
+              {isUploading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"/> : null}
+              {isUploading ? 'Uploading...' : 'Submit Answers'}
             </button>
           </div>
         </div>

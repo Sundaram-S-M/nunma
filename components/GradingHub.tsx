@@ -3,6 +3,7 @@ import { collection, query, onSnapshot, doc, updateDoc, setDoc, serverTimestamp 
 import { db } from '../utils/firebase';
 import { X, Check, Eye, AlertTriangle, Search, Upload, FileSpreadsheet } from 'lucide-react';
 import PDFViewer from './PDFViewer';
+import TutorGradingHub from './TutorGradingHub';
 import * as XLSX from 'xlsx';
 
 interface GradingHubProps {
@@ -22,6 +23,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
     // New States
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+    const [valuatingStudentId, setValuatingStudentId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -304,7 +306,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                                     </div>
                                     {selectedSubmission?.answerSheetUrl && (
                                         <button
-                                            onClick={() => onValuate(selectedStudent.id, selectedSubmission.answerSheetUrl)}
+                                            onClick={() => setValuatingStudentId(selectedStudent.id)}
                                             className="px-6 py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-black uppercase text-[12px] tracking-widest hover:bg-indigo-100 transition-colors flex items-center gap-2 border border-indigo-100"
                                         >
                                             <Eye size={18} /> View & Valuate Script
@@ -312,12 +314,21 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                                     )}
                                 </div>
 
-                                {selectedSubmission?.cheatViolations > 0 && (
-                                    <div className="mb-6 flex items-start gap-3 p-4 bg-red-50 rounded-2xl border border-red-100">
-                                        <AlertTriangle className="text-red-500 mt-1" size={20} />
-                                        <div>
-                                            <h4 className="text-red-700 font-black text-sm uppercase tracking-widest">Potential Cheating Detected</h4>
-                                            <p className="text-red-600/80 text-xs mt-1 font-bold">This student left the exam tab {selectedSubmission.cheatViolations} times during the test.</p>
+                                {selectedSubmission?.cheatViolations?.length > 0 && (
+                                    <div className="mb-6 flex flex-col gap-3 p-5 bg-red-50 rounded-2xl border border-red-200">
+                                        <div className="flex items-start gap-3">
+                                            <AlertTriangle className="text-red-500 mt-0.5" size={20} />
+                                            <div>
+                                                <h4 className="text-red-700 font-black text-sm uppercase tracking-widest leading-tight">Cheating Detected</h4>
+                                                <p className="text-red-600/80 text-xs mt-1 font-bold">This student left the exam tab {selectedSubmission.cheatViolations.length} times.</p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-2 pl-8 flex gap-2 flex-wrap text-red-600/70 text-[10px] font-bold">
+                                            {selectedSubmission.cheatViolations.map((stamp: string, i: number) => (
+                                                <div key={i} className="px-3 py-1 bg-red-100/50 rounded-full border border-red-200/50">
+                                                    {new Date(stamp).toLocaleTimeString()}
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -374,6 +385,21 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
 
             {viewingPdfUrl && (
                 <PDFViewer url={viewingPdfUrl} onClose={() => setViewingPdfUrl(null)} />
+            )}
+
+            {valuatingStudentId && (
+                <TutorGradingHub
+                    zoneId={zoneId}
+                    exam={exam}
+                    studentId={valuatingStudentId}
+                    studentName={students.find(s => s.id === valuatingStudentId)?.name || 'Unknown'}
+                    submission={submissions.find(s => s.studentId === valuatingStudentId)}
+                    onClose={() => setValuatingStudentId(null)}
+                    onGraded={() => {
+                        setValuatingStudentId(null);
+                        alert("Valuation finalized constraints successfully synchronized.");
+                    }}
+                />
             )}
         </div>
     );

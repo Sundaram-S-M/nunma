@@ -25,7 +25,7 @@ import Auth from './pages/Auth';
 import BookingPage from './pages/BookingPage';
 import PricingPage from './pages/PricingPage';
 import OnboardingSystem from './pages/OnboardingSystem';
-import SandboxLive from './pages/SandboxLive';
+import LiveClassroom from './pages/LiveClassroom';
 import LandingPage from './pages/LandingPage';
 import PublicLayout from './layouts/PublicLayout';
 import LegalPolicy from './pages/LegalPolicy';
@@ -99,8 +99,7 @@ const AppContent: React.FC = () => {
             <Route path="/workplace/launch" element={role === UserRole.TUTOR ? <LaunchZone /> : <Navigate to="/dashboard" />} />
             <Route path="/certificate-engine" element={role === UserRole.TUTOR ? <CertificateEngine /> : <Navigate to="/dashboard" />} />
             <Route path="/list-product/flow" element={role === UserRole.TUTOR ? <ListProductFlow /> : <Navigate to="/dashboard" />} />
-            <Route path="/live/:zoneId/:sessionId" element={<SandboxLive />} />
-            <Route path="/sandbox/live" element={<SandboxLive />} />
+            <Route path="/live/:zoneId/:sessionId" element={<LiveClassroom />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/search" element={<Search />} />
             <Route path="/explore" element={<Explore />} />
