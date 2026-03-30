@@ -89,7 +89,7 @@ const BlogSection: React.FC = () => {
                   {post.excerpt}
                 </p>
                 
-                <div className="flex items-center text-brand-blue font-semibold text-sm mt-auto group-hover:text-blue-700">
+                <div className="flex items-center text-brand-blue font-semibold text-sm mt-auto group-hover:text-[#c2f575] transition-colors">
                   <span className="mr-2">Read Article</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>

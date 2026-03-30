@@ -32,9 +32,9 @@ const DemoBookingWidget: React.FC = () => {
       // Reveal the calendar iframe
       setWidgetState('calendar');
       toast.success('Demo unlocked! Choose a time below.');
-    } catch (error) {
-      console.error('Error saving lead:', error);
-      toast.error('Failed to unlock demo. Please try again.');
+    } catch (error: any) {
+      console.error('Error saving Calendar Event (Lead):', error);
+      toast.error(error.message || 'Failed to unlock demo. Please try again.');
       setWidgetState('initial');
     }
   };
@@ -80,7 +80,7 @@ const DemoBookingWidget: React.FC = () => {
               <button
                 type="submit"
                 disabled={widgetState === 'submitting'}
-                className="w-full flex items-center justify-center gap-2 py-4 px-6 border border-transparent rounded-2xl shadow-sm text-base font-bold text-white bg-brand-blue hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors disabled:opacity-70 disabled:cursor-not-allowed group"
+                className="w-full flex items-center justify-center gap-2 py-4 px-6 border border-transparent rounded-2xl shadow-sm text-base font-bold text-white bg-brand-blue hover:shadow-[0_0_15px_#c2f575] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#c2f575] transition-all disabled:opacity-70 disabled:cursor-not-allowed group"
               >
                 {widgetState === 'submitting' ? (
                   <>

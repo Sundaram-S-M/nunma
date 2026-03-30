@@ -25,6 +25,20 @@
             'nunma-white': '#fcfcfc',
             'brand-blue': '#1a1a4e',
             'brand-slate': '#0f172a',
+          },
+          animation: {
+            float: 'float 3s ease-in-out infinite',
+            glow: 'glow 2s ease-in-out infinite alternate',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-10px)' },
+            },
+            glow: {
+              'from': { boxShadow: '0 0 10px #c2f575' },
+              'to': { boxShadow: '0 0 20px #c2f575, 0 0 30px #c2f575' },
+            }
           }
         }
       }

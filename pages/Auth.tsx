@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import {
@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 
 const Auth: React.FC = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParams] = useSearchParams();
+  const [isLogin, setIsLogin] = useState(searchParams.get('mode') !== 'signup');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -84,7 +85,7 @@ const Auth: React.FC = () => {
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
-      await loginWithGoogle();
+      await loginWithGoogle(role);
       navigate('/dashboard');
     } catch (error: any) {
       console.error("Google Sign-In error:", error);

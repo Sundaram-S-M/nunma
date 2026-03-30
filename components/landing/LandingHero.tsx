@@ -31,8 +31,8 @@ const LandingHero: React.FC = () => {
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 items-center">
           <button 
-            onClick={() => navigate('/auth')}
-            className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 bg-brand-blue text-white rounded-full font-semibold text-lg hover:bg-blue-700 transition-colors shadow-sm overflow-hidden w-full sm:w-auto"
+            onClick={() => navigate('/auth?mode=signup')}
+            className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 bg-[#c2f575] text-[#1a1a4e] rounded-full font-semibold text-lg hover:shadow-[0_0_15px_#c2f575] transition-all shadow-sm overflow-hidden w-full sm:w-auto animate-float"
           >
             <span className="relative z-10">Start for Free</span>
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform relative z-10" />

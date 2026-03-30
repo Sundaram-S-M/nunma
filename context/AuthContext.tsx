@@ -62,7 +62,7 @@ interface AuthContextType {
   signup: (profile: Omit<UserProfile, 'uid'>, password: string) => Promise<void>;
   requestOTP: (email: string) => Promise<void>;
   verifyOTP: (email: string, otp: string, registrationData?: { name: string, role: string }, password?: string) => Promise<any>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (selectedRole?: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   toggleRole: () => Promise<void>;
@@ -189,10 +189,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (selectedRole?: UserRole) => {
     if (!auth) throw new Error("Firebase Auth not initialized");
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    
+    if (db && selectedRole) {
+        try {
+            const userRef = doc(db, 'users', result.user.uid);
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+                await setDoc(userRef, { role: selectedRole }, { merge: true });
+            }
+        } catch (error) {
+            console.error("AuthContext: Failed to update role after Google Login", error);
+        }
+    }
   };
 
   const logout = async () => {

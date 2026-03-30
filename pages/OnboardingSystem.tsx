@@ -19,6 +19,10 @@ const studentSchema = z.object({
 const tutorSchema = z.object({
     businessType: z.enum(["individual", "registered"]),
     legalName: z.string().min(2, "Name is required"),
+    pan: z.string().regex(/^[A-Za-z]{5}\d{4}[A-Za-z]{1}$/, "Invalid PAN format. Example: ABCDE1234F"),
+    bankAccount: z.string().min(9, "Bank Account is required"),
+    ifsc: z.string().min(4, "Valid IFSC code is required"),
+    gstin: z.string().optional(),
     expertise: z.array(z.string()).max(3).optional()
 });
 
@@ -56,6 +60,10 @@ const OnboardingSystem: React.FC = () => {
         defaultValues: {
             businessType: 'individual',
             legalName: '',
+            pan: '',
+            bankAccount: '',
+            ifsc: '',
+            gstin: '',
             expertise: [],
         }
     });
@@ -107,7 +115,11 @@ const OnboardingSystem: React.FC = () => {
             const payload = {
                 taxDetails: {
                     businessType: data.businessType,
-                    legalName: data.legalName
+                    legalName: data.legalName,
+                    pan: data.pan,
+                    bankAccount: data.bankAccount,
+                    ifsc: data.ifsc,
+                    gstin: data.gstin
                 },
                 expertise: data.expertise || []
             };
@@ -123,10 +135,17 @@ const OnboardingSystem: React.FC = () => {
             const { httpsCallable } = await import('firebase/functions');
             const { functions } = await import('../utils/firebase');
             
-            const initAccount = httpsCallable<{businessType: string, legalName: string}, {onboardingUrl: string}>(functions, 'createTutorLinkedAccount');
+            const initAccount = httpsCallable<{businessType: string, legalName: string, pan: string, bankAccount: string, ifsc: string, gstin?: string}, {onboardingUrl: string}>(functions, 'createTutorLinkedAccount');
             
             try {
-                const res = await initAccount({ businessType: data.businessType, legalName: data.legalName });
+                const res = await initAccount({ 
+                    businessType: data.businessType, 
+                    legalName: data.legalName,
+                    pan: data.pan,
+                    bankAccount: data.bankAccount,
+                    ifsc: data.ifsc,
+                    gstin: data.gstin
+                });
                 if (res.data?.onboardingUrl) {
                     toast.success("Redirecting to Razorpay...", { id: 'rzp' });
                     window.location.href = res.data.onboardingUrl;
@@ -135,14 +154,14 @@ const OnboardingSystem: React.FC = () => {
                     toast.error("Account created, but no onboarding URL returned.");
                     navigate('/workplace');
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Razorpay Onboarding Error:", error);
                 toast.dismiss('rzp');
-                toast.error("Account creation failed. Check console for details.");
+                toast.error(error.message || "Account creation failed. Check console for details.");
             }
-        } catch (err) {
+        } catch (err: any) {
             toast.dismiss('rzp');
-            toast.error('Failed to complete onboarding. Please try again.');
+            toast.error(err.message || 'Failed to complete onboarding. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -202,7 +221,7 @@ const OnboardingSystem: React.FC = () => {
                                     <GraduationCap strokeWidth={2.5} size={32} />
                                 </div>
                                 <h3 className="text-2xl font-black text-white mb-2 tracking-tight group-hover:text-[#c2f575] transition-colors">I want to Teach</h3>
-                                <p className="text-indigo-200 font-medium">Join as a <span className="text-white font-black">Thala</span> and build your digital academy.</p>
+                                <p className="text-indigo-200 font-medium">Join as a <span className="text-white font-black">Thala</span> and build your digital profile.</p>
                                 <div className="mt-8 flex items-center gap-2 text-[#c2f575] font-bold text-sm tracking-widest uppercase opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
                                     Select Thala <ArrowRight size={16} />
                                 </div>
@@ -228,10 +247,15 @@ const OnboardingSystem: React.FC = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Phone Number</label>
                                 <input
-                                    type="text"
+                                    type="tel"
                                     maxLength={10}
                                     placeholder="10-digit number"
                                     {...studentForm.register('phoneNumber')}
+                                    onChange={(e) => {
+                                        const digitsOnly = e.target.value.replace(/\D/g, '');
+                                        e.target.value = digitsOnly;
+                                        studentForm.setValue('phoneNumber', digitsOnly);
+                                    }}
                                     className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${studentForm.formState.errors.phoneNumber ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                 />
                                 {studentForm.formState.errors.phoneNumber && (
@@ -306,7 +330,7 @@ const OnboardingSystem: React.FC = () => {
                         <div className="mb-8 flex items-start justify-between">
                             <div>
                                 <h2 className="text-3xl font-black text-[#040457] tracking-tight mb-2">Thala Profile</h2>
-                                <p className="text-gray-500">Set up your academy and payout details to get started.</p>
+                                <p className="text-gray-500">Set up your profile and payout details to get started.</p>
                             </div>
                             <div className="w-12 h-12 bg-[#040457] rounded-xl flex items-center justify-center text-[#c2f575]">
                                 <GraduationCap size={24} />
@@ -339,6 +363,75 @@ const OnboardingSystem: React.FC = () => {
                                     className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.legalName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                 />
                                 {tutorForm.formState.errors.legalName && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.legalName.message}</p>}
+                            </div>
+
+                            <div className="p-6 rounded-[2rem] bg-[#052e16] space-y-5 border border-[#c2f575]/20 shadow-xl shadow-[#052e16]/30 group hover:border-[#c2f575]/50 transition-colors">
+                                <h4 className="text-[#c2f575] font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                                    <ShieldCheck size={16} /> Financial KYC (Strict)
+                                </h4>
+                                
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-[#fcfcfc]/60 uppercase tracking-[0.2em] ml-2">PAN Card Number</label>
+                                    <input
+                                        type="text"
+                                        placeholder="ABCDE1234F"
+                                        maxLength={10}
+                                        {...tutorForm.register('pan', {
+                                            onChange: (e) => {
+                                                e.target.value = e.target.value.toUpperCase();
+                                                tutorForm.setValue('pan', e.target.value.toUpperCase());
+                                            }
+                                        })}
+                                        className={`w-full bg-[#052e16] border-2 rounded-[1.25rem] px-5 py-4 font-bold text-[#fcfcfc] outline-none transition-all placeholder-[#fcfcfc]/20 ${tutorForm.formState.errors.pan ? 'border-red-400 focus:border-red-400' : 'border-[#144f2b] focus:border-[#c2f575]'}`}
+                                    />
+                                    {tutorForm.formState.errors.pan && <p className="text-red-400 text-xs font-bold pl-2">{tutorForm.formState.errors.pan.message}</p>}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-[#fcfcfc]/60 uppercase tracking-[0.2em] ml-2">Bank Account</label>
+                                        <input
+                                            type="password"
+                                            placeholder="Account Number"
+                                            {...tutorForm.register('bankAccount')}
+                                            className={`w-full bg-[#052e16] border-2 rounded-[1.25rem] px-5 py-4 font-bold text-[#fcfcfc] outline-none transition-all placeholder-[#fcfcfc]/20 ${tutorForm.formState.errors.bankAccount ? 'border-red-400 focus:border-red-400' : 'border-[#144f2b] focus:border-[#c2f575]'}`}
+                                        />
+                                        {tutorForm.formState.errors.bankAccount && <p className="text-red-400 text-xs font-bold pl-2">{tutorForm.formState.errors.bankAccount.message}</p>}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-[#fcfcfc]/60 uppercase tracking-[0.2em] ml-2">IFSC Code</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Bank IFSC"
+                                            {...tutorForm.register('ifsc', {
+                                                onChange: (e) => {
+                                                    e.target.value = e.target.value.toUpperCase();
+                                                    tutorForm.setValue('ifsc', e.target.value.toUpperCase());
+                                                }
+                                            })}
+                                            className={`w-full bg-[#052e16] border-2 rounded-[1.25rem] px-5 py-4 font-bold text-[#fcfcfc] outline-none transition-all placeholder-[#fcfcfc]/20 ${tutorForm.formState.errors.ifsc ? 'border-red-400 focus:border-red-400' : 'border-[#144f2b] focus:border-[#c2f575]'}`}
+                                        />
+                                        {tutorForm.formState.errors.ifsc && <p className="text-red-400 text-xs font-bold pl-2">{tutorForm.formState.errors.ifsc.message}</p>}
+                                    </div>
+                                </div>
+
+                                {tutorForm.watch("businessType") === "registered" && (
+                                    <div className="space-y-2 pt-2 border-t border-[#144f2b]">
+                                        <label className="text-[10px] font-black text-[#fcfcfc]/60 uppercase tracking-[0.2em] ml-2">GSTIN (Optional)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Registered GST Number"
+                                            {...tutorForm.register('gstin', {
+                                                onChange: (e) => {
+                                                    e.target.value = e.target.value.toUpperCase();
+                                                    tutorForm.setValue('gstin', e.target.value.toUpperCase());
+                                                }
+                                            })}
+                                            className={`w-full bg-[#052e16] border-2 rounded-[1.25rem] px-5 py-4 font-bold text-[#fcfcfc] outline-none transition-all placeholder-[#fcfcfc]/20 ${tutorForm.formState.errors.gstin ? 'border-red-400 focus:border-red-400' : 'border-[#144f2b] focus:border-[#c2f575]'}`}
+                                        />
+                                        {tutorForm.formState.errors.gstin && <p className="text-red-400 text-xs font-bold pl-2">{tutorForm.formState.errors.gstin.message}</p>}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-2">
@@ -395,7 +488,7 @@ const OnboardingSystem: React.FC = () => {
                                     disabled={isSubmitting}
                                     className="flex-1 py-4 bg-[#c2f575] text-[#040457] border-2 border-transparent focus:border-[#040457] rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#c2f575]/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-[#c2f575]/40 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:transform-none"
                                 >
-                                    {isSubmitting ? 'Creating Academy...' : 'Launch Academy'} <ChevronRight size={20} strokeWidth={3} />
+                                    {isSubmitting ? 'Creating Profile...' : 'Launch Profile'} <ChevronRight size={20} strokeWidth={3} />
                                 </button>
                             </div>
                         </form>

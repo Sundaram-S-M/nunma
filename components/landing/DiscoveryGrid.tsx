@@ -120,7 +120,7 @@ const DiscoveryGrid: React.FC = () => {
                     </div>
                     <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">{zone.ownerName || 'Tutor'}</span>
                   </div>
-                  <button className="text-brand-blue hover:text-blue-700 font-medium text-sm flex items-center gap-1 transition-colors">
+                  <button className="text-brand-blue hover:text-[#c2f575] font-medium text-sm flex items-center gap-1 transition-colors">
                     <PlayCircle className="w-4 h-4" />
                     Enter
                   </button>

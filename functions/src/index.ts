@@ -241,6 +241,23 @@ export const generateBunnyToken = onCall(
 
 // --- RAZORPAY & KYC STATE MANAGEMENT ---
 
+/**
+ * Extracts a human-readable error message from a Razorpay API error response.
+ * Razorpay's errors are typically nested under error.response.data.error.
+ */
+function extractRazorpayError(error: any): string {
+    const rzpError = error?.response?.data?.error;
+    if (rzpError) {
+        // Build a descriptive message: e.g. "Invalid IFSC code: Please provide a valid IFSC"
+        const parts: string[] = [];
+        if (rzpError.description) parts.push(rzpError.description);
+        if (rzpError.field) parts.push(`(Field: ${rzpError.field})`);
+        if (rzpError.reason) parts.push(`Reason: ${rzpError.reason}`);
+        if (parts.length > 0) return parts.join(' ');
+    }
+    return error?.message || "An unexpected Razorpay error occurred.";
+}
+
 export const createTutorLinkedAccount = onCall(
     { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] },
     async (request) => {
@@ -249,7 +266,14 @@ export const createTutorLinkedAccount = onCall(
         const keySecret = process.env.RAZORPAY_KEY_SECRET;
         const uid = request.auth.uid;
 
-        const { businessType: payloadBusinessType, legalName: payloadLegalName } = request.data || {};
+        const {
+            businessType: payloadBusinessType,
+            legalName: payloadLegalName,
+            pan: payloadPan,
+            bankAccount: payloadBankAccount,
+            ifsc: payloadIfsc,
+            gstin: payloadGstin,
+        } = request.data || {};
 
         try {
             const tutorRef = db.collection("users").doc(uid);
@@ -258,32 +282,123 @@ export const createTutorLinkedAccount = onCall(
 
             let accountId = tutorData?.razorpay_account_id;
             const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
+            const headers = { 'Authorization': authHeader, 'Content-Type': 'application/json' };
 
+            // ── Step 1: Create or re-use the Razorpay Linked Account ──────────────
             if (!accountId) {
                 const bType = payloadBusinessType || tutorData?.taxDetails?.businessType || "individual";
+                // Razorpay accepts: individual | proprietorship | partnership | private_limited | public_limited | llp | ngo | trust | society | not_yet_registered | huf
                 const mappedBusinessType = bType === "registered" ? "proprietorship" : "individual";
                 const mappedLegalName = payloadLegalName || tutorData?.taxDetails?.legalName || tutorData?.name || "Independent Tutor";
+                const mappedEmail = tutorData?.email || request.auth.token.email;
 
-                const createPayload = {
-                    email: tutorData?.email || request.auth.token.email,
-                    type: "standard",
+                const createPayload: Record<string, any> = {
+                    email: mappedEmail,
+                    type: "route",
                     reference_id: uid,
                     legal_business_name: mappedLegalName,
                     business_type: mappedBusinessType,
-                    profile: { category: "education", subcategory: "e_learning" }
+                    profile: {
+                        category: "education",
+                        subcategory: "e_learning",
+                        addresses: {
+                            registered: {
+                                street1: "N/A",
+                                city: "India",
+                                state: "KA",
+                                postal_code: "560001",
+                                country: "IN",
+                            }
+                        }
+                    },
+                    legal_info: {
+                        pan: (payloadPan || tutorData?.taxDetails?.pan || "").toUpperCase(),
+                        ...(payloadGstin || tutorData?.taxDetails?.gstin
+                            ? { gst: (payloadGstin || tutorData?.taxDetails?.gstin || "").toUpperCase() }
+                            : {}),
+                    }
                 };
-                const response = await axios.post('https://api.razorpay.com/v2/accounts', createPayload, { headers: { 'Authorization': authHeader } });
-                accountId = response.data.id;
-                await tutorRef.update({ razorpay_account_id: accountId, kycStatus: 'PENDING' });
+
+                let createResponse: any;
+                try {
+                    createResponse = await axios.post(
+                        'https://api.razorpay.com/v2/accounts',
+                        createPayload,
+                        { headers }
+                    );
+                } catch (err: any) {
+                    const msg = extractRazorpayError(err);
+                    console.error("Razorpay account creation failed:", msg, err?.response?.data);
+                    throw new functions.https.HttpsError("failed-precondition", `Razorpay KYC rejected: ${msg}`);
+                }
+
+                accountId = createResponse.data.id;
+
+                // ── Step 2: Configure the Route product with bank settlement details ──
+                const bankPayload = {
+                    settlements: {
+                        account_number: payloadBankAccount || tutorData?.taxDetails?.bankAccount,
+                        ifsc_code: (payloadIfsc || tutorData?.taxDetails?.ifsc || "").toUpperCase(),
+                        beneficiary_name: mappedLegalName,
+                    },
+                    tnc_accepted: true,
+                };
+
+                try {
+                    await axios.patch(
+                        `https://api.razorpay.com/v2/accounts/${accountId}/products`,
+                        bankPayload,
+                        { headers }
+                    );
+                } catch (err: any) {
+                    const msg = extractRazorpayError(err);
+                    console.error("Razorpay product config failed:", msg, err?.response?.data);
+                    // Bank config failure is non-fatal for the onboarding link — log and continue
+                    // The expert can fix bank details via the Razorpay onboarding dashboard
+                    console.warn(`Bank config for account ${accountId} will be completed via Razorpay dashboard. Reason: ${msg}`);
+                }
+
+                // ── Step 3: Persist KYC data in Firestore ────────────────────────────
+                await tutorRef.update({
+                    razorpay_account_id: accountId,
+                    kycStatus: 'PENDING',
+                    taxDetails: {
+                        ...(tutorData?.taxDetails || {}),
+                        businessType: bType,
+                        legalName: mappedLegalName,
+                        pan: (payloadPan || "").toUpperCase(),
+                        // Never store raw bank account number in plain Firestore — store last 4 only
+                        bankAccountLast4: (payloadBankAccount || "").slice(-4),
+                        ifsc: (payloadIfsc || "").toUpperCase(),
+                        ...(payloadGstin ? { gstin: payloadGstin.toUpperCase() } : {}),
+                    }
+                });
             } else if (tutorData?.kycStatus !== 'VERIFIED') {
                 await tutorRef.update({ kycStatus: 'PENDING' });
             }
 
-            const linkResponse = await axios.post(`https://api.razorpay.com/v2/accounts/${accountId}/login_links`, {}, { headers: { 'Authorization': authHeader } });
-            return { success: true, onboardingUrl: linkResponse.data.short_url || linkResponse.data.url };
+            // ── Step 4: Generate a Razorpay onboarding magic link ─────────────────
+            let onboardingUrl: string;
+            try {
+                const linkResponse = await axios.post(
+                    `https://api.razorpay.com/v2/accounts/${accountId}/login_links`,
+                    {},
+                    { headers }
+                );
+                onboardingUrl = linkResponse.data.short_url || linkResponse.data.url;
+            } catch (err: any) {
+                const msg = extractRazorpayError(err);
+                console.error("Failed to generate Razorpay login link:", msg);
+                throw new functions.https.HttpsError("internal", `Could not generate onboarding link: ${msg}`);
+            }
+
+            return { success: true, onboardingUrl };
         } catch (error: any) {
-            console.error(error);
-            throw new functions.https.HttpsError("internal", error.message);
+            // Re-throw HttpsErrors unchanged; wrap raw errors with Razorpay message extraction
+            if (error instanceof functions.https.HttpsError) throw error;
+            const msg = extractRazorpayError(error);
+            console.error("createTutorLinkedAccount unexpected error:", error);
+            throw new functions.https.HttpsError("internal", msg);
         }
     }
 );
@@ -842,7 +957,7 @@ export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request
 
     try {
         await resend.emails.send({
-            from: "Nunma <support@nunma.in>",
+            from: "Nunma <admin@nunma.in>",
             to: email,
             subject: "Your Nunma Verification Code",
             html: `
@@ -859,7 +974,7 @@ export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request
         return { success: true };
     } catch (error: any) {
         console.error("Resend error:", error);
-        throw new functions.https.HttpsError("internal", "Failed to send OTP email.");
+        throw new functions.https.HttpsError("internal", error.message || "Failed to send OTP email.");
     }
 });
 

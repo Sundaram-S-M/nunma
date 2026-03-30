@@ -89,6 +89,17 @@ const Payment: React.FC = () => {
     const displayCurrency = isMentorship && countryCode === 'IN' && basePriceINR ? 'INR' : currency;
     const finalOriginalPrice = isMentorship && countryCode === 'IN' && basePriceINR ? null : originalPrice;
 
+    // GST breakdown (18%) — reverse-calculate for prices that are GST-inclusive (Indian market)
+    // Formula: Base = Total / 1.18, GST = Total - Base
+    const gstBreakdown = (() => {
+        if (displayCurrency !== 'INR' || isLoading) return null;
+        const total = parseFloat(displayPrice.toString());
+        if (!total || isNaN(total)) return null;
+        const base = +(total / 1.18).toFixed(2);
+        const gst = +(total - base).toFixed(2);
+        return { base, gst, total };
+    })();
+
 
     const handlePayment = async () => {
         if (!termsAccepted) {
@@ -232,6 +243,29 @@ const Payment: React.FC = () => {
                                     )}
                                 </div>
                             </div>
+
+                            {gstBreakdown && (
+                                <div className="mx-5 mb-2 rounded-2xl border border-[#c1e60d]/20 bg-[#c1e60d]/5 overflow-hidden">
+                                    <div className="px-5 py-2.5 flex items-center justify-between border-b border-[#c1e60d]/10">
+                                        <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Price Breakdown</span>
+                                        <span className="text-[10px] font-bold text-[#c1e60d]/60 bg-[#c1e60d]/10 px-2 py-0.5 rounded-full">18% GST</span>
+                                    </div>
+                                    <div className="px-5 py-3 space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs text-indigo-300 font-medium">Base Price (excl. GST)</span>
+                                            <span className="text-xs font-black text-white">&#8377;{gstBreakdown.base.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs text-indigo-300 font-medium">GST @ 18%</span>
+                                            <span className="text-xs font-black text-[#c1e60d]">+ &#8377;{gstBreakdown.gst.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center pt-2 border-t border-[#c1e60d]/10">
+                                            <span className="text-xs font-black text-white uppercase tracking-wider">Total</span>
+                                            <span className="text-sm font-black text-[#c1e60d]">&#8377;{gstBreakdown.total.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {refundDeadline && (
                                 <div className="mt-8 p-6 bg-red-500/10 border border-red-500/20 rounded-3xl">
