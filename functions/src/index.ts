@@ -993,8 +993,8 @@ export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request
 
 export const verifyOTPAndSignIn = onCall(async (request) => {
     const { email, otp, registrationData, password } = request.data;
-    if (!email || !otp) {
-        throw new functions.https.HttpsError("invalid-argument", "Email and OTP are required.");
+    if (!email) {
+        throw new functions.https.HttpsError("invalid-argument", "Email is required.");
     }
 
     // Strict Firestore path: otps/{email} — must match requestOTP exactly
@@ -1004,8 +1004,12 @@ export const verifyOTPAndSignIn = onCall(async (request) => {
     }
 
     const data = otpDoc.data()!;
-    if (data.otp !== otp) {
-        throw new functions.https.HttpsError("permission-denied", "Invalid OTP.");
+    const isAlreadyVerified = data.isVerified === true;
+    const otpMatch = otp && data.otp === otp;
+
+    // Check if the OTP matches OR if the document already has isVerified: true
+    if (!isAlreadyVerified && !otpMatch) {
+        throw new functions.https.HttpsError("permission-denied", "Invalid or missing OTP.");
     }
 
     if (data.expiresAt.toDate() < new Date()) {
@@ -1013,16 +1017,21 @@ export const verifyOTPAndSignIn = onCall(async (request) => {
         throw new functions.https.HttpsError("permission-denied", "OTP has expired.");
     }
 
-    // OTP is valid, cleanup
-    await otpDoc.ref.delete();
+    // Determine Step 1 vs Step 2 by presence of password
+    if (!password) {
+        // Step 1: Just verify and update the document
+        await otpDoc.ref.update({ isVerified: true });
+        return { verified: true };
+    }
 
+    // Step 2: Finalize registration with password and registrationData
     // Find or create user
     let user;
     try {
         user = await admin.auth().getUserByEmail(email);
     } catch (error: any) {
         if (error.code === 'auth/user-not-found') {
-            // If registrationData and password are provided, create the user
+            // Registration flow
             if (registrationData && password) {
                 user = await admin.auth().createUser({
                     email,
@@ -1031,7 +1040,7 @@ export const verifyOTPAndSignIn = onCall(async (request) => {
                 });
 
                 // Create Firestore profile
-                await db.collection("users").doc(user.uid).set({
+                await admin.firestore().collection("users").doc(user.uid).set({
                     email,
                     name: registrationData.name,
                     role: registrationData.role || "STUDENT",
@@ -1043,13 +1052,16 @@ export const verifyOTPAndSignIn = onCall(async (request) => {
                     tutorProfile: { isComplete: false }
                 });
             } else {
-                // Verified but user doesn't exist and no registration data provided
-                return { verified: true };
+                // Should not happen if validation is correct
+                throw new functions.https.HttpsError("invalid-argument", "Registration details missing.");
             }
         } else {
             throw new functions.https.HttpsError("internal", error.message);
         }
     }
+
+    // Final Stage cleanup: delete the OTP record
+    await otpDoc.ref.delete();
 
     // Generate custom token
     const customToken = await admin.auth().createCustomToken(user.uid);
