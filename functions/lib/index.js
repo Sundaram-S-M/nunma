@@ -266,7 +266,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                     category: "education",
                     subcategory: "e_learning_and_online_tutoring",
                     addresses: {
-                        residential: {
+                        registered: {
                             street1: payloadStreet || "N/A",
                             city: payloadCity || "India",
                             state: payloadState || "KA",

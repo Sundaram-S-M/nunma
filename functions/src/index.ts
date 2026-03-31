@@ -310,7 +310,7 @@ export const createTutorLinkedAccount = onCall(
                         category: "education",
                         subcategory: "e_learning_and_online_tutoring",
                         addresses: {
-                            residential: {
+                            registered: {
                                 street1: payloadStreet || "N/A",
                                 city: payloadCity || "India",
                                 state: payloadState || "KA",
