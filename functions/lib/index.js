@@ -287,6 +287,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                 throw new functions.https.HttpsError("failed-precondition", `Razorpay KYC rejected: ${msg}`);
             }
             accountId = createResponse.data.id;
+            console.log(`Razorpay linked account created successfully. AccountId: ${accountId} for uid: ${uid}`);
             // ── Step 2: Configure the Route product with bank settlement details ──
             const bankPayload = {
                 settlements: {
@@ -297,7 +298,10 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                 tnc_accepted: true,
             };
             try {
-                await axios_1.default.patch(`https://api.razorpay.com/v2/accounts/${accountId}/products`, bankPayload, { headers });
+                // POST is correct for initial product configuration on a new linked account.
+                // PATCH is only used to update an existing product config and requires a product_id in the path.
+                await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/products`, bankPayload, { headers });
+                console.log(`Bank settlement configured successfully for account: ${accountId}`);
             }
             catch (err) {
                 const msg = extractRazorpayError(err);
@@ -789,16 +793,18 @@ exports.registerIssuance = (0, https_1.onCall)(async (request) => {
 });
 // --- OTP AUTHENTICATION ---
 exports.requestOTP = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"] }, async (request) => {
-    const { email } = request.data;
+    let { email } = request.data;
     if (!email) {
         throw new functions.https.HttpsError("invalid-argument", "Email is required.");
     }
+    email = email.toLowerCase().trim();
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)); // 10 mins
     // Strict Firestore path: otps/{email}
     await admin.firestore().collection("otps").doc(email).set({
         otp,
         expiresAt,
+        isVerified: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
     // Initialize Resend client inside the function using the injected secret
@@ -809,8 +815,12 @@ exports.requestOTP = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"] }, async 
     }
     const resend = new resend_1.Resend(resendApiKey);
     try {
-        await resend.emails.send({
-            from: '"NUNMA NOTIFICATION" <notification@nunma.in>',
+        // IMPORTANT: Use support@nunma.in (the primary verified Resend sender).
+        // notification@nunma.in is an email alias — Resend validates the exact From
+        // address against verified domains; using an alias that isn't explicitly
+        // added as a sender in the Resend dashboard will cause silent delivery failure.
+        const sendResult = await resend.emails.send({
+            from: 'Nunma <support@nunma.in>',
             to: email,
             subject: "Your Nunma Verification Code",
             html: `
@@ -824,33 +834,62 @@ exports.requestOTP = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"] }, async 
                 </div>
             `
         });
+        console.log("RESEND SUCCESS: Email sent for", email, "| Resend response:", JSON.stringify(sendResult));
         return { success: true };
     }
     catch (error) {
-        console.error("RESEND ERROR:", error);
+        // Log the full error object so we can see the exact Resend rejection reason in Firebase logs
+        console.error("RESEND DELIVERY FAILURE for", email, "| Full error:", JSON.stringify(error), "| Message:", error === null || error === void 0 ? void 0 : error.message);
         throw new functions.https.HttpsError("internal", error.message || "Failed to send OTP email.");
     }
 });
 exports.verifyOTPAndSignIn = (0, https_1.onCall)(async (request) => {
-    const { email, otp, registrationData, password } = request.data;
-    if (!email || !otp) {
-        throw new functions.https.HttpsError("invalid-argument", "Email and OTP are required.");
+    var _a, _b;
+    let { email, otp, registrationData, password } = request.data;
+    if (!email) {
+        throw new functions.https.HttpsError("invalid-argument", "Email is required.");
     }
+    email = email.toLowerCase().trim();
     // Strict Firestore path: otps/{email} — must match requestOTP exactly
     const otpDoc = await admin.firestore().collection("otps").doc(email).get();
     if (!otpDoc.exists) {
-        throw new functions.https.HttpsError("not-found", "No OTP requested for this email.");
+        console.error(`verifyOTPAndSignIn: No OTP document found for email: ${email}`);
+        throw new functions.https.HttpsError("not-found", "No OTP found. Please request a new code.");
     }
     const data = otpDoc.data();
-    if (data.otp !== otp) {
-        throw new functions.https.HttpsError("permission-denied", "Invalid OTP.");
+    const isAlreadyVerified = data.isVerified === true;
+    const otpMatch = otp && data.otp === otp;
+    // --- Step 1 path: OTP not yet verified, validate the code ---
+    if (!isAlreadyVerified) {
+        if (!otpMatch) {
+            throw new functions.https.HttpsError("permission-denied", "Invalid OTP. Please check the code and try again.");
+        }
+        // Check original 10-minute expiry only on first verification
+        if (data.expiresAt.toDate() < new Date()) {
+            await otpDoc.ref.delete();
+            throw new functions.https.HttpsError("permission-denied", "OTP has expired. Please request a new code.");
+        }
     }
-    if (data.expiresAt.toDate() < new Date()) {
-        await otpDoc.ref.delete();
-        throw new functions.https.HttpsError("permission-denied", "OTP has expired.");
+    // --- Step 2 path: isVerified=true, check the 15-minute grace window ---
+    if (isAlreadyVerified && password) {
+        const verifiedAt = ((_a = data.verifiedAt) === null || _a === void 0 ? void 0 : _a.toDate) ? data.verifiedAt.toDate() : (((_b = data.createdAt) === null || _b === void 0 ? void 0 : _b.toDate) ? data.createdAt.toDate() : new Date());
+        const gracePeriodMs = 15 * 60 * 1000; // 15 minutes to complete password step
+        if (Date.now() - verifiedAt.getTime() > gracePeriodMs) {
+            console.warn(`verifyOTPAndSignIn: Verification session expired for ${email}`);
+            await otpDoc.ref.delete();
+            throw new functions.https.HttpsError("permission-denied", "Verification session expired. Please request a new code.");
+        }
     }
-    // OTP is valid, cleanup
-    await otpDoc.ref.delete();
+    // Determine Step 1 vs Step 2 by presence of password
+    if (!password) {
+        // Step 1: Mark as verified and record the timestamp for the grace window
+        await otpDoc.ref.update({
+            isVerified: true,
+            verifiedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return { verified: true };
+    }
+    // Step 2: Finalize registration with password and registrationData
     // Find or create user
     let user;
     try {
@@ -858,7 +897,7 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)(async (request) => {
     }
     catch (error) {
         if (error.code === 'auth/user-not-found') {
-            // If registrationData and password are provided, create the user
+            // Registration flow
             if (registrationData && password) {
                 user = await admin.auth().createUser({
                     email,
@@ -866,7 +905,7 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)(async (request) => {
                     displayName: registrationData.name
                 });
                 // Create Firestore profile
-                await db.collection("users").doc(user.uid).set({
+                await admin.firestore().collection("users").doc(user.uid).set({
                     email,
                     name: registrationData.name,
                     role: registrationData.role || "STUDENT",
@@ -879,14 +918,16 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)(async (request) => {
                 });
             }
             else {
-                // Verified but user doesn't exist and no registration data provided
-                return { verified: true };
+                // Should not happen if validation is correct
+                throw new functions.https.HttpsError("invalid-argument", "Registration details missing.");
             }
         }
         else {
             throw new functions.https.HttpsError("internal", error.message);
         }
     }
+    // Final Stage cleanup: delete the OTP record
+    await otpDoc.ref.delete();
     // Generate custom token
     const customToken = await admin.auth().createCustomToken(user.uid);
     return { verified: true, customToken };

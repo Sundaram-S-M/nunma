@@ -25,6 +25,8 @@ const Auth: React.FC = () => {
   // New OTP Flow State
   const [step, setStep] = useState<'info' | 'otp' | 'password'>('info');
   const [otp, setOtp] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isResending, setIsResending] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,11 +42,41 @@ const Auth: React.FC = () => {
       setIsLoading(true);
       await requestOTP(email);
       setStep('otp');
+      // Start 60-second resend cooldown
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown(prev => {
+          if (prev <= 1) { clearInterval(timer); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (error: any) {
       console.error("OTP Request error:", error);
       alert(`Request Failed: ${error.message || "Failed to send verification code."}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (resendCooldown > 0 || isResending) return;
+    try {
+      setIsResending(true);
+      setOtp('');
+      await requestOTP(email);
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown(prev => {
+          if (prev <= 1) { clearInterval(timer); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+      alert(`A new verification code has been sent to ${email}.`);
+    } catch (error: any) {
+      console.error("Resend OTP error:", error);
+      alert(`Resend Failed: ${error.message || "Could not resend verification code."}`);
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -336,6 +368,17 @@ const Auth: React.FC = () => {
                       <p className="text-[10px] text-gray-400 font-medium ml-1">
                         Code sent to <span className="text-[#040457] font-bold">{email}</span>.
                         <button type="button" onClick={() => setStep('info')} className="ml-1 text-[#040457] font-black uppercase tracking-tighter hover:underline">Change</button>
+                      </p>
+                      <p className="text-[10px] text-gray-400 font-medium ml-1 mt-1">
+                        Didn&apos;t receive it? Check your spam folder, or{' '}
+                        <button
+                          type="button"
+                          onClick={handleResendOTP}
+                          disabled={resendCooldown > 0 || isResending}
+                          className="text-[#040457] font-black uppercase tracking-tighter hover:underline disabled:text-gray-300 disabled:cursor-not-allowed"
+                        >
+                          {isResending ? 'Sending...' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+                        </button>
                       </p>
                     </div>
 

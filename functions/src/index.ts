@@ -334,6 +334,7 @@ export const createTutorLinkedAccount = onCall(
                 }
 
                 accountId = createResponse.data.id;
+                console.log(`Razorpay linked account created successfully. AccountId: ${accountId} for uid: ${uid}`);
 
                 // ── Step 2: Configure the Route product with bank settlement details ──
                 const bankPayload = {
@@ -346,11 +347,14 @@ export const createTutorLinkedAccount = onCall(
                 };
 
                 try {
-                    await axios.patch(
+                    // POST is correct for initial product configuration on a new linked account.
+                    // PATCH is only used to update an existing product config and requires a product_id in the path.
+                    await axios.post(
                         `https://api.razorpay.com/v2/accounts/${accountId}/products`,
                         bankPayload,
                         { headers }
                     );
+                    console.log(`Bank settlement configured successfully for account: ${accountId}`);
                 } catch (err: any) {
                     const msg = extractRazorpayError(err);
                     console.error("Razorpay product config failed:", msg, err?.response?.data);
@@ -945,10 +949,12 @@ export const registerIssuance = onCall(async (request) => {
 // --- OTP AUTHENTICATION ---
 
 export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request) => {
-    const { email } = request.data;
+    let { email } = request.data;
     if (!email) {
         throw new functions.https.HttpsError("invalid-argument", "Email is required.");
     }
+
+    email = email.toLowerCase().trim();
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)); // 10 mins
@@ -957,6 +963,7 @@ export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request
     await admin.firestore().collection("otps").doc(email).set({
         otp,
         expiresAt,
+        isVerified: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
@@ -969,8 +976,12 @@ export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request
     const resend = new Resend(resendApiKey);
 
     try {
-        await resend.emails.send({
-            from: '"NUNMA NOTIFICATION" <notification@nunma.in>',
+        // IMPORTANT: Use support@nunma.in (the primary verified Resend sender).
+        // notification@nunma.in is an email alias — Resend validates the exact From
+        // address against verified domains; using an alias that isn't explicitly
+        // added as a sender in the Resend dashboard will cause silent delivery failure.
+        const sendResult = await resend.emails.send({
+            from: 'Nunma <support@nunma.in>',
             to: email,
             subject: "Your Nunma Verification Code",
             html: `
@@ -984,43 +995,64 @@ export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request
                 </div>
             `
         });
+        console.log("RESEND SUCCESS: Email sent for", email, "| Resend response:", JSON.stringify(sendResult));
         return { success: true };
     } catch (error: any) {
-        console.error("RESEND ERROR:", error);
+        // Log the full error object so we can see the exact Resend rejection reason in Firebase logs
+        console.error("RESEND DELIVERY FAILURE for", email, "| Full error:", JSON.stringify(error), "| Message:", error?.message);
         throw new functions.https.HttpsError("internal", error.message || "Failed to send OTP email.");
     }
 });
 
 export const verifyOTPAndSignIn = onCall(async (request) => {
-    const { email, otp, registrationData, password } = request.data;
+    let { email, otp, registrationData, password } = request.data;
     if (!email) {
         throw new functions.https.HttpsError("invalid-argument", "Email is required.");
     }
 
+    email = email.toLowerCase().trim();
+
     // Strict Firestore path: otps/{email} — must match requestOTP exactly
     const otpDoc = await admin.firestore().collection("otps").doc(email).get();
     if (!otpDoc.exists) {
-        throw new functions.https.HttpsError("not-found", "No OTP requested for this email.");
+        console.error(`verifyOTPAndSignIn: No OTP document found for email: ${email}`);
+        throw new functions.https.HttpsError("not-found", "No OTP found. Please request a new code.");
     }
 
     const data = otpDoc.data()!;
     const isAlreadyVerified = data.isVerified === true;
     const otpMatch = otp && data.otp === otp;
 
-    // Check if the OTP matches OR if the document already has isVerified: true
-    if (!isAlreadyVerified && !otpMatch) {
-        throw new functions.https.HttpsError("permission-denied", "Invalid or missing OTP.");
+    // --- Step 1 path: OTP not yet verified, validate the code ---
+    if (!isAlreadyVerified) {
+        if (!otpMatch) {
+            throw new functions.https.HttpsError("permission-denied", "Invalid OTP. Please check the code and try again.");
+        }
+        // Check original 10-minute expiry only on first verification
+        if (data.expiresAt.toDate() < new Date()) {
+            await otpDoc.ref.delete();
+            throw new functions.https.HttpsError("permission-denied", "OTP has expired. Please request a new code.");
+        }
     }
 
-    if (data.expiresAt.toDate() < new Date()) {
-        await otpDoc.ref.delete();
-        throw new functions.https.HttpsError("permission-denied", "OTP has expired.");
+    // --- Step 2 path: isVerified=true, check the 15-minute grace window ---
+    if (isAlreadyVerified && password) {
+        const verifiedAt: Date = data.verifiedAt?.toDate ? data.verifiedAt.toDate() : (data.createdAt?.toDate ? data.createdAt.toDate() : new Date());
+        const gracePeriodMs = 15 * 60 * 1000; // 15 minutes to complete password step
+        if (Date.now() - verifiedAt.getTime() > gracePeriodMs) {
+            console.warn(`verifyOTPAndSignIn: Verification session expired for ${email}`);
+            await otpDoc.ref.delete();
+            throw new functions.https.HttpsError("permission-denied", "Verification session expired. Please request a new code.");
+        }
     }
 
     // Determine Step 1 vs Step 2 by presence of password
     if (!password) {
-        // Step 1: Just verify and update the document
-        await otpDoc.ref.update({ isVerified: true });
+        // Step 1: Mark as verified and record the timestamp for the grace window
+        await otpDoc.ref.update({
+            isVerified: true,
+            verifiedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
         return { verified: true };
     }
 

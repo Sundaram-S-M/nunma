@@ -117,30 +117,23 @@ const Payment: React.FC = () => {
 
             const createOrder = httpsCallable(functions, 'createRazorpayOrder');
 
-            // Razorpay amount expects smallest currency unit (paise/cents)
-            const amountInSmallestUnit = Math.round(parseFloat(displayPrice.toString()) * 100).toString();
+            const orderResult: any = await createOrder({ zoneId });
 
-            const result = await createOrder({
-                amount: amountInSmallestUnit,
-                currency: displayCurrency,
-                tutorId: item.tutorId || tutorId,
-                productId: zoneId,
-                isMentorship: isMentorship,
-                slotId: slotId,
-                bookingDate: bookingDate,
-                bookingTime: bookingTime
-            });
-
-            const orderData = result.data as any;
-
-            if (!orderData || !orderData.id) {
+            if (!orderResult.data.id || !orderResult.data.amount) {
                 throw new Error('Failed to create Razorpay order. The server returned an invalid response.');
             }
 
+            const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY;
+            if (!razorpayKey) {
+                throw new Error('Razorpay payment gateway is not configured. Please contact support.');
+            }
+
+            const orderData = orderResult.data as any;
+
             const options = {
-                key: import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY || 'TEST_KEY_ID',
+                key: razorpayKey,
                 amount: orderData.amount,
-                currency: orderData.currency,
+                currency: orderData.currency || 'INR',
                 name: 'Nunma Academy',
                 description: item.title,
                 order_id: orderData.id,
