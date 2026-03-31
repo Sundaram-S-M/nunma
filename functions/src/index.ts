@@ -32,7 +32,8 @@ const transporter = nodemailer.createTransport({
 });
 */
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+
+
 
 
 // --- LIVEKIT INTEGRATION ---
@@ -50,13 +51,13 @@ export const generateLiveToken = onCall(
         }
 
         const uid = request.auth.uid;
-        
+
         // Fetch user document to check role and name
         const userDoc = await db.collection("users").doc(uid).get();
         if (!userDoc.exists) {
             throw new functions.https.HttpsError("not-found", "User profile not found.");
         }
-        
+
         const userData = userDoc.data();
         const userName = userData?.name || "Anonymous";
         const userRole = userData?.role || "STUDENT";
@@ -116,10 +117,10 @@ export const toggleStudentAudio = onCall(
         if (!zoneDoc.exists) {
             throw new functions.https.HttpsError("not-found", "Zone not found.");
         }
-        
+
         const zoneData = zoneDoc.data();
         const isCreator = zoneData?.createdBy === uid;
-        
+
         // Also check if user is a TUTOR in the users collection
         const userDoc = await db.collection("users").doc(uid).get();
         const userRole = userDoc.data()?.role;
@@ -178,7 +179,7 @@ export const bunnyStreamWebhook = onRequest(
         }
 
         const expectedSignature = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex').toLowerCase();
-        
+
         const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
         const signatureBuffer = Buffer.from(signature.toLowerCase(), 'utf8');
 
@@ -231,7 +232,7 @@ export const generateBunnyToken = onCall(
         }
 
         const expires = Math.floor(Date.now() / 1000) + 21600; // 6 hours from now
-        
+
         // Bunny signature logic: Token Security Key + Video ID + Expiration Time
         const hash = crypto.createHash('sha256').update(tokenKey + videoId + expires).digest('hex');
 
@@ -414,7 +415,7 @@ export const createRazorpayOrder = onCall(
         try {
             const zoneDoc = await db.collection("zones").doc(zoneId).get();
             const zoneData = zoneDoc.data()!;
-            
+
             const tutorDoc = await db.collection("users").doc(zoneData.createdBy).get();
             const tutorData = tutorDoc.data()!;
 
@@ -423,7 +424,7 @@ export const createRazorpayOrder = onCall(
             }
 
             const gross_paise = Math.round(zoneData.price * 100);
-            
+
             let commissionTierPercentage = 0.10; // Basic = 10%
             if (tutorData.subscriptionPlan === 'Pro') {
                 commissionTierPercentage = 0.05;
@@ -490,7 +491,7 @@ export const razorpayRouteWebhook = onRequest(
                 if (txDoc.exists) {
                     return true;
                 }
-                
+
                 transaction.set(txRef, {
                     processedAt: admin.firestore.FieldValue.serverTimestamp(),
                     eventId: req.body.id || 'unknown'
@@ -513,7 +514,7 @@ export const razorpayRouteWebhook = onRequest(
                 try {
                     let resolvedTutorId = paymentEntity.notes?.tutorId;
                     const zoneId = paymentEntity.notes?.zoneId;
-                    
+
                     if (!resolvedTutorId && zoneId) {
                         const zoneDoc = await db.collection("zones").doc(zoneId).get();
                         if (zoneDoc.exists) {
@@ -525,7 +526,7 @@ export const razorpayRouteWebhook = onRequest(
                         const tutorDoc = await db.collection("users").doc(resolvedTutorId).get();
                         let resolvedTutorName = "Tutor";
                         let subscriptionPlan = "Basic";
-                        
+
                         if (tutorDoc.exists) {
                             const tutorData = tutorDoc.data()!;
                             resolvedTutorName = tutorData.name || tutorData.taxDetails?.legalName || "Tutor";
@@ -668,7 +669,7 @@ export const uploadExamScript = onCall(async (request) => {
 
     const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(uid).get();
     const studentData = studentDoc.data();
-    
+
     if (!studentData || studentData.activeExamId !== examId) {
         throw new functions.https.HttpsError("failed-precondition", "No active exam found to upload.");
     }
@@ -676,7 +677,7 @@ export const uploadExamScript = onCall(async (request) => {
     if (studentData.examEndsAt) {
         const serverNow = Date.now();
         const absoluteCutoff = new Date(studentData.examEndsAt).getTime() + (20 * 60 * 1000);
-        
+
         if (serverNow > absoluteCutoff) {
             throw new functions.https.HttpsError("permission-denied", "Submission window has permanently closed.");
         }
@@ -687,7 +688,7 @@ export const uploadExamScript = onCall(async (request) => {
     const pullZone = process.env.BUNNY_PULL_ZONE_URL;
 
     if (!bunnyApiKey || !storageZone || !pullZone) {
-         throw new functions.https.HttpsError("internal", "Storage configuration missing");
+        throw new functions.https.HttpsError("internal", "Storage configuration missing");
     }
 
     const base64Data = file.replace(/^data:.*\/.*;base64,/, '');
@@ -729,12 +730,12 @@ export const uploadExamScript = onCall(async (request) => {
 export const submitGradedScript = onCall(async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId, examId, studentId, score, feedback, mergedPdf, oldFileUrl } = request.data;
-    
+
     // Authorization
     const zoneDoc = await db.collection('zones').doc(zoneId).get();
     const tutorUid = zoneDoc.data()?.createdBy;
     if (request.auth.uid !== tutorUid) {
-         throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
+        throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
     }
 
     const bunnyApiKey = process.env.BUNNY_STORAGE_API_KEY;
@@ -742,7 +743,7 @@ export const submitGradedScript = onCall(async (request) => {
     const pullZone = process.env.BUNNY_PULL_ZONE_URL;
 
     if (!bunnyApiKey || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
-         throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
+        throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
     }
 
     try {
@@ -766,13 +767,13 @@ export const submitGradedScript = onCall(async (request) => {
         let oldFileSizeInBytes = 0;
         try {
             const oldPath = oldFileUrl.replace(`https://${pullZone}/`, '');
-            
+
             // Get original file size to maintain exact quota diff
             const res = await axios.head(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
                 headers: { 'AccessKey': bunnyApiKey }
             });
             oldFileSizeInBytes = parseInt(res.headers['content-length'] || "0");
-            
+
             await axios.delete(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
                 headers: { 'AccessKey': bunnyApiKey }
             });
@@ -782,12 +783,12 @@ export const submitGradedScript = onCall(async (request) => {
 
         const sizeDiff = newFileSizeInBytes - oldFileSizeInBytes;
         await db.collection("users").doc(tutorUid).update({
-             usedStorageBytes: admin.firestore.FieldValue.increment(sizeDiff)
+            usedStorageBytes: admin.firestore.FieldValue.increment(sizeDiff)
         });
 
         // Update DB
         const newFileUrl = `https://${pullZone}/${storagePath}`;
-        
+
         await db.collection('zones').doc(zoneId).collection('exams').doc(examId).collection('submissions').doc(studentId).set({
             status: "graded",
             score: score,
@@ -816,7 +817,7 @@ export const submitExam = onCall(async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId, examId, answers, violationLogs, answerSheetUrl } = request.data;
     const uid = request.auth.uid;
-    
+
     // Time Window Validation
     const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(uid).get();
     const studentData = studentDoc.data();
@@ -827,7 +828,7 @@ export const submitExam = onCall(async (request) => {
     if (studentData.examEndsAt) {
         const serverNow = Date.now();
         const absoluteCutoff = new Date(studentData.examEndsAt).getTime() + (20 * 60 * 1000);
-        
+
         if (serverNow > absoluteCutoff) {
             throw new functions.https.HttpsError("permission-denied", "Submission window has permanently closed.");
         }
@@ -838,24 +839,24 @@ export const submitExam = onCall(async (request) => {
     if (!examData) {
         throw new functions.https.HttpsError("not-found", "Exam not found.");
     }
-    
+
     let marks = 0;
     let status = 'ongoing';
     const isTerminatedByCheat = violationLogs && violationLogs.length >= 3;
 
     // Secure Scoring
     if (examData.type === 'online-mcq' || examData.type === 'online-test') {
-       if (examData.questions && answers) {
-           let score = 0;
-           examData.questions.forEach((q: any) => {
-               if (answers[q.id] === q.correctAnswer) score++;
-           });
-           marks = Math.round((score / examData.questions.length) * (examData.maxMark || 100));
-           const minMark = examData.minMark || 0;
-           status = marks >= minMark ? 'passed' : 'failed';
-       }
+        if (examData.questions && answers) {
+            let score = 0;
+            examData.questions.forEach((q: any) => {
+                if (answers[q.id] === q.correctAnswer) score++;
+            });
+            marks = Math.round((score / examData.questions.length) * (examData.maxMark || 100));
+            const minMark = examData.minMark || 0;
+            status = marks >= minMark ? 'passed' : 'failed';
+        }
     }
-    
+
     if (isTerminatedByCheat) {
         status = 'failed';
         marks = 0;
@@ -890,37 +891,37 @@ export const submitExam = onCall(async (request) => {
 export const registerIssuance = onCall(async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId, studentId } = request.data;
-    
+
     // Security Check: Fetch student's enrollment document and the Zone's structure
     const zoneDoc = await db.collection('zones').doc(zoneId).get();
     const zoneData = zoneDoc.data();
     if (!zoneData) throw new functions.https.HttpsError("not-found", "Zone not found.");
-    
+
     const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(studentId).get();
     const studentData = studentDoc.data();
     if (!studentData) throw new functions.https.HttpsError("not-found", "Student not enrolled.");
-    
+
     // Verify that completedSegments.length exactly matches the total number of segments in the Zone.
     const completedSegmentsLength = studentData.completedSegments?.length || 0;
     const totalSegmentsLength = zoneData.segments?.length || 0;
-    
+
     if (completedSegmentsLength !== totalSegmentsLength || totalSegmentsLength === 0) {
         throw new functions.https.HttpsError("permission-denied", "Incomplete course requirements.");
     }
-    
+
     // Generate unique urn:uuid
     const certId = `urn:uuid:${uuidv4()}`;
-    
+
     const studentUserDoc = await db.collection('users').doc(studentId).get();
     const studentName = studentUserDoc.data()?.name || 'Student';
     const courseName = zoneData.title || zoneData.name || 'Course Completion';
-    
+
     const issueDate = new Date().toISOString();
     const platformUrl = "https://nunma.in";
-    
+
     // Call generateOpenBadgePayload to create the credential data
     const payload = generateOpenBadgePayload(studentName, courseName, issueDate, certId, platformUrl);
-    
+
     // Database Write: Create a new document in a root-level certificates collection
     await db.collection('certificates').doc(certId).set({
         payload,
@@ -928,15 +929,18 @@ export const registerIssuance = onCall(async (request) => {
         zoneId,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    
+
     // Update the student's enrollment document
     await studentDoc.ref.update({
         certificateId: certId,
         status: "graduated"
     });
-    
+
     return { certId };
 });
+
+
+
 
 // --- OTP AUTHENTICATION ---
 
@@ -955,9 +959,13 @@ export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request
         createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    // Instantiate Resend locally with a fallback for deployment analysis
+    const apiKey = process.env.RESEND_API_KEY || "re_dummy_fallback_key";
+    const resend = new Resend(apiKey);
+
     try {
         await resend.emails.send({
-            from: "Nunma <admin@nunma.in>",
+            from: '"NUNMA NOTIFICATION" <notification@nunma.in>',
             to: email,
             subject: "Your Nunma Verification Code",
             html: `
