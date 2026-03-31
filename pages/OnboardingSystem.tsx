@@ -19,11 +19,16 @@ const studentSchema = z.object({
 const tutorSchema = z.object({
     businessType: z.enum(["individual", "registered"]),
     legalName: z.string().min(2, "Name is required"),
+    phone: z.string().regex(/^\d{10}$/, "Phone number must be exactly 10 digits"),
     pan: z.string().regex(/^[A-Za-z]{5}\d{4}[A-Za-z]{1}$/, "Invalid PAN format. Example: ABCDE1234F"),
     bankAccount: z.string().min(9, "Bank Account is required"),
     ifsc: z.string().min(4, "Valid IFSC code is required"),
     gstin: z.string().optional(),
-    expertise: z.array(z.string()).max(3).optional()
+    expertise: z.array(z.string()).max(3).optional(),
+    street: z.string().min(3, "Street address is required"),
+    city: z.string().min(2, "City is required"),
+    state: z.string().min(2, "State is required"),
+    pinCode: z.string().regex(/^\d{6}$/, "Invalid PIN Code"),
 });
 
 type StudentFormValues = z.infer<typeof studentSchema>;
@@ -60,11 +65,16 @@ const OnboardingSystem: React.FC = () => {
         defaultValues: {
             businessType: 'individual',
             legalName: '',
+            phone: '',
             pan: '',
             bankAccount: '',
             ifsc: '',
             gstin: '',
             expertise: [],
+            street: '',
+            city: '',
+            state: '',
+            pinCode: '',
         }
     });
 
@@ -113,13 +123,21 @@ const OnboardingSystem: React.FC = () => {
         setIsSubmitting(true);
         try {
             const payload = {
+                phoneNumber: data.phone,
                 taxDetails: {
                     businessType: data.businessType,
                     legalName: data.legalName,
+                    phone: data.phone,
                     pan: data.pan,
                     bankAccount: data.bankAccount,
                     ifsc: data.ifsc,
-                    gstin: data.gstin
+                    gstin: data.gstin,
+                    address: {
+                        street: data.street,
+                        city: data.city,
+                        state: data.state,
+                        pinCode: data.pinCode
+                    }
                 },
                 expertise: data.expertise || []
             };
@@ -135,16 +153,21 @@ const OnboardingSystem: React.FC = () => {
             const { httpsCallable } = await import('firebase/functions');
             const { functions } = await import('../utils/firebase');
             
-            const initAccount = httpsCallable<{businessType: string, legalName: string, pan: string, bankAccount: string, ifsc: string, gstin?: string}, {onboardingUrl: string}>(functions, 'createTutorLinkedAccount');
+            const initAccount = httpsCallable<{businessType: string, legalName: string, phone: string, pan: string, bankAccount: string, ifsc: string, gstin?: string, street: string, city: string, state: string, pinCode: string}, {onboardingUrl: string}>(functions, 'createTutorLinkedAccount');
             
             try {
                 const res = await initAccount({ 
                     businessType: data.businessType, 
                     legalName: data.legalName,
+                    phone: data.phone,
                     pan: data.pan,
                     bankAccount: data.bankAccount,
                     ifsc: data.ifsc,
-                    gstin: data.gstin
+                    gstin: data.gstin,
+                    street: data.street,
+                    city: data.city,
+                    state: data.state,
+                    pinCode: data.pinCode
                 });
                 if (res.data?.onboardingUrl) {
                     toast.success("Redirecting to Razorpay...", { id: 'rzp' });
@@ -338,6 +361,16 @@ const OnboardingSystem: React.FC = () => {
                         </div>
 
                         <form onSubmit={tutorForm.handleSubmit(onSubmitTutor)} className="space-y-6">
+                            <div className="bg-[#040457]/5 border-2 border-[#040457]/10 p-4 rounded-[1.5rem] flex gap-4 items-start shadow-sm">
+                                <div className="text-[#040457] mt-1 shrink-0"><ShieldCheck size={20} className="w-6 h-6" /></div>
+                                <div>
+                                    <h5 className="font-black text-[#040457] text-sm mb-1 uppercase tracking-widest">RBI Compliance Message</h5>
+                                    <p className="text-gray-600 text-xs font-medium leading-relaxed">
+                                        Data is securely sent to Razorpay for RBI compliance and marketplace payout verification. We do not store your PAN or full Bank Account details in our database.
+                                    </p>
+                                </div>
+                            </div>
+                            
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Business Type</label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -363,6 +396,23 @@ const OnboardingSystem: React.FC = () => {
                                     className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.legalName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                 />
                                 {tutorForm.formState.errors.legalName && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.legalName.message}</p>}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Phone Number</label>
+                                <input
+                                    type="tel"
+                                    maxLength={10}
+                                    placeholder="10-digit mobile number"
+                                    {...tutorForm.register('phone')}
+                                    onChange={(e) => {
+                                        const digitsOnly = e.target.value.replace(/\D/g, '');
+                                        e.target.value = digitsOnly;
+                                        tutorForm.setValue('phone', digitsOnly);
+                                    }}
+                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.phone ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                />
+                                {tutorForm.formState.errors.phone && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.phone.message}</p>}
                             </div>
 
                             <div className="p-6 rounded-[2rem] bg-[#052e16] space-y-5 border border-[#c2f575]/20 shadow-xl shadow-[#052e16]/30 group hover:border-[#c2f575]/50 transition-colors">
@@ -432,6 +482,58 @@ const OnboardingSystem: React.FC = () => {
                                         {tutorForm.formState.errors.gstin && <p className="text-red-400 text-xs font-bold pl-2">{tutorForm.formState.errors.gstin.message}</p>}
                                     </div>
                                 )}
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <h4 className="text-[#040457] font-black text-xs uppercase tracking-widest px-2">Residential Address</h4>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Street Address</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Apartment, Studio, or Floor"
+                                        {...tutorForm.register('street')}
+                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.street ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                    />
+                                    {tutorForm.formState.errors.street && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.street.message}</p>}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">City</label>
+                                        <input
+                                            type="text"
+                                            placeholder="City"
+                                            {...tutorForm.register('city')}
+                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.city ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                        />
+                                        {tutorForm.formState.errors.city && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.city.message}</p>}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">State</label>
+                                        <input
+                                            type="text"
+                                            placeholder="State"
+                                            {...tutorForm.register('state')}
+                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.state ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                        />
+                                        {tutorForm.formState.errors.state && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.state.message}</p>}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">PIN Code</label>
+                                        <input
+                                            type="text"
+                                            maxLength={6}
+                                            placeholder="123456"
+                                            {...tutorForm.register('pinCode', {
+                                                onChange: (e) => {
+                                                    const digitsOnly = e.target.value.replace(/\D/g, '');
+                                                    tutorForm.setValue('pinCode', digitsOnly);
+                                                }
+                                            })}
+                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.pinCode ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                        />
+                                        {tutorForm.formState.errors.pinCode && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.pinCode.message}</p>}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="space-y-2">

@@ -270,10 +270,15 @@ export const createTutorLinkedAccount = onCall(
         const {
             businessType: payloadBusinessType,
             legalName: payloadLegalName,
+            phone: payloadPhone,
             pan: payloadPan,
             bankAccount: payloadBankAccount,
             ifsc: payloadIfsc,
             gstin: payloadGstin,
+            street: payloadStreet,
+            city: payloadCity,
+            state: payloadState,
+            pinCode: payloadPinCode,
         } = request.data || {};
 
         try {
@@ -292,28 +297,30 @@ export const createTutorLinkedAccount = onCall(
                 const mappedBusinessType = bType === "registered" ? "proprietorship" : "individual";
                 const mappedLegalName = payloadLegalName || tutorData?.taxDetails?.legalName || tutorData?.name || "Independent Tutor";
                 const mappedEmail = tutorData?.email || request.auth.token.email;
+                const mappedPhone = payloadPhone || tutorData?.taxDetails?.phone || tutorData?.phoneNumber;
 
                 const createPayload: Record<string, any> = {
                     email: mappedEmail,
+                    phone: mappedPhone,
                     type: "route",
                     reference_id: uid,
                     legal_business_name: mappedLegalName,
                     business_type: mappedBusinessType,
                     profile: {
                         category: "education",
-                        subcategory: "e_learning",
+                        subcategory: "e_learning_and_online_tutoring",
                         addresses: {
-                            registered: {
-                                street1: "N/A",
-                                city: "India",
-                                state: "KA",
-                                postal_code: "560001",
+                            residential: {
+                                street1: payloadStreet || "N/A",
+                                city: payloadCity || "India",
+                                state: payloadState || "KA",
+                                postal_code: payloadPinCode || "560001",
                                 country: "IN",
                             }
                         }
                     },
                     legal_info: {
-                        pan: (payloadPan || tutorData?.taxDetails?.pan || "").toUpperCase(),
+                        pan: (payloadPan || "").toUpperCase(),
                         ...(payloadGstin || tutorData?.taxDetails?.gstin
                             ? { gst: (payloadGstin || tutorData?.taxDetails?.gstin || "").toUpperCase() }
                             : {}),
@@ -371,8 +378,7 @@ export const createTutorLinkedAccount = onCall(
                         ...(tutorData?.taxDetails || {}),
                         businessType: bType,
                         legalName: mappedLegalName,
-                        pan: (payloadPan || "").toUpperCase(),
-                        // Never store raw bank account number in plain Firestore — store last 4 only
+                        phone: mappedPhone,
                         bankAccountLast4: (payloadBankAccount || "").slice(-4),
                         ifsc: (payloadIfsc || "").toUpperCase(),
                         ...(payloadGstin ? { gstin: payloadGstin.toUpperCase() } : {}),
@@ -486,6 +492,9 @@ export const razorpayRouteWebhook = onRequest(
         } else if (event === 'account.rejected') {
             const tutorId = payload.account.entity.reference_id;
             if (tutorId) await db.collection('users').doc(tutorId).update({ kycStatus: "FAILED" });
+        } else if (event === 'account.needs_clarification') {
+            const tutorId = payload.account.entity.reference_id;
+            if (tutorId) await db.collection('users').doc(tutorId).update({ kycStatus: "NEEDS_CLARIFICATION" });
         } else if (event === 'payment.captured') {
             const paymentEntity = payload.payment.entity;
             const txRef = db.collection('transactions').doc(paymentEntity.id);
@@ -1065,29 +1074,35 @@ export const verifyOTPAndSignIn = onCall(async (request) => {
         if (error.code === 'auth/user-not-found') {
             // Registration flow
             if (registrationData && password) {
-                user = await admin.auth().createUser({
-                    email,
-                    password,
-                    displayName: registrationData.name
-                });
+                try {
+                    user = await admin.auth().createUser({
+                        email,
+                        password,
+                        displayName: registrationData.name
+                    });
 
-                // Create Firestore profile
-                await admin.firestore().collection("users").doc(user.uid).set({
-                    email,
-                    name: registrationData.name,
-                    role: registrationData.role || "STUDENT",
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
-                    subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
-                    storage_used_bytes: 0,
-                    studentProfile: { isComplete: false },
-                    tutorProfile: { isComplete: false }
-                });
+                    // Create Firestore profile
+                    await admin.firestore().collection("users").doc(user.uid).set({
+                        email,
+                        name: registrationData.name,
+                        role: registrationData.role || "STUDENT",
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
+                        subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+                        storage_used_bytes: 0,
+                        studentProfile: { isComplete: false },
+                        tutorProfile: { isComplete: false }
+                    });
+                } catch (creationError: any) {
+                    console.error("verifyOTPAndSignIn: Error creating user account:", creationError);
+                    throw new functions.https.HttpsError("failed-precondition", creationError.message || "Could not create user account.");
+                }
             } else {
                 // Should not happen if validation is correct
                 throw new functions.https.HttpsError("invalid-argument", "Registration details missing.");
             }
         } else {
+            console.error("verifyOTPAndSignIn: Error fetching user:", error);
             throw new functions.https.HttpsError("internal", error.message);
         }
     }

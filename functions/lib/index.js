@@ -239,7 +239,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     const uid = request.auth.uid;
-    const { businessType: payloadBusinessType, legalName: payloadLegalName, pan: payloadPan, bankAccount: payloadBankAccount, ifsc: payloadIfsc, gstin: payloadGstin, } = request.data || {};
+    const { businessType: payloadBusinessType, legalName: payloadLegalName, phone: payloadPhone, pan: payloadPan, bankAccount: payloadBankAccount, ifsc: payloadIfsc, gstin: payloadGstin, street: payloadStreet, city: payloadCity, state: payloadState, pinCode: payloadPinCode, } = request.data || {};
     try {
         const tutorRef = db.collection("users").doc(uid);
         const tutorDoc = await tutorRef.get();
@@ -254,26 +254,28 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
             const mappedBusinessType = bType === "registered" ? "proprietorship" : "individual";
             const mappedLegalName = payloadLegalName || ((_b = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _b === void 0 ? void 0 : _b.legalName) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor";
             const mappedEmail = (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || request.auth.token.email;
+            const mappedPhone = payloadPhone || ((_c = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _c === void 0 ? void 0 : _c.phone) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.phoneNumber);
             const createPayload = {
                 email: mappedEmail,
+                phone: mappedPhone,
                 type: "route",
                 reference_id: uid,
                 legal_business_name: mappedLegalName,
                 business_type: mappedBusinessType,
                 profile: {
                     category: "education",
-                    subcategory: "e_learning",
+                    subcategory: "e_learning_and_online_tutoring",
                     addresses: {
-                        registered: {
-                            street1: "N/A",
-                            city: "India",
-                            state: "KA",
-                            postal_code: "560001",
+                        residential: {
+                            street1: payloadStreet || "N/A",
+                            city: payloadCity || "India",
+                            state: payloadState || "KA",
+                            postal_code: payloadPinCode || "560001",
                             country: "IN",
                         }
                     }
                 },
-                legal_info: Object.assign({ pan: (payloadPan || ((_c = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _c === void 0 ? void 0 : _c.pan) || "").toUpperCase() }, (payloadGstin || ((_d = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _d === void 0 ? void 0 : _d.gstin)
+                legal_info: Object.assign({ pan: (payloadPan || "").toUpperCase() }, (payloadGstin || ((_d = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _d === void 0 ? void 0 : _d.gstin)
                     ? { gst: (payloadGstin || ((_e = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _e === void 0 ? void 0 : _e.gstin) || "").toUpperCase() }
                     : {}))
             };
@@ -314,9 +316,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
             await tutorRef.update({
                 razorpay_account_id: accountId,
                 kycStatus: 'PENDING',
-                taxDetails: Object.assign(Object.assign(Object.assign({}, ((tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) || {})), { businessType: bType, legalName: mappedLegalName, pan: (payloadPan || "").toUpperCase(), 
-                    // Never store raw bank account number in plain Firestore — store last 4 only
-                    bankAccountLast4: (payloadBankAccount || "").slice(-4), ifsc: (payloadIfsc || "").toUpperCase() }), (payloadGstin ? { gstin: payloadGstin.toUpperCase() } : {}))
+                taxDetails: Object.assign(Object.assign(Object.assign({}, ((tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) || {})), { businessType: bType, legalName: mappedLegalName, phone: mappedPhone, bankAccountLast4: (payloadBankAccount || "").slice(-4), ifsc: (payloadIfsc || "").toUpperCase() }), (payloadGstin ? { gstin: payloadGstin.toUpperCase() } : {}))
             });
         }
         else if ((tutorData === null || tutorData === void 0 ? void 0 : tutorData.kycStatus) !== 'VERIFIED') {
@@ -417,6 +417,11 @@ exports.razorpayRouteWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBH
         const tutorId = payload.account.entity.reference_id;
         if (tutorId)
             await db.collection('users').doc(tutorId).update({ kycStatus: "FAILED" });
+    }
+    else if (event === 'account.needs_clarification') {
+        const tutorId = payload.account.entity.reference_id;
+        if (tutorId)
+            await db.collection('users').doc(tutorId).update({ kycStatus: "NEEDS_CLARIFICATION" });
     }
     else if (event === 'payment.captured') {
         const paymentEntity = payload.payment.entity;
@@ -899,23 +904,29 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)(async (request) => {
         if (error.code === 'auth/user-not-found') {
             // Registration flow
             if (registrationData && password) {
-                user = await admin.auth().createUser({
-                    email,
-                    password,
-                    displayName: registrationData.name
-                });
-                // Create Firestore profile
-                await admin.firestore().collection("users").doc(user.uid).set({
-                    email,
-                    name: registrationData.name,
-                    role: registrationData.role || "STUDENT",
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
-                    subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
-                    storage_used_bytes: 0,
-                    studentProfile: { isComplete: false },
-                    tutorProfile: { isComplete: false }
-                });
+                try {
+                    user = await admin.auth().createUser({
+                        email,
+                        password,
+                        displayName: registrationData.name
+                    });
+                    // Create Firestore profile
+                    await admin.firestore().collection("users").doc(user.uid).set({
+                        email,
+                        name: registrationData.name,
+                        role: registrationData.role || "STUDENT",
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
+                        subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+                        storage_used_bytes: 0,
+                        studentProfile: { isComplete: false },
+                        tutorProfile: { isComplete: false }
+                    });
+                }
+                catch (creationError) {
+                    console.error("verifyOTPAndSignIn: Error creating user account:", creationError);
+                    throw new functions.https.HttpsError("failed-precondition", creationError.message || "Could not create user account.");
+                }
             }
             else {
                 // Should not happen if validation is correct
@@ -923,6 +934,7 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)(async (request) => {
             }
         }
         else {
+            console.error("verifyOTPAndSignIn: Error fetching user:", error);
             throw new functions.https.HttpsError("internal", error.message);
         }
     }
