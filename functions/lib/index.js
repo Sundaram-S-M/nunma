@@ -795,14 +795,19 @@ exports.requestOTP = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"] }, async 
     }
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)); // 10 mins
-    await db.collection("otps").doc(email).set({
+    // Strict Firestore path: otps/{email}
+    await admin.firestore().collection("otps").doc(email).set({
         otp,
         expiresAt,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    // Instantiate Resend locally with a fallback for deployment analysis
-    const apiKey = process.env.RESEND_API_KEY || "re_dummy_fallback_key";
-    const resend = new resend_1.Resend(apiKey);
+    // Initialize Resend client inside the function using the injected secret
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+        console.error("RESEND ERROR: RESEND_API_KEY secret is not available in this function invocation.");
+        throw new functions.https.HttpsError("failed-precondition", "Email service is not configured.");
+    }
+    const resend = new resend_1.Resend(resendApiKey);
     try {
         await resend.emails.send({
             from: '"NUNMA NOTIFICATION" <notification@nunma.in>',
@@ -822,16 +827,17 @@ exports.requestOTP = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"] }, async 
         return { success: true };
     }
     catch (error) {
-        console.error("Resend error:", error);
+        console.error("RESEND ERROR:", error);
         throw new functions.https.HttpsError("internal", error.message || "Failed to send OTP email.");
     }
 });
-exports.verifyOTPAndSignIn = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"] }, async (request) => {
+exports.verifyOTPAndSignIn = (0, https_1.onCall)(async (request) => {
     const { email, otp, registrationData, password } = request.data;
     if (!email || !otp) {
         throw new functions.https.HttpsError("invalid-argument", "Email and OTP are required.");
     }
-    const otpDoc = await db.collection("otps").doc(email).get();
+    // Strict Firestore path: otps/{email} — must match requestOTP exactly
+    const otpDoc = await admin.firestore().collection("otps").doc(email).get();
     if (!otpDoc.exists) {
         throw new functions.https.HttpsError("not-found", "No OTP requested for this email.");
     }
