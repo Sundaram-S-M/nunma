@@ -276,6 +276,7 @@ export const createTutorLinkedAccount = onCall(
             ifsc: payloadIfsc,
             gstin: payloadGstin,
             street: payloadStreet,
+            street2: payloadStreet2,
             city: payloadCity,
             state: payloadState,
             pinCode: payloadPinCode,
@@ -312,6 +313,7 @@ export const createTutorLinkedAccount = onCall(
                         addresses: {
                             registered: {
                                 street1: payloadStreet || "N/A",
+                                street2: payloadStreet2 || "",
                                 city: payloadCity || "India",
                                 state: payloadState || "KA",
                                 postal_code: payloadPinCode || "560001",

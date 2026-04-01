@@ -26,6 +26,7 @@ const tutorSchema = z.object({
     gstin: z.string().optional(),
     expertise: z.array(z.string()).max(3).optional(),
     street: z.string().min(3, "Street address is required"),
+    street2: z.string().min(1, "Street address line 2 is required (Area/Locality)"),
     city: z.string().min(2, "City is required"),
     state: z.string().min(2, "State is required"),
     pinCode: z.string().regex(/^\d{6}$/, "Invalid PIN Code"),
@@ -72,6 +73,7 @@ const OnboardingSystem: React.FC = () => {
             gstin: '',
             expertise: [],
             street: '',
+            street2: '',
             city: '',
             state: '',
             pinCode: '',
@@ -134,6 +136,7 @@ const OnboardingSystem: React.FC = () => {
                     gstin: data.gstin,
                     address: {
                         street: data.street,
+                        street2: data.street2,
                         city: data.city,
                         state: data.state,
                         pinCode: data.pinCode
@@ -153,7 +156,7 @@ const OnboardingSystem: React.FC = () => {
             const { httpsCallable } = await import('firebase/functions');
             const { functions } = await import('../utils/firebase');
             
-            const initAccount = httpsCallable<{businessType: string, legalName: string, phone: string, pan: string, bankAccount: string, ifsc: string, gstin?: string, street: string, city: string, state: string, pinCode: string}, {onboardingUrl: string}>(functions, 'createTutorLinkedAccount');
+            const initAccount = httpsCallable<{businessType: string, legalName: string, phone: string, pan: string, bankAccount: string, ifsc: string, gstin?: string, street: string, street2: string, city: string, state: string, pinCode: string}, {onboardingUrl: string}>(functions, 'createTutorLinkedAccount');
             
             try {
                 const res = await initAccount({ 
@@ -165,6 +168,7 @@ const OnboardingSystem: React.FC = () => {
                     ifsc: data.ifsc,
                     gstin: data.gstin,
                     street: data.street,
+                    street2: data.street2,
                     city: data.city,
                     state: data.state,
                     pinCode: data.pinCode
@@ -495,6 +499,16 @@ const OnboardingSystem: React.FC = () => {
                                         className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.street ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                     />
                                     {tutorForm.formState.errors.street && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.street.message}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Area / Locality / Street 2</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Area, Locality, or Landmark"
+                                        {...tutorForm.register('street2')}
+                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.street2 ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                    />
+                                    {tutorForm.formState.errors.street2 && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.street2.message}</p>}
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div className="space-y-2">

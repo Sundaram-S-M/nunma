@@ -239,7 +239,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     const uid = request.auth.uid;
-    const { businessType: payloadBusinessType, legalName: payloadLegalName, phone: payloadPhone, pan: payloadPan, bankAccount: payloadBankAccount, ifsc: payloadIfsc, gstin: payloadGstin, street: payloadStreet, city: payloadCity, state: payloadState, pinCode: payloadPinCode, } = request.data || {};
+    const { businessType: payloadBusinessType, legalName: payloadLegalName, phone: payloadPhone, pan: payloadPan, bankAccount: payloadBankAccount, ifsc: payloadIfsc, gstin: payloadGstin, street: payloadStreet, street2: payloadStreet2, city: payloadCity, state: payloadState, pinCode: payloadPinCode, } = request.data || {};
     try {
         const tutorRef = db.collection("users").doc(uid);
         const tutorDoc = await tutorRef.get();
@@ -268,6 +268,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                     addresses: {
                         registered: {
                             street1: payloadStreet || "N/A",
+                            street2: payloadStreet2 || "",
                             city: payloadCity || "India",
                             state: payloadState || "KA",
                             postal_code: payloadPinCode || "560001",
