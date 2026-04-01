@@ -255,7 +255,15 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
             const mappedLegalName = payloadLegalName || ((_b = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _b === void 0 ? void 0 : _b.legalName) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor";
             const mappedEmail = (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || request.auth.token.email;
             const mappedPhone = payloadPhone || ((_c = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _c === void 0 ? void 0 : _c.phone) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.phoneNumber);
-            const createPayload = Object.assign({ email: mappedEmail, phone: mappedPhone, type: "route", reference_id: uid.slice(0, 20), legal_business_name: mappedLegalName, customer_facing_business_name: mappedLegalName, business_type: mappedBusinessType, profile: {
+            const createPayload = {
+                email: mappedEmail,
+                phone: mappedPhone,
+                type: "route",
+                reference_id: uid.slice(0, 20),
+                legal_business_name: mappedLegalName,
+                customer_facing_business_name: mappedLegalName,
+                business_type: mappedBusinessType,
+                profile: {
                     category: "education",
                     subcategory: "professional_courses",
                     addresses: {
@@ -268,61 +276,22 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                             country: "IN",
                         }
                     }
-                } }, (payloadGstin || ((_d = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _d === void 0 ? void 0 : _d.gstin)
-                ? {
-                    legal_info: {
-                        gst: (payloadGstin || ((_e = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _e === void 0 ? void 0 : _e.gstin) || "").toUpperCase()
-                    }
-                }
-                : {}));
+                },
+                legal_info: Object.assign({ pan: (payloadPan || ((_d = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _d === void 0 ? void 0 : _d.pan) || "").toUpperCase() }, (payloadGstin || ((_e = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _e === void 0 ? void 0 : _e.gstin)
+                    ? { gst: (payloadGstin || ((_f = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _f === void 0 ? void 0 : _f.gstin) || "").toUpperCase() }
+                    : {}))
+            };
             let createResponse;
             try {
                 createResponse = await axios_1.default.post('https://api.razorpay.com/v2/accounts', createPayload, { headers });
             }
             catch (err) {
                 const msg = extractRazorpayError(err);
-                console.error("Razorpay account creation failed:", msg, (_f = err === null || err === void 0 ? void 0 : err.response) === null || _f === void 0 ? void 0 : _f.data);
+                console.error("Razorpay account creation failed:", msg, (_g = err === null || err === void 0 ? void 0 : err.response) === null || _g === void 0 ? void 0 : _g.data);
                 throw new functions.https.HttpsError("failed-precondition", `Razorpay Account creation rejected: ${msg}`);
             }
             accountId = createResponse.data.id;
-            console.log(`Razorpay linked account created: ${accountId} for uid: ${uid}. Now adding stakeholder...`);
-            // ── Step 2: Add Individual/Owner as a Stakeholder (The "Right Way") ─────
-            // For Individuals and Proprietorships, this is where the Personal PAN belongs.
-            const stakeholderPayload = {
-                name: mappedLegalName,
-                email: mappedEmail,
-                phone: {
-                    number: mappedPhone
-                },
-                percentage_ownership: 100,
-                relationship: {
-                    director: true,
-                    executive: true
-                },
-                addresses: {
-                    registered: {
-                        street1: payloadStreet || "N/A",
-                        street2: payloadStreet2 || "",
-                        city: payloadCity || "India",
-                        state: payloadState || "KA",
-                        postal_code: payloadPinCode || "560001",
-                        country: "IN",
-                    }
-                },
-                kyc: {
-                    pan: (payloadPan || "").toUpperCase()
-                }
-            };
-            try {
-                await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/stakeholders`, stakeholderPayload, { headers });
-                console.log(`Stakeholder added successfully with PAN for account: ${accountId}`);
-            }
-            catch (err) {
-                const msg = extractRazorpayError(err);
-                console.error("Razorpay Stakeholder addition failed:", msg, (_g = err === null || err === void 0 ? void 0 : err.response) === null || _g === void 0 ? void 0 : _g.data);
-                // We don't throw here to allow the user to still get the onboarding link
-                // They can fix PAN issues in the Razorpay Dashboard if this step fails.
-            }
+            console.log(`Razorpay linked account created: ${accountId} for uid: ${uid}.`);
             // ── Step 3: Configure the Route product with bank settlement details ──
             const bankPayload = {
                 settlements: {
@@ -354,7 +323,9 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
         // ── Step 4: Generate a Razorpay onboarding magic link ─────────────────
         let onboardingUrl;
         try {
-            const linkResponse = await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/login_links`, {}, { headers });
+            const linkResponse = await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/onboarding_links`, {
+                notify_by: "email", // Optional, can be empty
+            }, { headers });
             onboardingUrl = linkResponse.data.short_url || linkResponse.data.url;
         }
         catch (err) {

@@ -322,16 +322,12 @@ export const createTutorLinkedAccount = onCall(
                             }
                         }
                     },
-                    // We REMOVE legal_info.pan from the initial account creation.
-                    // This avoids the "Company PAN" validation error for Individuals/Proprietors.
-                    // We will add the Individual details via the Stakeholders API in Step 2.
-                    ...(payloadGstin || tutorData?.taxDetails?.gstin
-                        ? {
-                            legal_info: {
-                                gst: (payloadGstin || tutorData?.taxDetails?.gstin || "").toUpperCase()
-                            }
-                        }
-                        : {})
+                    legal_info: {
+                        pan: (payloadPan || tutorData?.taxDetails?.pan || "").toUpperCase(),
+                        ...(payloadGstin || tutorData?.taxDetails?.gstin
+                            ? { gst: (payloadGstin || tutorData?.taxDetails?.gstin || "").toUpperCase() }
+                            : {}),
+                    }
                 };
 
                 let createResponse: any;
@@ -348,49 +344,8 @@ export const createTutorLinkedAccount = onCall(
                 }
 
                 accountId = createResponse.data.id;
-                console.log(`Razorpay linked account created: ${accountId} for uid: ${uid}. Now adding stakeholder...`);
+                console.log(`Razorpay linked account created: ${accountId} for uid: ${uid}.`);
 
-                // ── Step 2: Add Individual/Owner as a Stakeholder (The "Right Way") ─────
-                // For Individuals and Proprietorships, this is where the Personal PAN belongs.
-                const stakeholderPayload = {
-                    name: mappedLegalName,
-                    email: mappedEmail,
-                    phone: {
-                        number: mappedPhone
-                    },
-                    percentage_ownership: 100,
-                    relationship: {
-                        director: true,
-                        executive: true
-                    },
-                    addresses: { // Explicit stakeholder address
-                        registered: {
-                            street1: payloadStreet || "N/A",
-                            street2: payloadStreet2 || "",
-                            city: payloadCity || "India",
-                            state: payloadState || "KA",
-                            postal_code: payloadPinCode || "560001",
-                            country: "IN",
-                        }
-                    },
-                    kyc: {
-                        pan: (payloadPan || "").toUpperCase()
-                    }
-                };
-
-                try {
-                    await axios.post(
-                        `https://api.razorpay.com/v2/accounts/${accountId}/stakeholders`,
-                        stakeholderPayload,
-                        { headers }
-                    );
-                    console.log(`Stakeholder added successfully with PAN for account: ${accountId}`);
-                } catch (err: any) {
-                    const msg = extractRazorpayError(err);
-                    console.error("Razorpay Stakeholder addition failed:", msg, err?.response?.data);
-                    // We don't throw here to allow the user to still get the onboarding link
-                    // They can fix PAN issues in the Razorpay Dashboard if this step fails.
-                }
 
                 // ── Step 3: Configure the Route product with bank settlement details ──
                 const bankPayload = {
@@ -437,8 +392,10 @@ export const createTutorLinkedAccount = onCall(
             let onboardingUrl: string;
             try {
                 const linkResponse = await axios.post(
-                    `https://api.razorpay.com/v2/accounts/${accountId}/login_links`,
-                    {},
+                    `https://api.razorpay.com/v2/accounts/${accountId}/onboarding_links`,
+                    {
+                        notify_by: "email", // Optional, can be empty
+                    },
                     { headers }
                 );
                 onboardingUrl = linkResponse.data.short_url || linkResponse.data.url;
