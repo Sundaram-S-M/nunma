@@ -251,20 +251,11 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
         if (!accountId) {
             const bType = payloadBusinessType || ((_a = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _a === void 0 ? void 0 : _a.businessType) || "individual";
             // Razorpay accepts: individual | proprietorship | partnership | private_limited | public_limited | llp | ngo | trust | society | not_yet_registered | huf
-            // Map both individual and registered academy to 'proprietorship'. 
-            // This is the most stable business type for tutors using their personal PAN card on Razorpay India.
-            const mappedBusinessType = "proprietorship";
+            const mappedBusinessType = bType === "individual" ? "individual" : "proprietorship";
             const mappedLegalName = payloadLegalName || ((_b = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _b === void 0 ? void 0 : _b.legalName) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor";
             const mappedEmail = (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || request.auth.token.email;
             const mappedPhone = payloadPhone || ((_c = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _c === void 0 ? void 0 : _c.phone) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.phoneNumber);
-            const createPayload = {
-                email: mappedEmail,
-                phone: mappedPhone,
-                type: "route",
-                reference_id: uid,
-                legal_business_name: mappedLegalName,
-                business_type: mappedBusinessType,
-                profile: {
+            const createPayload = Object.assign({ email: mappedEmail, phone: mappedPhone, type: "route", reference_id: uid, legal_business_name: mappedLegalName, business_type: mappedBusinessType, profile: {
                     category: "education",
                     subcategory: "e_learning_and_online_tutoring",
                     addresses: {
@@ -277,11 +268,13 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                             country: "IN",
                         }
                     }
-                },
-                legal_info: Object.assign({ pan: (payloadPan || "").toUpperCase() }, (payloadGstin || ((_d = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _d === void 0 ? void 0 : _d.gstin)
-                    ? { gst: (payloadGstin || ((_e = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _e === void 0 ? void 0 : _e.gstin) || "").toUpperCase() }
-                    : {}))
-            };
+                } }, (payloadGstin || ((_d = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _d === void 0 ? void 0 : _d.gstin)
+                ? {
+                    legal_info: {
+                        gst: (payloadGstin || ((_e = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _e === void 0 ? void 0 : _e.gstin) || "").toUpperCase()
+                    }
+                }
+                : {}));
             let createResponse;
             try {
                 createResponse = await axios_1.default.post('https://api.razorpay.com/v2/accounts', createPayload, { headers });
@@ -289,31 +282,54 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
             catch (err) {
                 const msg = extractRazorpayError(err);
                 console.error("Razorpay account creation failed:", msg, (_f = err === null || err === void 0 ? void 0 : err.response) === null || _f === void 0 ? void 0 : _f.data);
-                throw new functions.https.HttpsError("failed-precondition", `Razorpay KYC rejected: ${msg}`);
+                throw new functions.https.HttpsError("failed-precondition", `Razorpay Account creation rejected: ${msg}`);
             }
             accountId = createResponse.data.id;
-            console.log(`Razorpay linked account created successfully. AccountId: ${accountId} for uid: ${uid}`);
-            // ── Step 2: Configure the Route product with bank settlement details ──
+            console.log(`Razorpay linked account created: ${accountId} for uid: ${uid}. Now adding stakeholder...`);
+            // ── Step 2: Add Individual/Owner as a Stakeholder (The "Right Way") ─────
+            // For Individuals and Proprietorships, this is where the Personal PAN belongs.
+            const stakeholderPayload = {
+                name: mappedLegalName,
+                email: mappedEmail,
+                phone: {
+                    number: mappedPhone
+                },
+                percentage_ownership: 100,
+                relationship: {
+                    director: true,
+                    executive: true
+                },
+                kyc: {
+                    pan: (payloadPan || "").toUpperCase()
+                }
+            };
+            try {
+                await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/stakeholders`, stakeholderPayload, { headers });
+                console.log(`Stakeholder added successfully with PAN for account: ${accountId}`);
+            }
+            catch (err) {
+                const msg = extractRazorpayError(err);
+                console.error("Razorpay Stakeholder addition failed:", msg, (_g = err === null || err === void 0 ? void 0 : err.response) === null || _g === void 0 ? void 0 : _g.data);
+                // We don't throw here to allow the user to still get the onboarding link
+                // They can fix PAN issues in the Razorpay Dashboard if this step fails.
+            }
+            // ── Step 3: Configure the Route product with bank settlement details ──
             const bankPayload = {
                 settlements: {
-                    account_number: payloadBankAccount || ((_g = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _g === void 0 ? void 0 : _g.bankAccount),
-                    ifsc_code: (payloadIfsc || ((_h = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _h === void 0 ? void 0 : _h.ifsc) || "").toUpperCase(),
+                    account_number: payloadBankAccount || ((_h = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _h === void 0 ? void 0 : _h.bankAccount),
+                    ifsc_code: (payloadIfsc || ((_j = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _j === void 0 ? void 0 : _j.ifsc) || "").toUpperCase(),
                     beneficiary_name: mappedLegalName,
                 },
                 tnc_accepted: true,
             };
             try {
                 // POST is correct for initial product configuration on a new linked account.
-                // PATCH is only used to update an existing product config and requires a product_id in the path.
                 await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/products`, bankPayload, { headers });
                 console.log(`Bank settlement configured successfully for account: ${accountId}`);
             }
             catch (err) {
                 const msg = extractRazorpayError(err);
-                console.error("Razorpay product config failed:", msg, (_j = err === null || err === void 0 ? void 0 : err.response) === null || _j === void 0 ? void 0 : _j.data);
-                // Bank config failure is non-fatal for the onboarding link — log and continue
-                // The expert can fix bank details via the Razorpay onboarding dashboard
-                console.warn(`Bank config for account ${accountId} will be completed via Razorpay dashboard. Reason: ${msg}`);
+                console.warn(`Bank config for account ${accountId} failed. Reason: ${msg}`);
             }
             // ── Step 3: Persist KYC data in Firestore ────────────────────────────
             await tutorRef.update({

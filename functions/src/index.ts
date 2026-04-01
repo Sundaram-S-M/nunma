@@ -295,9 +295,7 @@ export const createTutorLinkedAccount = onCall(
             if (!accountId) {
                 const bType = payloadBusinessType || tutorData?.taxDetails?.businessType || "individual";
                 // Razorpay accepts: individual | proprietorship | partnership | private_limited | public_limited | llp | ngo | trust | society | not_yet_registered | huf
-                // Map both individual and registered academy to 'proprietorship'. 
-                // This is the most stable business type for tutors using their personal PAN card on Razorpay India.
-                const mappedBusinessType = "proprietorship";
+                const mappedBusinessType = bType === "individual" ? "individual" : "proprietorship";
                 const mappedLegalName = payloadLegalName || tutorData?.taxDetails?.legalName || tutorData?.name || "Independent Tutor";
                 const mappedEmail = tutorData?.email || request.auth.token.email;
                 const mappedPhone = payloadPhone || tutorData?.taxDetails?.phone || tutorData?.phoneNumber;
@@ -323,12 +321,16 @@ export const createTutorLinkedAccount = onCall(
                             }
                         }
                     },
-                    legal_info: {
-                        pan: (payloadPan || "").toUpperCase(),
-                        ...(payloadGstin || tutorData?.taxDetails?.gstin
-                            ? { gst: (payloadGstin || tutorData?.taxDetails?.gstin || "").toUpperCase() }
-                            : {}),
-                    }
+                    // We REMOVE legal_info.pan from the initial account creation.
+                    // This avoids the "Company PAN" validation error for Individuals/Proprietors.
+                    // We will add the Individual details via the Stakeholders API in Step 2.
+                    ...(payloadGstin || tutorData?.taxDetails?.gstin
+                        ? {
+                            legal_info: {
+                                gst: (payloadGstin || tutorData?.taxDetails?.gstin || "").toUpperCase()
+                            }
+                        }
+                        : {})
                 };
 
                 let createResponse: any;
@@ -341,13 +343,45 @@ export const createTutorLinkedAccount = onCall(
                 } catch (err: any) {
                     const msg = extractRazorpayError(err);
                     console.error("Razorpay account creation failed:", msg, err?.response?.data);
-                    throw new functions.https.HttpsError("failed-precondition", `Razorpay KYC rejected: ${msg}`);
+                    throw new functions.https.HttpsError("failed-precondition", `Razorpay Account creation rejected: ${msg}`);
                 }
 
                 accountId = createResponse.data.id;
-                console.log(`Razorpay linked account created successfully. AccountId: ${accountId} for uid: ${uid}`);
+                console.log(`Razorpay linked account created: ${accountId} for uid: ${uid}. Now adding stakeholder...`);
 
-                // ── Step 2: Configure the Route product with bank settlement details ──
+                // ── Step 2: Add Individual/Owner as a Stakeholder (The "Right Way") ─────
+                // For Individuals and Proprietorships, this is where the Personal PAN belongs.
+                const stakeholderPayload = {
+                    name: mappedLegalName,
+                    email: mappedEmail,
+                    phone: {
+                        number: mappedPhone
+                    },
+                    percentage_ownership: 100,
+                    relationship: {
+                        director: true,
+                        executive: true
+                    },
+                    kyc: {
+                        pan: (payloadPan || "").toUpperCase()
+                    }
+                };
+
+                try {
+                    await axios.post(
+                        `https://api.razorpay.com/v2/accounts/${accountId}/stakeholders`,
+                        stakeholderPayload,
+                        { headers }
+                    );
+                    console.log(`Stakeholder added successfully with PAN for account: ${accountId}`);
+                } catch (err: any) {
+                    const msg = extractRazorpayError(err);
+                    console.error("Razorpay Stakeholder addition failed:", msg, err?.response?.data);
+                    // We don't throw here to allow the user to still get the onboarding link
+                    // They can fix PAN issues in the Razorpay Dashboard if this step fails.
+                }
+
+                // ── Step 3: Configure the Route product with bank settlement details ──
                 const bankPayload = {
                     settlements: {
                         account_number: payloadBankAccount || tutorData?.taxDetails?.bankAccount,
@@ -359,7 +393,6 @@ export const createTutorLinkedAccount = onCall(
 
                 try {
                     // POST is correct for initial product configuration on a new linked account.
-                    // PATCH is only used to update an existing product config and requires a product_id in the path.
                     await axios.post(
                         `https://api.razorpay.com/v2/accounts/${accountId}/products`,
                         bankPayload,
@@ -368,10 +401,7 @@ export const createTutorLinkedAccount = onCall(
                     console.log(`Bank settlement configured successfully for account: ${accountId}`);
                 } catch (err: any) {
                     const msg = extractRazorpayError(err);
-                    console.error("Razorpay product config failed:", msg, err?.response?.data);
-                    // Bank config failure is non-fatal for the onboarding link — log and continue
-                    // The expert can fix bank details via the Razorpay onboarding dashboard
-                    console.warn(`Bank config for account ${accountId} will be completed via Razorpay dashboard. Reason: ${msg}`);
+                    console.warn(`Bank config for account ${accountId} failed. Reason: ${msg}`);
                 }
 
                 // ── Step 3: Persist KYC data in Firestore ────────────────────────────
