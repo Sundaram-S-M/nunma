@@ -298,7 +298,8 @@ export const createTutorLinkedAccount = onCall(
                 const mappedBusinessType = bType === "individual" ? "individual" : "proprietorship";
                 const mappedLegalName = payloadLegalName || tutorData?.taxDetails?.legalName || tutorData?.name || "Independent Tutor";
                 const mappedEmail = tutorData?.email || request.auth.token.email;
-                const mappedPhone = payloadPhone || tutorData?.taxDetails?.phone || tutorData?.phoneNumber;
+                const rawPhone = (payloadPhone || tutorData?.taxDetails?.phone || tutorData?.phoneNumber || "").toString().replace(/\D/g, '');
+                const mappedPhone = rawPhone.length === 10 ? `+91${rawPhone}` : (rawPhone.startsWith('91') && rawPhone.length === 12 ? `+${rawPhone}` : `+91${rawPhone.slice(-10)}`);
 
                 const createPayload: Record<string, any> = {
                     email: mappedEmail,
@@ -349,6 +350,7 @@ export const createTutorLinkedAccount = onCall(
 
                 // ── Step 3: Configure the Route product with bank settlement details ──
                 const bankPayload = {
+                    product_name: "payment_gateway",
                     settlements: {
                         account_number: payloadBankAccount || tutorData?.taxDetails?.bankAccount,
                         ifsc_code: (payloadIfsc || tutorData?.taxDetails?.ifsc || "").toUpperCase(),
@@ -364,10 +366,11 @@ export const createTutorLinkedAccount = onCall(
                         bankPayload,
                         { headers }
                     );
-                    console.log(`Bank settlement configured successfully for account: ${accountId}`);
+                    console.log(`Product "${bankPayload.product_name}" configured successfully for account: ${accountId}`);
                 } catch (err: any) {
                     const msg = extractRazorpayError(err);
-                    console.warn(`Bank config for account ${accountId} failed. Reason: ${msg}`);
+                    console.error(`Product config for account ${accountId} failed:`, msg, err?.response?.data);
+                    throw new functions.https.HttpsError("failed-precondition", `Razorpay Product configuration rejected: ${msg}`);
                 }
 
                 // ── Step 3: Persist KYC data in Firestore ────────────────────────────
@@ -391,18 +394,38 @@ export const createTutorLinkedAccount = onCall(
             // ── Step 4: Generate a Razorpay onboarding magic link ─────────────────
             let onboardingUrl: string;
             try {
+                console.log(`Attempting v2 onboarding link for account: ${accountId}`);
                 const linkResponse = await axios.post(
                     `https://api.razorpay.com/v2/accounts/${accountId}/onboarding_links`,
-                    {
-                        notify_by: "email", // Optional, can be empty
-                    },
+                    {}, // Minimal payload (unnotified)
                     { headers }
                 );
                 onboardingUrl = linkResponse.data.short_url || linkResponse.data.url;
-            } catch (err: any) {
-                const msg = extractRazorpayError(err);
-                console.error("Failed to generate Razorpay login link:", msg);
-                throw new functions.https.HttpsError("internal", `Could not generate onboarding link: ${msg}`);
+            } catch (v2Error: any) {
+                const v2Msg = extractRazorpayError(v2Error);
+                const is404 = v2Error?.response?.status === 404;
+                
+                console.warn(`v2 onboarding link failed (Status: ${v2Error?.response?.status}): ${v2Msg}`);
+                if (is404) console.warn("404 Body:", JSON.stringify(v2Error?.response?.data));
+
+                if (is404) {
+                    try {
+                        console.log(`Attempting v1 fallback for account: ${accountId}`);
+                        const v1Response = await axios.post(
+                            `https://api.razorpay.com/v1/accounts/${accountId}/onboarding_links`,
+                            {},
+                            { headers }
+                        );
+                        onboardingUrl = v1Response.data.short_url || v1Response.data.url;
+                        console.log("v1 fallback successful.");
+                    } catch (v1Error: any) {
+                        const v1Msg = extractRazorpayError(v1Error);
+                        console.error("v1 fallback also failed:", v1Msg);
+                        throw new functions.https.HttpsError("internal", `Could not generate onboarding link (v1/v2 404): ${v1Msg}. Ensure Adaptive Onboarding is enabled.`);
+                    }
+                } else {
+                    throw new functions.https.HttpsError("internal", `Could not generate onboarding link: ${v2Msg}`);
+                }
             }
 
             return { success: true, onboardingUrl };

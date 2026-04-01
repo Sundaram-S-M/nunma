@@ -145,12 +145,17 @@ const OnboardingSystem: React.FC = () => {
                 expertise: data.expertise || []
             };
 
+            // Save basic profile completion status. 
+            // WE DO NOT save raw taxDetails/PAN/Bank to the users document from the frontend
+            // to avoid security rule rejections and PII exposure.
             await updateProfile({
                 tutorProfile: {
                     isComplete: true,
                 },
-                ...payload
+                phoneNumber: data.phone,
+                expertise: data.expertise || []
             });
+
             
             toast.loading("Initiating Razorpay Verification...", { id: 'rzp' });
             const { httpsCallable } = await import('firebase/functions');

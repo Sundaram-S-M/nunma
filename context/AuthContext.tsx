@@ -38,9 +38,14 @@ export interface UserProfile {
   tutorProfile?: TutorProfileData;
   linkedin?: string;
   expertise?: string[];
+  phoneNumber?: string;
   taxDetails?: {
     businessType: 'individual' | 'registered';
     legalName: string;
+    phone?: string;
+    bankAccountLast4?: string;
+    ifsc?: string;
+    gstin?: string;
   };
   availability?: any[];
   storage_used_bytes?: number;
