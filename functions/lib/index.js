@@ -255,9 +255,9 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
             const mappedLegalName = payloadLegalName || ((_b = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _b === void 0 ? void 0 : _b.legalName) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor";
             const mappedEmail = (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || request.auth.token.email;
             const mappedPhone = payloadPhone || ((_c = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _c === void 0 ? void 0 : _c.phone) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.phoneNumber);
-            const createPayload = Object.assign({ email: mappedEmail, phone: mappedPhone, type: "route", reference_id: uid, legal_business_name: mappedLegalName, business_type: mappedBusinessType, profile: {
+            const createPayload = Object.assign({ email: mappedEmail, phone: mappedPhone, type: "route", reference_id: uid, legal_business_name: mappedLegalName, customer_facing_business_name: mappedLegalName, business_type: mappedBusinessType, profile: {
                     category: "education",
-                    subcategory: "e_learning_and_online_tutoring",
+                    subcategory: "professional_courses",
                     addresses: {
                         registered: {
                             street1: payloadStreet || "N/A",
@@ -298,6 +298,16 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                 relationship: {
                     director: true,
                     executive: true
+                },
+                addresses: {
+                    registered: {
+                        street1: payloadStreet || "N/A",
+                        street2: payloadStreet2 || "",
+                        city: payloadCity || "India",
+                        state: payloadState || "KA",
+                        postal_code: payloadPinCode || "560001",
+                        country: "IN",
+                    }
                 },
                 kyc: {
                     pan: (payloadPan || "").toUpperCase()

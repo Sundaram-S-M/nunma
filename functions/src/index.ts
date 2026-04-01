@@ -306,10 +306,11 @@ export const createTutorLinkedAccount = onCall(
                     type: "route",
                     reference_id: uid,
                     legal_business_name: mappedLegalName,
+                    customer_facing_business_name: mappedLegalName, // Added branding as required for some products
                     business_type: mappedBusinessType,
                     profile: {
                         category: "education",
-                        subcategory: "e_learning_and_online_tutoring",
+                        subcategory: "professional_courses", // Fixed from 'e_learning_and_online_tutoring'
                         addresses: {
                             registered: {
                                 street1: payloadStreet || "N/A",
@@ -361,6 +362,16 @@ export const createTutorLinkedAccount = onCall(
                     relationship: {
                         director: true,
                         executive: true
+                    },
+                    addresses: { // Explicit stakeholder address
+                        registered: {
+                            street1: payloadStreet || "N/A",
+                            street2: payloadStreet2 || "",
+                            city: payloadCity || "India",
+                            state: payloadState || "KA",
+                            postal_code: payloadPinCode || "560001",
+                            country: "IN",
+                        }
                     },
                     kyc: {
                         pan: (payloadPan || "").toUpperCase()
