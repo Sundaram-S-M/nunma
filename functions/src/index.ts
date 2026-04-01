@@ -294,8 +294,9 @@ export const createTutorLinkedAccount = onCall(
             // ── Step 1: Create or re-use the Razorpay Linked Account ──────────────
             if (!accountId) {
                 const bType = payloadBusinessType || tutorData?.taxDetails?.businessType || "individual";
-                // Razorpay accepts: individual | proprietorship | partnership | private_limited | public_limited | llp | ngo | trust | society | not_yet_registered | huf
-                const mappedBusinessType = bType === "individual" ? "individual" : "proprietorship";
+                // Razorpay standard: Mapping 'individual' to 'proprietorship' for linked accounts 
+                // ensures standard PAN acceptance and eligibility for onboarding links.
+                const mappedBusinessType = "proprietorship"; 
                 const mappedLegalName = payloadLegalName || tutorData?.taxDetails?.legalName || tutorData?.name || "Independent Tutor";
                 const mappedEmail = tutorData?.email || request.auth.token.email;
                 const rawPhone = (payloadPhone || tutorData?.taxDetails?.phone || tutorData?.phoneNumber || "").toString().replace(/\D/g, '');
@@ -394,34 +395,36 @@ export const createTutorLinkedAccount = onCall(
             // ── Step 4: Generate a Razorpay onboarding magic link ─────────────────
             let onboardingUrl: string;
             try {
-                console.log(`Attempting v2 onboarding link for account: ${accountId}`);
+                console.log(`[RAZORPAY] Attempting v2 onboarding link for account: ${accountId}`);
                 const linkResponse = await axios.post(
                     `https://api.razorpay.com/v2/accounts/${accountId}/onboarding_links`,
                     {}, // Minimal payload (unnotified)
                     { headers }
                 );
                 onboardingUrl = linkResponse.data.short_url || linkResponse.data.url;
+                console.log(`[RAZORPAY] v2 onboarding link generated: ${onboardingUrl}`);
             } catch (v2Error: any) {
                 const v2Msg = extractRazorpayError(v2Error);
+                const v2Data = v2Error?.response?.data;
                 const is404 = v2Error?.response?.status === 404;
                 
-                console.warn(`v2 onboarding link failed (Status: ${v2Error?.response?.status}): ${v2Msg}`);
-                if (is404) console.warn("404 Body:", JSON.stringify(v2Error?.response?.data));
+                console.warn(`[RAZORPAY] v2 link failed (Status: ${v2Error?.response?.status}):`, v2Msg, JSON.stringify(v2Data));
 
                 if (is404) {
                     try {
-                        console.log(`Attempting v1 fallback for account: ${accountId}`);
+                        console.log(`[RAZORPAY] Attempting v1 fallback for account: ${accountId}`);
                         const v1Response = await axios.post(
                             `https://api.razorpay.com/v1/accounts/${accountId}/onboarding_links`,
                             {},
                             { headers }
                         );
                         onboardingUrl = v1Response.data.short_url || v1Response.data.url;
-                        console.log("v1 fallback successful.");
+                        console.log("[RAZORPAY] v1 fallback successful.");
                     } catch (v1Error: any) {
                         const v1Msg = extractRazorpayError(v1Error);
-                        console.error("v1 fallback also failed:", v1Msg);
-                        throw new functions.https.HttpsError("internal", `Could not generate onboarding link (v1/v2 404): ${v1Msg}. Ensure Adaptive Onboarding is enabled.`);
+                        const v1Data = v1Error?.response?.data;
+                        console.error("[RAZORPAY] v1 fallback also failed:", v1Msg, JSON.stringify(v1Data));
+                        throw new functions.https.HttpsError("internal", `Razorpay Link Generation Failed (v1/v2 404). Details: ${v1Msg}. Ensure Marketplace feature is enabled.`);
                     }
                 } else {
                     throw new functions.https.HttpsError("internal", `Could not generate onboarding link: ${v2Msg}`);

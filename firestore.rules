@@ -9,7 +9,10 @@ service cloud.firestore {
       
       // Strict ownership for profile management
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && (request.auth.uid == userId || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']));
+      allow update: if request.auth != null && (
+        request.auth.uid == userId || 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount'])
+      );
       allow delete: if request.auth != null && request.auth.uid == userId;
       
       // CRITICAL SECURITY: SENSITIVE KYC DATA LOCKDOWN
