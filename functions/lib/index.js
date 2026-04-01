@@ -251,7 +251,9 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
         if (!accountId) {
             const bType = payloadBusinessType || ((_a = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _a === void 0 ? void 0 : _a.businessType) || "individual";
             // Razorpay accepts: individual | proprietorship | partnership | private_limited | public_limited | llp | ngo | trust | society | not_yet_registered | huf
-            const mappedBusinessType = bType === "registered" ? "proprietorship" : "individual";
+            // Map both individual and registered academy to 'proprietorship'. 
+            // This is the most stable business type for tutors using their personal PAN card on Razorpay India.
+            const mappedBusinessType = "proprietorship";
             const mappedLegalName = payloadLegalName || ((_b = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _b === void 0 ? void 0 : _b.legalName) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor";
             const mappedEmail = (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || request.auth.token.email;
             const mappedPhone = payloadPhone || ((_c = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _c === void 0 ? void 0 : _c.phone) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.phoneNumber);

@@ -295,7 +295,9 @@ export const createTutorLinkedAccount = onCall(
             if (!accountId) {
                 const bType = payloadBusinessType || tutorData?.taxDetails?.businessType || "individual";
                 // Razorpay accepts: individual | proprietorship | partnership | private_limited | public_limited | llp | ngo | trust | society | not_yet_registered | huf
-                const mappedBusinessType = bType === "registered" ? "proprietorship" : "individual";
+                // Map both individual and registered academy to 'proprietorship'. 
+                // This is the most stable business type for tutors using their personal PAN card on Razorpay India.
+                const mappedBusinessType = "proprietorship";
                 const mappedLegalName = payloadLegalName || tutorData?.taxDetails?.legalName || tutorData?.name || "Independent Tutor";
                 const mappedEmail = tutorData?.email || request.auth.token.email;
                 const mappedPhone = payloadPhone || tutorData?.taxDetails?.phone || tutorData?.phoneNumber;
