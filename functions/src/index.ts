@@ -291,16 +291,16 @@ export const createTutorLinkedAccount = onCall(
             const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
             const headers = { 'Authorization': authHeader, 'Content-Type': 'application/json' };
 
+            // Extract profile data for link generation (needed for both new and existing accounts)
+            const bType = payloadBusinessType || tutorData?.taxDetails?.businessType || "individual";
+            const mappedBusinessType = "proprietorship"; // Standard for individual linked accounts
+            const mappedLegalName = payloadLegalName || tutorData?.taxDetails?.legalName || tutorData?.name || "Independent Tutor";
+            const mappedEmail = tutorData?.email || request.auth.token.email;
+            const rawPhone = (payloadPhone || tutorData?.taxDetails?.phone || tutorData?.phoneNumber || "").toString().replace(/\D/g, '');
+            const mappedPhone = rawPhone.length === 10 ? `+91${rawPhone}` : (rawPhone.startsWith('91') && rawPhone.length === 12 ? `+${rawPhone}` : `+91${rawPhone.slice(-10)}`);
+
             // ── Step 1: Create or re-use the Razorpay Linked Account ──────────────
             if (!accountId) {
-                const bType = payloadBusinessType || tutorData?.taxDetails?.businessType || "individual";
-                // Razorpay standard: Mapping 'individual' to 'proprietorship' for linked accounts 
-                // ensures standard PAN acceptance and eligibility for onboarding links.
-                const mappedBusinessType = "proprietorship"; 
-                const mappedLegalName = payloadLegalName || tutorData?.taxDetails?.legalName || tutorData?.name || "Independent Tutor";
-                const mappedEmail = tutorData?.email || request.auth.token.email;
-                const rawPhone = (payloadPhone || tutorData?.taxDetails?.phone || tutorData?.phoneNumber || "").toString().replace(/\D/g, '');
-                const mappedPhone = rawPhone.length === 10 ? `+91${rawPhone}` : (rawPhone.startsWith('91') && rawPhone.length === 12 ? `+${rawPhone}` : `+91${rawPhone.slice(-10)}`);
 
                 const createPayload: Record<string, any> = {
                     email: mappedEmail,
@@ -395,39 +395,40 @@ export const createTutorLinkedAccount = onCall(
             // ── Step 4: Generate a Razorpay onboarding magic link ─────────────────
             let onboardingUrl: string;
             try {
-                console.log(`[RAZORPAY] Attempting v2 onboarding link for account: ${accountId}`);
+                console.log(`[RAZORPAY_DEBUG] Generating link for accountId: ${accountId} with email: ${mappedEmail}`);
                 const linkResponse = await axios.post(
                     `https://api.razorpay.com/v2/accounts/${accountId}/onboarding_links`,
-                    {}, // Minimal payload (unnotified)
+                    {
+                        notify_address: mappedEmail // บาง Razorpay versions require an email for notification
+                    }, 
                     { headers }
                 );
                 onboardingUrl = linkResponse.data.short_url || linkResponse.data.url;
-                console.log(`[RAZORPAY] v2 onboarding link generated: ${onboardingUrl}`);
+                console.log(`[RAZORPAY_DEBUG] Onboarding link generated successfully: ${onboardingUrl}`);
             } catch (v2Error: any) {
                 const v2Msg = extractRazorpayError(v2Error);
                 const v2Data = v2Error?.response?.data;
                 const is404 = v2Error?.response?.status === 404;
                 
-                console.warn(`[RAZORPAY] v2 link failed (Status: ${v2Error?.response?.status}):`, v2Msg, JSON.stringify(v2Data));
+                console.error(`[RAZORPAY_ERROR] v2 link failed for ${accountId}:`, v2Msg, JSON.stringify(v2Data));
 
                 if (is404) {
                     try {
-                        console.log(`[RAZORPAY] Attempting v1 fallback for account: ${accountId}`);
+                        console.log(`[RAZORPAY_DEBUG] Attempting fallback v1 onboarding for ${accountId}`);
                         const v1Response = await axios.post(
                             `https://api.razorpay.com/v1/accounts/${accountId}/onboarding_links`,
-                            {},
+                            { notify_address: mappedEmail },
                             { headers }
                         );
                         onboardingUrl = v1Response.data.short_url || v1Response.data.url;
-                        console.log("[RAZORPAY] v1 fallback successful.");
                     } catch (v1Error: any) {
                         const v1Msg = extractRazorpayError(v1Error);
                         const v1Data = v1Error?.response?.data;
-                        console.error("[RAZORPAY] v1 fallback also failed:", v1Msg, JSON.stringify(v1Data));
-                        throw new functions.https.HttpsError("internal", `Razorpay Link Generation Failed (v1/v2 404). Details: ${v1Msg}. Ensure Marketplace feature is enabled.`);
+                        console.error("[RAZORPAY_ERROR] Fallback failed:", v1Msg, JSON.stringify(v1Data));
+                        throw new functions.https.HttpsError("internal", `Razorpay Link Generation Failed (v2/v1 404). Details: ${v1Msg}. Check if Marketplace is enabled in your dashboard.`);
                     }
                 } else {
-                    throw new functions.https.HttpsError("internal", `Could not generate onboarding link: ${v2Msg}`);
+                    throw new functions.https.HttpsError("internal", `Onboarding Link error: ${v2Msg}`);
                 }
             }
 

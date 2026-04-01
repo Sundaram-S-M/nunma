@@ -233,7 +233,7 @@ function extractRazorpayError(error) {
     return (error === null || error === void 0 ? void 0 : error.message) || "An unexpected Razorpay error occurred.";
 }
 exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
     if (!request.auth)
         throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const keyId = process.env.RAZORPAY_KEY_ID;
@@ -247,14 +247,15 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
         let accountId = tutorData === null || tutorData === void 0 ? void 0 : tutorData.razorpay_account_id;
         const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
         const headers = { 'Authorization': authHeader, 'Content-Type': 'application/json' };
+        // Extract profile data for link generation (needed for both new and existing accounts)
+        const bType = payloadBusinessType || ((_a = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _a === void 0 ? void 0 : _a.businessType) || "individual";
+        const mappedBusinessType = "proprietorship"; // Standard for individual linked accounts
+        const mappedLegalName = payloadLegalName || ((_b = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _b === void 0 ? void 0 : _b.legalName) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor";
+        const mappedEmail = (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || request.auth.token.email;
+        const rawPhone = (payloadPhone || ((_c = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _c === void 0 ? void 0 : _c.phone) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.phoneNumber) || "").toString().replace(/\D/g, '');
+        const mappedPhone = rawPhone.length === 10 ? `+91${rawPhone}` : (rawPhone.startsWith('91') && rawPhone.length === 12 ? `+${rawPhone}` : `+91${rawPhone.slice(-10)}`);
         // ── Step 1: Create or re-use the Razorpay Linked Account ──────────────
         if (!accountId) {
-            const bType = payloadBusinessType || ((_a = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _a === void 0 ? void 0 : _a.businessType) || "individual";
-            // Razorpay accepts: individual | proprietorship | partnership | private_limited | public_limited | llp | ngo | trust | society | not_yet_registered | huf
-            const mappedBusinessType = bType === "individual" ? "individual" : "proprietorship";
-            const mappedLegalName = payloadLegalName || ((_b = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _b === void 0 ? void 0 : _b.legalName) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor";
-            const mappedEmail = (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || request.auth.token.email;
-            const mappedPhone = payloadPhone || ((_c = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _c === void 0 ? void 0 : _c.phone) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.phoneNumber);
             const createPayload = {
                 email: mappedEmail,
                 phone: mappedPhone,
@@ -294,6 +295,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
             console.log(`Razorpay linked account created: ${accountId} for uid: ${uid}.`);
             // ── Step 3: Configure the Route product with bank settlement details ──
             const bankPayload = {
+                product_name: "payment_gateway",
                 settlements: {
                     account_number: payloadBankAccount || ((_h = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _h === void 0 ? void 0 : _h.bankAccount),
                     ifsc_code: (payloadIfsc || ((_j = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _j === void 0 ? void 0 : _j.ifsc) || "").toUpperCase(),
@@ -304,11 +306,12 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
             try {
                 // POST is correct for initial product configuration on a new linked account.
                 await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/products`, bankPayload, { headers });
-                console.log(`Bank settlement configured successfully for account: ${accountId}`);
+                console.log(`Product "${bankPayload.product_name}" configured successfully for account: ${accountId}`);
             }
             catch (err) {
                 const msg = extractRazorpayError(err);
-                console.warn(`Bank config for account ${accountId} failed. Reason: ${msg}`);
+                console.error(`Product config for account ${accountId} failed:`, msg, (_k = err === null || err === void 0 ? void 0 : err.response) === null || _k === void 0 ? void 0 : _k.data);
+                throw new functions.https.HttpsError("failed-precondition", `Razorpay Product configuration rejected: ${msg}`);
             }
             // ── Step 3: Persist KYC data in Firestore ────────────────────────────
             await tutorRef.update({
@@ -323,15 +326,34 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
         // ── Step 4: Generate a Razorpay onboarding magic link ─────────────────
         let onboardingUrl;
         try {
+            console.log(`[RAZORPAY_DEBUG] Generating link for accountId: ${accountId} with email: ${mappedEmail}`);
             const linkResponse = await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/onboarding_links`, {
-                notify_by: "email", // Optional, can be empty
+                notify_address: mappedEmail // บาง Razorpay versions require an email for notification
             }, { headers });
             onboardingUrl = linkResponse.data.short_url || linkResponse.data.url;
+            console.log(`[RAZORPAY_DEBUG] Onboarding link generated successfully: ${onboardingUrl}`);
         }
-        catch (err) {
-            const msg = extractRazorpayError(err);
-            console.error("Failed to generate Razorpay login link:", msg);
-            throw new functions.https.HttpsError("internal", `Could not generate onboarding link: ${msg}`);
+        catch (v2Error) {
+            const v2Msg = extractRazorpayError(v2Error);
+            const v2Data = (_l = v2Error === null || v2Error === void 0 ? void 0 : v2Error.response) === null || _l === void 0 ? void 0 : _l.data;
+            const is404 = ((_m = v2Error === null || v2Error === void 0 ? void 0 : v2Error.response) === null || _m === void 0 ? void 0 : _m.status) === 404;
+            console.error(`[RAZORPAY_ERROR] v2 link failed for ${accountId}:`, v2Msg, JSON.stringify(v2Data));
+            if (is404) {
+                try {
+                    console.log(`[RAZORPAY_DEBUG] Attempting fallback v1 onboarding for ${accountId}`);
+                    const v1Response = await axios_1.default.post(`https://api.razorpay.com/v1/accounts/${accountId}/onboarding_links`, { notify_address: mappedEmail }, { headers });
+                    onboardingUrl = v1Response.data.short_url || v1Response.data.url;
+                }
+                catch (v1Error) {
+                    const v1Msg = extractRazorpayError(v1Error);
+                    const v1Data = (_o = v1Error === null || v1Error === void 0 ? void 0 : v1Error.response) === null || _o === void 0 ? void 0 : _o.data;
+                    console.error("[RAZORPAY_ERROR] Fallback failed:", v1Msg, JSON.stringify(v1Data));
+                    throw new functions.https.HttpsError("internal", `Razorpay Link Generation Failed (v2/v1 404). Details: ${v1Msg}. Check if Marketplace is enabled in your dashboard.`);
+                }
+            }
+            else {
+                throw new functions.https.HttpsError("internal", `Onboarding Link error: ${v2Msg}`);
+            }
         }
         return { success: true, onboardingUrl };
     }
