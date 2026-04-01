@@ -255,7 +255,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
             const mappedLegalName = payloadLegalName || ((_b = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _b === void 0 ? void 0 : _b.legalName) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.name) || "Independent Tutor";
             const mappedEmail = (tutorData === null || tutorData === void 0 ? void 0 : tutorData.email) || request.auth.token.email;
             const mappedPhone = payloadPhone || ((_c = tutorData === null || tutorData === void 0 ? void 0 : tutorData.taxDetails) === null || _c === void 0 ? void 0 : _c.phone) || (tutorData === null || tutorData === void 0 ? void 0 : tutorData.phoneNumber);
-            const createPayload = Object.assign({ email: mappedEmail, phone: mappedPhone, type: "route", reference_id: uid, legal_business_name: mappedLegalName, customer_facing_business_name: mappedLegalName, business_type: mappedBusinessType, profile: {
+            const createPayload = Object.assign({ email: mappedEmail, phone: mappedPhone, type: "route", reference_id: uid.slice(0, 20), legal_business_name: mappedLegalName, customer_facing_business_name: mappedLegalName, business_type: mappedBusinessType, profile: {
                     category: "education",
                     subcategory: "professional_courses",
                     addresses: {
@@ -437,20 +437,24 @@ exports.razorpayRouteWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBH
     }
     const event = req.body.event;
     const payload = req.body.payload;
-    if (event === 'account.activated') {
-        const tutorId = payload.account.entity.reference_id;
-        if (tutorId)
-            await db.collection('users').doc(tutorId).update({ kycStatus: "VERIFIED", razorpay_account_id: payload.account.entity.id });
-    }
-    else if (event === 'account.rejected') {
-        const tutorId = payload.account.entity.reference_id;
-        if (tutorId)
-            await db.collection('users').doc(tutorId).update({ kycStatus: "FAILED" });
-    }
-    else if (event === 'account.needs_clarification') {
-        const tutorId = payload.account.entity.reference_id;
-        if (tutorId)
-            await db.collection('users').doc(tutorId).update({ kycStatus: "NEEDS_CLARIFICATION" });
+    if (event === 'account.activated' || event === 'account.rejected' || event === 'account.needs_clarification') {
+        const accountId = payload.account.entity.id;
+        const usersSnapshot = await db.collection('users').where('razorpay_account_id', '==', accountId).get();
+        if (!usersSnapshot.empty) {
+            const userDoc = usersSnapshot.docs[0];
+            let kycStatus = 'PENDING';
+            if (event === 'account.activated')
+                kycStatus = 'VERIFIED';
+            else if (event === 'account.rejected')
+                kycStatus = 'FAILED';
+            else if (event === 'account.needs_clarification')
+                kycStatus = 'NEEDS_CLARIFICATION';
+            await userDoc.ref.update({ kycStatus });
+            console.log(`Updated KYC status for user ${userDoc.id} to ${kycStatus} based on event ${event}`);
+        }
+        else {
+            console.warn(`No user found with razorpay_account_id: ${accountId} for event: ${event}`);
+        }
     }
     else if (event === 'payment.captured') {
         const paymentEntity = payload.payment.entity;

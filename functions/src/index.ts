@@ -304,7 +304,7 @@ export const createTutorLinkedAccount = onCall(
                     email: mappedEmail,
                     phone: mappedPhone,
                     type: "route",
-                    reference_id: uid,
+                    reference_id: uid.slice(0, 20),
                     legal_business_name: mappedLegalName,
                     customer_facing_business_name: mappedLegalName, // Added branding as required for some products
                     business_type: mappedBusinessType,
@@ -531,15 +531,22 @@ export const razorpayRouteWebhook = onRequest(
         const event = req.body.event;
         const payload = req.body.payload;
 
-        if (event === 'account.activated') {
-            const tutorId = payload.account.entity.reference_id;
-            if (tutorId) await db.collection('users').doc(tutorId).update({ kycStatus: "VERIFIED", razorpay_account_id: payload.account.entity.id });
-        } else if (event === 'account.rejected') {
-            const tutorId = payload.account.entity.reference_id;
-            if (tutorId) await db.collection('users').doc(tutorId).update({ kycStatus: "FAILED" });
-        } else if (event === 'account.needs_clarification') {
-            const tutorId = payload.account.entity.reference_id;
-            if (tutorId) await db.collection('users').doc(tutorId).update({ kycStatus: "NEEDS_CLARIFICATION" });
+        if (event === 'account.activated' || event === 'account.rejected' || event === 'account.needs_clarification') {
+            const accountId = payload.account.entity.id;
+            const usersSnapshot = await db.collection('users').where('razorpay_account_id', '==', accountId).get();
+            
+            if (!usersSnapshot.empty) {
+                const userDoc = usersSnapshot.docs[0];
+                let kycStatus = 'PENDING';
+                if (event === 'account.activated') kycStatus = 'VERIFIED';
+                else if (event === 'account.rejected') kycStatus = 'FAILED';
+                else if (event === 'account.needs_clarification') kycStatus = 'NEEDS_CLARIFICATION';
+                
+                await userDoc.ref.update({ kycStatus });
+                console.log(`Updated KYC status for user ${userDoc.id} to ${kycStatus} based on event ${event}`);
+            } else {
+                console.warn(`No user found with razorpay_account_id: ${accountId} for event: ${event}`);
+            }
         } else if (event === 'payment.captured') {
             const paymentEntity = payload.payment.entity;
             const txRef = db.collection('transactions').doc(paymentEntity.id);
