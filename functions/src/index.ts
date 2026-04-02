@@ -458,7 +458,9 @@ export const createRazorpayOrder = onCall(
             const tutorDoc = await db.collection("users").doc(zoneData.createdBy).get();
             const tutorData = tutorDoc.data()!;
 
-            if (!tutorData.razorpay_account_id) {
+            const rzpAccountId = tutorData.razorpay_account_id || (tutorData.isDevBypass ? "acc_TEST_BYPASS" : null);
+
+            if (!rzpAccountId) {
                 throw new functions.https.HttpsError("invalid-argument", "Tutor has not completed KYC onboarding.");
             }
 
@@ -482,7 +484,7 @@ export const createRazorpayOrder = onCall(
                 currency: "INR",
                 transfers: [
                     {
-                        account: tutorData.razorpay_account_id,
+                        account: rzpAccountId,
                         amount: Math.round(tutor_transfer_paise), // Ensure absolute integer in paise
                         currency: "INR",
                         notes: {

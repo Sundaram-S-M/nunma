@@ -58,6 +58,7 @@ export interface UserProfile {
   kycStatus?: 'PENDING' | 'VERIFIED' | 'FAILED' | null;
   razorpay_account_id?: string;
   current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
+  isDevBypass?: boolean;
 }
 
 interface AuthContextType {

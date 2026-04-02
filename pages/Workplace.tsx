@@ -278,15 +278,15 @@ const Workplace: React.FC = () => {
         {/* KYC Status Banner */}
         {user?.role === 'TUTOR' && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-700">
-            {user.kycStatus === 'VERIFIED' && user.razorpay_account_id ? (
+            {(user.kycStatus === 'VERIFIED' && user.razorpay_account_id) || user.isDevBypass ? (
               <div className="bg-[#c2f575]/10 border border-[#c2f575]/30 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
                     <Check size={24} strokeWidth={3} />
                   </div>
                   <div>
-                    <h4 className="text-lg font-black text-[#040457] tracking-tight">Ready to Sell</h4>
-                    <p className="text-xs font-bold text-[#040457]/60 uppercase tracking-widest">KYC VERIFIED & RAZORPAY ACTIVE</p>
+                    <h4 className="text-lg font-black text-[#040457] tracking-tight">{user.isDevBypass && user.kycStatus !== 'VERIFIED' ? 'Developer Bypass Active' : 'Ready to Sell'}</h4>
+                    <p className="text-xs font-bold text-[#040457]/60 uppercase tracking-widest">{user.isDevBypass && user.kycStatus !== 'VERIFIED' ? 'KYC Gating Overridden' : 'KYC VERIFIED & RAZORPAY ACTIVE'}</p>
                   </div>
                 </div>
                 <div className="hidden md:block">
@@ -400,18 +400,18 @@ const Workplace: React.FC = () => {
           {/* Feature: Live Classes (Gated by KYC) */}
           <button
             onClick={() => setShowScheduleModal(true)}
-            disabled={user?.kycStatus !== 'VERIFIED'}
+            disabled={user?.kycStatus !== 'VERIFIED' && !user?.isDevBypass}
             title={user?.kycStatus !== 'VERIFIED' ? "Verification required" : ""}
             className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
-            <Radio size={18} className={`text-red-500 ${user?.kycStatus === 'VERIFIED' && streamsUsed < streamLimit ? "animate-pulse" : ""}`} />
+            <Radio size={18} className={`text-red-500 ${(user?.kycStatus === 'VERIFIED' || user?.isDevBypass) && streamsUsed < streamLimit ? "animate-pulse" : ""}`} />
             Schedule Live Class
           </button>
 
           {/* Feature: Certificate Issuance (Gated by KYC) */}
           <button
             onClick={() => navigate('/certificate-engine')}
-            disabled={user?.kycStatus !== 'VERIFIED'}
+            disabled={user?.kycStatus !== 'VERIFIED' && !user?.isDevBypass}
             title={user?.kycStatus !== 'VERIFIED' ? "Verification required" : ""}
             className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
@@ -422,7 +422,7 @@ const Workplace: React.FC = () => {
           {/* Feature: Digital Products (Gated by KYC) */}
           <button
             onClick={() => navigate('/list-product/flow')}
-            disabled={user?.kycStatus !== 'VERIFIED'}
+            disabled={user?.kycStatus !== 'VERIFIED' && !user?.isDevBypass}
             title={user?.kycStatus !== 'VERIFIED' ? "Verification required" : ""}
             className="shrink-0 bg-[#040457] text-white font-bold px-6 h-[80px] rounded-2xl shadow-xl hover:bg-black transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
@@ -433,7 +433,7 @@ const Workplace: React.FC = () => {
           {/* CRITICAL: Launch New Zone Trigger (Strict KYC Gating) */}
           <button
             onClick={() => navigate('/workplace/launch')}
-            disabled={user?.kycStatus !== 'VERIFIED'}
+            disabled={user?.kycStatus !== 'VERIFIED' && !user?.isDevBypass}
             title={user?.kycStatus !== 'VERIFIED' ? "Verification required" : ""}
             className="shrink-0 bg-[#c2f575] text-[#040457] font-black p-2 pr-6 h-[80px] rounded-[1.25rem] shadow-xl shadow-[#c2f575]/20 hover:scale-[1.03] active:scale-95 transition-all flex items-center gap-4 whitespace-nowrap group disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed disabled:hover:scale-100"
           >

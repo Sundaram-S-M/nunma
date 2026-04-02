@@ -670,16 +670,16 @@ const Billings = () => {
             </div>
           </div>
 
-          {user?.kycStatus === 'VERIFIED' && (user as any)?.razorpay_account_id ? (
+          {(user?.kycStatus === 'VERIFIED' && (user as any)?.razorpay_account_id) || user?.isDevBypass ? (
             <div className="bg-[#f8fafc] border border-gray-100 rounded-3xl p-8 flex flex-col sm:flex-row items-center gap-8 shadow-inner">
               <div className="flex items-center gap-6 flex-1">
                 <div className="w-16 h-16 bg-[#c2f575]/20 rounded-full flex items-center justify-center text-[#7cc142] shrink-0 border border-[#c2f575]/30">
                   <Check size={32} />
                 </div>
                 <div>
-                  <h4 className="text-xl font-black text-indigo-900 leading-tight">KYC Verified & Active</h4>
+                  <h4 className="text-xl font-black text-indigo-900 leading-tight">{user?.isDevBypass && user?.kycStatus !== 'VERIFIED' ? 'Developer Bypass Active' : 'KYC Verified & Active'}</h4>
                   <p className="text-sm font-medium text-gray-500 mt-2 max-w-sm">
-                    Your account is securely linked. You are ready to receive direct automated bank payouts.
+                    {user?.isDevBypass && user?.kycStatus !== 'VERIFIED' ? 'KYC Gating Overridden for development.' : 'Your account is securely linked. You are ready to receive direct automated bank payouts.'}
                   </p>
                 </div>
               </div>
