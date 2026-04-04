@@ -447,15 +447,30 @@ export const createRazorpayOrder = onCall(
     { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] },
     async (request) => {
         if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
-        const { zoneId } = request.data;
+        const { zoneId, type = 'zone' } = request.data;
         const keyId = process.env.RAZORPAY_KEY_ID;
         const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
         try {
-            const zoneDoc = await db.collection("zones").doc(zoneId).get();
-            const zoneData = zoneDoc.data()!;
+            const collectionName = type === 'mentorship' ? 'products' : 'zones';
+            const itemDoc = await db.collection(collectionName).doc(zoneId).get();
+            
+            if (!itemDoc.exists) {
+                throw new functions.https.HttpsError("not-found", `${type === 'mentorship' ? 'Mentorship session' : 'Zone'} not found.`);
+            }
 
-            const tutorDoc = await db.collection("users").doc(zoneData.createdBy).get();
+            const itemData = itemDoc.data()!;
+            const tutorId = itemData.createdBy;
+
+            if (!tutorId) {
+                throw new functions.https.HttpsError("failed-precondition", "This item is not linked to a valid tutor.");
+            }
+
+            const tutorDoc = await db.collection("users").doc(tutorId).get();
+            if (!tutorDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
+            }
+
             const tutorData = tutorDoc.data()!;
 
             const rzpAccountId = tutorData.razorpay_account_id || (tutorData.isDevBypass ? "acc_TEST_BYPASS" : null);
@@ -464,7 +479,7 @@ export const createRazorpayOrder = onCall(
                 throw new functions.https.HttpsError("invalid-argument", "Tutor has not completed KYC onboarding.");
             }
 
-            const gross_paise = Math.round(zoneData.price * 100);
+            const gross_paise = Math.round(itemData.price * 100);
 
             let commissionTierPercentage = 0.10; // Basic = 10%
             if (tutorData.subscriptionPlan === 'Pro') {
@@ -489,12 +504,14 @@ export const createRazorpayOrder = onCall(
                         currency: "INR",
                         notes: {
                             zoneId: zoneId,
-                            studentId: request.auth.uid
+                            studentId: request.auth.uid,
+                            tutorId: tutorId,
+                            type: type
                         },
                         on_hold: true // Holds funds in escrow until we explicitly release them or standard settlement kicks in
                     }
                 ],
-                notes: { zoneId, studentId: request.auth.uid }
+                notes: { zoneId, studentId: request.auth.uid, tutorId, type }
             });
             return { id: order.id, amount: order.amount };
         } catch (error: any) {
@@ -548,14 +565,25 @@ export const razorpayRouteWebhook = onRequest(
                     eventId: req.body.id || 'unknown'
                 });
 
-                const { zoneId, studentId } = paymentEntity.notes || {};
+                const { zoneId, studentId, type } = paymentEntity.notes || {};
                 if (zoneId && studentId) {
-                    const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentId);
-                    transaction.set(studentRef, {
-                        status: "active",
-                        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-                        completedSegments: []
-                    });
+                    if (type === 'mentorship') {
+                        // For mentorship, we just record the enrollment on the user's profile
+                        const userEnrollRef = db.collection('users').doc(studentId).collection('enrollments').doc(zoneId);
+                        transaction.set(userEnrollRef, {
+                            type: 'mentorship',
+                            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                            status: 'paid'
+                        });
+                    } else {
+                        // For zones/courses
+                        const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentId);
+                        transaction.set(studentRef, {
+                            status: "active",
+                            joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            completedSegments: []
+                        });
+                    }
                 }
                 return false;
             });

@@ -117,7 +117,10 @@ const Payment: React.FC = () => {
 
             const createOrder = httpsCallable(functions, 'createRazorpayOrder');
 
-            const orderResult: any = await createOrder({ zoneId });
+            const orderResult: any = await createOrder({ 
+                zoneId,
+                type: isMentorship ? 'mentorship' : 'zone'
+            });
 
             if (!orderResult.data.id || !orderResult.data.amount) {
                 throw new Error('Failed to create Razorpay order. The server returned an invalid response.');

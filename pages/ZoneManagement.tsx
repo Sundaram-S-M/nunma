@@ -522,7 +522,14 @@ const ZoneManagement: React.FC = () => {
     // 2. Chapters (Curriculum)
     const chaptersq = query(collection(db, 'zones', zoneId, 'chapters'));
     const chaptersUnsub = onSnapshot(chaptersq, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Chapter));
+      const data = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return { 
+          ...d, 
+          id: doc.id,
+          segments: d.segments || [] 
+        } as Chapter;
+      });
       // Sort if needed, or rely on client-side order
       setChapters(data);
     });
@@ -772,7 +779,8 @@ const ZoneManagement: React.FC = () => {
     // Find current chapter to get existing segments or just use arrayUnion
     const chapter = chapters.find(c => c.id === chapterId);
     if (chapter && zoneId) {
-      const updatedSegments = [...chapter.segments, newSeg];
+      const existingSegments = chapter.segments || [];
+      const updatedSegments = [...existingSegments, newSeg];
       await updateDoc(doc(db, 'zones', zoneId, 'chapters', chapterId), {
         segments: updatedSegments
       });
@@ -793,7 +801,8 @@ const ZoneManagement: React.FC = () => {
 
     const chapter = chapters.find(c => c.id === activeChapterForUpload);
     if (chapter) {
-      const updatedSegments = [...chapter.segments, newSeg];
+      const existingSegments = chapter.segments || [];
+      const updatedSegments = [...existingSegments, newSeg];
       await updateDoc(doc(db, 'zones', zoneId, 'chapters', activeChapterForUpload), {
         segments: updatedSegments
       });
@@ -1465,82 +1474,92 @@ const ZoneManagement: React.FC = () => {
 
         {/* CREATE EXAM MODAL */}
         {showAddExamModal && (
-          <div className="fixed inset-0 z-[130] flex items-center justify-center p-6 bg-[#040457]/90 backdrop-blur-2xl animate-in fade-in duration-300 overflow-y-auto">
-            <div className="bg-white rounded-[4rem] w-full max-w-4xl shadow-3xl overflow-hidden p-12 my-8 animate-in zoom-in-95 duration-500">
-              <div className="flex justify-between items-center mb-10">
-                <h3 className="text-4xl font-black text-[#040457] tracking-tight">Create Achievement Gate</h3>
-                <button onClick={() => setShowAddExamModal(false)} className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all"><X size={24} /></button>
+          <div className="fixed inset-0 z-[130] bg-white animate-in fade-in duration-300 overflow-y-auto font-inter">
+            <div className="w-full min-h-screen p-12 md:p-20 flex flex-col">
+              <div className="flex justify-between items-center mb-16">
+                <div>
+                  <h3 className="text-5xl font-black text-[#040457] tracking-tighter">Create Achievement Gate</h3>
+                  <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-widest">Configuration & Assessment Setup</p>
+                </div>
+                <button onClick={() => setShowAddExamModal(false)} className="p-6 bg-gray-50 text-gray-400 rounded-3xl hover:bg-black hover:text-white transition-all shadow-sm"><X size={32} /></button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-12">
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">Exam Name</label>
-                    <input value={newExamTitle} onChange={e => setNewExamTitle(e.target.value)} placeholder="Final Certification..." className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all" />
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-20">
+                <div className="lg:col-span-4 space-y-10">
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Exam Name</label>
+                    <input value={newExamTitle} onChange={e => setNewExamTitle(e.target.value)} placeholder="e.g. Final Certification Phase 1" className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all text-lg shadow-sm" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">Date</label>
-                      <input type="date" value={newExamDate} onChange={e => setNewExamDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all" />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Date</label>
+                      <input type="date" value={newExamDate} onChange={e => setNewExamDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">Time</label>
-                      <input type="time" value={newExamTime} onChange={e => setNewExamTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all" />
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Time</label>
+                      <input type="time" value={newExamTime} onChange={e => setNewExamTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">Exam Mode</label>
-                    <div className="flex gap-4">
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Assessment Mode</label>
+                    <div className="flex gap-4 p-2 bg-gray-50 rounded-3xl border border-gray-100">
                       {(['online-test', 'online-mcq', 'offline'] as const).map(mode => (
-                        <button key={mode} onClick={() => setNewExamType(mode)} className={`flex-1 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${newExamType === mode ? 'bg-[#040457] text-white shadow-xl' : 'bg-gray-50 text-gray-400'}`}>
+                        <button key={mode} onClick={() => setNewExamType(mode)} className={`flex-1 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${newExamType === mode ? 'bg-[#040457] text-white shadow-xl scale-[1.02]' : 'text-gray-400 hover:text-[#040457]'}`}>
                           {mode}
                         </button>
                       ))}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">Max Marks</label>
-                      <input type="number" min="0" value={newExamMaxMark} onChange={e => setNewExamMaxMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all" />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Max Marks</label>
+                      <input type="number" min="0" value={newExamMaxMark} onChange={e => setNewExamMaxMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">Min (Pass) Marks</label>
-                      <input type="number" min="0" value={newExamMinMark} onChange={e => setNewExamMinMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all" />
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Pass Marks</label>
+                      <input type="number" min="0" value={newExamMinMark} onChange={e => setNewExamMinMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-gray-50 rounded-[2.5rem] p-8 overflow-hidden flex flex-col">
-                  <div className="flex justify-between items-center mb-6">
-                    <h4 className="font-black text-[#040457] uppercase text-[11px] tracking-widest">{newExamType === 'offline' ? 'Settings (No Questions)' : 'Questions'}</h4>
-                  </div>
-                  <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+                <div className="lg:col-span-8 bg-gray-50/50 rounded-[4rem] p-12 border border-gray-100 flex flex-col min-h-[600px] shadow-inner">
+                  <div className="flex-1 flex flex-col">
                     {newExamType === 'online-mcq' ? (
                       <MCQBuilder questions={newExamQuestions} setQuestions={setNewExamQuestions} />
                     ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center p-10 space-y-6">
+                      <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center p-10 space-y-8 animate-in fade-in duration-700">
                         {newExamType === 'offline' ? (
                           <>
-                            <FileText size={40} className="mb-4 opacity-50 text-green-500" />
-                            <p className="font-bold">Offline Assessment Mode</p>
-                            <p className="text-xs text-gray-400">Upload a PDF question paper for students to download.<br />After the exam, upload the students' marks via an Excel sheet in the gradebook.</p>
-                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-green-200 hover:border-green-400 rounded-2xl cursor-pointer bg-green-50 transition-all">
+                            <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-[2rem] flex items-center justify-center shadow-sm">
+                              <FileText size={48} />
+                            </div>
+                            <div>
+                              <p className="font-black text-2xl text-[#040457] tracking-tight">Offline Assessment Mode</p>
+                              <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-wide">Standard Paper-Based Testing</p>
+                            </div>
+                            <p className="text-gray-400 max-w-md mx-auto leading-relaxed">Upload a PDF question paper for students to download. After the exam, upload the students' marks via an Excel sheet in the gradebook.</p>
+                            <label className="flex flex-col items-center justify-center w-full max-w-lg h-48 border-4 border-dashed border-emerald-100 hover:border-emerald-300 rounded-[3rem] cursor-pointer bg-white transition-all hover:bg-emerald-50/30 group">
                               <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                <Upload size={24} className="mb-2 text-green-500" />
-                                <p className="text-xs font-bold text-green-600">{newExamFile ? newExamFile.name : 'Upload Question Paper (.pdf)'}</p>
+                                <Upload size={32} className="mb-4 text-emerald-300 group-hover:text-emerald-500 transition-colors" />
+                                <p className="text-sm font-black text-emerald-600 uppercase tracking-widest">{newExamFile ? newExamFile.name : 'Upload Question Paper (.pdf)'}</p>
                               </div>
                               <input type="file" className="hidden" accept=".pdf" onChange={(e) => e.target.files && setNewExamFile(e.target.files[0])} />
                             </label>
                           </>
                         ) : (
                           <>
-                            <FileText size={40} className="mb-4 opacity-50 text-indigo-500" />
-                            <p className="font-bold">Online PDF Test Mode</p>
-                            <p className="text-xs text-gray-400">Students will view your uploaded PDF question paper while their camera/mic is monitored.<br />They will have 20 mins after the exam to scan and upload their answers.</p>
-                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-2xl cursor-pointer bg-indigo-50 transition-all">
+                            <div className="w-24 h-24 bg-indigo-50 text-indigo-500 rounded-[2rem] flex items-center justify-center shadow-sm">
+                              <FileText size={48} />
+                            </div>
+                            <div>
+                                <p className="font-black text-2xl text-[#040457] tracking-tight">Online PDF Test Mode</p>
+                                <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-wide">Live Monitored Assessment</p>
+                            </div>
+                            <p className="text-gray-400 max-w-md mx-auto leading-relaxed">Students will view your uploaded PDF question paper while their camera/mic is monitored. They will have 20 mins after the exam to scan and upload their answers.</p>
+                            <label className="flex flex-col items-center justify-center w-full max-w-lg h-48 border-4 border-dashed border-indigo-100 hover:border-indigo-300 rounded-[3rem] cursor-pointer bg-white transition-all hover:bg-indigo-50/30 group">
                               <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                <Upload size={24} className="mb-2 text-indigo-500" />
-                                <p className="text-xs font-bold text-indigo-600">{newExamFile ? newExamFile.name : 'Upload Question Paper (.pdf)'}</p>
+                                <Upload size={32} className="mb-4 text-indigo-300 group-hover:text-indigo-500 transition-colors" />
+                                <p className="text-sm font-black text-indigo-600 uppercase tracking-widest">{newExamFile ? newExamFile.name : 'Upload Question Paper (.pdf)'}</p>
                               </div>
                               <input type="file" className="hidden" accept=".pdf" onChange={(e) => e.target.files && setNewExamFile(e.target.files[0])} />
                             </label>
@@ -1552,9 +1571,11 @@ const ZoneManagement: React.FC = () => {
                 </div>
               </div>
 
-              <button onClick={handleCreateExam} className="w-full py-6 bg-[#c2f575] text-[#040457] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:brightness-110 transition-all flex items-center justify-center gap-4">
-                <Sparkles size={20} /> Deploy Exam Instance
-              </button>
+              <div className="mt-20 pt-10 border-t border-gray-100">
+                <button onClick={handleCreateExam} className="w-full py-8 bg-[#c2f575] text-[#040457] rounded-[2.5rem] font-black uppercase text-sm tracking-[0.3em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-6">
+                  <Sparkles size={24} /> Deploy Exam Instance
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1788,15 +1809,7 @@ const ZoneManagement: React.FC = () => {
 
                             await setDoc(doc(db, 'zones', zoneId, 'students', userId), newStudent);
 
-                            // Add to user's enrollments
-                            await setDoc(doc(db, 'users', userId, 'enrollments', zoneId), {
-                              zoneId: zoneId,
-                              title: zone.title || 'Learning Zone',
-                              type: zone.zoneType || 'zone',
-                              enrolledAt: new Date().toISOString()
-                            });
-
-                            alert(`User ${newStudent.name} enrolled directly!`);
+                            alert(`Student added to zone.`);
                           } else {
                             // User doesn't exist - Whitelist email and invite
                             await updateDoc(doc(db, 'zones', zoneId), {
@@ -1898,12 +1911,6 @@ const ZoneManagement: React.FC = () => {
                                   addedAt: new Date().toISOString()
                                 });
 
-                                await setDoc(doc(usersRef, userId, 'enrollments', zoneId), {
-                                  zoneId: zoneId,
-                                  title: zone.title || 'Learning Zone',
-                                  type: zone.zoneType || 'zone',
-                                  enrolledAt: new Date().toISOString()
-                                });
                                 enrolled++;
                               } else {
                                 await updateDoc(zoneRef, {
@@ -2301,6 +2308,7 @@ const ZoneManagement: React.FC = () => {
                             const docRef = await addDoc(chaptersRef, {
                               title: newTitle,
                               order: newOrder,
+                              segments: [],
                               createdAt: serverTimestamp()
                             });
 
@@ -2380,7 +2388,7 @@ const ZoneManagement: React.FC = () => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-12">
-                          {chapter.segments.map((seg) => (
+                          {(chapter.segments || []).map((seg) => (
                             <div key={seg.id} className="p-6 bg-gray-50 border border-transparent hover:border-[#c2f575]/20 rounded-3xl flex items-center justify-between group/seg transition-all">
                               <div className="flex items-center gap-4">
                                 <div className="p-4 bg-white rounded-2xl shadow-sm text-[#040457]">
@@ -2393,7 +2401,7 @@ const ZoneManagement: React.FC = () => {
                                     onChange={(e) => {
                                       setChapters(chapters.map(c => c.id === chapter.id ? {
                                         ...c,
-                                        segments: c.segments.map(s => s.id === seg.id ? { ...s, title: e.target.value } : s)
+                                        segments: (c.segments || []).map(s => s.id === seg.id ? { ...s, title: e.target.value } : s)
                                       } : c));
                                     }}
                                     className="bg-transparent font-bold text-[#040457] outline-none border-b-2 border-transparent focus:border-[#c2f575]/20 block mb-1"
@@ -2415,7 +2423,7 @@ const ZoneManagement: React.FC = () => {
                                   onClick={() => {
                                     setChapters(chapters.map(c => c.id === chapter.id ? {
                                       ...c,
-                                      segments: c.segments.filter(s => s.id !== seg.id)
+                                      segments: (c.segments || []).filter(s => s.id !== seg.id)
                                     } : c));
                                   }}
                                   className="p-3 bg-white text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
@@ -3037,7 +3045,7 @@ const ZoneManagement: React.FC = () => {
 
                 {isSmartMarking && !isAnalyzing && activeClusterId && (
                   <div className="absolute top-10 left-10 z-50 flex -space-x-4">
-                    {clusters.find(c => c.id === activeClusterId)?.studentIds.map(sid => (
+                    {clusters.find(c => c.id === activeClusterId)?.studentIds?.map(sid => (
                       <div key={sid} className="w-16 h-16 rounded-full border-4 border-[#03031f] overflow-hidden shadow-2xl group cursor-help transition-transform hover:scale-125 hover:z-20">
                         <img src={students.find(s => s.id === sid)?.avatar} className="w-full h-full object-cover" alt="" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -3067,7 +3075,7 @@ const ZoneManagement: React.FC = () => {
                     <div className="w-[1.5px] h-16 bg-white/10"></div>
                     <div className="text-right">
                       <p className="text-white font-black text-xl tracking-tighter">Cluster Grade</p>
-                      <p className="text-[10px] font-bold text-indigo-200/50 uppercase tracking-widest mt-1">Applies to {clusters.find(c => c.id === activeClusterId)?.studentIds.length} learners</p>
+                      <p className="text-[10px] font-bold text-indigo-200/50 uppercase tracking-widest mt-1">Applies to {clusters.find(c => c.id === activeClusterId)?.studentIds?.length || 0} learners</p>
                     </div>
                   </div>
                 )}

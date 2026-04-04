@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Trash2, Plus, Clock, Brain, Loader2, Award, FileText } from 'lucide-react';
+import { Upload, Trash2, Plus, Clock, Brain, Loader2, Award, FileText, Sparkles } from 'lucide-react';
 
 export interface MCQ {
     id: string;
@@ -17,6 +17,8 @@ interface MCQBuilderProps {
 
 const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isGeneratingMore, setIsGeneratingMore] = useState(false);
+    const [targetCount, setTargetCount] = useState(5);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleAddQuestion = () => {
@@ -50,180 +52,232 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
         setQuestions(questions.filter(q => q.id !== id));
     };
 
+    const generateMockQuestions = (count: number, offset: number = 0): MCQ[] => {
+        return Array.from({ length: count }).map((_, i) => ({
+            id: `${Date.now()}_${offset + i}`,
+            question: i % 2 === 0 
+                ? `Based on the uploaded document, what is the core principle mentioned in section ${offset + i + 1}?`
+                : `Which of the following aligns with the framework analyzed in chapter ${offset + i + 1}?`,
+            options: ['To define core terminology', 'To establish practical applications', 'To evaluate historical context', 'To summarize theoretical models'],
+            correctAnswer: Math.floor(Math.random() * 4),
+            timerSeconds: 60,
+            marks: 5
+        }));
+    };
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // Simulate AI generation process
         setIsGenerating(true);
 
         setTimeout(() => {
-            // Mock generated questions based on "reading context"
-            const generated: MCQ[] = [
-                {
-                    id: Date.now().toString() + '_1',
-                    question: 'Based on the uploaded document, what is the primary objective of this module?',
-                    options: ['To define core terminology', 'To establish practical applications', 'To evaluate historical context', 'To summarize theoretical models'],
-                    correctAnswer: 1,
-                    timerSeconds: 60,
-                    marks: 5
-                },
-                {
-                    id: Date.now().toString() + '_2',
-                    question: 'Which of the following aligns with the framework proposed in section 2?',
-                    options: ['Iterative Design', 'Waterfall Approach', 'Agile Methodology', 'Lean Six Sigma'],
-                    correctAnswer: 2,
-                    timerSeconds: 45,
-                    marks: 5
-                }
-            ];
-
+            const generated = generateMockQuestions(targetCount);
             setQuestions([...questions, ...generated]);
             setIsGenerating(false);
 
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
-        }, 4000); // 4 seconds mock loading
+        }, 3000);
+    };
+
+    const handleGenerateMore = () => {
+        setIsGeneratingMore(true);
+        setTimeout(() => {
+            const moreQuestions = generateMockQuestions(5, questions.length);
+            setQuestions([...questions, ...moreQuestions]);
+            setIsGeneratingMore(false);
+        }, 2000);
     };
 
     return (
-        <div className="w-full flex flex-col gap-6">
+        <div className="w-full flex flex-col gap-10">
 
-            <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 rounded-3xl p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
-                {/* Abstract Background Element */}
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
-
-                <div className="w-20 h-20 bg-white rounded-3xl shadow-sm flex items-center justify-center mb-6 z-10">
-                    <Brain size={40} className="text-indigo-600" />
+            <div className="bg-gradient-to-br from-indigo-50/50 to-white border border-indigo-100 rounded-[3rem] p-12 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-sm">
+                <div className="absolute -top-24 -right-24 w-80 h-80 bg-indigo-100/50 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
+                
+                <div className="w-24 h-24 bg-white rounded-[2rem] shadow-xl flex items-center justify-center mb-8 z-10 border border-indigo-50">
+                    <Brain size={48} className="text-indigo-600" />
                 </div>
-                <h3 className="text-3xl font-black text-[#040457] mb-3 z-10 tracking-tight">AI Question Generator</h3>
-                <p className="text-gray-500 font-medium max-w-md z-10 mb-8">
+                
+                <h3 className="text-4xl font-black text-[#040457] mb-4 z-10 tracking-tight">AI Question Generator</h3>
+                <p className="text-gray-500 font-bold max-w-lg z-10 mb-10 leading-relaxed text-sm">
                     Upload your syllabus or study material PDF. Our AI model will automatically extract key concepts and generate ready-to-use exact mock questions.
                 </p>
 
-                <input
-                    type="file"
-                    accept=".pdf,.txt,.docx"
-                    className="hidden"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                />
+                <div className="z-10 flex flex-col items-center gap-8 w-full max-w-md">
+                    <div className="w-full space-y-4">
+                        <div className="flex justify-between items-center px-1">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Question Quantity</label>
+                            <span className="text-lg font-black text-indigo-600 bg-indigo-50 px-4 py-1 rounded-full">{targetCount} Questions</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="2" 
+                            max="20" 
+                            value={targetCount} 
+                            onChange={(e) => setTargetCount(parseInt(e.target.value))} 
+                            className="w-full h-2 bg-indigo-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                        />
+                        <div className="flex justify-between text-[9px] font-bold text-gray-300 uppercase tracking-tighter px-1">
+                            <span>2 Min</span>
+                            <span>20 Max</span>
+                        </div>
+                    </div>
 
-                <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isGenerating}
-                    className={`px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[13px] shadow-xl transition-all z-10 flex items-center gap-3 border ${isGenerating
-                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                        : 'bg-[#c2f575] text-[#040457] border-[#c2f575] hover:bg-[#b0eb5c] active:scale-95'
-                        }`}
-                >
-                    {isGenerating ? (
-                        <>
-                            <Loader2 size={20} className="animate-spin" />
-                            AI is reading your document...
-                        </>
-                    ) : (
-                        <>
-                            <Upload size={20} />
-                            Upload PDF (Auto-Generate)
-                        </>
-                    )}
-                </button>
+                    <input
+                        type="file"
+                        accept=".pdf,.txt,.docx"
+                        className="hidden"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                    />
+
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isGenerating}
+                        className={`w-full py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-2xl transition-all z-10 flex items-center justify-center gap-4 border ${isGenerating
+                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
+                            : 'bg-[#040457] text-white border-[#040457] hover:scale-[1.02] active:scale-95'
+                            }`}
+                    >
+                        {isGenerating ? (
+                            <>
+                                <Loader2 size={24} className="animate-spin" />
+                                Analyzing Document...
+                            </>
+                        ) : (
+                            <>
+                                <Upload size={24} className="text-[#c2f575]" />
+                                Upload PDF & Generate
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
 
-            <div className="flex items-center justify-between mb-2 mt-4">
-                <h4 className="text-xl font-black text-[#040457]">Question Bank <span className="text-gray-400 text-sm ml-2">({questions.length} Questions)</span></h4>
+            <div className="flex items-center justify-between mt-6">
+                <div>
+                    <h4 className="text-2xl font-black text-[#040457] tracking-tight">Question Bank</h4>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Currently Contains {questions.length} Questions</p>
+                </div>
                 <button
                     onClick={handleAddQuestion}
-                    className="px-5 py-3 bg-gray-50 text-indigo-600 border border-gray-200 rounded-xl font-bold uppercase tracking-widest text-[11px] hover:bg-white hover:border-indigo-200 hover:shadow-sm transition-all flex items-center gap-2"
+                    className="px-8 py-4 bg-white text-[#040457] border-2 border-gray-100 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:border-[#c2f575] hover:shadow-lg transition-all flex items-center gap-3 active:scale-95"
                 >
-                    <Plus size={16} /> Add Blank Question
+                    <Plus size={18} /> Add Empty Question
                 </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-8 min-h-[200px]">
                 {questions.length === 0 ? (
-                    <div className="text-center py-16 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
-                        <FileText size={48} className="text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-400 font-bold">No questions added yet.</p>
+                    <div className="text-center py-24 bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-100">
+                        <FileText size={64} className="text-gray-200 mx-auto mb-6" />
+                        <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">No questions in the vault.</p>
                     </div>
                 ) : (
-                    questions.map((q, index) => (
-                        <div key={q.id} className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 relative group animate-in slide-in-from-bottom-4 duration-300">
-
-                            <div className="flex justify-between items-start mb-6">
-                                <div className="flex items-center gap-4 w-full">
-                                    <div className="w-10 h-10 rounded-2xl border-2 border-indigo-100 bg-indigo-50/50 flex flex-shrink-0 items-center justify-center font-black text-indigo-400">
-                                        {index + 1}
-                                    </div>
-                                    <input
-                                        type="text"
-                                        value={q.question}
-                                        onChange={(e) => handleUpdateQuestion(q.id, 'question', e.target.value)}
-                                        placeholder="Type your question here..."
-                                        className="w-full text-lg font-bold text-[#040457] outline-none border-b-2 border-transparent focus:border-[#c2f575] pb-2 transition-colors placeholder-gray-300"
-                                    />
-                                </div>
-                                <button
-                                    onClick={() => handleDeleteQuestion(q.id)}
-                                    className="ml-4 p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all xl:opacity-0 xl:group-hover:opacity-100 flex-shrink-0"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 pl-14">
-                                {q.options.map((opt, optIdx) => (
-                                    <div key={optIdx} className="flex items-center gap-3">
+                    <>
+                        <div className="grid grid-cols-1 gap-8">
+                            {questions.map((q, index) => (
+                                <div key={q.id} className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-gray-50 relative group hover:shadow-xl transition-all duration-500">
+                                    <div className="flex justify-between items-start mb-8">
+                                        <div className="flex items-center gap-6 w-full">
+                                            <div className="w-14 h-14 rounded-2xl bg-[#040457] text-[#c2f575] flex flex-shrink-0 items-center justify-center text-xl font-black shadow-lg">
+                                                {index + 1}
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={q.question}
+                                                onChange={(e) => handleUpdateQuestion(q.id, 'question', e.target.value)}
+                                                placeholder="Enter Question Statement..."
+                                                className="w-full text-xl font-black text-[#040457] outline-none border-b-4 border-transparent focus:border-[#c2f575]/20 pb-2 transition-all placeholder-gray-200 tracking-tight"
+                                            />
+                                        </div>
                                         <button
-                                            onClick={() => handleUpdateQuestion(q.id, 'correctAnswer', optIdx)}
-                                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${q.correctAnswer === optIdx ? 'bg-[#c2f575] border-[#c2f575]' : 'border-gray-300 hover:border-[#c2f575]'
-                                                }`}
+                                            onClick={() => handleDeleteQuestion(q.id)}
+                                            className="ml-6 p-4 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-90"
                                         >
-                                            {q.correctAnswer === optIdx && <div className="w-2.5 h-2.5 rounded-full bg-[#040457]" />}
+                                            <Trash2 size={20} />
                                         </button>
-                                        <input
-                                            type="text"
-                                            value={opt}
-                                            onChange={(e) => handleUpdateOption(q.id, optIdx, e.target.value)}
-                                            placeholder={`Option ${optIdx + 1}`}
-                                            className={`w-full py-3 px-4 rounded-xl border-2 outline-none font-bold text-sm transition-colors ${q.correctAnswer === optIdx
-                                                ? 'bg-[#c2f575]/10 border-[#c2f575]/50 text-[#040457]'
-                                                : 'bg-gray-50 border-transparent focus:bg-white focus:border-indigo-200 text-gray-600'
-                                                }`}
-                                        />
                                     </div>
-                                ))}
-                            </div>
 
-                            <div className="flex items-center gap-4 pl-14 border-t border-gray-100 pt-6">
-                                <div className="flex items-center gap-2 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-200">
-                                    <Clock size={16} className="text-gray-400" />
-                                    <input
-                                        type="number"
-                                        min="10"
-                                        value={q.timerSeconds || 60}
-                                        onChange={(e) => handleUpdateQuestion(q.id, 'timerSeconds', parseInt(e.target.value) || 0)}
-                                        className="w-16 bg-transparent outline-none font-black text-[#040457] text-sm text-center"
-                                    />
-                                    <span className="text-[10px] uppercase font-black tracking-widest text-gray-400">Sec</span>
-                                </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 pl-20">
+                                        {q.options.map((opt, optIdx) => (
+                                            <div key={optIdx} className="flex items-center gap-4 group/opt">
+                                                <button
+                                                    onClick={() => handleUpdateQuestion(q.id, 'correctAnswer', optIdx)}
+                                                    className={`w-8 h-8 rounded-xl border-4 flex items-center justify-center flex-shrink-0 transition-all ${q.correctAnswer === optIdx ? 'bg-[#c2f575] border-[#c2f575] rotate-45' : 'border-gray-100 hover:border-[#c2f575]/50 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    {q.correctAnswer === optIdx && <div className="w-3 h-3 bg-[#040457] -rotate-45 rounded-sm" />}
+                                                </button>
+                                                <input
+                                                    type="text"
+                                                    value={opt}
+                                                    onChange={(e) => handleUpdateOption(q.id, optIdx, e.target.value)}
+                                                    placeholder={`Enter Option ${optIdx + 1}`}
+                                                    className={`w-full py-5 px-6 rounded-2xl border-2 outline-none font-bold text-sm transition-all ${q.correctAnswer === optIdx
+                                                        ? 'bg-[#c2f575]/5 border-[#c2f575]/30 text-[#040457]'
+                                                        : 'bg-gray-50 border-transparent focus:bg-white focus:border-indigo-100 text-gray-500'
+                                                        }`}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
 
-                                <div className="flex items-center gap-2 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-200">
-                                    <Award size={16} className="text-[#c2f575] fill-current" />
-                                    <span className="text-[10px] uppercase font-black tracking-widest text-gray-400">Marks</span>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        value={q.marks || 5}
-                                        onChange={(e) => handleUpdateQuestion(q.id, 'marks', parseInt(e.target.value) || 0)}
-                                        className="w-12 bg-transparent outline-none font-black text-[#040457] text-sm text-center"
-                                    />
+                                    <div className="flex items-center gap-6 pl-20 border-t border-gray-50 pt-8">
+                                        <div className="flex items-center gap-3 bg-gray-50/50 px-6 py-3 rounded-2xl border border-gray-100 shadow-inner">
+                                            <Clock size={18} className="text-gray-400" />
+                                            <input
+                                                type="number"
+                                                min="10"
+                                                value={q.timerSeconds || 60}
+                                                onChange={(e) => handleUpdateQuestion(q.id, 'timerSeconds', parseInt(e.target.value) || 0)}
+                                                className="w-20 bg-transparent outline-none font-black text-[#040457] text-lg text-center"
+                                            />
+                                            <span className="text-[10px] uppercase font-black tracking-widest text-gray-400">Seconds</span>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 bg-gray-50/50 px-6 py-3 rounded-2xl border border-gray-100 shadow-inner">
+                                            <Award size={18} className="text-[#c2f575]" />
+                                            <span className="text-[10px] uppercase font-black tracking-widest text-gray-400">Points</span>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={q.marks || 5}
+                                                onChange={(e) => handleUpdateQuestion(q.id, 'marks', parseInt(e.target.value) || 0)}
+                                                className="w-16 bg-transparent outline-none font-black text-[#040457] text-lg text-center"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            ))}
                         </div>
-                    ))
+
+                        <div className="pt-10 flex justify-center">
+                            <button
+                                onClick={handleGenerateMore}
+                                disabled={isGeneratingMore}
+                                className={`px-12 py-6 rounded-[2.5rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl transition-all border-2 flex items-center gap-4 ${isGeneratingMore
+                                    ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                                    : 'bg-white text-indigo-600 border-indigo-100 hover:border-indigo-600 hover:bg-indigo-50 active:scale-95'
+                                    }`}
+                            >
+                                {isGeneratingMore ? (
+                                    <>
+                                        <Loader2 size={20} className="animate-spin" />
+                                        Fetching 5 More Intelligent Questions...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles size={20} className="text-[#c2f575]" />
+                                        Showcase 5 More Questions
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </>
                 )}
             </div>
         </div>
