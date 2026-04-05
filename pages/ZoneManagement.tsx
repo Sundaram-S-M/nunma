@@ -913,9 +913,12 @@ const ZoneManagement: React.FC = () => {
     if (!activeChapterForUpload || !zoneId) return;
     try {
       const newSeg: Segment = {
-        id: `s${Date.now()}`,
+        id: docData.id,
         title: docData.title,
         type: 'pdf',
+        // @ts-ignore
+        fileUrl: docData.fileUrl,
+        fileSize: docData.fileSize
       };
       const chapter = chapters.find(c => c.id === activeChapterForUpload);
       if (chapter) {
@@ -947,16 +950,44 @@ const ZoneManagement: React.FC = () => {
 
       const chapter = chapters.find(c => c.id === activeChapterForUpload);
       if (chapter) {
-        const updatedSegments = [...chapter.segments, newSeg];
+        const existingSegments = chapter.segments || [];
+        const updatedSegments = [...existingSegments, newSeg];
         await updateDoc(doc(db, 'zones', zoneId, 'chapters', activeChapterForUpload), {
           segments: updatedSegments
         });
       }
       setActiveChapterForUpload(null);
-      // Removed the alert here, VideoUploadModal has its own confetti and success state
     } catch (error) {
       console.error("Failed to append video segment to chapter:", error);
       alert("Video was uploaded, but failed to link to chapter. Please refresh and try again.");
+    }
+  };
+
+  const updateChapterTitle = async (chapterId: string, newTitle: string) => {
+    if (!zoneId) return;
+    try {
+      await updateDoc(doc(db, 'zones', zoneId, 'chapters', chapterId), {
+        title: newTitle
+      });
+    } catch (e) {
+      console.error("Failed to persist chapter title change:", e);
+    }
+  };
+
+  const updateSegmentTitle = async (chapterId: string, segmentId: string, newTitle: string) => {
+    if (!zoneId) return;
+    try {
+      const chapter = chapters.find(c => c.id === chapterId);
+      if (chapter) {
+        const updatedSegments = (chapter.segments || []).map(s => 
+          s.id === segmentId ? { ...s, title: newTitle } : s
+        );
+        await updateDoc(doc(db, 'zones', zoneId, 'chapters', chapterId), {
+          segments: updatedSegments
+        });
+      }
+    } catch (e) {
+      console.error("Failed to persist title change:", e);
     }
   };
 
@@ -1268,7 +1299,7 @@ const ZoneManagement: React.FC = () => {
             courseId={zoneId}
             chapterId={activeChapterForUpload}
             onClose={() => { setShowDocumentUploader(false); setActiveChapterForUpload(null); }}
-            onSuccess={() => { }}
+            onSuccess={handleDocumentUploadSuccess}
           />
         )}
 
@@ -2399,6 +2430,7 @@ const ZoneManagement: React.FC = () => {
                               type="text"
                               value={chapter.title}
                               onChange={(e) => setChapters(chapters.map(c => c.id === chapter.id ? { ...c, title: e.target.value } : c))}
+                              onBlur={(e) => updateChapterTitle(chapter.id, e.target.value)}
                               className="bg-transparent text-2xl font-black text-[#040457] outline-none border-b-4 border-transparent focus:border-[#c2f575]/20 w-full"
                             />
                           </div>
@@ -2459,6 +2491,7 @@ const ZoneManagement: React.FC = () => {
                                         segments: (c.segments || []).map(s => s.id === seg.id ? { ...s, title: e.target.value } : s)
                                       } : c));
                                     }}
+                                    onBlur={(e) => updateSegmentTitle(chapter.id, seg.id, e.target.value)}
                                     className="bg-transparent font-bold text-[#040457] outline-none border-b-2 border-transparent focus:border-[#c2f575]/20 block mb-1"
                                   />
                                   <div className="flex gap-2">

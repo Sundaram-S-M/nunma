@@ -38,7 +38,7 @@ const transporter = nodemailer.createTransport({
 // --- LIVEKIT INTEGRATION ---
 
 export const generateLiveToken = onCall(
-    { secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"] },
+    { secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"], cors: true },
     async (request) => {
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "Login required.");
@@ -98,7 +98,7 @@ export const generateLiveToken = onCall(
 );
 
 export const toggleStudentAudio = onCall(
-    { secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"] },
+    { secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"], cors: true },
     async (request) => {
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "Login required.");
@@ -156,7 +156,7 @@ export const toggleStudentAudio = onCall(
 // --- BUNNY STREAM INTEGRATION ---
 
 export const createBunnyVideo = onCall(
-    { secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"] },
+    { secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true },
     async (request) => {
         if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
         
@@ -257,7 +257,7 @@ export const bunnyStreamWebhook = onRequest(
 );
 
 export const generateBunnyToken = onCall(
-    { secrets: ["BUNNY_TOKEN_KEY", "BUNNY_LIBRARY_ID"] },
+    { secrets: ["BUNNY_TOKEN_KEY", "BUNNY_LIBRARY_ID"], cors: true },
     async (request) => {
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "Login required.");
@@ -304,7 +304,7 @@ function extractRazorpayError(error: any): string {
 }
 
 export const createTutorLinkedAccount = onCall(
-    { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] },
+    { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], cors: true },
     async (request) => {
         if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
         const keyId = process.env.RAZORPAY_KEY_ID;
@@ -488,7 +488,7 @@ export const createTutorLinkedAccount = onCall(
 );
 
 export const createRazorpayOrder = onCall(
-    { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] },
+    { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], cors: true },
     async (request) => {
         if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
         const { zoneId, type = 'zone' } = request.data;
@@ -727,7 +727,7 @@ export const serveSecurePdf = onRequest({ cors: true }, async (req, res) => {
 // --- ACCOUNT DELETION ---
 
 export const deleteUserAccount = onCall(
-    { secrets: ["BUNNY_API_KEY"] },
+    { secrets: ["BUNNY_API_KEY"], cors: true },
     async (request) => {
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "Login required for account deletion.");
@@ -790,7 +790,7 @@ export const deleteUserAccount = onCall(
 
 // --- EXAM SUBMISSION LOGIC ---
 
-export const uploadExamScript = onCall(async (request) => {
+export const uploadExamScript = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { file, fileName, zoneId, examId } = request.data;
     const uid = request.auth.uid;
@@ -855,7 +855,7 @@ export const uploadExamScript = onCall(async (request) => {
     }
 });
 
-export const submitGradedScript = onCall(async (request) => {
+export const submitGradedScript = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId, examId, studentId, score, feedback, mergedPdf, oldFileUrl } = request.data;
 
@@ -941,7 +941,7 @@ export const submitGradedScript = onCall(async (request) => {
     }
 });
 
-export const submitExam = onCall(async (request) => {
+export const submitExam = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId, examId, answers, violationLogs, answerSheetUrl } = request.data;
     const uid = request.auth.uid;
@@ -1016,7 +1016,7 @@ export const submitExam = onCall(async (request) => {
     return { success: true, marks, status };
 });
 
-export const registerIssuance = onCall(async (request) => {
+export const registerIssuance = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId, studentId } = request.data;
 
@@ -1072,7 +1072,7 @@ export const registerIssuance = onCall(async (request) => {
 
 // --- OTP AUTHENTICATION ---
 
-export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request) => {
+export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"], cors: true }, async (request) => {
     let { email } = request.data;
     if (!email) {
         throw new functions.https.HttpsError("invalid-argument", "Email is required.");
@@ -1128,7 +1128,7 @@ export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"] }, async (request
     }
 });
 
-export const verifyOTPAndSignIn = onCall(async (request) => {
+export const verifyOTPAndSignIn = onCall({ cors: true }, async (request) => {
     let { email, otp, registrationData, password } = request.data;
     if (!email) {
         throw new functions.https.HttpsError("invalid-argument", "Email is required.");
@@ -1232,34 +1232,40 @@ export const verifyOTPAndSignIn = onCall(async (request) => {
 
 // --- ZONE INVITATION SYSTEM ---
 
-export const generateZoneInvite = onCall(async (request) => {
+export const generateZoneInvite = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     
     const { zoneId } = request.data;
     if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId.");
 
-    const zoneDoc = await db.collection("zones").doc(zoneId).get();
-    if (!zoneDoc.exists) throw new functions.https.HttpsError("not-found", "Zone not found.");
+    try {
+        const zoneDoc = await db.collection("zones").doc(zoneId).get();
+        if (!zoneDoc.exists) throw new functions.https.HttpsError("not-found", "Zone not found.");
 
-    const zoneData = zoneDoc.data();
-    if (zoneData?.createdBy !== request.auth.uid) {
-        throw new functions.https.HttpsError("permission-denied", "Only the zone creator can generate invites.");
+        const zoneData = zoneDoc.data();
+        if (zoneData?.createdBy !== request.auth.uid) {
+            throw new functions.https.HttpsError("permission-denied", "Only the zone creator can generate invites.");
+        }
+
+        const inviteToken = uuidv4();
+        const expiresAt = Date.now() + (48 * 60 * 60 * 1000); // 48 hours
+
+        await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).set({
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            expiresAt,
+            createdBy: request.auth.uid,
+            isActive: true
+        });
+
+        console.log(`[INVITE] Token generated for zone ${zoneId} by user ${request.auth.uid}: ${inviteToken}`);
+        return { inviteToken, expiresAt, isActive: true };
+    } catch (err: any) {
+        console.error(`[INVITE_ERROR] Failed to generate token for zone ${zoneId}:`, err);
+        throw new functions.https.HttpsError("internal", err.message || "Failed to generate invite token.");
     }
-
-    const inviteToken = uuidv4();
-    const expiresAt = Date.now() + (48 * 60 * 60 * 1000); // 48 hours
-
-    await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).set({
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt,
-        createdBy: request.auth.uid,
-        isActive: true
-    });
-
-    return { inviteToken, expiresAt, isActive: true };
 });
 
-export const revokeZoneInvite = onCall(async (request) => {
+export const revokeZoneInvite = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { zoneId, inviteToken } = request.data;
@@ -1279,7 +1285,7 @@ export const revokeZoneInvite = onCall(async (request) => {
     return { success: true };
 });
 
-export const joinZoneByInvite = onCall(async (request) => {
+export const joinZoneByInvite = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { zoneId, inviteToken } = request.data;

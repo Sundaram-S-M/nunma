@@ -23,6 +23,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
+    const [title, setTitle] = useState('');
     const { user } = useAuth();
 
     const uploadRef = useRef<tus.Upload | null>(null);
@@ -70,6 +71,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
         setFile(selectedFile);
         setUploadStatus('idle');
         setUploadProgress(0);
+        setTitle(selectedFile.name.replace(/\.[^/.]+$/, ""));
     };
 
     const startTusUpload = async () => {
@@ -129,7 +131,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     });
 
                     // Notify parent component
-                    onUploadSuccess({ videoId, title: file.name });
+                    onUploadSuccess({ videoId, title: title || file.name });
 
                     // Auto close after 3 seconds showing success
                     setTimeout(() => {
@@ -247,10 +249,20 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                         <X size={20} />
                                     </button>
                                 )}
-                                {uploadStatus === 'success' && (
-                                    <CheckCircle size={28} className="text-[#c2f575]" />
-                                )}
                             </div>
+
+                            {uploadStatus === 'idle' && (
+                                <div className="space-y-3 animate-in slide-in-from-top-4 duration-500">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Section Name</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Introduction to Calculus"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                                    />
+                                </div>
+                            )}
 
                             {/* Progress Bar Area */}
                             {(uploadStatus === 'uploading' || uploadStatus === 'success') && (

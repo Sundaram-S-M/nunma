@@ -55,7 +55,8 @@ export const gradePdfSubmission = onCall(
     {
         secrets: ["GEMINI_API_KEY", "BUNNY_STORAGE_KEY"],
         timeoutSeconds: 300,
-        memory: "1GiB"
+        memory: "1GiB",
+        cors: true
     },
     async (request) => {
         const db = admin.firestore();
