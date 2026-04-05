@@ -9,6 +9,7 @@ import {
   Plus,
   X,
   UserPlus,
+  Share2,
   GraduationCap,
   Trash2,
   Layers,
@@ -55,9 +56,11 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { VideoUploadModal } from '../components/VideoUploadModal';
+import { ShareModal } from '../components/ShareModal';
 import DocumentModuleUploader from '../components/DocumentModuleUploader';
 import TextModuleEditor from '../components/TextModuleEditor';
 import QuizModuleEditor from '../components/QuizModuleEditor';
+import { toast } from 'react-hot-toast';
 import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
@@ -315,6 +318,46 @@ const ZoneManagement: React.FC = () => {
   const [examSearchQuery, setExamSearchQuery] = useState('');
   const [showExamAnalytics, setShowExamAnalytics] = useState(false);
   const [selectedExamForMarks, setSelectedExamForMarks] = useState<Exam | null>(null);
+
+  // Share Modal State
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [activeInvite, setActiveInvite] = useState<{ inviteToken: string, expiresAt: number } | null>(null);
+
+  const handleOpenShareModal = async () => {
+    if (!zoneId) return;
+    try {
+      // Fetch existing active invite
+      const invitesRef = collection(db, 'zones', zoneId, 'invites');
+      const q = query(invitesRef, where('isActive', '==', true), limit(1));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const docSnap = querySnapshot.docs[0];
+        const data = docSnap.data();
+        setActiveInvite({ inviteToken: docSnap.id, expiresAt: data.expiresAt });
+      } else {
+        // Auto-generate if none exists
+        await handleGenerateInvite();
+      }
+      setShowShareModal(true);
+    } catch (err) {
+      console.error('Error fetching invite:', err);
+      toast.error('Failed to prepare sharing link');
+    }
+  };
+
+  const handleGenerateInvite = async () => {
+    if (!zoneId) return;
+    try {
+      const genFunc = httpsCallable(functions, 'generateZoneInvite');
+      const result = await genFunc({ zoneId });
+      const { inviteToken, expiresAt } = result.data as any;
+      setActiveInvite({ inviteToken, expiresAt });
+    } catch (err: any) {
+      console.error('Generation failed:', err);
+      toast.error(err.message || 'Failed to generate invite');
+    }
+  };
 
   // Grading Hub State
   const [showGradingHubModal, setShowGradingHubModal] = useState(false);
@@ -2098,6 +2141,9 @@ const ZoneManagement: React.FC = () => {
           </div>
           <div className="flex gap-4">
             <ZoneCapacityMeter zoneId={zoneId!} />
+            <button onClick={handleOpenShareModal} className="px-6 py-5 bg-[#c2f575] text-[#040457] rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-xl">
+              <Share2 size={20} />
+            </button>
             <button onClick={() => setShowAddStudentModal(true)} className="px-10 py-5 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-[#040457]/20">
               <UserPlus size={20} /> Whitelist
             </button>
@@ -2298,6 +2344,15 @@ const ZoneManagement: React.FC = () => {
                               activeTypeForUpload === 'reading' ? '.txt,.doc,.docx' :
                                 '*'
                         }
+                      />
+                      <ShareModal
+                        isOpen={showShareModal}
+                        onClose={() => setShowShareModal(false)}
+                        zoneId={zoneId!}
+                        zoneTitle={zone?.title || 'Zone'}
+                        activeInvite={activeInvite}
+                        onRevoke={() => setActiveInvite(null)}
+                        onGenerate={handleGenerateInvite}
                       />
                       <button
                         onClick={async () => {

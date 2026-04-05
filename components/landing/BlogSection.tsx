@@ -14,7 +14,7 @@ const blogPosts = [
   {
     id: 2,
     title: 'Monetizing Your Knowledge Base with AI',
-    excerpt: 'Leveraging AI co-hosts and dynamic PPP pricing to scale your educational business globally.',
+    excerpt: 'Leveraging AI co-hosts and streamlined monetization to scale your educational business globally.',
     category: 'Growth',
     date: 'Mar 12, 2026',
     readTime: '4 min read',

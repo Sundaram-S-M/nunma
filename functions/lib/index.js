@@ -26,10 +26,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.uploadExamScript = exports.deleteUserAccount = exports.serveSecurePdf = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.generateLiveToken = void 0;
+exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.uploadExamScript = exports.deleteUserAccount = exports.serveSecurePdf = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.generateLiveToken = exports.gradePdfSubmission = void 0;
+const admin = __importStar(require("firebase-admin"));
+admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
 const https_1 = require("firebase-functions/v2/https");
-const admin = __importStar(require("firebase-admin"));
 const crypto = __importStar(require("crypto"));
 // import * as nodemailer from "nodemailer";
 const livekit_server_sdk_1 = require("livekit-server-sdk");
@@ -40,9 +41,8 @@ const zohoUtils_1 = require("./zohoUtils");
 const uuid_1 = require("uuid");
 const vcUtils_1 = require("./utils/vcUtils");
 const resend_1 = require("resend");
-if (!admin.apps.length) {
-    admin.initializeApp();
-}
+var gradeSubmission_1 = require("./ai/gradeSubmission");
+Object.defineProperty(exports, "gradePdfSubmission", { enumerable: true, get: function () { return gradeSubmission_1.gradePdfSubmission; } });
 const db = admin.firestore();
 // Global transporter for billing and OTP emails
 /*
@@ -144,16 +144,45 @@ exports.toggleStudentAudio = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", 
     return { success: true, message: `Student audio ${allowAudio ? 'enabled' : 'disabled'}` };
 });
 // --- BUNNY STREAM INTEGRATION ---
-exports.createBunnyVideo = (0, https_1.onCall)(async (request) => {
+exports.createBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"] }, async (request) => {
     if (!request.auth)
         throw new functions.https.HttpsError("unauthenticated", "Login required.");
-    const { title } = request.data;
+    // Step 1: Role Check
+    const role = request.auth.token.role;
+    if (role !== "THALA") {
+        throw new functions.https.HttpsError("permission-denied", "Thala access required.");
+    }
+    const { title, zoneId } = request.data;
+    if (!zoneId)
+        throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
     const libraryId = process.env.BUNNY_LIBRARY_ID;
     const apiKey = process.env.BUNNY_API_KEY;
-    if (!libraryId || !apiKey)
-        throw new functions.https.HttpsError("failed-precondition", "Bunny config missing.");
+    if (!libraryId || !apiKey) {
+        throw new functions.https.HttpsError("failed-precondition", "Bunny security configuration missing.");
+    }
+    // Step 2: Bunny Init (Get GUID)
     const response = await axios_1.default.post(`https://video.bunnycdn.com/library/${libraryId}/videos`, { title: title || 'Untitled' }, { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } });
-    return { videoId: response.data.guid };
+    const videoId = response.data.guid;
+    // Step 3: Signature Generation
+    const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
+    const signature = crypto.createHash('sha256').update(libraryId + apiKey + expirationTime + videoId).digest('hex');
+    // Step 4: DB Write (Direct indexing under Zone subcollection)
+    const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
+    await videoRef.set({
+        bunnyVideoId: videoId,
+        status: 'pending',
+        title: title || 'Untitled Video',
+        tutorId: request.auth.uid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        zoneId
+    });
+    return {
+        videoId,
+        signature,
+        expirationTime,
+        libraryId,
+        uploadUrl: 'https://video.bunnycdn.com/tusupload'
+    };
 });
 exports.bunnyStreamWebhook = (0, https_1.onRequest)({ secrets: ["BUNNY_WEBHOOK_SECRET"] }, async (req, res) => {
     const signature = req.headers['x-bunnystream-signature'] || req.headers['x-bunny-signature'];
@@ -369,18 +398,34 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
 exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] }, async (request) => {
     if (!request.auth)
         throw new functions.https.HttpsError("unauthenticated", "Login required.");
-    const { zoneId } = request.data;
+    const { zoneId, type = 'zone' } = request.data;
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     try {
-        const zoneDoc = await db.collection("zones").doc(zoneId).get();
-        const zoneData = zoneDoc.data();
-        const tutorDoc = await db.collection("users").doc(zoneData.createdBy).get();
+        const collectionName = type === 'mentorship' ? 'products' : 'zones';
+        const itemDoc = await db.collection(collectionName).doc(zoneId).get();
+        if (!itemDoc.exists) {
+            throw new functions.https.HttpsError("not-found", `${type === 'mentorship' ? 'Mentorship session' : 'Zone'} not found.`);
+        }
+        const itemData = itemDoc.data();
+        const tutorId = itemData.createdBy;
+        if (!tutorId) {
+            throw new functions.https.HttpsError("failed-precondition", "This item is not linked to a valid tutor.");
+        }
+        const tutorDoc = await db.collection("users").doc(tutorId).get();
+        if (!tutorDoc.exists) {
+            throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
+        }
         const tutorData = tutorDoc.data();
-        if (!tutorData.razorpay_account_id) {
+        const rzpAccountId = tutorData.razorpay_account_id || (tutorData.isDevBypass ? "acc_TEST_BYPASS" : null);
+        if (!rzpAccountId) {
             throw new functions.https.HttpsError("invalid-argument", "Tutor has not completed KYC onboarding.");
         }
-        const gross_paise = Math.round(zoneData.price * 100);
+        const priceValue = type === 'mentorship' ? (itemData.priceINR || itemData.price) : itemData.price;
+        if (!priceValue) {
+            throw new functions.https.HttpsError("failed-precondition", "Item price is not defined in the system.");
+        }
+        const gross_paise = Math.round(parseFloat(priceValue.toString()) * 100);
         let commissionTierPercentage = 0.10; // Basic = 10%
         if (tutorData.subscriptionPlan === 'Pro') {
             commissionTierPercentage = 0.05;
@@ -398,17 +443,19 @@ exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID",
             currency: "INR",
             transfers: [
                 {
-                    account: tutorData.razorpay_account_id,
+                    account: rzpAccountId,
                     amount: Math.round(tutor_transfer_paise),
                     currency: "INR",
                     notes: {
                         zoneId: zoneId,
-                        studentId: request.auth.uid
+                        studentId: request.auth.uid,
+                        tutorId: tutorId,
+                        type: type
                     },
                     on_hold: true // Holds funds in escrow until we explicitly release them or standard settlement kicks in
                 }
             ],
-            notes: { zoneId, studentId: request.auth.uid }
+            notes: { zoneId, studentId: request.auth.uid, tutorId, type }
         });
         return { id: order.id, amount: order.amount };
     }
@@ -461,14 +508,26 @@ exports.razorpayRouteWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBH
                 processedAt: admin.firestore.FieldValue.serverTimestamp(),
                 eventId: req.body.id || 'unknown'
             });
-            const { zoneId, studentId } = paymentEntity.notes || {};
+            const { zoneId, studentId, type } = paymentEntity.notes || {};
             if (zoneId && studentId) {
-                const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentId);
-                transaction.set(studentRef, {
-                    status: "active",
-                    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    completedSegments: []
-                });
+                if (type === 'mentorship') {
+                    // For mentorship, we just record the enrollment on the user's profile
+                    const userEnrollRef = db.collection('users').doc(studentId).collection('enrollments').doc(zoneId);
+                    transaction.set(userEnrollRef, {
+                        type: 'mentorship',
+                        enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                        status: 'paid'
+                    });
+                }
+                else {
+                    // For zones/courses
+                    const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentId);
+                    transaction.set(studentRef, {
+                        status: "active",
+                        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        completedSegments: []
+                    });
+                }
             }
             return false;
         });
@@ -969,5 +1028,74 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)(async (request) => {
     // Generate custom token
     const customToken = await admin.auth().createCustomToken(user.uid);
     return { verified: true, customToken };
+});
+// --- ZONE INVITATION SYSTEM ---
+exports.generateZoneInvite = (0, https_1.onCall)(async (request) => {
+    if (!request.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { zoneId } = request.data;
+    if (!zoneId)
+        throw new functions.https.HttpsError("invalid-argument", "Missing zoneId.");
+    const zoneDoc = await db.collection("zones").doc(zoneId).get();
+    if (!zoneDoc.exists)
+        throw new functions.https.HttpsError("not-found", "Zone not found.");
+    const zoneData = zoneDoc.data();
+    if ((zoneData === null || zoneData === void 0 ? void 0 : zoneData.createdBy) !== request.auth.uid) {
+        throw new functions.https.HttpsError("permission-denied", "Only the zone creator can generate invites.");
+    }
+    const inviteToken = (0, uuid_1.v4)();
+    const expiresAt = Date.now() + (48 * 60 * 60 * 1000); // 48 hours
+    await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).set({
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt,
+        createdBy: request.auth.uid,
+        isActive: true
+    });
+    return { inviteToken, expiresAt, isActive: true };
+});
+exports.revokeZoneInvite = (0, https_1.onCall)(async (request) => {
+    var _a;
+    if (!request.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { zoneId, inviteToken } = request.data;
+    if (!zoneId || !inviteToken)
+        throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or inviteToken.");
+    const zoneDoc = await db.collection("zones").doc(zoneId).get();
+    if (!zoneDoc.exists)
+        throw new functions.https.HttpsError("not-found", "Zone not found.");
+    if (((_a = zoneDoc.data()) === null || _a === void 0 ? void 0 : _a.createdBy) !== request.auth.uid) {
+        throw new functions.https.HttpsError("permission-denied", "Only the zone creator can revoke invites.");
+    }
+    await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).update({
+        isActive: false
+    });
+    return { success: true };
+});
+exports.joinZoneByInvite = (0, https_1.onCall)(async (request) => {
+    if (!request.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    const { zoneId, inviteToken } = request.data;
+    if (!zoneId || !inviteToken)
+        throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or inviteToken.");
+    const inviteDoc = await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).get();
+    if (!inviteDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Invite token not found.");
+    }
+    const inviteData = inviteDoc.data();
+    if (!(inviteData === null || inviteData === void 0 ? void 0 : inviteData.isActive) || inviteData.expiresAt < Date.now()) {
+        throw new functions.https.HttpsError("failed-precondition", "Invite token is invalid or expired.");
+    }
+    const uid = request.auth.uid;
+    const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
+    const studentDoc = await studentRef.get();
+    if (studentDoc.exists) {
+        return { success: true, message: "Already enrolled" };
+    }
+    await studentRef.set({
+        status: "active",
+        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+        source: "whitelist"
+    });
+    return { success: true };
 });
 //# sourceMappingURL=index.js.map

@@ -41,6 +41,28 @@ const AppContent: React.FC = () => {
   const location = useLocation();
   const { user, isAuthenticated, toggleRole } = useAuth();
 
+  // Task 2.1: Capture invite token and zoneId from URL
+  React.useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    const inviteToken = query.get('invite');
+    if (inviteToken) {
+      sessionStorage.setItem('pendingInvite', inviteToken);
+      
+      // Extract zoneId from path like /classroom/zone/XXXX
+      const pathParts = location.pathname.split('/');
+      const zoneIdIndex = pathParts.indexOf('zone');
+      if (zoneIdIndex !== -1 && pathParts[zoneIdIndex + 1]) {
+        sessionStorage.setItem('pendingZoneId', pathParts[zoneIdIndex + 1]);
+      }
+
+      // Cleanup URL
+      const newParams = new URLSearchParams(location.search);
+      newParams.delete('invite');
+      const search = newParams.toString() ? `?${newParams.toString()}` : '';
+      window.history.replaceState({}, '', location.pathname + search);
+    }
+  }, [location]);
+
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
   };

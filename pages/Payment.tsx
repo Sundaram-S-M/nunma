@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CreditCard, ShieldCheck, Zap, Check, Globe, Video, Clock } from 'lucide-react';
-import { usePPPPrice } from '../hooks/usePPPPrice';
 import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
@@ -78,21 +77,12 @@ const Payment: React.FC = () => {
         fetchItem();
     }, [zoneId, isMentorship]);
 
-    const basePrice = item ? item.priceUSD || item.price || '0' : '0';
-    const basePriceINR = item ? item.priceINR || item.price || '0' : '0';
-
-    // We update usePPP logic purely for display here, and let backend do real final auth check.
-    const { price, currency, isPPPApplied, originalPrice, countryCode, isLoading } = usePPPPrice(basePrice);
-
-    // For mentorship specifically, we know distinct tiers exist:
-    const displayPrice = isMentorship && countryCode === 'IN' && basePriceINR ? basePriceINR : price;
-    const displayCurrency = isMentorship && countryCode === 'IN' && basePriceINR ? 'INR' : currency;
-    const finalOriginalPrice = isMentorship && countryCode === 'IN' && basePriceINR ? null : originalPrice;
+    const displayPrice = isMentorship ? (item?.priceINR || item?.price || '0') : (item?.price || '0');
+    const displayCurrency = 'INR';
 
     // GST breakdown (18%) — reverse-calculate for prices that are GST-inclusive (Indian market)
     // Formula: Base = Total / 1.18, GST = Total - Base
     const gstBreakdown = (() => {
-        if (displayCurrency !== 'INR' || isLoading) return null;
         const total = parseFloat(displayPrice.toString());
         if (!total || isNaN(total)) return null;
         const base = +(total / 1.18).toFixed(2);
@@ -217,26 +207,9 @@ const Payment: React.FC = () => {
                             <div className="flex justify-between items-center p-5">
                                 <span className="text-indigo-200 font-bold">Total Amount</span>
                                 <div className="text-right">
-                                    {isLoading ? (
-                                        <span className="text-white/50 text-sm">Calculating regional price...</span>
-                                    ) : (
-                                        <>
-                                            {isPPPApplied && finalOriginalPrice && (
-                                                <span className="block text-sm text-gray-400 line-through font-bold">
-                                                    ${finalOriginalPrice}
-                                                </span>
-                                            )}
-                                            <span className="text-3xl font-black text-[#c1e60d]">
-                                                {displayCurrency === 'USD' ? '$' : displayCurrency === 'INR' ? '₹' : displayCurrency} {displayPrice}
-                                            </span>
-                                            {(isPPPApplied || (isMentorship && countryCode === 'IN')) && (
-                                                <div className="flex items-center gap-1 justify-end mt-1 text-[#c1e60d] text-[10px] uppercase font-black tracking-widest">
-                                                    <Globe size={12} />
-                                                    <span>PPP Applied ({countryCode})</span>
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
+                                    <span className="text-3xl font-black text-[#c1e60d]">
+                                        ₹ {displayPrice}
+                                    </span>
                                 </div>
                             </div>
 

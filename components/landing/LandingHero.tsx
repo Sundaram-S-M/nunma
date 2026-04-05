@@ -66,7 +66,7 @@ const LandingHero: React.FC = () => {
           </div>
           <div className="flex flex-col items-center">
             <span className="text-3xl font-black text-slate-900">Global</span>
-            <span className="text-sm text-slate-500 font-medium">PPP Pricing Setup</span>
+            <span className="text-sm text-slate-500 font-medium">Standard Pricing</span>
           </div>
         </div>
       </div>

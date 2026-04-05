@@ -15,7 +15,7 @@ Organized by feature capability for high maintainability:
 - **`components/`**: Atomic UI components and feature-specific modules (e.g., `LiveRoom.tsx`, `ChatSidebar.tsx`).
 - **`pages/`**: Route-level views implementing core business logic.
 - **`context/`**: Global state management (Auth, Theme, User Preferences).
-- **`hooks/`**: Specialized logic like `usePPPPrice` for regional adjustments.
+- **`hooks/`**: Specialized logic for authentication, real-time state, and UI interactions.
 
 ### Technology Stack
 | Layer | Technology |
@@ -49,9 +49,9 @@ Nunma transitions from "certificates that are pictures" to "certificates that ar
 - **Zero-Knowledge Proofs**: Students can prove they passed a course or achieved a certain grade without revealing their identity or private data.
 - **Selective Disclosure**: share only what is necessary (e.g., "I passed Level 3" without showing the score).
 
-### 4. Global Accessibility (PPP & Localization)
+### 4. Global Accessibility & Localization
 Education should be accessible regardless of geography:
-- **Purchasing Power Parity (PPP)**: Our `usePPPPrice` hook automatically adjusts pricing based on the learner's country, ensuring fair access in markets like India, Africa, and LATAM.
+- **Direct Monetization**: Our integrated Razorpay split-payment architecture handles global transactions in INR, ensuring seamless payouts for tutors.
 - **Regional Edge Nodes**: Leveraging Firebase and LiveKit's global infra for low-latency streaming everywhere.
 
 ---

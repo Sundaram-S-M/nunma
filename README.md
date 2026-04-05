@@ -27,7 +27,7 @@
 | **AI Assessment** | Automated MCQ and rubric-based grading using **Gemini 1.5 Pro**. |
 | **LiveRoom Plus** | Low-latency WebRTC streaming with integrated AI co-hosting. |
 | **Verifiable Credentials** | W3C-compliant digital signatures and selective disclosure for achievements. |
-| **PPP Smart Pricing** | Global accessibility with automated regional pricing adjustments. |
+| **Global Enrollment** | Seamless INR-based checkout with Razorpay split-payment integration. |
 | **Digital Storefront** | Highly optimized public profiles for tutors to sell products and services. |
 
 ---

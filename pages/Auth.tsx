@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../utils/firebase';
 import {
   ArrowRight,
   Mail,
@@ -35,6 +37,29 @@ const Auth: React.FC = () => {
 
   const { login, signup, requestOTP, verifyOTP, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  // Task 2.1: Post-login auto-enrollment intercept
+  const handlePostAuthInvite = async () => {
+    const inviteToken = sessionStorage.getItem('pendingInvite');
+    const zoneId = sessionStorage.getItem('pendingZoneId');
+
+    if (inviteToken && zoneId) {
+      try {
+        const joinZoneFunc = httpsCallable(functions, 'joinZoneByInvite');
+        await joinZoneFunc({ zoneId, inviteToken });
+        navigate(`/classroom/zone/${zoneId}`);
+      } catch (err: any) {
+        console.error("Invite enrollment failed:", err);
+        navigate('/dashboard');
+      } finally {
+        // Task 2.1: Clear sessionStorage immediately
+        sessionStorage.removeItem('pendingInvite');
+        sessionStorage.removeItem('pendingZoneId');
+      }
+    } else {
+      navigate('/dashboard');
+    }
+  };
 
   const handleSignUpInfoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,8 +114,7 @@ const Auth: React.FC = () => {
       if (result?.verified) {
         setStep('password');
       } else {
-        // If result has customToken, verifyOTP would have already signed in
-        navigate('/dashboard');
+        handlePostAuthInvite();
       }
     } catch (error: any) {
       console.error("OTP Verification error:", error);
@@ -105,7 +129,7 @@ const Auth: React.FC = () => {
     try {
       setIsLoading(true);
       await verifyOTP(email, otp, { name, role }, password);
-      navigate('/dashboard');
+      handlePostAuthInvite();
     } catch (error: any) {
       console.error("Finalize Sign-Up error:", error);
       alert(`Setup Failed: ${error.message || "Failed to create account."}`);
@@ -118,7 +142,7 @@ const Auth: React.FC = () => {
     try {
       setIsLoading(true);
       await loginWithGoogle(role);
-      navigate('/dashboard');
+      handlePostAuthInvite();
     } catch (error: any) {
       console.error("Google Sign-In error:", error);
       alert(`Google Sign-In Failed: ${error.message || "Authentication cancelled."}`);
@@ -132,7 +156,7 @@ const Auth: React.FC = () => {
     try {
       setIsLoading(true);
       await login(email, password);
-      navigate('/dashboard');
+      handlePostAuthInvite();
     } catch (error: any) {
       console.error("Login error:", error);
       alert(`Access Denied: ${error.message || "Please verify your credentials and configuration."}`);

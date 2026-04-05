@@ -1,6 +1,8 @@
+import * as admin from "firebase-admin";
+admin.initializeApp();
+
 import * as functions from "firebase-functions";
 import { onRequest, onCall } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 // import * as nodemailer from "nodemailer";
 
@@ -12,10 +14,7 @@ import { generatePlatformFeeInvoice } from "./zohoUtils";
 import { v4 as uuidv4 } from "uuid";
 import { generateOpenBadgePayload } from "./utils/vcUtils";
 import { Resend } from "resend";
-
-if (!admin.apps.length) {
-    admin.initializeApp();
-}
+export { gradePdfSubmission } from "./ai/gradeSubmission";
 
 const db = admin.firestore();
 
@@ -156,16 +155,61 @@ export const toggleStudentAudio = onCall(
 
 // --- BUNNY STREAM INTEGRATION ---
 
-export const createBunnyVideo = onCall(async (request) => {
-    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
-    const { title } = request.data;
-    const libraryId = process.env.BUNNY_LIBRARY_ID;
-    const apiKey = process.env.BUNNY_API_KEY;
-    if (!libraryId || !apiKey) throw new functions.https.HttpsError("failed-precondition", "Bunny config missing.");
+export const createBunnyVideo = onCall(
+    { secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"] },
+    async (request) => {
+        if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+        
+        // Step 1: Role Check
+        const role = request.auth.token.role;
+        if (role !== "THALA") {
+            throw new functions.https.HttpsError("permission-denied", "Thala access required.");
+        }
 
-    const response = await axios.post(`https://video.bunnycdn.com/library/${libraryId}/videos`, { title: title || 'Untitled' }, { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } });
-    return { videoId: response.data.guid };
-});
+        const { title, zoneId } = request.data;
+        if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
+
+        const libraryId = process.env.BUNNY_LIBRARY_ID;
+        const apiKey = process.env.BUNNY_API_KEY;
+        
+        if (!libraryId || !apiKey) {
+            throw new functions.https.HttpsError("failed-precondition", "Bunny security configuration missing.");
+        }
+
+        // Step 2: Bunny Init (Get GUID)
+        const response = await axios.post(
+            `https://video.bunnycdn.com/library/${libraryId}/videos`, 
+            { title: title || 'Untitled' }, 
+            { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } }
+        );
+        
+        const videoId = response.data.guid;
+        
+        // Step 3: Signature Generation
+        const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
+        const signature = crypto.createHash('sha256').update(libraryId + apiKey + expirationTime + videoId).digest('hex');
+
+        // Step 4: DB Write (Direct indexing under Zone subcollection)
+        const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
+        await videoRef.set({
+            bunnyVideoId: videoId,
+            status: 'pending',
+            title: title || 'Untitled Video',
+            tutorId: request.auth.uid,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            zoneId
+        });
+
+        return { 
+            videoId, 
+            signature, 
+            expirationTime, 
+            libraryId,
+            uploadUrl: 'https://video.bunnycdn.com/tusupload'
+        };
+    }
+);
+
 
 export const bunnyStreamWebhook = onRequest(
     { secrets: ["BUNNY_WEBHOOK_SECRET"] },
@@ -479,7 +523,12 @@ export const createRazorpayOrder = onCall(
                 throw new functions.https.HttpsError("invalid-argument", "Tutor has not completed KYC onboarding.");
             }
 
-            const gross_paise = Math.round(itemData.price * 100);
+            const priceValue = type === 'mentorship' ? (itemData.priceINR || itemData.price) : itemData.price;
+            if (!priceValue) {
+                throw new functions.https.HttpsError("failed-precondition", "Item price is not defined in the system.");
+            }
+
+            const gross_paise = Math.round(parseFloat(priceValue.toString()) * 100);
 
             let commissionTierPercentage = 0.10; // Basic = 10%
             if (tutorData.subscriptionPlan === 'Pro') {
@@ -1179,4 +1228,87 @@ export const verifyOTPAndSignIn = onCall(async (request) => {
     // Generate custom token
     const customToken = await admin.auth().createCustomToken(user.uid);
     return { verified: true, customToken };
+});
+
+// --- ZONE INVITATION SYSTEM ---
+
+export const generateZoneInvite = onCall(async (request) => {
+    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+    
+    const { zoneId } = request.data;
+    if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId.");
+
+    const zoneDoc = await db.collection("zones").doc(zoneId).get();
+    if (!zoneDoc.exists) throw new functions.https.HttpsError("not-found", "Zone not found.");
+
+    const zoneData = zoneDoc.data();
+    if (zoneData?.createdBy !== request.auth.uid) {
+        throw new functions.https.HttpsError("permission-denied", "Only the zone creator can generate invites.");
+    }
+
+    const inviteToken = uuidv4();
+    const expiresAt = Date.now() + (48 * 60 * 60 * 1000); // 48 hours
+
+    await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).set({
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt,
+        createdBy: request.auth.uid,
+        isActive: true
+    });
+
+    return { inviteToken, expiresAt, isActive: true };
+});
+
+export const revokeZoneInvite = onCall(async (request) => {
+    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+
+    const { zoneId, inviteToken } = request.data;
+    if (!zoneId || !inviteToken) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or inviteToken.");
+
+    const zoneDoc = await db.collection("zones").doc(zoneId).get();
+    if (!zoneDoc.exists) throw new functions.https.HttpsError("not-found", "Zone not found.");
+
+    if (zoneDoc.data()?.createdBy !== request.auth.uid) {
+        throw new functions.https.HttpsError("permission-denied", "Only the zone creator can revoke invites.");
+    }
+
+    await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).update({
+        isActive: false
+    });
+
+    return { success: true };
+});
+
+export const joinZoneByInvite = onCall(async (request) => {
+    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+
+    const { zoneId, inviteToken } = request.data;
+    if (!zoneId || !inviteToken) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or inviteToken.");
+
+    const inviteDoc = await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).get();
+    
+    if (!inviteDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Invite token not found.");
+    }
+
+    const inviteData = inviteDoc.data();
+    if (!inviteData?.isActive || inviteData.expiresAt < Date.now()) {
+        throw new functions.https.HttpsError("failed-precondition", "Invite token is invalid or expired.");
+    }
+
+    const uid = request.auth.uid;
+    const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
+    const studentDoc = await studentRef.get();
+
+    if (studentDoc.exists) {
+        return { success: true, message: "Already enrolled" };
+    }
+
+    await studentRef.set({
+        status: "active",
+        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+        source: "whitelist"
+    });
+
+    return { success: true };
 });

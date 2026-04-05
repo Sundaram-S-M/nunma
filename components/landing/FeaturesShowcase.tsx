@@ -23,7 +23,7 @@ const features = [
   {
     icon: <Globe2 className="w-8 h-8 text-emerald-600" />,
     title: 'Global Monetization',
-    description: 'Dynamic Regional Pricing (PPP) adjusts based on geolocation. Razorpay split-payment architecture autonomously calculates commissions and handles tax.',
+    description: 'Direct INR-based pricing model. Razorpay split-payment architecture autonomously calculates commissions and handles tax.',
     color: 'bg-emerald-50 border-emerald-100',
   },
   {

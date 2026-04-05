@@ -25,7 +25,7 @@ Nunma is a next-generation Learning Management System (LMS) built for the decent
 - **Gamified Mastery**: XP-based leaderboard and achievement system.
 
 ### 4. Advanced Monetization & Reach
-- **Purchasing Power Parity (PPP)**: Automatic price adjustment based on location (e.g., automated discounts for developing markets).
+- **Global Payments**: Seamless INR-based checkout with Razorpay split-payment architecture.
 - **Public Profiles**: Highly optimized "Digital Storefronts" for tutors to showcase products and ratings.
 - **Service Booking**: Automated 1:1 mentorship scheduling based on tutor availability.
 
@@ -72,4 +72,4 @@ Nunma is a next-generation Learning Management System (LMS) built for the decent
 - **[Fix]** Canvas initialization error in `ZoneManagement` grading view.
 - **[Update]** Added hex code support for certificate brand colors.
 - **[Feature]** Initial implementation of Gemini MCQ generator.
-- **[Feature]** Added smart PPP pricing detection.
+- **[Update]** Transitioned to fixed INR pricing model.

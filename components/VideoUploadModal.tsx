@@ -6,6 +6,7 @@ import { UploadCloud, X, Film, CheckCircle } from 'lucide-react';
 import Confetti from 'react-confetti';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-hot-toast';
 
 interface VideoUploadModalProps {
     isOpen: boolean;
@@ -97,6 +98,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                 metadata: {
                     filetype: file.type,
                     title: file.name,
+                    collection: zoneId || 'default',
                 },
                 onError: (error) => {
                     console.error('TUS Upload Failed:', error);
@@ -110,38 +112,32 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                 },
                 onSuccess: async () => {
                     console.log('TUS Upload completed for videoId:', videoId);
+                    
+                    // Optimistic update
                     setUploadStatus('success');
                     setIsUploading(false);
+
+                    toast.success("Video uploaded! It is now processing.", {
+                        icon: '🎬',
+                        style: { 
+                            borderRadius: '20px', 
+                            background: '#040457', 
+                            color: '#c2f575',
+                            fontWeight: 'bold',
+                            border: '2px solid #c2f575'
+                        }
+                    });
 
                     // Notify parent component
                     onUploadSuccess({ videoId, title: file.name });
 
-                    // Save directly to Tutor Library
-                    if (user) {
-                        try {
-                            await addDoc(collection(db, 'videos'), {
-                                tutorId: user.uid,
-                                bunnyVideoId: videoId,
-                                title: file.name || "Untitled Video",
-                                sizeBytes: file.size, // Track size for storage metering
-                                status: "processing",
-                                createdAt: serverTimestamp(),
-                                zoneId: zoneId || null,
-                                chapterId: chapterId || null
-                            });
-
-                            alert("Video upload started. It will appear once processed.");
-                        } catch (err: any) {
-                            console.error("Failed to save video metadata:", err);
-                        }
-                    }
-
                     // Auto close after 3 seconds showing success
                     setTimeout(() => {
                         handleClose();
-                    }, 3000);
+                    }, 2000);
                 },
             });
+
 
             uploadRef.current = upload;
 

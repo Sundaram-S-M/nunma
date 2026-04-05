@@ -45,7 +45,13 @@ service cloud.firestore {
       allow read: if request.auth != null;
       
       // Only the creator/tutor can modify the zone config
-      allow write: if request.auth != null && (resource == null || resource.data.createdBy == request.auth.uid || request.resource.data.createdBy == request.auth.uid);
+      // Hardening: Prevent client-side updates to pricing fields
+      allow update: if request.auth != null && 
+                       resource.data.createdBy == request.auth.uid && 
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['price', 'currency']);
+      
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
       
       // Student-specific enrollment data within a zone
       match /students/{studentId} {
@@ -61,6 +67,14 @@ service cloud.firestore {
         allow read: if request.auth != null && (request.auth.uid == resource.data.studentId || get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy == request.auth.uid);
         allow create: if request.auth != null;
       }
+
+      match /invites/{inviteId} {
+        // Only the Thala who created the zone can view the invites
+        allow read: if request.auth != null && 
+                       request.auth.uid == get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy;
+        // ALL writes (create, update, delete) must be done via the Cloud Functions
+        allow write: if false; 
+      }
       
       // recursive catch-all for zone content (videos, segments, etc.)
       match /{allSubcollections=**} {
@@ -72,7 +86,10 @@ service cloud.firestore {
     match /products/{productId} {
       allow read: if true;
       allow create: if request.auth != null && request.resource.data.tutorId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.tutorId == request.auth.uid;
+      // Hardening: Prevent client-side updates to pricing fields
+      allow update: if request.auth != null && resource.data.tutorId == request.auth.uid && 
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['price', 'priceINR']);
+      allow delete: if request.auth != null && resource.data.tutorId == request.auth.uid;
     }
 
     // --- SOCIAL / FOLLOWERS ---
