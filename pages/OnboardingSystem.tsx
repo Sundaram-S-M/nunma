@@ -189,7 +189,16 @@ const OnboardingSystem: React.FC = () => {
             } catch (error: any) {
                 console.error("Razorpay Onboarding Error:", error);
                 toast.dismiss('rzp');
-                toast.error(error.message || "Account creation failed. Check console for details.");
+                
+                // Specific Check for 404 / 'not-found'
+                if (error.code === 'not-found') {
+                    toast.error("Platform Maintenance: Payout Module Configuration in Progress", {
+                        duration: 6000,
+                        icon: '🛠️'
+                    });
+                } else {
+                    toast.error(error.message || "Account creation failed. Check console for details.");
+                }
             }
         } catch (err: any) {
             toast.dismiss('rzp');

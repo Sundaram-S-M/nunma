@@ -604,6 +604,19 @@ const ZoneManagement: React.FC = () => {
       setAttendanceSessions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AttendanceSession)));
     });
 
+    // 7. Active Invite Listener (Hotfix)
+    const invitesRef = collection(db, 'zones', zoneId, 'invites');
+    const invitesq = query(invitesRef, where('isActive', '==', true), limit(1));
+    const invitesUnsub = onSnapshot(invitesq, (snapshot) => {
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        const data = docSnap.data();
+        setActiveInvite({ inviteToken: docSnap.id, expiresAt: data.expiresAt });
+      } else {
+        setActiveInvite(null);
+      }
+    });
+
     return () => {
       zoneUnsub();
       chaptersUnsub();
@@ -611,6 +624,7 @@ const ZoneManagement: React.FC = () => {
       studentsUnsub();
       sessionsUnsub();
       attSessionsUnsub();
+      invitesUnsub();
     };
   }, [zoneId]);
 

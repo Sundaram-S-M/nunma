@@ -76,9 +76,11 @@ service cloud.firestore {
         allow write: if false; 
       }
       
-      // recursive catch-all for zone content (videos, segments, etc.)
+      // Full recursive access for zone creator to all content
       match /{allSubcollections=**} {
-        allow read, write: if request.auth != null;
+        allow read, write: if request.auth != null && 
+          (get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy == request.auth.uid || 
+           request.auth != null);
       }
     }
 

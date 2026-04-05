@@ -149,7 +149,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
         } catch (error: any) {
             console.error('Bunny Session Error:', error.message, error.details);
             setUploadStatus('error');
-            setErrorMessage('Failed to initiate secure upload session. Please try again.');
+            setErrorMessage(error.message || 'Failed to initiate secure upload session. Please try again.');
             setIsUploading(false);
         }
     };

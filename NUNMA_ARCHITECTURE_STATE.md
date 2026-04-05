@@ -1,6 +1,6 @@
 # NUNMA Platform Architecture State
 
-**Last Updated**: 2026-03-31
+**Last Updated**: 2026-04-05
 **Status**: Comprehensive Codebase Analysis (Truth Level: Absolute)
 
 ---
@@ -11,7 +11,8 @@ The NUNMA platform is built on a modern, serverless architecture optimized for h
 
 ### Core Frameworks
 - **Frontend**: React 19, Vite, Vanilla CSS ("Anti-Gravity" Design System).
-- **Backend**: Firebase Cloud Functions (v2), Node.js.
+- **Backend**: Firebase Cloud Functions (v2), Node.js 20.
+- **AI/LLM**: Google Gemini 1.5 Pro via `@google/genai` (v1.x).
 - **Communication**: `resend` (Transactional OTP/System emails).
 - **Video/Storage**: Bunny Stream (TUS upload, Secure Pull Zones), Bunny Storage (Exam scripts).
 - **Messaging/Interactive**: LiveKit (Real-time classroom), Tldraw (Digital Whiteboard).
@@ -23,38 +24,38 @@ The platform requires the following keys for full functionality:
 | Key | Scope | Purpose |
 | :--- | :--- | :--- |
 | `VITE_FIREBASE_*` | Frontend | Firebase project configuration (API Key, Auth Domain, etc.). |
+| `GEMINI_API_KEY` | Backend (Secret) | AI processing for automated PDF grading. |
 | `RESEND_API_KEY` | Backend (Secret) | Resend API key for OTP and notification emails. |
 | `RAZORPAY_KEY_ID/SECRET` | Backend (Secret) | Aggregator Partner OAuth keys for Sub-Merchant management. |
 | `RAZORPAY_WEBHOOK_SECRET` | Backend (Secret) | Verifies signatures for payment and account events. |
 | `BUNNY_API_KEY/TOKEN_KEY` | Backend (Secret) | Managing video libraries and generating secure playback tokens. |
 | `BUNNY_WEBHOOK_SECRET` | Backend (Secret) | Signature verification for Bunny transcoding events. |
 | `LIVEKIT_API_KEY/SECRET` | Backend (Secret) | Generating JWT access tokens for live classrooms. |
-| `ZOHO_ORG_ID / REFRESH_TOKEN`| Backend (Secret) | Integration with Zoho Books for autonomous invoicing. |
+| `ZOHO_ORG_ID` | Backend (Secret) | Organization ID for Zoho Books invoicing. |
+| `ZOHO_REFRESH_TOKEN` | Backend (Secret) | OAuth2 refresh token for Zoho API access. |
 
 ---
 
 ## 2. The Database Schema (Firestore)
 
-The system operates on a highly decentralized schema within Firestore, designed for rapid scaling and distinct role-based access.
-
 ### Core Collections
 
 | Collection | Key Fields | Purpose |
 | :--- | :--- | :--- |
-| `users` | `name`, `email`, `role`, `kycStatus`, `taxDetails[]`, `subscriptionPlan`, `storage_used_bytes` | User profiles and roles (THALA/LEARNER). Includes `kycStatus` (PENDING/VERIFIED) and financial data for Thalas. |
-| `zones` | `title`, `zoneType`, `price`, `currency`, `createdBy`, `segments[]` | High-level containers for courses or workshops. |
+| `users` | `name`, `email`, `role`, `kycStatus`, `taxDetails[]`, `subscriptionPlan`, `storage_used_bytes` | User profiles and roles (THALA/LEARNER). Includes `kycStatus` (PENDING/VERIFIED). |
+| `zones` | `title`, `zoneType`, `price`, `currency`, `createdBy`, `segments[]` | Containers for courses or workshops. **Pricing fields are read-only for clients.** |
 | `products` | `title`, `priceINR`, `tutorId`, `availability` | Mentorship services and standalone digital materials. |
 | `otps` | `otp`, `expiresAt`, `createdAt` | Temporary storage for 6-digit verification codes keyed by email. |
-| `certificates` | `payload` (JSON-LD), `studentId`, `zoneId` | Root collection for decentralised verifiable credentials (URN:UUID). |
-| `transactions` | `processedAt`, `eventId` | Idempotency layer for tracking processed Razorpay webhooks. |
+| `certificates` | `payload` (JSON-LD), `studentId`, `zoneId` | Root collection for verifiable credentials (URN:UUID). |
 
 ### Operational Sub-collections (Inside `users/{uid}`)
 
-- **`invoices`**: Records of Zoho-generated platform fee invoices.
+- **`invoices`**: Records of Zoho-generated platform fee invoices (`zohoInvoiceId`, `amount`, `paymentId`).
 
 ### Operational Sub-collections (Inside `zones/{zoneId}`)
 
-- **`students`**: Tracks enrolled users (`status`, `joinedAt`, `completedSegments[]`).
+- **`students`**: Tracks enrolled users (`status`, `joinedAt`, `source: 'payment' | 'whitelist'`).
+- **`invites`**: Stores invitation tokens (`token`, `expiresAt`, `isActive`). Restricted to Thala-only read access.
 - **`exams`**: Metadata for scheduled gates (`questions[]`, `maxMark`, `type`).
 - **`exam_results`**: (Within `exams/{id}/submissions`) Stores student attempts, `cheatViolations`, and `answerSheetUrl`.
 
@@ -62,67 +63,52 @@ The system operates on a highly decentralized schema within Firestore, designed 
 
 ## 3. External API Integrations
 
-### Resend: OTP-First Authentication
-- **Flow**: The system uses a passwordless OTP (One-Time Password) flow. 
-- **Delivery**: `requestOTP` generates a 6-digit code and sends it via `notification@nunma.in` using Resend.
-- **Verification**: `verifyOTPAndSignIn` validates the code, creates/fetches the user, and issues a Firebase Custom Token for client-side authentication.
+### Gemini AI: Automated Grading
+- **Integration**: Uses `@google/genai` SDK v1.x with Gemini 1.5 Pro.
+- **Capabilities**: Analyzes student-uploaded PDF answer scripts against a provided scoring rubric and returns structured JSON marks/feedback.
 
 ### Razorpay Route: Escrow & KYC
-- **Onboarding**: Thalas (Experts) complete financial KYC (PAN, Bank Account, IFSC, GSTIN) via `createTutorLinkedAccount`.
-- **Linked Accounts**: Creates a Razorpay Sub-Merchant account and generates a login link for the expert to manage their dashboard.
-- **Split Payments**: `createRazorpayOrder` calculates platform commission (10/5/2% based on plan) and handles statutory deductions (0.1% TDS, 0.5% TCS).
-- **Webhooks**: `razorpayRouteWebhook` monitors `account.activated` and `payment.captured` for real-time status updates.
+- **Currency**: Strictly **INR/₹**. PPP (Purchasing Power Parity) has been deprecated and removed.
+- **Onboarding**: Thalas complete financial KYC via `createTutorLinkedAccount`.
+- **Split Payments**: `createRazorpayOrder` calculates platform commission (10/5/2% based on plan).
+- **Invoicing**: `razorpayRouteWebhook` triggers `generatePlatformFeeInvoice` (Zoho) upon successful payment capture.
 
 ### Bunny Stream & Storage: Content Security
-- **Video**: Uses TUS protocol for resumable uploads. Webhooks with signature verification update video status to `ready`.
-- **Protected Storage**: Exam scripts are stored in Bunny Storage. The platform uses a Pull Zone for serving PDFs while applying user-specific watermarks via `pdf-lib`.
+- **Video**: Uses TUS protocol for resumable uploads.
+- **Protected Storage**: Exam scripts are stored in Bunny Storage, served via Pull Zones with PDF watermarking.
 
 ---
 
 ## 4. Core Platform Workflows
 
-### Thala (Expert) Journey
-1. **Onboarding**: Expert signs up via OTP, selects their role, and completes financial KYC. 
-2. **Zone Creation**: Defines a Zone, sets pricing (INR), and adds curriculum segments.
-3. **Live Instruction**: Launches immersive classrooms via LiveKit + Tldraw. Hands-on management of student audio/video.
-4. **Grading**: Reviews PDF uploads from students, uses AI-assisted or manual grading, and bulk imports results via Excel.
+### Enrollment Flow
+1. **Direct Purchase**: Student pays via Razorpay -> `payment.captured` webhook triggers enrollment.
+2. **Whitelist/Invite**: Thala generates a UUID invite token -> Student joins via token bypass -> enrolled with `source: 'whitelist'`.
 
-### Learner (Student) Journey
-1. **Discovery**: Browses the landing page (Anti-Gravity UI), views pricing, and enrolls via Razorpay.
-2. **Consumption**: Accesses video segments and PDFs. Progress is tracked automatically.
-3. **Assessment**: Completes MCQs or PDF-based "Online Tests" within strict time-locks and anti-cheat (tab-switch tracking) proctoring.
-4. **Certification**: Upon 100% completion, triggers `registerIssuance` to receive a verifiable JSON-LD certificate.
+### Assessment Workflow
+1. **PDF Upload**: Student uploads exam script to Bunny Storage via Cloud Function.
+2. **AI Grading**: `gradePdfSubmission` is triggered -> AI analyzes script -> Results written to `exam_results`.
+3. **Certification**: Upon completion, `registerIssuance` generates a verifiable JSON-LD certificate.
 
 ---
 
 ## 5. Current State & Known Bottlenecks
 
 ### Just Finished
-- **Anti-Gravity UI Redesign**: Global theme shift to Deep Navy, Deep Green, White, and Vibrant Lime with premium micro-animations.
-- **OTP Auth Integration**: Fully functional Resend-based passwordless entry.
-- **Razorpay KYC Flow**: Mandatory collection of PAN/Bank/IFSC for expert onboarding.
-- **Webhook Security**: Implemented HMAC SHA256 signature verification for both Bunny and Razorpay webhooks.
+- **Fixed-Price INR Transition**: Removed all PPP logic from frontend and backend.
+- **Zone Invitation System**: Fully functional link-based enrollment with 48h expiry.
+- **Gemini SDK Upgrade**: Migrated to `@google/genai` v1.x with strict schema enforcement.
+- **Infrastructure Hardening**: Standardized `admin.initializeApp()` at the top of entry points and moved Firestore references inside function scopes for deployment stability.
 
 ### Immediate Constraints & Next Steps
-- **AI Grading R&D**: Moving from manual entry to automated PDF script analysis using the Gemini API.
-- **Mobile Experience**: Optimizing the classroom UI for lower-latency mobile devices and PWA-specific interactions.
-- **Advanced Proctoring**: Adding browser-lock options for high-stakes examinations.
+- **Tailwind Migration**: Moving from external CDN to local build in `index.html`.
+- **Mobile Experience**: Optimizing classroom UI for mobile latency.
 
 ---
 
 ## 6. Security & Access Control
 
-- **Identity**: Firebase Auth via Custom Tokens (OTP-verified).
-- **Permissions**: Firestore Security Rules enforce role-based access for Thalas and Learners.
-- **Content**: Hashed Bunny tokens for video; unique watermarks for PDF content.
-- **Integrity**: Tab-switching proctoring (3-strike system) for exams.
-
----
-
-## 7. Certificate Engine (URN:UUID)
-
-The certification system utilizes **W3C Verifiable Credentials** and **OpenBadges 3.0** standards.
-- **Issuer**: `did:web:nunma.in`
-- **Format**: JSON-LD with mock cryptographic proof.
-- **Verification**: Publicly verifiable via unique certificate IDs stored in a root-level `certificates` collection.
+- **Price Integrity**: Firestore rules block any client-side modification of `price`, `priceINR`, or `currency`.
+- **Permissions**: Sub-collections like `invites` are restricted to parent document owners only.
+- **Data Safety**: Cloud Functions use the "Internal Scope Initialization" pattern to prevent cross-contamination and deployment crashes.
 

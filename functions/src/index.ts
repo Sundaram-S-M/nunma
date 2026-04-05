@@ -16,7 +16,8 @@ import { generateOpenBadgePayload } from "./utils/vcUtils";
 import { Resend } from "resend";
 export { gradePdfSubmission } from "./ai/gradeSubmission";
 
-const db = admin.firestore();
+// const db = admin.firestore(); // Moved inside function scopes for deployment stability
+
 
 // Global transporter for billing and OTP emails
 /*
@@ -40,6 +41,7 @@ const transporter = nodemailer.createTransport({
 export const generateLiveToken = onCall(
     { secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"], cors: true },
     async (request) => {
+        const db = admin.firestore();
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "Login required.");
         }
@@ -100,6 +102,7 @@ export const generateLiveToken = onCall(
 export const toggleStudentAudio = onCall(
     { secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"], cors: true },
     async (request) => {
+        const db = admin.firestore();
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "Login required.");
         }
@@ -158,12 +161,18 @@ export const toggleStudentAudio = onCall(
 export const createBunnyVideo = onCall(
     { secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true },
     async (request) => {
+        const db = admin.firestore();
         if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
         
         // Step 1: Role Check
-        const role = request.auth.token.role;
-        if (role !== "THALA") {
-            throw new functions.https.HttpsError("permission-denied", "Thala access required.");
+        let role = request.auth.token.role;
+        if (!role) {
+            const userDoc = await db.collection("users").doc(request.auth.uid).get();
+            role = userDoc.data()?.role;
+        }
+
+        if (role !== "THALA" && role !== "TUTOR") {
+            throw new functions.https.HttpsError("permission-denied", "Thala or Tutor access required.");
         }
 
         const { title, zoneId } = request.data;
@@ -214,6 +223,7 @@ export const createBunnyVideo = onCall(
 export const bunnyStreamWebhook = onRequest(
     { secrets: ["BUNNY_WEBHOOK_SECRET"] },
     async (req, res) => {
+        const db = admin.firestore();
         const signature = req.headers['x-bunnystream-signature'] || req.headers['x-bunny-signature'];
         const secret = process.env.BUNNY_WEBHOOK_SECRET;
 
@@ -306,6 +316,7 @@ function extractRazorpayError(error: any): string {
 export const createTutorLinkedAccount = onCall(
     { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], cors: true },
     async (request) => {
+        const db = admin.firestore();
         if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
         const keyId = process.env.RAZORPAY_KEY_ID;
         const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -481,6 +492,13 @@ export const createTutorLinkedAccount = onCall(
             // Re-throw HttpsErrors unchanged; wrap raw errors with Razorpay message extraction
             if (error instanceof functions.https.HttpsError) throw error;
             const msg = extractRazorpayError(error);
+            const rzpError = error?.response?.data?.error || {};
+            console.error("[RAZORPAY_DEBUG_FULL]", {
+                description: rzpError.description || "N/A",
+                metadata: rzpError.metadata || "N/A",
+                code: rzpError.code || "N/A",
+                full_response: error?.response?.data
+            });
             console.error("createTutorLinkedAccount unexpected error:", error);
             throw new functions.https.HttpsError("internal", msg);
         }
@@ -490,6 +508,7 @@ export const createTutorLinkedAccount = onCall(
 export const createRazorpayOrder = onCall(
     { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], cors: true },
     async (request) => {
+        const db = admin.firestore();
         if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
         const { zoneId, type = 'zone' } = request.data;
         const keyId = process.env.RAZORPAY_KEY_ID;
@@ -575,6 +594,7 @@ export const createRazorpayOrder = onCall(
 export const razorpayRouteWebhook = onRequest(
     { secrets: ["RAZORPAY_WEBHOOK_SECRET"] },
     async (req, res) => {
+        const db = admin.firestore();
         const signature = req.headers['x-razorpay-signature'] as string;
         const secret = process.env.RAZORPAY_WEBHOOK_SECRET!;
         const hmac = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
@@ -699,6 +719,7 @@ export const razorpayRouteWebhook = onRequest(
 // --- PDF WATERMARKING ---
 
 export const serveSecurePdf = onRequest({ cors: true }, async (req, res) => {
+    const db = admin.firestore();
     try {
         const authHeader = req.headers.authorization;
         const idToken = authHeader?.split('Bearer ')[1];
@@ -729,6 +750,7 @@ export const serveSecurePdf = onRequest({ cors: true }, async (req, res) => {
 export const deleteUserAccount = onCall(
     { secrets: ["BUNNY_API_KEY"], cors: true },
     async (request) => {
+        const db = admin.firestore();
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "Login required for account deletion.");
         }
@@ -791,6 +813,7 @@ export const deleteUserAccount = onCall(
 // --- EXAM SUBMISSION LOGIC ---
 
 export const uploadExamScript = onCall({ cors: true }, async (request) => {
+    const db = admin.firestore();
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { file, fileName, zoneId, examId } = request.data;
     const uid = request.auth.uid;
@@ -856,6 +879,7 @@ export const uploadExamScript = onCall({ cors: true }, async (request) => {
 });
 
 export const submitGradedScript = onCall({ cors: true }, async (request) => {
+    const db = admin.firestore();
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId, examId, studentId, score, feedback, mergedPdf, oldFileUrl } = request.data;
 
@@ -942,6 +966,7 @@ export const submitGradedScript = onCall({ cors: true }, async (request) => {
 });
 
 export const submitExam = onCall({ cors: true }, async (request) => {
+    const db = admin.firestore();
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId, examId, answers, violationLogs, answerSheetUrl } = request.data;
     const uid = request.auth.uid;
@@ -1017,6 +1042,7 @@ export const submitExam = onCall({ cors: true }, async (request) => {
 });
 
 export const registerIssuance = onCall({ cors: true }, async (request) => {
+    const db = admin.firestore();
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     const { zoneId, studentId } = request.data;
 
@@ -1232,7 +1258,10 @@ export const verifyOTPAndSignIn = onCall({ cors: true }, async (request) => {
 
 // --- ZONE INVITATION SYSTEM ---
 
-export const generateZoneInvite = onCall({ cors: true }, async (request) => {
+export const generateZoneInvite = onCall(
+    { cors: ["https://www.nunma.in", "https://nunma.in", "http://localhost:5173"] }, 
+    async (request) => {
+    const db = admin.firestore();
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
     
     const { zoneId } = request.data;
@@ -1265,7 +1294,10 @@ export const generateZoneInvite = onCall({ cors: true }, async (request) => {
     }
 });
 
-export const revokeZoneInvite = onCall({ cors: true }, async (request) => {
+export const revokeZoneInvite = onCall(
+    { cors: ["https://www.nunma.in", "https://nunma.in", "http://localhost:5173"] }, 
+    async (request) => {
+    const db = admin.firestore();
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { zoneId, inviteToken } = request.data;
@@ -1285,7 +1317,10 @@ export const revokeZoneInvite = onCall({ cors: true }, async (request) => {
     return { success: true };
 });
 
-export const joinZoneByInvite = onCall({ cors: true }, async (request) => {
+export const joinZoneByInvite = onCall(
+    { cors: ["https://www.nunma.in", "https://nunma.in", "http://localhost:5173"] }, 
+    async (request) => {
+    const db = admin.firestore();
     if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
     const { zoneId, inviteToken } = request.data;
