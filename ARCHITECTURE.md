@@ -82,7 +82,7 @@ Expanding `LiveRoom` to support interactive breakout rooms and P2P collaboration
 A "Gumroad-style" store for educators to sell downloadable assets (Notion templates, code bundles, checklists) alongside their courses.
 
 ### Phase 4: Decentralized Identity (DID)
-Full integration with decentralized identifiers to give students total ownership of their learning history across different platforms.
+Full integration with decentralized identifiers to give students total ownership of their learning history across different platforms.   
 
 ---
 
