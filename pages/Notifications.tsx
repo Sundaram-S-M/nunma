@@ -136,7 +136,7 @@ const Notifications: React.FC = () => {
             </div>
 
             <button
-              onClick={() => navigate(`/live/${session.zoneId}/${session.id}`)}
+              onClick={() => navigate(`/classroom/${session.zoneId}`)}
               className="bg-[#c2f575] text-[#040457] px-8 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 active:scale-95 transition-all relative z-10"
             >
               Enter Room <ArrowRight size={14} />

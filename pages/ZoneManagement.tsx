@@ -52,8 +52,9 @@ import {
   Search,
   Star,
   Trophy,
-  Loader2, Calendar as CalendarIcon, Settings, MoreVertical, ShieldAlert, FileSearch, HelpCircle
+  Loader2, Calendar as CalendarIcon, Settings, MoreVertical, ShieldAlert, FileSearch, HelpCircle, BarChart3
 } from 'lucide-react';
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { VideoUploadModal } from '../components/VideoUploadModal';
 import { ShareModal } from '../components/ShareModal';
@@ -2186,9 +2187,13 @@ const ZoneManagement: React.FC = () => {
           </div>
           <div className="flex gap-4">
             <ZoneCapacityMeter zoneId={zoneId!} />
+            <button onClick={() => navigate(`/workplace/analytics/${zoneId}`)} className="px-10 py-5 bg-white border border-gray-100 text-[#040457] rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:shadow-2xl transition-all shadow-sm active:scale-95">
+              <BarChart3 size={20} /> Analytics
+            </button>
             <button onClick={handleOpenShareModal} className="px-6 py-5 bg-[#c2f575] text-[#040457] rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-xl">
               <Share2 size={20} />
             </button>
+
             <button onClick={() => setShowAddStudentModal(true)} className="px-10 py-5 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-[#040457]/20">
               <UserPlus size={20} /> Whitelist
             </button>
@@ -2607,7 +2612,7 @@ const ZoneManagement: React.FC = () => {
                     ) : (
                       <div className="flex gap-4">
                         <button
-                          onClick={() => navigate(`/live/${zoneId}/${activeSession.id}`)}
+                          onClick={() => navigate(`/classroom/${zoneId}`)}
                           className="bg-[#c2f575] text-[#040457] px-10 py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] flex items-center gap-4 shadow-2xl hover:brightness-110 active:scale-95 transition-all"
                         >
                           <ExternalLink size={20} /> JOIN ROOM
@@ -2645,7 +2650,7 @@ const ZoneManagement: React.FC = () => {
                       </h4>
                       <p className="text-sm text-gray-400 font-medium">Share this deep-link to grant students instant access to your live zone.</p>
                       <div className="p-6 bg-gray-50 border border-gray-100 rounded-3xl break-all font-mono text-[10px] text-gray-400 relative group overflow-hidden">
-                        {activeSession ? `${window.location.origin}/#/live/${zoneId}/${activeSession.id}` : 'Launch session to generate link'}
+                        {activeSession ? `${window.location.origin}/#/classroom/${zoneId}` : 'Launch session to generate link'}
                         {activeSession && (
                           <div className="absolute inset-0 bg-white/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <button onClick={handleCopyLink} className="flex items-center gap-3 text-[#040457] font-black uppercase text-[10px] tracking-widest">

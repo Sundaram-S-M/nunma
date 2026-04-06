@@ -525,7 +525,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                         <button
                           onClick={() => {
                             if (event.session?.status === 'live') {
-                              navigate(`/live/${event.session.zoneId}/${event.session.id}`);
+                              navigate(`/classroom/${event.session.zoneId}`);
                               setShowEventModal(false);
                             } else {
                               // Link to zone or show alert
@@ -703,7 +703,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                             </p>
                           </div>
                           <button
-                            onClick={() => navigate(`/live/${activeSessions[0].zoneId}/${activeSessions[0].id}`)}
+                            onClick={() => navigate(`/classroom/${activeSessions[0].zoneId}`)}
                             className="px-12 py-6 bg-[#c2f575] text-[#1A1A4E] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
                           >
                             Enter Room

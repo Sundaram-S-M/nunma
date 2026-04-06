@@ -3,48 +3,29 @@ import * as admin from "firebase-admin";
 import axios from "axios";
 import { GoogleGenAI } from "@google/genai";
 
-// Step 1: Type Definitions
-export interface GradingPayload {
-    totalScore: number;
-    maxScore: number;
-    aiConfidenceScore: number;
-    rubricBreakdown: Array<{
-        criteria: string;
-        awarded: number;
-        max: number;
-        feedback: string;
-    }>;
-    overallFeedback: string;
-    suggestedRemediation: string[];
-}
-
-// Gemini Schema Enforcement
+// Step 1: Request Schema Enforcement
 const responseSchema = {
     type: "object",
     properties: {
-        totalScore: { type: "number" },
-        maxScore: { type: "number" },
-        aiConfidenceScore: { type: "number" },
-        rubricBreakdown: {
+        totalMarks: { type: "number" },
+        maxMark: { type: "number" },
+        percentageScore: { type: "number" },
+        feedback: { type: "string" },
+        questionBreakdown: {
             type: "array",
             items: {
                 type: "object",
                 properties: {
-                    criteria: { type: "string" },
-                    awarded: { type: "number" },
-                    max: { type: "number" },
-                    feedback: { type: "string" }
+                    question: { type: "string" },
+                    marksAwarded: { type: "number" },
+                    maxMarks: { type: "number" },
+                    comment: { type: "string" }
                 },
-                required: ["criteria", "awarded", "max", "feedback"]
+                required: ["question", "marksAwarded", "maxMarks", "comment"]
             }
-        },
-        overallFeedback: { type: "string" },
-        suggestedRemediation: {
-            type: "array",
-            items: { type: "string" }
         }
     },
-    required: ["totalScore", "maxScore", "aiConfidenceScore", "rubricBreakdown", "overallFeedback", "suggestedRemediation"]
+    required: ["totalMarks", "maxMark", "percentageScore", "feedback", "questionBreakdown"]
 };
 
 /**
@@ -53,7 +34,7 @@ const responseSchema = {
  */
 export const gradePdfSubmission = onCall(
     {
-        secrets: ["GEMINI_API_KEY", "BUNNY_STORAGE_KEY"],
+        secrets: ["GEMINI_API_KEY", "BUNNY_API_KEY", "BUNNY_PULL_ZONE_URL"],
         timeoutSeconds: 300,
         memory: "1GiB",
         cors: true
@@ -61,57 +42,102 @@ export const gradePdfSubmission = onCall(
     async (request) => {
         const db = admin.firestore();
 
-        // Step 1: Auth Check
+        // 1. Authenticate and Validate Inputs
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "Thala or student authentication required.");
+            throw new HttpsError("unauthenticated", "Login required.");
         }
 
-        const { zoneId, examId, learnerId, filePath } = request.data;
-        if (!zoneId || !examId || !learnerId || !filePath) {
-            throw new HttpsError("invalid-argument", "Missing required parameters (zoneId, examId, learnerId, filePath).");
+        const { zoneId, examId, studentUid } = request.data;
+        if (!zoneId || !examId || !studentUid) {
+            throw new HttpsError("invalid-argument", "Missing required parameters (zoneId, examId, studentUid).");
         }
 
-        // Step 2: Storage Fetch Pipeline
-        const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
-        const region = "storage"; // Default region
-        const bunnyPdfUrl = `https://${region}.bunnycdn.com/${storageZone}/${filePath}`;
+        const callerUid = request.auth.uid;
 
+        // 2. Fetch Exam & Zone Details for Authorization
+        const zoneRef = db.collection("zones").doc(zoneId);
+        const examRef = zoneRef.collection("exams").doc(examId);
+
+        const [zoneSnap, examSnap] = await Promise.all([
+            zoneRef.get(),
+            examRef.get()
+        ]);
+
+        if (!zoneSnap.exists || !examSnap.exists) {
+            throw new HttpsError("not-found", "Zone or Exam not found.");
+        }
+
+        const zoneData = zoneSnap.data()!;
+        const examData = examSnap.data()!;
+
+        // 3. Permission Check
+        const isThala = zoneData.createdBy === callerUid;
+        const isStudent = studentUid === callerUid;
+        const allowSelfGrading = examData.allowSelfGrading === true;
+
+        if (!isThala && !(isStudent && allowSelfGrading)) {
+            throw new HttpsError("permission-denied", "You are not authorized to trigger grading for this submission.");
+        }
+
+        // 4. Fetch Submission Details
+        const submissionRef = examRef.collection("submissions").doc(studentUid);
+        const submissionSnap = await submissionRef.get();
+
+        if (!submissionSnap.exists) {
+            throw new HttpsError("not-found", "Submission not found.");
+        }
+
+        const submissionData = submissionSnap.data()!;
+        if (submissionData.status !== "PENDING_GRADING") {
+            throw new HttpsError("failed-precondition", "Submission is not in PENDING_GRADING status.");
+        }
+
+        const answerSheetUrl = submissionData.answerSheetUrl;
+        if (!answerSheetUrl) {
+            throw new HttpsError("failed-precondition", "Submission missing answer sheet URL.");
+        }
+
+        // 5. Download and Prepare PDF
         let base64Pdf: string;
         try {
-            const response = await axios.get(bunnyPdfUrl, {
+            const response = await axios.get(answerSheetUrl, {
                 responseType: 'arraybuffer',
                 headers: {
-                    AccessKey: process.env.BUNNY_STORAGE_KEY
+                    AccessKey: process.env.BUNNY_API_KEY
                 }
             });
-            // Convert to Base64 for Gemini multimodal ingestion
             base64Pdf = Buffer.from(response.data).toString('base64');
         } catch (error) {
-            console.error("Failed to fetch script from Bunny Storage:", error);
-            throw new HttpsError("internal", "Could not retrieve the answer script from storage.");
+            console.error("Failed to download PDF from Bunny:", error);
+            throw new HttpsError("internal", "Failed to retrieve the answer script from storage.");
         }
 
-        // Step 3: Fetch Exam Rubric from Firestore
-        const examSnap = await db.doc(`zones/${zoneId}/exams/${examId}`).get();
-        if (!examSnap.exists) {
-            throw new HttpsError("not-found", "The specified exam does not exist.");
-        }
-        const examData = examSnap.data();
-        const rubric = examData?.rubric; // Fetched from the exams doc
-
-        if (!rubric) {
-            throw new HttpsError("failed-precondition", "No grading rubric found for this exam.");
-        }
-
-        // Step 4: Gemini Instantiation & Execution
+        // 6. Gemini Integration
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
         
+        // Construct Rubric Prompt with marksPerQuestion
+        const questions = examData.questions || [];
+        const maxMark = examData.maxMark || 0;
+
+        const rubricText = questions.map((q: any, index: number) => {
+            return `Question ${index + 1}: ${q.questionText || q.question} (Max Marks: ${q.marksPerQuestion || q.marks})`;
+        }).join("\n");
+
+        const prompt = `
+            Please grade this student script strictly based on the following rubric:
+            Max Total Marks for Exam: ${maxMark}
+            
+            Rubric Breakdown:
+            ${rubricText}
+            
+            Return the results precisely in JSON format.
+        `;
+
         try {
-            const prompt = `Please grade this student script based on the following rubric:\n\n${JSON.stringify(rubric, null, 2)}`;
             const result = await ai.models.generateContent({
                 model: "gemini-1.5-pro",
                 config: {
-                    systemInstruction: "You are an elite, impartial academic evaluator for NUNMA. Grade the provided PDF script against the provided JSON rubric. Output valid JSON adhering to the specified schema.",
+                    systemInstruction: "You are an exam grader. Grade strictly against the rubric. Provide constructive feedback for the student.",
                     responseMimeType: "application/json",
                     responseSchema: responseSchema
                 },
@@ -131,38 +157,35 @@ export const gradePdfSubmission = onCall(
                 ]
             });
 
-            // In the new SDK, result.text is a property
-            const responseText = result.text || "";
-            let gradingPayload: GradingPayload;
-            
-            if (typeof responseText === 'string') {
-                gradingPayload = JSON.parse(responseText);
-            } else {
-                gradingPayload = responseText as unknown as GradingPayload;
-            }
+            const gradingResult = JSON.parse(result.text || "{}");
 
-            // Step 5: Persistence Logic (Firestore Sync)
-            // If confidence < 0.8, status is 'flagged'. Otherwise 'graded'.
-            const status = gradingPayload.aiConfidenceScore < 0.8 ? 'flagged' : 'graded';
-
-            const submissionRef = db.doc(`zones/${zoneId}/exams/${examId}/submissions/${learnerId}`);
-            
+            // 7. Persist Results & Check Exam Completion
             await submissionRef.update({
-                status: status,
-                gradingPayload: gradingPayload,
-                score: gradingPayload.totalScore, // Pulled up for UI leaderboards/sorting
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                ...gradingResult,
+                status: "GRADED",
+                gradedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
+            // Check if all submissions are now GRADED
+            const allSubmissions = await examRef.collection("submissions").get();
+            const allGraded = allSubmissions.docs.every(doc => doc.data().status === "GRADED");
+
+            if (allGraded) {
+                await examRef.update({
+                    status: "COMPLETED",
+                    completedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
             return {
-                message: "Valuation cycle complete.",
-                status,
-                score: gradingPayload.totalScore
+                message: "Grading successful",
+                result: gradingResult,
+                examCompleted: allGraded
             };
 
         } catch (error) {
-            console.error("Gemini AI Processing Error:", error);
-            throw new HttpsError("internal", "The AI evaluator encountered an error during script analysis.");
+            console.error("Gemini Grading Error:", error);
+            throw new HttpsError("internal", "The AI grader encountered an error analyzing the script.");
         }
     }
 );

@@ -1,6 +1,6 @@
 import React from 'react';
 import { BookOpen, Users, Trophy, PlayCircle, Search, Bell, Settings, Plus, Menu } from 'lucide-react';
-import './AntiGravityTheme.css';
+
 
 const NunmaDashboard: React.FC = () => {
   const courses = [

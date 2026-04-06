@@ -1,108 +1,113 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // --- Helper Functions ---
     
-    // --- USER PROFILE RULES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserData(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function getZoneData(zoneId) {
+      return get(/databases/$(database)/documents/zones/$(zoneId)).data;
+    }
+
+    // --- USERS Collection ---
+    // Rule: read auth.uid === userId
+    // Rule: write auth.uid === userId (block sensitive fields: role, kycStatus, razorpayAccountId, kycSubmittedAt)
     match /users/{userId} {
-      // Allow general read for authenticated users (to view profile basic info)
-      allow read: if request.auth != null;
+      allow read: if isUser(userId);
+      allow create: if isUser(userId) 
+        && !request.resource.data.keys().hasAny(['role', 'kycStatus', 'razorpayAccountId', 'kycSubmittedAt']);
+      allow update: if isUser(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'kycStatus', 'razorpayAccountId', 'kycSubmittedAt']);
       
-      // Strict ownership for profile management
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId; // Full access for testing
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      
-      // CRITICAL SECURITY: SENSITIVE KYC DATA LOCKDOWN
-      // The 'taxDetails' subcollection contains PII/Financial data.
-      // This is EXPLICITLY LOCKED from client-side access.
-      // Only Admin SDK (Cloud Functions) can interact with this path.
-      match /taxDetails/{document=**} {
-        allow read, write: if false;
-      }
-      
-      // Allow access to other subcollections (orders, enrollments, etc.) 
-      // ONLY if they are NOT the sensitive taxDetails path.
-      match /{allSubcollections=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId 
-          && !('taxDetails' in request.path);
+      // Invoices sub-collection: read auth.uid === userId, no client writes
+      match /invoices/{invoiceId} {
+        allow read: if isUser(userId);
+        allow write: if false;
       }
     }
 
-    // --- CHAT / CONVERSATIONS RULES ---
-    match /conversations/{conversationId} {
-      allow read: if request.auth != null && (request.auth.uid in resource.data.participants);
-      allow create: if request.auth != null && (request.auth.uid in request.resource.data.participants);
-      allow update: if request.auth != null && (request.auth.uid in resource.data.participants);
-
-      match /messages/{messageId} {
-        allow read, write: if request.auth != null;
-      }
-    }
-    
-    // --- ZONE & CONTENT RULES ---
+    // --- ZONES Collection ---
+    // Rule: anyone can read zone metadata
+    // Rule: create only for THALA role
+    // Rule: update/delete only for creator
+    // Rule: block client writes to price, priceINR, currency
     match /zones/{zoneId} {
-      // Zones are public/shared but content is gated
-      allow read: if request.auth != null;
-      
-      // Only the creator/tutor can modify the zone config
-      // Hardening: Prevent client-side updates to pricing fields
-      allow update: if request.auth != null && 
-                       resource.data.createdBy == request.auth.uid && 
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['price', 'currency']);
-      
-      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
-      
-      // Student-specific enrollment data within a zone
+      allow read: if true;
+      allow create: if isSignedIn() && getUserData(request.auth.uid).role == 'THALA'
+        && !request.resource.data.keys().hasAny(['price', 'priceINR', 'currency']);
+      allow update: if isSignedIn() && request.auth.uid == resource.data.createdBy
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['price', 'priceINR', 'currency']);
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.createdBy;
+
+      // ZONES/STUDENTS Sub-collection
+      // Rule: read if studentId or zone creator, no client writes
       match /students/{studentId} {
-        allow read, write: if request.auth != null && (request.auth.uid == studentId || get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy == request.auth.uid);
-      }
-      
-      // Exam and results logic (Simplified for MVP)
-      match /exams/{examId} {
-        allow read, write: if request.auth != null;
+        allow read: if isSignedIn() && (request.auth.uid == studentId || getZoneData(zoneId).createdBy == request.auth.uid);
+        allow write: if false;
       }
 
-      match /exam_results/{resultId} {
-        allow read: if request.auth != null && (request.auth.uid == resource.data.studentId || get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy == request.auth.uid);
-        allow create: if request.auth != null;
-      }
-
+      // ZONES/INVITES Sub-collection
+      // Rule: read/write only for zone creator
       match /invites/{inviteId} {
-        // Only the Thala who created the zone can view the invites
-        allow read: if request.auth != null && 
-                       request.auth.uid == get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy;
-        // ALL writes (create, update, delete) must be done via the Cloud Functions
-        allow write: if false; 
+        allow read, write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
       }
-      
-      // Full recursive access for zone creator to all content
-      match /{allSubcollections=**} {
-        allow read, write: if request.auth != null && 
-          (get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy == request.auth.uid || 
-           request.auth != null);
+
+      // ZONES/EXAMS Sub-collection
+      // Rule: read if active student OR creator, write if creator only
+      match /exams/{examId} {
+        allow read: if isSignedIn() && (
+          exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid)) ||
+          request.auth.uid == getZoneData(zoneId).createdBy
+        );
+        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
+
+        // ZONES/EXAMS/SUBMISSIONS Sub-collection
+        // Rule: read if studentId or creator, no client writes
+        match /submissions/{studentId} {
+          allow read: if isSignedIn() && (request.auth.uid == studentId || getZoneData(zoneId).createdBy == request.auth.uid);
+          allow write: if false;
+        }
+      }
+
+      // ZONES/ORDERS Sub-collection
+      // Rule: read if studentUid or creator, no client writes
+      match /orders/{orderId} {
+        allow read: if isSignedIn() && (request.auth.uid == resource.data.studentUid || getZoneData(zoneId).createdBy == request.auth.uid);
+        allow write: if false;
       }
     }
 
-    // --- PRODUCTS & COMMERCE ---
+    // --- CERTIFICATES Collection ---
+    // Rule: read if studentId or issuedBy, no client writes
+    match /certificates/{certId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.studentId || request.auth.uid == resource.data.issuedBy);
+      allow write: if false;
+    }
+
+    // --- OTPS Collection ---
+    // Rule: deny all client reads and writes
+    match /otps/{email} {
+      allow read, write: if false;
+    }
+
+    // --- PRODUCTS Collection ---
+    // Rule: public read, write for THALA role only if tutorId matches
     match /products/{productId} {
       allow read: if true;
-      allow create: if request.auth != null && request.resource.data.tutorId == request.auth.uid;
-      // Hardening: Prevent client-side updates to pricing fields
-      allow update: if request.auth != null && resource.data.tutorId == request.auth.uid && 
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['price', 'priceINR']);
-      allow delete: if request.auth != null && resource.data.tutorId == request.auth.uid;
-    }
-
-    // --- SOCIAL / FOLLOWERS ---
-    match /followers/{followerDocId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    // --- SYSTEM LOGS & IDEMPOTENCY ---
-    match /system/webhooks/processed/{eventId} {
-      allow read, write: if false; // Internal system path
+      allow write: if isSignedIn() 
+        && getUserData(request.auth.uid).role == 'THALA'
+        && (request.method == 'delete' ? resource.data.tutorId == request.auth.uid : request.resource.data.tutorId == request.auth.uid);
     }
   }
 }

@@ -119,7 +119,7 @@ const StudentZoneView: React.FC = () => {
       const sessionId = params.get('session');
       if (sessionId) {
         const found = sessions.find((s: any) => s.id === sessionId);
-        if (found) navigate(`/live/${zoneId}/${found.id}`);
+        if (found) navigate(`/classroom/${zoneId}`);
       }
     });
 
@@ -738,7 +738,7 @@ const StudentZoneView: React.FC = () => {
                 className="bg-[#c2f575]/10 border-[#c2f575]/20 text-[#c2f575]"
               />
               <button
-                onClick={() => navigate(`/live/${zoneId}/${currentZoneLive.id}`)}
+                onClick={() => navigate(`/classroom/${zoneId}`)}
                 className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-[1.75rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
               >
                 Join Live Classroom <ArrowRight size={16} />

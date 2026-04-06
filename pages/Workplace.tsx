@@ -236,7 +236,7 @@ const Workplace: React.FC = () => {
 
       if (goLiveNow) {
         setActiveSession({ id: docRef.id, ...sessionData, zoneId: liveZoneId });
-        navigate(`/live/${liveZoneId}/${docRef.id}`);
+        navigate(`/classroom/${liveZoneId}`);
       } else {
         alert('Live session scheduled successfully!');
       }
@@ -487,7 +487,7 @@ const Workplace: React.FC = () => {
                         </div>
                         {session.status === 'live' ? (
                           <button
-                            onClick={() => { setActiveSession(session); navigate(`/live/${session.zoneId}/${session.id}`); }}
+                            onClick={() => { setActiveSession(session); navigate(`/classroom/${session.zoneId}`); }}
                             className="w-full mt-8 py-5 bg-red-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-red-700 transition-all shadow-xl shadow-red-600/20 flex items-center justify-center gap-3"
                           >
                             Return to Stream <Radio size={16} />
@@ -497,7 +497,7 @@ const Workplace: React.FC = () => {
                             onClick={() => {
                               // update to live
                               setActiveSession({ ...session, status: 'live' });
-                              navigate(`/live/${session.zoneId}/${session.id}`);
+                              navigate(`/classroom/${session.zoneId}`);
                             }}
                             className="w-full mt-8 py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-900/20"
                           >

@@ -314,7 +314,7 @@ const Classroom: React.FC = () => {
                         </div>
                         {session.status === 'live' ? (
                            <button
-                              onClick={() => navigate(`/live/${session.zoneId}/${session.id}`)}
+                              onClick={() => navigate(`/classroom/${session.zoneId}`)}
                               className="w-full mt-8 py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-900/20"
                            >
                               Enter Living Room
