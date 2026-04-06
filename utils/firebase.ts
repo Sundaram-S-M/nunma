@@ -1,8 +1,8 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAuth, connectAuthEmulator } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
-import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
-import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -43,14 +43,5 @@ const auth = app ? getAuth(app) : null;
 const db = app ? getFirestore(app) : null;
 const functions = app ? getFunctions(app) : null;
 const storage = app ? getStorage(app) : null;
-
-// Emulator support for local development and CI
-if (import.meta.env.VITE_USE_EMULATORS === 'true') {
-    if (auth) connectAuthEmulator(auth, "http://localhost:9099");
-    if (db) connectFirestoreEmulator(db, "localhost", 8080);
-    if (functions) connectFunctionsEmulator(functions, "localhost", 5001);
-    if (storage) connectStorageEmulator(storage, "localhost", 9199);
-    console.log("⚡ Connected to Firebase Emulators");
-}
 
 export { app, analytics, auth, db, functions, storage };

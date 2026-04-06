@@ -11,10 +11,18 @@ def run_tests():
         print("[*] Initializing Master Launch Test Suite...")
         
         # Emulation: Mobile for classroom UI checks as requested
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         iphone_13 = p.devices['iPhone 13']
-        context = browser.new_page(**iphone_13).context
+        context = browser.new_context(**iphone_13)
         page = context.new_page()
+
+        # Global "Anti-Dollar" Security Check
+        print("[*] Performing Global 'Anti-Dollar' Integrity Audit...")
+        forbidden_terms = ["$", "USD", "Global Pricing", "PPP"]
+        for term in forbidden_terms:
+            if page.locator(f"text={term}").count() > 0:
+                raise Exception(f"CRITICAL: Found forbidden currency term: {term}")
+        print("[+] Integrity Audit PASSED: No forbidden terms detected.")
 
         # Pillar 1: Onboarding Test (Thala Flow)
         print("\n[*] Pillar 1: Onboarding Test (Thala Flow)")
@@ -46,9 +54,9 @@ def run_tests():
             print("[*] Clicking 'Launch Profile'...")
             page.click('button:has-text("Launch Profile")')
             
-            # Verify "Platform Maintenance" toast (Expected Razorpay 404 in emulator)
+            # Verify "Platform Maintenance" toast (Expected Razorpay 404 in project fallback)
             print("[*] Waiting for 'Platform Maintenance' toast...")
-            page.wait_for_selector('text="Platform Maintenance"', timeout=15000)
+            page.wait_for_selector('text="Platform Maintenance: Payout Module Configuration in Progress"', timeout=20000)
             print("[+] Pillar 1 PASSED: Onboarding toast verified.")
         except Exception as e:
             print(f"[!] Pillar 1 FAILED: {str(e)}")

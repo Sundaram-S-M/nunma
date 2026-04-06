@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:master": "python scripts/with_server.py --server \"npm run dev\" 5173 --server \"firebase emulators:start\" 4000 -- python master_launch_test.py"
+    "test:master": "python scripts/with_server.py --server \"npm run dev\" 5173 -- python master_launch_test.py"
   },
   "dependencies": {
     "@google/genai": "^1.34.0",
