@@ -256,13 +256,18 @@ export const createBunnyVideo = onCall(
         }
 
         // Step 2: Bunny Init (Get GUID)
-        const response = await axios.post(
-            `https://video.bunnycdn.com/library/${libraryId}/videos`, 
-            { title: title || 'Untitled' }, 
-            { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } }
-        );
-        
-        const videoId = response.data.guid;
+        let videoId;
+        try {
+            const response = await axios.post(
+                `https://video.bunnycdn.com/library/${libraryId}/videos`, 
+                { title: title || 'Untitled' }, 
+                { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } }
+            );
+            videoId = response.data.guid;
+        } catch (apiError: any) {
+            console.error("Bunny API Error:", apiError.response?.data || apiError.message);
+            throw new functions.https.HttpsError("internal", `Bunny API Error: ${apiError.response?.data?.Message || apiError.message}`);
+        }
         
         // Step 3: Signature Generation
         const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry

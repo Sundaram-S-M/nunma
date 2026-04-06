@@ -111,12 +111,12 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#fbfbfb]">
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
       {!hideSidebar && <Sidebar isOpen={isSidebarOpen} onToggle={toggleSidebar} />}
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative', overflow: 'hidden' }}>
         {!hideHeader && <Header onToggleRole={toggleRole} />}
 
-        <main className={`flex-1 ${isLiveMode ? 'overflow-hidden p-0' : 'overflow-y-auto p-4 md:p-8'} custom-scrollbar relative`}>
+        <main className={`flex-1 ${isLiveMode ? 'overflow-hidden p-0' : 'overflow-y-auto p-4 md:p-8'} custom-scrollbar relative`} style={{ background: 'var(--bg)' }}>
           <Routes>
             <Route path="/onboarding" element={<OnboardingSystem />} />
             <Route path="/dashboard" element={<Dashboard role={role} />} />

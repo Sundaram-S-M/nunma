@@ -198,7 +198,7 @@ exports.toggleStudentAudio = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", 
 });
 // --- BUNNY STREAM INTEGRATION ---
 exports.createBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true }, async (request) => {
-    var _a;
+    var _a, _b, _c, _d;
     const db = admin.firestore();
     if (!request.auth)
         throw new functions.https.HttpsError("unauthenticated", "Login required.");
@@ -220,8 +220,15 @@ exports.createBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUN
         throw new functions.https.HttpsError("failed-precondition", "Bunny security configuration missing.");
     }
     // Step 2: Bunny Init (Get GUID)
-    const response = await axios_1.default.post(`https://video.bunnycdn.com/library/${libraryId}/videos`, { title: title || 'Untitled' }, { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } });
-    const videoId = response.data.guid;
+    let videoId;
+    try {
+        const response = await axios_1.default.post(`https://video.bunnycdn.com/library/${libraryId}/videos`, { title: title || 'Untitled' }, { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } });
+        videoId = response.data.guid;
+    }
+    catch (apiError) {
+        console.error("Bunny API Error:", ((_b = apiError.response) === null || _b === void 0 ? void 0 : _b.data) || apiError.message);
+        throw new functions.https.HttpsError("internal", `Bunny API Error: ${((_d = (_c = apiError.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.Message) || apiError.message}`);
+    }
     // Step 3: Signature Generation
     const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
     const signature = crypto.createHash('sha256').update(libraryId + apiKey + expirationTime + videoId).digest('hex');

@@ -7,11 +7,13 @@ import {
   Mail,
   Briefcase,
   Layers,
-  ChevronLeft,
-  ChevronRight,
   Share2,
   ShoppingBag,
-  X
+  PanelLeftClose,
+  PanelLeft,
+  HardDrive,
+  AlertTriangle,
+  Zap,
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -23,208 +25,325 @@ interface SidebarProps {
 }
 
 const LogoIcon = () => (
-  <Link to="/dashboard">
-    <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-10 h-10 shrink-0 object-contain" />
+  <Link to="/dashboard" aria-label="Dashboard">
+    <img src="/assets/logo-icon.png" alt="Nunma" style={{ width: 28, height: 28, objectFit: 'contain', display: 'block' }} />
   </Link>
 );
 
 const LogoFull = () => (
-  <Link to="/dashboard" className="flex items-center gap-3 animate-in fade-in slide-in-from-left-4 duration-300">
-    <img src="/assets/logo-full.png" alt="Nunma Logo" className="h-10 shrink-0 object-contain" />
+  <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
+    <img src="/assets/logo-full.png" alt="Nunma" style={{ height: 26, objectFit: 'contain', display: 'block' }} />
   </Link>
 );
 
+/* ─── STYLES ──────────────────────────────────────────────── */
+
+const sidebarBase: React.CSSProperties = {
+  /* Flat solid white — no blur, no transparency */
+  background: '#FFFFFF',
+  borderRight: '1px solid #E5E7EB',
+  boxShadow: 'none',
+  height: '100vh',
+  position: 'sticky',
+  top: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  zIndex: 40,
+  overflow: 'hidden',
+  flexShrink: 0,
+  transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
+};
+
+const toggleBtnStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 6,
+  border: '1px solid #E5E7EB',
+  background: '#F9FAFB',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: '#9CA3AF',
+  cursor: 'pointer',
+  flexShrink: 0,
+  transition: 'background 0.12s, color 0.12s',
+};
+
+const navLinkBase: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.75rem',
+  padding: '0.5rem 0.75rem',
+  borderRadius: 8,
+  fontSize: '0.8125rem',
+  fontWeight: 500,
+  color: '#6B7280',
+  textDecoration: 'none',
+  transition: 'background 0.12s, color 0.12s',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+};
+
+const sectionLabel: React.CSSProperties = {
+  fontSize: '0.625rem',
+  fontWeight: 700,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  color: '#9CA3AF',
+  padding: '0.25rem 0.75rem 0.625rem',
+};
+
+/* ─── COMPONENT ───────────────────────────────────────────── */
+
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const role = user?.role || UserRole.STUDENT;
-  const currentTier = (user as any)?.current_tier || 'STARTER';
-
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const navigate  = useNavigate();
+  const role      = user?.role || UserRole.STUDENT;
+  const tier      = (user as any)?.current_tier || 'STARTER';
   const [showAddonModal, setShowAddonModal] = useState(false);
 
-  const storageUsedRaw = (user as any)?.usedStorageBytes || 0;
+  const usedBytes  = (user as any)?.usedStorageBytes || 0;
+  const limitBytes = tier === 'PREMIUM' ? 32212254720 : tier === 'STANDARD' ? 16106127360 : 3221225472;
+  const pct        = limitBytes > 0 ? Math.min(100, Math.round((usedBytes / limitBytes) * 100)) : 0;
+  const overLimit  = usedBytes > limitBytes;
 
-  let storageLimitRaw = 3221225472; // 3GB for STARTER
-  if (currentTier === 'STANDARD') {
-    storageLimitRaw = 16106127360; // 15GB
-  } else if (currentTier === 'PREMIUM') {
-    storageLimitRaw = 32212254720; // 30GB
-  }
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const fmt = (b: number) => {
+    if (b === 0) return '0 B';
+    const k = 1024, s = ['B','KB','MB','GB'];
+    const i = Math.floor(Math.log(b) / Math.log(k));
+    return parseFloat((b / Math.pow(k, i)).toFixed(1)) + ' ' + s[i];
   };
 
-  const storageLimitStr = formatBytes(storageLimitRaw);
-  const storageUsedStr = formatBytes(storageUsedRaw);
-  const rawPercent = storageLimitRaw > 0 ? Math.round((storageUsedRaw / storageLimitRaw) * 100) : 0;
-  const storagePercent = Math.min(100, rawPercent);
-  const isOverLimit = storageUsedRaw > storageLimitRaw;
-
-  const commonLinks = [
-    { id: 'dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', label: 'Dashboard' },
+  const navLinks = [
+    { id: 'dashboard', icon: <LayoutDashboard size={16} />, path: '/dashboard',  label: 'Dashboard' },
     {
       id: 'classroom',
-      icon: role === UserRole.STUDENT ? <MonitorPlay size={20} /> : <Briefcase size={20} />,
+      icon: role === UserRole.STUDENT ? <MonitorPlay size={16} /> : <Briefcase size={16} />,
       path: role === UserRole.STUDENT ? '/classroom' : '/workplace',
-      label: role === UserRole.STUDENT ? 'My Classroom' : 'My Workplace'
+      label: role === UserRole.STUDENT ? 'My Classroom' : 'My Workplace',
     },
-    { id: 'explore', icon: <Layers size={20} />, path: '/explore', label: 'Explore' },
-    { id: 'inbox', icon: <Mail size={20} />, path: '/inbox', label: 'Inbox' },
-    ...(role === UserRole.TUTOR && user?.onboardingCompleted ? [
-      { id: 'products', icon: <ShoppingBag size={20} />, path: '/products', label: 'Products' }
-    ] : [])
+    { id: 'explore', icon: <Layers size={16} />,      path: '/explore',  label: 'Explore' },
+    { id: 'inbox',   icon: <Mail size={16} />,         path: '/inbox',    label: 'Inbox'   },
+    ...(role === UserRole.TUTOR && user?.onboardingCompleted
+      ? [{ id: 'products', icon: <ShoppingBag size={16} />, path: '/products', label: 'Products' }]
+      : []),
   ];
 
   return (
     <>
-      <aside
-        className={`bg-white border-r border-gray-100 flex flex-col sticky top-0 h-screen transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-40 relative
-        ${isOpen ? 'w-64' : 'w-20'}
-      `}
-      >
-        <button
-          onClick={onToggle}
-          className="absolute -right-3 top-20 bg-white border border-gray-100 rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:shadow-lg transition-all z-50 text-gray-400 hover:text-indigo-900"
-        >
-          {isOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-        </button>
+      <aside style={{ ...sidebarBase, width: isOpen ? 240 : 64 }}>
 
-        <div className="p-5 flex items-center h-24 overflow-hidden">
-          {isOpen ? <LogoFull /> : <div className="flex justify-center w-full scale-75 transition-transform"><LogoIcon /></div>}
+        {/* ── Logo + toggle ─────────────────────────────── */}
+        <div style={{
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: isOpen ? 'space-between' : 'center',
+          padding: isOpen ? '0 1rem 0 1.25rem' : '0',
+          borderBottom: '1px solid #F3F4F6',
+          flexShrink: 0,
+        }}>
+          {isOpen ? (
+            <>
+              <LogoFull />
+              <button
+                onClick={onToggle}
+                aria-label="Collapse sidebar"
+                style={toggleBtnStyle}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F3F4F6'; (e.currentTarget as HTMLElement).style.color = '#374151'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#F9FAFB'; (e.currentTarget as HTMLElement).style.color = '#9CA3AF'; }}
+              >
+                <PanelLeftClose size={13} />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onToggle}
+              aria-label="Expand sidebar"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+            >
+              <LogoIcon />
+            </button>
+          )}
         </div>
 
-        <nav className="flex-1 px-3 space-y-1 mt-4 overflow-y-auto custom-scrollbar overflow-x-hidden">
-          <div className="mb-6">
-            {isOpen && (
-              <p className="px-4 py-2 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 animate-in fade-in duration-500">
-                Personal
-              </p>
-            )}
-            {commonLinks.map((link) => (
+        {/* ── Nav ──────────────────────────────────────── */}
+        <nav
+          style={{ flex: 1, padding: '1rem 0.625rem', overflowY: 'auto', overflowX: 'hidden' }}
+          className="custom-scrollbar"
+        >
+          {isOpen && <p style={sectionLabel}>Menu</p>}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {navLinks.map(link => (
               <NavLink
                 key={link.id}
                 to={link.path}
-                className={({ isActive }) => `
-                flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group relative
-                ${isActive
-                    ? 'bg-[#c2f575] text-[#1A1A4E] shadow-sm font-bold'
-                    : 'text-gray-500 hover:bg-gray-50'
+                title={!isOpen ? link.label : undefined}
+                style={({ isActive }) => ({
+                  ...navLinkBase,
+                  justifyContent: isOpen ? 'flex-start' : 'center',
+                  padding: isOpen ? '0.5rem 0.75rem' : '0.5rem',
+                  fontWeight: isActive ? 600 : 500,
+                  color: isActive ? '#111827' : '#6B7280',
+                  background: isActive ? '#F3F4F6' : 'transparent',
+                  /* Crisp left-border accent instead of heavy background */
+                  borderLeft: isActive ? '2px solid #2563EB' : '2px solid transparent',
+                  paddingLeft: isActive && isOpen ? 'calc(0.75rem - 2px)' : isOpen ? 'calc(0.75rem - 2px)' : undefined,
+                })}
+                onMouseEnter={e => {
+                  const el = e.currentTarget as HTMLElement;
+                  if (el.getAttribute('aria-current') !== 'page') {
+                    el.style.background = '#F9FAFB';
+                    el.style.color = '#374151';
                   }
-              `}
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget as HTMLElement;
+                  if (el.getAttribute('aria-current') !== 'page') {
+                    el.style.background = 'transparent';
+                    el.style.color = '#6B7280';
+                  }
+                }}
               >
-                <span className={`shrink-0 transition-all duration-300 ${!isOpen && 'mx-auto group-hover:scale-110'}`}>{link.icon}</span>
-                <span className={`truncate text-sm transition-all duration-500 origin-left ${isOpen ? 'opacity-100 scale-100 w-auto' : 'opacity-0 scale-90 w-0 pointer-events-none'}`}>
-                  {link.label}
-                </span>
-                {!isOpen && (
-                  <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#1A1A4E] text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all whitespace-nowrap z-50 translate-x-2 group-hover:translate-x-0">
+                <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>{link.icon}</span>
+                {isOpen && (
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {link.label}
-                  </div>
+                  </span>
                 )}
               </NavLink>
             ))}
           </div>
 
+          {/* ── Tutor public page ──────────────────────── */}
           {role === UserRole.TUTOR && (
-            <div className="mt-4 border-t border-gray-50 pt-6">
+            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #F3F4F6' }}>
               <Link
                 to="/u/sundaram"
                 target="_blank"
-                className="flex items-center gap-4 px-4 py-3 rounded-xl text-indigo-900 bg-indigo-50/50 hover:bg-[#c2f575]/20 transition-all duration-300 group relative"
+                title={!isOpen ? 'Public Page' : undefined}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  justifyContent: isOpen ? 'flex-start' : 'center',
+                  padding: isOpen ? '0.5rem 0.75rem' : '0.5rem',
+                  borderRadius: 8,
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: '#2563EB',
+                  background: '#EFF6FF',
+                  textDecoration: 'none',
+                  border: '1px solid #DBEAFE',
+                  transition: 'background 0.12s',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                }}
               >
-                <span className={`shrink-0 transition-all duration-300 ${!isOpen && 'mx-auto'}`}><Share2 size={20} className="text-[#1A1A4E]" /></span>
-                <span className={`truncate text-[10px] font-black uppercase tracking-widest transition-all duration-500 origin-left ${isOpen ? 'opacity-100 scale-100 w-auto' : 'opacity-0 scale-90 w-0 pointer-events-none'}`}>
-                  Public Page
-                </span>
-                {!isOpen && (
-                  <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#1A1A4E] text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all whitespace-nowrap z-50 translate-x-2 group-hover:translate-x-0">
-                    Your Public Profile
-                  </div>
+                <Share2 size={14} style={{ flexShrink: 0 }} />
+                {isOpen && (
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    Public Page
+                  </span>
                 )}
               </Link>
             </div>
           )}
         </nav>
 
-        <div className="p-4">
-          {role === UserRole.TUTOR && (
-            isOpen ? (
-              <div className="bg-[#1A1A4E] rounded-2xl p-6 text-white relative overflow-hidden group shadow-xl animate-in zoom-in duration-300">
-                <div className="relative z-10">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-200">Storage</span>
-                    <span className={`text-xs font-bold ${isOverLimit ? 'text-red-500' : 'text-[#c2f575]'}`}>{rawPercent}%</span>
+        {/* ── Storage widget ────────────────────────────── */}
+        {role === UserRole.TUTOR && (
+          <div style={{ padding: '0.75rem 0.625rem', borderTop: '1px solid #F3F4F6', flexShrink: 0 }}>
+            {isOpen ? (
+              <div style={{
+                background: '#F9FAFB',
+                border: '1px solid #E5E7EB',
+                borderRadius: 10,
+                padding: '0.875rem 1rem',
+              }}>
+                {/* Header row */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <HardDrive size={12} style={{ color: overLimit ? '#ef4444' : '#9CA3AF' }} />
+                    <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF' }}>Storage</span>
                   </div>
-                  <div className="w-full h-1.5 bg-white/10 rounded-full mb-4">
-                    <div className={`h-full rounded-full transition-all duration-500 ${isOverLimit ? 'bg-red-500' : 'bg-[#c2f575]'}`} style={{ width: `${storagePercent}%` }}></div>
-                  </div>
-                  {isOverLimit ? (
-                    <p className="text-[10px] text-red-500 font-bold mb-3 animate-pulse">Upgrade Required: Limit Exceeded</p>
-                  ) : (
-                    <p className="text-[10px] text-gray-400 font-medium mb-3">{storageUsedStr} of {storageLimitStr} used</p>
-                  )}
-                  <button
-                    onClick={() => navigate('/settings/pricing')}
-                    className={`text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition-all border-b border-transparent inline-block ${isOverLimit ? 'text-red-400 hover:border-red-400' : 'text-[#c2f575] hover:border-[#c2f575]'}`}
-                  >
-                    Buy Addons
-                  </button>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: overLimit ? '#ef4444' : '#2563EB' }}>{pct}%</span>
                 </div>
-                <div className="absolute -bottom-6 -right-6 w-20 h-20 bg-white opacity-5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+
+                {/* Track */}
+                <div style={{ height: 3, background: '#E5E7EB', borderRadius: 99, marginBottom: '0.5rem', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: overLimit ? '#ef4444' : '#2563EB', borderRadius: 99, transition: 'width 0.5s' }} />
+                </div>
+
+                <p style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginBottom: overLimit ? '0.5rem' : '0.75rem' }}>
+                  {fmt(usedBytes)} of {fmt(limitBytes)}
+                </p>
+
+                {overLimit && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: '0.625rem' }}>
+                    <AlertTriangle size={10} style={{ color: '#ef4444' }} />
+                    <span style={{ fontSize: '0.5625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#ef4444' }}>Limit exceeded</span>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => navigate('/settings/pricing')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    width: '100%',
+                    padding: '0.4375rem 0.75rem',
+                    borderRadius: 6,
+                    border: 'none',
+                    background: overLimit ? '#ef4444' : '#c2f575',
+                    color: overLimit ? '#fff' : '#1a3a05',
+                    fontSize: '0.6875rem',
+                    fontWeight: 800,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    transition: 'filter 0.12s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(0.94)')}
+                  onMouseLeave={e => (e.currentTarget.style.filter = 'none')}
+                >
+                  <Zap size={10} /> Buy Addons
+                </button>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-4">
-                <button className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-[8px] font-black text-gray-400 border border-gray-100 hover:bg-[#1A1A4E] hover:text-white transition-all group relative">
-                  {storagePercent}%
-                  <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#1A1A4E] text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all whitespace-nowrap z-50 translate-x-2 group-hover:translate-x-0">
-                    {storagePercent}% Storage
-                  </div>
+              /* Collapsed pill */
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  onClick={() => navigate('/settings/pricing')}
+                  title={`${pct}% storage used`}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    border: `1px solid ${overLimit ? '#FECACA' : '#E5E7EB'}`,
+                    background: overLimit ? '#FEF2F2' : '#F9FAFB',
+                    color: overLimit ? '#ef4444' : '#6B7280',
+                    fontSize: '0.5rem',
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'background 0.12s',
+                  }}
+                >
+                  {pct}%
                 </button>
               </div>
-            )
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </aside>
 
-      {/* Modals placed outside aside to avoid z-index/overflow issues, but fragment wrapper needed */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative animate-in zoom-in-95 duration-300">
-            <button onClick={() => setShowUpgradeModal(false)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-indigo-900 transition-colors">
-              <X size={20} />
-            </button>
-            <div className="text-center space-y-4 pt-4">
-              <div className="w-16 h-16 bg-indigo-50 text-indigo-900 rounded-full flex items-center justify-center mx-auto mb-6">
-                <ShoppingBag size={28} />
-              </div>
-              <h3 className="text-2xl font-black text-[#1A1A4E]">Expand Your Limits</h3>
-              <p className="text-gray-400 text-sm font-medium">Add-ons are available exclusively on the <span className="font-bold text-indigo-900">Standard</span> and <span className="font-bold text-indigo-900">Premium</span> tiers. Upgrade to significantly increase your limits.</p>
-              <div className="pt-6">
-                <button
-                  onClick={() => {
-                    setShowUpgradeModal(false);
-                    navigate('/billing');
-                  }}
-                  className="w-full py-4 bg-[#c2f575] text-[#1A1A4E] rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg"
-                >
-                  View Plans
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <AddonManagerModal
-        isOpen={showAddonModal}
-        onClose={() => setShowAddonModal(false)}
-      />
+      <AddonManagerModal isOpen={showAddonModal} onClose={() => setShowAddonModal(false)} />
     </>
   );
 };

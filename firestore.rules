@@ -86,6 +86,35 @@ service cloud.firestore {
         allow read: if isSignedIn() && (request.auth.uid == resource.data.studentUid || getZoneData(zoneId).createdBy == request.auth.uid);
         allow write: if false;
       }
+
+      // ZONES/STUDENTS Sub-collection
+      match /students/{studentUid} {
+        allow read, write: if isSignedIn();
+      }
+
+      // ZONES/VIDEOS Sub-collection
+      match /videos/{videoId} {
+        allow read, write: if isSignedIn();
+      }
+
+      // ZONES/CHAPTERS Sub-collection
+      match /chapters/{chapterId} {
+        allow read, write: if isSignedIn();
+      }
+
+      // ZONES/SESSIONS Sub-collection
+      match /sessions/{sessionId} {
+        allow read, write: if isSignedIn();
+
+        match /attendance/{attendeeId} {
+          allow read, write: if isSignedIn();
+        }
+      }
+
+      // ZONES/ATTENDANCE_SESSIONS Sub-collection
+      match /attendance_sessions/{sessionId} {
+        allow read, write: if isSignedIn();
+      }
     }
 
     // --- CERTIFICATES Collection ---
