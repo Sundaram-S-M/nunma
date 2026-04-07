@@ -263,7 +263,7 @@ const Search: React.FC = () => {
                   className="bg-white p-6 rounded-[2rem] border border-gray-100 hover:shadow-xl hover:border-[#c1e60d]/50 transition-all cursor-pointer group flex items-center gap-6"
                 >
                   <div className="w-16 h-16 rounded-2xl bg-gray-50 overflow-hidden shrink-0">
-                    <img src={item.avatar || item.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.id}`} alt="" className="w-full h-full object-cover" />
+                    <img src={item.avatar || item.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.id}`} alt="" className="w-full h-full object-cover" width="500" height="500" />
                   </div>
                   <div>
                     <h4 className="text-lg font-black text-[#1A1A4E] group-hover:text-indigo-600 transition-colors line-clamp-1">{item.name || item.title}</h4>

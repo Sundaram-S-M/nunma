@@ -261,7 +261,7 @@ const LaunchZone: React.FC = () => {
                   className={`aspect-video bg-gray-50 border-2 border-dashed rounded-[3rem] flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden group shadow-inner ${error && !zoneImage ? 'border-red-300' : 'border-gray-200 hover:border-[#c1e60d] hover:bg-white'}`}
                 >
                   {zoneImage ? (
-                    <img src={zoneImage} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Preview" />
+                    <img src={zoneImage} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Preview" width="500" height="500" />
                   ) : (
                     <>
                       <div className="w-20 h-20 bg-white rounded-[2rem] flex items-center justify-center text-gray-300 mb-4 shadow-sm group-hover:scale-110 group-hover:bg-[#c1e60d] group-hover:text-indigo-900 transition-all duration-500">

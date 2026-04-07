@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Camera, Move } from 'lucide-react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface PhotoAdjustModalProps {
     image: string;
@@ -44,8 +45,10 @@ const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, type = 'avat
         onSave(image);
     };
 
+    const modalRef = useFocusTrap(true, onClose);
+
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-navy/80 backdrop-blur-2xl animate-in fade-in duration-300">
+        <div ref={modalRef} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-navy/80 backdrop-blur-2xl animate-in fade-in duration-300">
             <div className="bg-white rounded-[4rem] w-full max-w-5xl shadow-[0_80px_160px_rgba(0,0,0,0.4)] border border-white/20 overflow-hidden animate-in zoom-in-95 duration-500">
                 <div className="flex h-[700px]">
 

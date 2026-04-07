@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Users, HardDrive, AlertCircle, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface AddonManagerModalProps {
     isOpen: boolean;
@@ -13,6 +14,8 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState<AddonType>('student');
     const [blockCount, setBlockCount] = useState(1);
+
+    const modalRef = useFocusTrap(isOpen, onClose);
 
     if (!isOpen) return null;
 
@@ -86,7 +89,7 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
 
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+        <div ref={modalRef} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
             <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl relative animate-in zoom-in-95 duration-300 overflow-hidden flex flex-col max-h-[90vh]">
 
                 {/* Header & Close Button */}

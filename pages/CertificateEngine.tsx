@@ -482,7 +482,7 @@ const CertificateEngine: React.FC = () => {
                       onClick={() => sig1InputRef.current?.click()}
                       className="h-32 bg-gray-50 border border-gray-100 rounded-[2rem] flex flex-col items-center justify-center border-dashed hover:border-[#040457] transition-colors cursor-pointer overflow-hidden relative shadow-inner"
                     >
-                      {signature1 ? <img src={signature1} className="w-full h-full object-contain p-4" alt="Sig 1" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 1</span></>}
+                      {signature1 ? <img src={signature1} className="w-full h-full object-contain p-4" alt="Sig 1" width="500" height="500" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 1</span></>}
                       <input ref={sig1InputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleSignatureUpload(e, 1)} />
                     </div>
                   </div>
@@ -493,7 +493,7 @@ const CertificateEngine: React.FC = () => {
                       onClick={() => sig2InputRef.current?.click()}
                       className="h-32 bg-gray-50 border border-gray-100 rounded-[2rem] flex flex-col items-center justify-center border-dashed hover:border-[#040457] transition-colors cursor-pointer overflow-hidden relative shadow-inner"
                     >
-                      {signature2 ? <img src={signature2} className="w-full h-full object-contain p-4" alt="Sig 2" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 2</span></>}
+                      {signature2 ? <img src={signature2} className="w-full h-full object-contain p-4" alt="Sig 2" width="500" height="500" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 2</span></>}
                       <input ref={sig2InputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleSignatureUpload(e, 2)} />
                     </div>
                   </div>
@@ -640,7 +640,7 @@ const CertificateEngine: React.FC = () => {
                     >
                       {manualFile ? (
                         <div className="p-8 w-full h-full">
-                          <img src={manualFile} className="w-full h-full object-contain rounded-2xl" alt="Manual Template" />
+                          <img src={manualFile} className="w-full h-full object-contain rounded-2xl" alt="Manual Template" width="500" height="500" />
                           <p className="text-[10px] font-black text-center mt-4 text-gray-400 uppercase tracking-widest">Click to change template</p>
                         </div>
                       ) : (
@@ -698,7 +698,7 @@ const CertificateEngine: React.FC = () => {
                         key={t.id}
                         className="group relative rounded-[2.5rem] overflow-hidden border-4 border-transparent"
                       >
-                        <img src={t.preview} className="w-full aspect-[16/10] object-cover" alt={t.name} />
+                        <img src={t.preview} className="w-full aspect-[16/10] object-cover" alt={t.name} width="500" height="500" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8">
                           <h5 className="text-white font-black text-xl tracking-tight">{t.name}</h5>
                         </div>

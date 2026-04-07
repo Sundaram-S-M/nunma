@@ -218,7 +218,7 @@ const OnboardingSystem: React.FC = () => {
             {/* Top Left Branding */}
             <div className="absolute top-8 left-8 flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#040457] rounded-xl flex items-center justify-center shadow-lg">
-                    <img src="/assets/logo-icon.png" alt="Logo" className="w-6 h-6 object-contain filter brightness-0 invert" />
+                    <img src="/assets/logo-icon.png" alt="Logo" className="w-6 h-6 object-contain filter brightness-0 invert" width="500" height="500" />
                 </div>
                 <span className="text-xl font-black tracking-tighter text-[#040457]">nunma</span>
             </div>

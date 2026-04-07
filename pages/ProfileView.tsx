@@ -71,7 +71,7 @@ const ProfileHeader = ({
     <div className="bg-[#1A1A4E] relative h-[260px] md:h-[320px] flex flex-col justify-end pb-8">
       <div className="absolute inset-0 opacity-40">
         {profileUser.banner ? (
-          <img src={profileUser.banner} className="w-full h-full object-cover" alt="Banner" />
+          <img src={profileUser.banner} className="w-full h-full object-cover" alt="Banner" width="500" height="500" />
         ) : (
           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,#c2f575_0,transparent_60%)]"></div>
         )}
@@ -174,7 +174,7 @@ const ProfileHeader = ({
           <div className="relative group shrink-0 -mt-[80px] md:-mt-[110px] mb-6 md:mb-0 md:mr-8 z-30">
             <div className={`w-36 h-36 md:w-44 md:h-44 rounded-3xl md:rounded-[2.2rem] p-[5px] bg-gradient-to-tr from-[#c2f575] via-[#4d56c8] to-[#1A1A4E] shadow-2xl overflow-hidden`}>
               <div className="w-full h-full bg-[#1A1A4E] rounded-[1.8rem] overflow-hidden border-2 border-[#1A1A4E] relative group">
-                <img src={profileUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + profileUser.uid} alt="Profile" className="w-full h-full object-cover" />
+                <img src={profileUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + profileUser.uid} alt="Profile" className="w-full h-full object-cover" width="500" height="500" />
                 {isMe && (
                   <div className="absolute bottom-2 right-2">
                     <button onClick={() => avatarInputRef.current?.click()} className="w-8 h-8 md:w-10 md:h-10 bg-white text-indigo-900 rounded-full shadow-lg flex items-center justify-center hover:bg-[#c2f575] border border-transparent transition-all opacity-0 group-hover:opacity-100"><Camera size={14} /></button>
@@ -290,7 +290,7 @@ const StudentProfile = ({
           {zones.filter((z: any) => enrolledIds.includes(z.id)).length > 0 ? zones.filter((z: any) => enrolledIds.includes(z.id)).map((zone: any) => (
             <div key={zone.id} className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 flex items-center gap-6 group hover:border-[#c2f575] transition-all cursor-pointer" onClick={() => navigate(`/classroom/zone/${zone.id}`)}>
               <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg">
-                <img src={zone.image} alt={zone.title} className="w-full h-full object-cover" />
+                <img src={zone.image} alt={zone.title} className="w-full h-full object-cover" width="500" height="500" />
               </div>
               <div className="flex-1">
                 <h4 className="text-xl font-black text-indigo-900">{zone.title}</h4>
@@ -461,7 +461,7 @@ const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, n
             {zones.length > 0 ? zones.map((zone: any) => (
               <div key={zone.id} className="bg-white border border-gray-100 rounded-[3.5rem] overflow-hidden group hover:shadow-2xl transition-all duration-700 flex flex-col">
                 <div className="h-60 overflow-hidden relative">
-                  <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                  <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" width="500" height="500" />
                   <div className="absolute top-6 right-6 bg-white/95 backdrop-blur-md text-indigo-900 px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase shadow-xl tracking-widest">${zone.price}</div>
                 </div>
                 <div className="p-10 flex flex-col flex-1">
@@ -944,7 +944,7 @@ const ProfileView: React.FC = () => {
                 <div className="space-y-4">
                   {followersList.map(fUser => (
                     <div key={fUser.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl cursor-pointer" onClick={() => { setShowFollowersModal(false); navigate(`/profile/${fUser.id}`); }}>
-                      <img src={fUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + fUser.id} className="w-12 h-12 rounded-xl object-cover" alt="" />
+                      <img src={fUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + fUser.id} className="w-12 h-12 rounded-xl object-cover" alt="" width="500" height="500" />
                       <div>
                         <p className="text-sm font-black text-indigo-900">{fUser.name}</p>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate w-48">{fUser.headline || 'Nunma User'}</p>

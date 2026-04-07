@@ -927,7 +927,7 @@ const StudentZoneView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {allStudents.map(student => (
                   <div key={student.id} className="p-6 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex items-center gap-4 hover:shadow-xl hover:bg-white hover:border-[#c2f575] transition-all cursor-pointer group">
-                    <img src={student.avatar} className="w-14 h-14 rounded-2xl object-cover bg-white p-1 border border-gray-100 shadow-sm" alt="" />
+                    <img src={student.avatar} className="w-14 h-14 rounded-2xl object-cover bg-white p-1 border border-gray-100 shadow-sm" alt="" width="500" height="500" />
                     <div>
                       <p className="font-black text-indigo-900 text-sm">{student.name}</p>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Joined {student.joinedAt}</p>

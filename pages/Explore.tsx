@@ -243,7 +243,7 @@ const Explore: React.FC = () => {
                   <div className="flex -space-x-3">
                     {[1, 2, 3].map(i => (
                       <div key={i} className="w-10 h-10 rounded-xl border-4 border-white overflow-hidden bg-gray-100 shadow-sm relative z-[1]">
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.id}${i}`} alt="Student" />
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.id}${i}`} alt="Student" width="500" height="500" />
                       </div>
                     ))}
                     <div className="w-10 h-10 rounded-xl border-4 border-white bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-400 relative z-0">

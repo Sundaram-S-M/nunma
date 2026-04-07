@@ -393,7 +393,7 @@ const Inbox: React.FC = () => {
               <div className="flex flex-col items-center">
                 <div className="relative group mb-6">
                   <div className="w-32 h-32 rounded-[2.5rem] border-4 border-gray-50 p-1 bg-white relative overflow-hidden shadow-xl">
-                    <img src={activeChat.avatar || 'https://picsum.photos/seed/group/200/200'} alt="Group" className="w-full h-full rounded-[2rem] object-cover" />
+                    <img src={activeChat.avatar || 'https://picsum.photos/seed/group/200/200'} alt="Group" className="w-full h-full rounded-[2rem] object-cover" width="500" height="500" />
                   </div>
                   <button onClick={() => groupAvatarRef.current?.click()} className="absolute bottom-[-10px] right-[-10px] w-12 h-12 bg-[#c2f575] text-indigo-900 rounded-2xl shadow-lg flex items-center justify-center hover:scale-110 transition-all border-4 border-white z-10">
                     <Camera size={20} className="ml-[1px]" />
@@ -449,7 +449,7 @@ const Inbox: React.FC = () => {
                         onClick={() => { setShowGroupProfile(false); navigate(`/profile/${p.id}`); }}
                         className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl cursor-pointer transition-colors border border-transparent hover:border-gray-100"
                       >
-                        <img src={p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`} className="w-12 h-12 rounded-[1rem] object-cover shadow-sm" alt="" />
+                        <img src={p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`} className="w-12 h-12 rounded-[1rem] object-cover shadow-sm" alt="" width="500" height="500" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-black text-indigo-900 truncate">{p.name}</p>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{p.headline || 'Member'}</p>
@@ -489,7 +489,7 @@ const Inbox: React.FC = () => {
                   mutualFollowers.map(mUser => (
                     <div key={mUser.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
                       <div className="flex items-center gap-4">
-                        <img src={mUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mUser.id}`} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                        <img src={mUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mUser.id}`} className="w-10 h-10 rounded-xl object-cover" alt="" width="500" height="500" />
                         <p className="text-sm font-black text-indigo-900">{mUser.name}</p>
                       </div>
                       <button
@@ -598,7 +598,7 @@ const Inbox: React.FC = () => {
                   }`}
               >
                 <div className="relative shrink-0">
-                  <img src={chat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={chat.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm" />
+                  <img src={chat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={chat.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm" width="500" height="500" />
                   {chat.online && (
                     <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#7cc142] border-[4px] border-white rounded-full"></div>
                   )}
@@ -634,7 +634,7 @@ const Inbox: React.FC = () => {
                   className="relative cursor-pointer hover:opacity-80 transition-opacity"
                   onClick={handleGroupHeaderClick}
                 >
-                  <img src={activeChat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={activeChat.name} className="w-14 h-14 rounded-2xl object-cover shadow-xl" />
+                  <img src={activeChat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={activeChat.name} className="w-14 h-14 rounded-2xl object-cover shadow-xl" width="500" height="500" />
                   {activeChat.online && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#7cc142] border-[3px] border-white rounded-full"></div>}
                 </div>
                 <div>

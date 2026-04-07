@@ -46,7 +46,7 @@ export const BunnyVideoPlayer: React.FC<BunnyVideoPlayerProps> = ({ videoId, tit
 
     if (error) {
         return (
-            <div className="w-full h-full min-h-[500px] flex items-center justify-center bg-gray-50 rounded-[3rem] text-red-500 font-bold p-6 text-center">
+            <div className="w-full h-full aspect-video flex items-center justify-center bg-gray-50 rounded-[3rem] text-red-500 font-bold p-6 text-center">
                 {error}
             </div>
         );
@@ -54,7 +54,7 @@ export const BunnyVideoPlayer: React.FC<BunnyVideoPlayerProps> = ({ videoId, tit
 
     if (!tokenData) {
         return (
-            <div className="w-full h-full min-h-[500px] flex flex-col items-center justify-center bg-gray-50 rounded-[3rem] text-indigo-900">
+            <div className="w-full h-full aspect-video flex flex-col items-center justify-center bg-gray-50 rounded-[3rem] text-indigo-900">
                 <Loader2 size={48} className="animate-spin mb-4" />
                 <p className="font-bold">Loading secure video player...</p>
             </div>
@@ -66,14 +66,14 @@ export const BunnyVideoPlayer: React.FC<BunnyVideoPlayerProps> = ({ videoId, tit
     const iframeUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}&autoplay=true`;
 
     return (
-        <div className="w-full h-full min-h-[600px] rounded-[3rem] overflow-hidden bg-black shadow-2xl relative flex flex-col items-center justify-center">
+        <div className="w-full max-w-full aspect-video rounded-[3rem] overflow-hidden bg-black shadow-2xl relative flex flex-col items-center justify-center">
             <iframe
                 ref={iframeRef}
                 src={iframeUrl}
                 loading="lazy"
                 allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
                 allowFullScreen
-                className="w-full h-full min-h-[600px] border-none"
+                className="w-full h-full border-none object-cover"
                 title={title}
             />
             {/* Absolute positioning to prevent right-clicks outside of player context if needed */}

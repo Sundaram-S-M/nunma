@@ -187,7 +187,7 @@ const Auth: React.FC = () => {
           <div className="relative z-10">
             <div className="flex items-center gap-4 mb-24">
               <div className="w-20 h-20 rounded-[1.5rem] flex items-center justify-center shadow-2xl rotate-3 overflow-hidden bg-[#040457]">
-                <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-full h-full object-cover" />
+                <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-full h-full object-cover" width="500" height="500" />
               </div>
               <span className="text-4xl font-black tracking-tighter">nunma</span>
             </div>
@@ -245,7 +245,7 @@ const Auth: React.FC = () => {
                     disabled={isLoading}
                     className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
                   >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" width="500" height="500" />
                     Continue with Google
                   </button>
 
@@ -261,7 +261,7 @@ const Auth: React.FC = () => {
                       <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457] transition-colors" size={20} />
                       <input
                         type="email" required placeholder="name@domain.com"
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all shadow-sm"
+                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
                         value={email} onChange={(e) => setEmail(e.target.value)}
                       />
                     </div>
@@ -276,7 +276,7 @@ const Auth: React.FC = () => {
                       <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457] transition-colors" size={20} />
                       <input
                         type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-5 font-bold text-[#040457] outline-none transition-all shadow-sm"
+                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
                         value={password} onChange={(e) => setPassword(e.target.value)}
                       />
                       <button
@@ -319,7 +319,7 @@ const Auth: React.FC = () => {
                       disabled={isLoading}
                       className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
                     >
-                      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" width="500" height="500" />
                       Sign up with Google
                     </button>
 
@@ -335,7 +335,7 @@ const Auth: React.FC = () => {
                         <User className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
                         <input
                           type="text" required placeholder="Legal full name"
-                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-2 font-bold text-[#040457] outline-none transition-all placeholder-slate-500"
                           value={name} onChange={(e) => setName(e.target.value)}
                         />
                       </div>
@@ -347,7 +347,7 @@ const Auth: React.FC = () => {
                         <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
                         <input
                           type="email" required placeholder="name@domain.com"
-                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-2 font-bold text-[#040457] outline-none transition-all placeholder-slate-500"
                           value={email} onChange={(e) => setEmail(e.target.value)}
                         />
                       </div>
@@ -385,7 +385,7 @@ const Auth: React.FC = () => {
                         <KeyRound className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
                         <input
                           type="text" required placeholder="••••••" maxLength={6}
-                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-5 font-black text-[#040457] outline-none transition-all text-2xl tracking-[0.5em]"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-2 font-black text-[#040457] outline-none transition-all text-2xl tracking-[0.5em] placeholder-slate-500"
                           value={otp} onChange={(e) => setOtp(e.target.value)}
                         />
                       </div>
@@ -420,7 +420,7 @@ const Auth: React.FC = () => {
                         <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
                         <input
                           type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-5 font-bold text-[#040457] outline-none transition-all shadow-sm"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
                           value={password} onChange={(e) => setPassword(e.target.value)}
                         />
                         <button

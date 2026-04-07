@@ -87,33 +87,32 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // ZONES/STUDENTS Sub-collection
-      match /students/{studentUid} {
-        allow read, write: if isSignedIn();
-      }
-
       // ZONES/VIDEOS Sub-collection
       match /videos/{videoId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
       }
 
       // ZONES/CHAPTERS Sub-collection
       match /chapters/{chapterId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
       }
 
       // ZONES/SESSIONS Sub-collection
       match /sessions/{sessionId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
 
         match /attendance/{attendeeId} {
-          allow read, write: if isSignedIn();
+          allow read, write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
         }
       }
 
       // ZONES/ATTENDANCE_SESSIONS Sub-collection
       match /attendance_sessions/{sessionId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
       }
     }
 

@@ -572,23 +572,23 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
       </div>
 
       {completionPercentage < 100 && (
-        <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row items-center gap-8 animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="bg-nunma-lime/10 rounded-[2.5rem] p-8 border border-[#c2f575]/20 shadow-sm flex flex-col md:flex-row items-center gap-8 animate-in fade-in slide-in-from-top-4 duration-700">
           <div className="flex-1 w-full space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-black text-[#1A1A4E]">Profile Completion</h3>
-              <span className="text-2xl font-black text-[#c2f575]">{completionPercentage}%</span>
+              <h3 className="text-xl font-black text-nunma-navy">Profile Completion</h3>
+              <span className="text-2xl font-black text-nunma-navy">{completionPercentage}%</span>
             </div>
-            <div className="h-4 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-4 w-full bg-nunma-navy/10 rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#1A1A4E] rounded-full transition-all duration-1000 ease-out"
+                className="h-full bg-nunma-navy rounded-full transition-all duration-1000 ease-out"
                 style={{ width: `${completionPercentage}%` }}
               />
             </div>
-            <p className="text-gray-400 text-sm font-medium">
+            <p className="text-nunma-navy/70 text-sm font-medium">
               Complete your profile to unlock full network access and verify your identity.
             </p>
           </div>
-          <Link to="/settings/profile" className="px-8 py-4 bg-[#c2f575] text-[#1A1A4E] rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap">
+          <Link to="/settings/profile" className="px-8 py-4 bg-nunma-navy text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap">
             Complete Profile
           </Link>
         </div>
@@ -612,7 +612,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                   <div key={zone.id} className="bg-white rounded-[3.5rem] p-10 border border-gray-100 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
                     <div className="flex justify-between items-start mb-8">
                       <div className="w-16 h-16 bg-gray-50 rounded-[1.75rem] flex items-center justify-center text-indigo-900 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-500 overflow-hidden">
-                        {zone.avatar ? <img src={zone.avatar} alt="" className="w-full h-full object-cover" /> : <Zap size={32} />}
+                        {zone.avatar ? <img src={zone.avatar} alt="" className="w-full h-full object-cover" width="500" height="500" /> : <Zap size={32} />}
                       </div>
                       <div className="text-right">
                         <span className="text-[9px] font-black bg-[#c2f575] text-indigo-900 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">
@@ -640,7 +640,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {stats.map((stat, idx) => (
               <div key={idx} className="bg-[#e9ecef]/60 p-6 rounded-[3rem] flex flex-col justify-center min-h-[180px] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 group">
                 <div className="bg-white p-8 rounded-[2.5rem] flex flex-col items-center justify-center shadow-inner text-center border border-gray-50 group-hover:border-[#c2f575]/30 transition-colors">
@@ -780,7 +780,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         </>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {stats.map((stat, idx) => (
               <div key={idx} className="bg-[#e9ecef]/60 p-6 rounded-[3rem] flex flex-col justify-center min-h-[180px] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 group">
                 <div className="bg-white p-8 rounded-[2.5rem] flex flex-col items-center justify-center shadow-inner text-center border border-gray-50 group-hover:border-[#c2f575]/30 transition-colors">

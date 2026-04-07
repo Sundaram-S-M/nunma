@@ -348,7 +348,7 @@ const Classroom: React.FC = () => {
                         <div key={student.rank} className={`p-5 rounded-2xl flex items-center justify-between ${student.isMe ? 'bg-[#c2f575]/20 border-2 border-[#c2f575]' : 'bg-gray-50 border border-gray-100'}`}>
                            <div className="flex items-center gap-4">
                               <span className="text-xs font-black text-gray-400 w-4">#{student.rank}</span>
-                              <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" />
+                              <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" width="500" height="500" />
                               <div>
                                  <p className="text-sm font-black text-indigo-900">{student.name} {student.isMe && '(You)'}</p>
                                  <p className="text-[10px] font-bold text-gray-400 uppercase">{student.xp} XP</p>
@@ -386,7 +386,7 @@ const Classroom: React.FC = () => {
                               className="group bg-gray-50/50 rounded-[3rem] border border-gray-100 p-8 hover:bg-white hover:shadow-2xl hover:border-[#c2f575] transition-all duration-700 cursor-pointer"
                            >
                               <div className="h-48 rounded-[2rem] overflow-hidden mb-8 relative shadow-lg">
-                                 <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+                                 <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" width="500" height="500" />
                                  <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl text-[9px] font-black text-indigo-900 flex items-center gap-1">
                                     <Star size={12} fill="#c2f575" className="text-[#c2f575]" /> {zone.rating || '4.8'}
                                  </div>
@@ -480,7 +480,7 @@ const Classroom: React.FC = () => {
                      {followedTutors.length > 0 ? followedTutors.map(tutor => (
                         <div key={tutor.uid} className="flex items-center gap-5 p-6 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-white/10 transition-all cursor-pointer group/tutor">
                            <div className="relative">
-                              <img src={tutor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutor.uid}`} className="w-16 h-16 rounded-2xl object-cover shadow-2xl" alt="" />
+                              <img src={tutor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutor.uid}`} className="w-16 h-16 rounded-2xl object-cover shadow-2xl" alt="" width="500" height="500" />
                               <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 bg-[#7cc142] border-[4px] border-indigo-900 rounded-full shadow-lg"></div>
                            </div>
                            <div>

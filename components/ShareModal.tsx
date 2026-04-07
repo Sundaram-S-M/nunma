@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { X, Copy, Check, ShieldAlert, Share2, Link as LinkIcon, RefreshCw } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../utils/firebase';

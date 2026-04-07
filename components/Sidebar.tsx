@@ -26,13 +26,13 @@ interface SidebarProps {
 
 const LogoIcon = () => (
   <Link to="/dashboard" aria-label="Dashboard">
-    <img src="/assets/logo-icon.png" alt="Nunma" style={{ width: 28, height: 28, objectFit: 'contain', display: 'block' }} />
+    <img src="/assets/logo-icon.png" alt="Nunma" style={{ width: 28, height: 28, objectFit: 'contain', display: 'block' }} width="500" height="500" />
   </Link>
 );
 
 const LogoFull = () => (
   <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
-    <img src="/assets/logo-full.png" alt="Nunma" style={{ height: 26, objectFit: 'contain', display: 'block' }} />
+    <img src="/assets/logo-full.png" alt="Nunma" style={{ height: 26, objectFit: 'contain', display: 'block' }} width="500" height="500" />
   </Link>
 );
 
@@ -40,7 +40,7 @@ const LogoFull = () => (
 
 const sidebarBase: React.CSSProperties = {
   /* Flat solid white — no blur, no transparency */
-  background: '#FFFFFF',
+  background: '#ffffff',
   borderRight: '1px solid #E5E7EB',
   boxShadow: 'none',
   height: '100vh',
@@ -57,13 +57,13 @@ const sidebarBase: React.CSSProperties = {
 const toggleBtnStyle: React.CSSProperties = {
   width: 28,
   height: 28,
-  borderRadius: 6,
-  border: '1px solid #E5E7EB',
-  background: '#F9FAFB',
+  borderRadius: 'var(--r-md)',
+  border: '1px solid var(--border)',
+  background: 'var(--surface-hover)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: '#9CA3AF',
+  color: 'var(--text-faint)',
   cursor: 'pointer',
   flexShrink: 0,
   transition: 'background 0.12s, color 0.12s',
@@ -73,11 +73,11 @@ const navLinkBase: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '0.75rem',
-  padding: '0.5rem 0.75rem',
-  borderRadius: 8,
-  fontSize: '0.8125rem',
+  padding: '0.625rem 0.875rem',
+  borderRadius: 'var(--r-full)',
+  fontSize: '0.875rem',
   fontWeight: 500,
-  color: '#6B7280',
+  color: 'var(--text-muted)',
   textDecoration: 'none',
   transition: 'background 0.12s, color 0.12s',
   whiteSpace: 'nowrap',
@@ -89,7 +89,7 @@ const sectionLabel: React.CSSProperties = {
   fontWeight: 700,
   letterSpacing: '0.12em',
   textTransform: 'uppercase',
-  color: '#9CA3AF',
+  color: 'var(--text-faint)',
   padding: '0.25rem 0.75rem 0.625rem',
 };
 
@@ -131,7 +131,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
   return (
     <>
-      <aside style={{ ...sidebarBase, width: isOpen ? 240 : 64 }}>
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex flex-col" style={{ ...sidebarBase, width: isOpen ? 240 : 64 }}>
 
         {/* ── Logo + toggle ─────────────────────────────── */}
         <div style={{
@@ -140,7 +141,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
           alignItems: 'center',
           justifyContent: isOpen ? 'space-between' : 'center',
           padding: isOpen ? '0 1rem 0 1.25rem' : '0',
-          borderBottom: '1px solid #F3F4F6',
+          borderBottom: 'none',
           flexShrink: 0,
         }}>
           {isOpen ? (
@@ -183,26 +184,25 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                 style={({ isActive }) => ({
                   ...navLinkBase,
                   justifyContent: isOpen ? 'flex-start' : 'center',
-                  padding: isOpen ? '0.5rem 0.75rem' : '0.5rem',
-                  fontWeight: isActive ? 600 : 500,
-                  color: isActive ? '#111827' : '#6B7280',
-                  background: isActive ? '#F3F4F6' : 'transparent',
-                  /* Crisp left-border accent instead of heavy background */
-                  borderLeft: isActive ? '2px solid #2563EB' : '2px solid transparent',
-                  paddingLeft: isActive && isOpen ? 'calc(0.75rem - 2px)' : isOpen ? 'calc(0.75rem - 2px)' : undefined,
+                  padding: isOpen ? '0.625rem 0.875rem' : '0.625rem',
+                  fontWeight: isActive ? 700 : 500,
+                  color: isActive ? 'var(--text-on-lime)' : 'var(--text-muted)',
+                  background: isActive ? 'var(--nunma-lime)' : 'transparent',
+                  borderLeft: 'none',
+                  paddingLeft: isOpen ? '0.875rem' : '0.625rem',
                 })}
                 onMouseEnter={e => {
                   const el = e.currentTarget as HTMLElement;
                   if (el.getAttribute('aria-current') !== 'page') {
-                    el.style.background = '#F9FAFB';
-                    el.style.color = '#374151';
+                    el.style.background = 'var(--surface-hover)';
+                    el.style.color = 'var(--text-secondary)';
                   }
                 }}
                 onMouseLeave={e => {
                   const el = e.currentTarget as HTMLElement;
                   if (el.getAttribute('aria-current') !== 'page') {
                     el.style.background = 'transparent';
-                    el.style.color = '#6B7280';
+                    el.style.color = 'var(--text-muted)';
                   }
                 }}
               >
@@ -218,7 +218,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
           {/* ── Tutor public page ──────────────────────── */}
           {role === UserRole.TUTOR && (
-            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #F3F4F6' }}>
+            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
               <Link
                 to="/u/sundaram"
                 target="_blank"
@@ -232,10 +232,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   borderRadius: 8,
                   fontSize: '0.75rem',
                   fontWeight: 600,
-                  color: '#2563EB',
-                  background: '#EFF6FF',
+                  color: 'var(--brand-blue)',
+                  background: 'var(--surface-active)',
                   textDecoration: 'none',
-                  border: '1px solid #DBEAFE',
+                  border: '1px solid var(--border)',
                   transition: 'background 0.12s',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
@@ -254,36 +254,36 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
         {/* ── Storage widget ────────────────────────────── */}
         {role === UserRole.TUTOR && (
-          <div style={{ padding: '0.75rem 0.625rem', borderTop: '1px solid #F3F4F6', flexShrink: 0 }}>
+          <div style={{ padding: '0.75rem 0.625rem', borderTop: '1px solid var(--border-light)', flexShrink: 0 }}>
             {isOpen ? (
               <div style={{
-                background: '#F9FAFB',
-                border: '1px solid #E5E7EB',
+                background: 'var(--surface-hover)',
+                border: '1px solid var(--border)',
                 borderRadius: 10,
                 padding: '0.875rem 1rem',
               }}>
                 {/* Header row */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <HardDrive size={12} style={{ color: overLimit ? '#ef4444' : '#9CA3AF' }} />
-                    <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF' }}>Storage</span>
+                    <HardDrive size={12} style={{ color: overLimit ? 'var(--brand-red)' : 'var(--text-faint)' }} />
+                    <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>Storage</span>
                   </div>
-                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: overLimit ? '#ef4444' : '#2563EB' }}>{pct}%</span>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: overLimit ? 'var(--brand-red)' : 'var(--brand-blue)' }}>{pct}%</span>
                 </div>
 
                 {/* Track */}
-                <div style={{ height: 3, background: '#E5E7EB', borderRadius: 99, marginBottom: '0.5rem', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: overLimit ? '#ef4444' : '#2563EB', borderRadius: 99, transition: 'width 0.5s' }} />
+                <div style={{ height: 3, background: 'var(--border)', borderRadius: 99, marginBottom: '0.5rem', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: overLimit ? 'var(--brand-red)' : 'var(--brand-blue)', borderRadius: 99, transition: 'width 0.5s' }} />
                 </div>
 
-                <p style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginBottom: overLimit ? '0.5rem' : '0.75rem' }}>
+                <p style={{ fontSize: '0.6875rem', color: 'var(--text-faint)', marginBottom: overLimit ? '0.5rem' : '0.75rem' }}>
                   {fmt(usedBytes)} of {fmt(limitBytes)}
                 </p>
 
                 {overLimit && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: '0.625rem' }}>
-                    <AlertTriangle size={10} style={{ color: '#ef4444' }} />
-                    <span style={{ fontSize: '0.5625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#ef4444' }}>Limit exceeded</span>
+                    <AlertTriangle size={10} style={{ color: 'var(--brand-red)' }} />
+                    <span style={{ fontSize: '0.5625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--brand-red)' }}>Limit exceeded</span>
                   </div>
                 )}
 
@@ -298,8 +298,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                     padding: '0.4375rem 0.75rem',
                     borderRadius: 6,
                     border: 'none',
-                    background: overLimit ? '#ef4444' : '#c2f575',
-                    color: overLimit ? '#fff' : '#1a3a05',
+                    background: overLimit ? 'var(--brand-red)' : 'var(--nunma-lime)',
+                    color: overLimit ? '#fff' : 'var(--text-on-lime)',
                     fontSize: '0.6875rem',
                     fontWeight: 800,
                     letterSpacing: '0.06em',
@@ -323,9 +323,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                     width: 36,
                     height: 36,
                     borderRadius: '50%',
-                    border: `1px solid ${overLimit ? '#FECACA' : '#E5E7EB'}`,
-                    background: overLimit ? '#FEF2F2' : '#F9FAFB',
-                    color: overLimit ? '#ef4444' : '#6B7280',
+                    border: `1px solid ${overLimit ? 'var(--brand-red)' : 'var(--border)'}`,
+                    background: overLimit ? '#FEF2F2' : 'var(--surface-hover)',
+                    color: overLimit ? 'var(--brand-red)' : 'var(--text-muted)',
                     fontSize: '0.5rem',
                     fontWeight: 800,
                     display: 'flex',
@@ -342,6 +342,25 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
           </div>
         )}
       </aside>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 w-full z-[50] flex justify-around items-center p-2 pb-4 border-t border-gray-100 bg-white/80 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.06)]"
+           style={{ WebkitBackdropFilter: 'blur(12px)' }}>
+        {navLinks.slice(0, 5).map(link => (
+          <NavLink
+            key={link.id}
+            to={link.path}
+            className={({ isActive }) => 
+              `flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 min-h-[48px] min-w-[48px] ${
+                isActive ? 'text-nunma-lime bg-nunma-navy' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+              }`
+            }
+          >
+            {link.icon}
+            <span className="text-[10px] mt-1 font-bold">{link.label}</span>
+          </NavLink>
+        ))}
+      </nav>
 
       <AddonManagerModal isOpen={showAddonModal} onClose={() => setShowAddonModal(false)} />
     </>

@@ -21,7 +21,7 @@ const CertificateOverlay: React.FC<CertificateOverlayProps> = ({
     return (
         <div className="relative w-full aspect-[1.414/1] bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 group">
             {/* Base Template Image */}
-            <img src={template} className="w-full h-full object-cover" alt="Certificate Template" />
+            <img src={template} className="w-full h-full object-cover" alt="Certificate Template" width="500" height="500" />
 
             {/* Dynamic Overlays */}
             <div className="absolute inset-0 flex flex-col items-center justify-center p-12 text-center pointer-events-none">
@@ -49,7 +49,7 @@ const CertificateOverlay: React.FC<CertificateOverlayProps> = ({
                 <div className="absolute bottom-[15%] left-0 right-0 flex justify-around px-20">
                     <div className="flex flex-col items-center">
                         <div className="h-16 w-32 mb-2 flex items-center justify-center">
-                            {signature1 && <img src={signature1} className="max-h-full max-w-full object-contain" alt="Sig 1" />}
+                            {signature1 && <img src={signature1} className="max-h-full max-w-full object-contain" alt="Sig 1" width="500" height="500" />}
                         </div>
                         <div className="w-32 h-[1px] bg-gray-300 mb-1" />
                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Primary Signature</p>
@@ -57,7 +57,7 @@ const CertificateOverlay: React.FC<CertificateOverlayProps> = ({
 
                     <div className="flex flex-col items-center">
                         <div className="h-16 w-32 mb-2 flex items-center justify-center">
-                            {signature2 && <img src={signature2} className="max-h-full max-w-full object-contain" alt="Sig 2" />}
+                            {signature2 && <img src={signature2} className="max-h-full max-w-full object-contain" alt="Sig 2" width="500" height="500" />}
                         </div>
                         <div className="w-32 h-[1px] bg-gray-300 mb-1" />
                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Secondary Signature</p>

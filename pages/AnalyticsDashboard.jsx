@@ -293,7 +293,7 @@ const AnalyticsDashboard = () => {
                 <Line 
                   type="monotone" 
                   dataKey="students" 
-                  stroke="#1A1A4E" 
+                  stroke="#c2f575" 
                   strokeWidth={4} 
                   dot={{ r: 6, fill: '#c2f575', strokeWidth: 0 }}
                   activeDot={{ r: 8, strokeWidth: 0 }}

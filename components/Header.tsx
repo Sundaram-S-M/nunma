@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../utils/firebase';
+import { useDropdownBoundary } from '../hooks/useDropdownBoundary';
 
 interface HeaderProps {
   onToggleRole: () => void;
@@ -23,8 +24,8 @@ interface HeaderProps {
 /** Flat header — solid white, 1px bottom border, no blur */
 const headerStyle: React.CSSProperties = {
   height: 64,
-  background: '#FFFFFF',
-  borderBottom: '1px solid #E5E7EB',
+  background: 'var(--surface)',
+  borderBottom: 'none',
   boxShadow: 'none',
   display: 'flex',
   alignItems: 'center',
@@ -38,16 +39,16 @@ const headerStyle: React.CSSProperties = {
 };
 
 const iconBtnStyle: React.CSSProperties = {
-  width: 34,
-  height: 34,
-  borderRadius: 7,
+  width: 40,
+  height: 40,
+  borderRadius: 'var(--r-full)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   background: 'transparent',
   border: 'none',
   cursor: 'pointer',
-  color: '#9CA3AF',
+  color: 'var(--text-muted)',
   transition: 'background 0.12s, color 0.12s',
   textDecoration: 'none',
   position: 'relative',
@@ -81,6 +82,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
   const btnRef    = useRef<HTMLButtonElement>(null);
   const location  = useLocation();
   const [unread, setUnread] = useState(0);
+
+  const boundaryStyles = useDropdownBoundary(btnRef, menuRef, showMenu, 'bottom-right');
 
   /* Clear badge when viewing notifications */
   useEffect(() => {
@@ -143,9 +146,9 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
   if (!user) return null;
 
   /* hover helpers */
-  const hoverOn  = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = '#F3F4F6'; (e.currentTarget as HTMLElement).style.color = '#111827'; };
-  const hoverOff = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9CA3AF'; };
-  const menuOn   = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = '#F3F4F6'; };
+  const hoverOn  = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; };
+  const hoverOff = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; };
+  const menuOn   = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-hover)'; };
   const menuOff  = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; };
 
   /* ══════════════════════════════════════════════════════════ */
@@ -166,12 +169,12 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
             position: 'absolute',
             top: 5, right: 5,
             width: 14, height: 14,
-            background: '#ef4444',
+            background: 'var(--brand-red)',
             borderRadius: '50%',
-            border: '2px solid #fff',
+            border: '2px solid var(--surface)',
             fontSize: '0.5rem',
             fontWeight: 900,
-            color: '#fff',
+            color: 'var(--surface)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -180,7 +183,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
       </Link>
 
       {/* ── Divider ────────────────────────────── */}
-      <div style={{ width: 1, height: 20, background: '#E5E7EB', margin: '0 0.25rem' }} />
+      <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 0.25rem' }} />
 
       {/* ── Avatar / menu ──────────────────────── */}
       <div style={{ position: 'relative' }}>
@@ -191,21 +194,21 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
           aria-haspopup="true"
           aria-expanded={showMenu}
           style={{
-            width: 34,
-            height: 34,
-            borderRadius: '50%',
-            border: `1.5px solid ${showMenu ? '#2563EB' : '#E5E7EB'}`,
+            width: 40,
+            height: 40,
+            borderRadius: 'var(--r-full)',
+            border: `1.5px solid ${showMenu ? 'var(--brand-blue)' : 'var(--border)'}`,
             padding: 0,
             cursor: 'pointer',
             overflow: 'hidden',
-            background: '#fff',
+            background: 'var(--surface)',
             transition: 'border-color 0.12s',
             display: 'block',
           }}
-          onMouseEnter={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = '#9CA3AF'; }}
-          onMouseLeave={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = '#E5E7EB'; }}
+          onMouseEnter={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = 'var(--text-muted)'; }}
+          onMouseLeave={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
         >
-          <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} width="500" height="500" />
         </button>
 
         {/* ── Dropdown ───────────────────────────── */}
@@ -215,31 +218,30 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
             role="menu"
             style={{
               position: 'absolute',
-              right: 0,
-              top: 'calc(100% + 8px)',
+              ...boundaryStyles,
               width: 260,
               zIndex: 50,
               /* Dropdown gets a soft shadow — sidebar/header stay flat */
-              background: '#FFFFFF',
-              border: '1px solid #E5E7EB',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
               borderRadius: 12,
-              boxShadow: '0 8px 24px -4px rgba(0,0,0,0.08), 0 4px 8px -2px rgba(0,0,0,0.04)',
+              boxShadow: 'var(--shadow-dropdown)',
               overflow: 'hidden',
               animation: 'fade-in 0.12s ease, slide-up 0.12s ease',
               animationFillMode: 'both',
             }}
           >
             {/* User info */}
-            <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid #F3F4F6' }}>
+            <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', border: '1px solid #E5E7EB', flexShrink: 0 }}>
-                  <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+                  <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} width="500" height="500" />
                 </div>
                 <div style={{ overflow: 'hidden', minWidth: 0 }}>
-                  <p style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
+                  <p style={{ fontWeight: 700, fontSize: '0.8125rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
                     {user.name}
                   </p>
-                  <p style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <p style={{ fontSize: '0.6875rem', color: 'var(--text-faint)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {user.email}
                   </p>
                 </div>
@@ -262,16 +264,16 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
                   onMouseEnter={menuOn}
                   onMouseLeave={menuOff}
                 >
-                  <span style={{ color: '#9CA3AF', flexShrink: 0 }}>{item.icon}</span>
+                  <span style={{ color: 'var(--text-faint)', flexShrink: 0 }}>{item.icon}</span>
                   {item.label}
                 </Link>
               ))}
             </div>
 
             {/* Role toggle */}
-            <div style={{ padding: '0.625rem 1rem', borderTop: '1px solid #F3F4F6', borderBottom: '1px solid #F3F4F6' }}>
+            <div style={{ padding: '0.625rem 1rem', borderTop: '1px solid var(--border-light)', borderBottom: '1px solid var(--border-light)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#6B7280', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Switch to {user.role === UserRole.STUDENT ? 'Tutor' : 'Student'}
                 </span>
                 <button
@@ -282,7 +284,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
                     height: 20,
                     borderRadius: 999,
                     border: 'none',
-                    background: user.role === UserRole.TUTOR ? '#c2f575' : '#E5E7EB',
+                    background: user.role === UserRole.TUTOR ? 'var(--nunma-lime)' : 'var(--border)',
                     cursor: 'pointer',
                     padding: 2,
                     display: 'flex',
@@ -294,8 +296,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
                   <div style={{
                     width: 16, height: 16,
                     borderRadius: '50%',
-                    background: '#fff',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                    background: 'var(--surface)',
+                    boxShadow: 'var(--shadow-sm)',
                     transform: user.role === UserRole.TUTOR ? 'translateX(18px)' : 'translateX(0)',
                     transition: 'transform 0.2s cubic-bezier(0.4,0,0.2,1)',
                   }} />
@@ -308,8 +310,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
               <button
                 role="menuitem"
                 onClick={() => { logout(); setShowMenu(false); }}
-                style={{ ...menuItemStyle, color: '#ef4444' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#FEF2F2'; }}
+                style={{ ...menuItemStyle, color: 'var(--brand-red)' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-hover)'; }}
                 onMouseLeave={menuOff}
               >
                 <LogOut size={14} style={{ flexShrink: 0 }} />

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import * as tus from 'tus-js-client';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '../utils/firebase';
 import { UploadCloud, X, Film, CheckCircle } from 'lucide-react';
@@ -178,10 +179,12 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
         onClose();
     };
 
+    const modalRef = useFocusTrap(isOpen, handleClose);
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+        <div ref={modalRef} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
             {uploadStatus === 'success' && <Confetti recycle={false} numberOfPieces={500} />}
 
             <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 relative">

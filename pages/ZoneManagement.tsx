@@ -1714,7 +1714,7 @@ const ZoneManagement: React.FC = () => {
                       return (
                         <div key={student.id} className="grid grid-cols-4 items-center bg-white p-5 rounded-2xl shadow-sm">
                           <div className="flex items-center gap-4">
-                            <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" />
+                            <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" width="500" height="500" />
                             <span className="font-bold text-[#040457] text-sm">{student.name}</span>
                           </div>
                           <div className="text-center">
@@ -1858,7 +1858,7 @@ const ZoneManagement: React.FC = () => {
                                   }}
                                   className="w-full p-4 flex items-center gap-4 hover:bg-[#c2f575]/10 transition-colors text-left group"
                                 >
-                                  <img src={u.avatar} className="w-10 h-10 rounded-xl" alt="" />
+                                  <img src={u.avatar} className="w-10 h-10 rounded-xl" alt="" width="500" height="500" />
                                   <div>
                                     <p className="font-black text-[#040457] text-sm group-hover:text-indigo-600 transition-colors">{u.name}</p>
                                     <p className="text-xs text-gray-400 font-medium">{u.email}</p>
@@ -2337,7 +2337,7 @@ const ZoneManagement: React.FC = () => {
                           <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
                             <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50/30">
                               <div className="flex items-center gap-4">
-                                <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" alt="" />
+                                <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" alt="" width="500" height="500" />
                                 <div className="flex flex-col">
                                   <span className="font-bold text-[#040457]">{student.name}</span>
                                   <span className="text-xs text-gray-400 font-medium">{student.email}</span>
@@ -2561,7 +2561,7 @@ const ZoneManagement: React.FC = () => {
                       <div key={student.id} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
                         <div className="relative">
                           <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                            <img src={student.avatar} className="w-full h-full object-cover" alt="" />
+                            <img src={student.avatar} className="w-full h-full object-cover" alt="" width="500" height="500" />
                           </div>
                           <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
                             <Check size={16} strokeWidth={3} />
@@ -3154,7 +3154,7 @@ const ZoneManagement: React.FC = () => {
                   <div className="absolute top-10 left-10 z-50 flex -space-x-4">
                     {clusters.find(c => c.id === activeClusterId)?.studentIds?.map(sid => (
                       <div key={sid} className="w-16 h-16 rounded-full border-4 border-[#03031f] overflow-hidden shadow-2xl group cursor-help transition-transform hover:scale-125 hover:z-20">
-                        <img src={students.find(s => s.id === sid)?.avatar} className="w-full h-full object-cover" alt="" />
+                        <img src={students.find(s => s.id === sid)?.avatar} className="w-full h-full object-cover" alt="" width="500" height="500" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     ))}
