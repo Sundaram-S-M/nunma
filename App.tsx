@@ -12,6 +12,7 @@ import Explore from './pages/Explore';
 import Inbox from './pages/Inbox';
 import Workplace from './pages/Workplace';
 import ZoneManagement from './pages/ZoneManagement';
+import ErrorBoundary from './components/ErrorBoundary';
 import LaunchZone from './pages/LaunchZone';
 import Settings from './pages/Settings';
 import AvailabilitySetup from './pages/AvailabilitySetup';
@@ -124,12 +125,26 @@ const AppContent: React.FC = () => {
             <Route path="/classroom" element={role === UserRole.STUDENT ? <Classroom /> : <Navigate to="/workplace" />} />
             <Route path="/classroom/zone/:zoneId" element={role === UserRole.STUDENT ? <StudentZoneView /> : <Navigate to="/dashboard" />} />
             <Route path="/workplace" element={role === UserRole.TUTOR ? <Workplace /> : <Navigate to="/classroom" />} />
-            <Route path="/workplace/manage/:zoneId" element={role === UserRole.TUTOR ? <ZoneManagement /> : <Navigate to="/dashboard" />} />
+            <Route path="/workplace/manage/:zoneId" element={
+              role === UserRole.TUTOR ? (
+                <ErrorBoundary>
+                  <ZoneManagement />
+                </ErrorBoundary>
+              ) : <Navigate to="/dashboard" />
+            } />
             <Route path="/workplace/launch" element={role === UserRole.TUTOR ? <LaunchZone /> : <Navigate to="/dashboard" />} />
             <Route path="/certificate-engine" element={role === UserRole.TUTOR ? <CertificateEngine /> : <Navigate to="/dashboard" />} />
             <Route path="/list-product/flow" element={role === UserRole.TUTOR ? <ListProductFlow /> : <Navigate to="/dashboard" />} />
-            <Route path="/classroom/:zoneId" element={<ClassroomPage />} />
-            <Route path="/whiteboard/:zoneId" element={<WhiteboardPage />} />
+            <Route path="/classroom/:zoneId" element={
+              <ErrorBoundary>
+                <ClassroomPage />
+              </ErrorBoundary>
+            } />
+            <Route path="/whiteboard/:zoneId" element={
+              <ErrorBoundary>
+                <WhiteboardPage />
+              </ErrorBoundary>
+            } />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/search" element={<Search />} />
             <Route path="/explore" element={<Explore />} />
@@ -140,10 +155,20 @@ const AppContent: React.FC = () => {
             <Route path="/products" element={<ProductManagement />} />
             <Route path="/u/:id" element={<ProfileView />} />
             <Route path="/payment/:zoneId" element={<Payment />} />
-            <Route path="/zone/:zoneId" element={<ZoneDetailView />} />
+            <Route path="/zone/:zoneId" element={
+              <ErrorBoundary>
+                <ZoneDetailView />
+              </ErrorBoundary>
+            } />
             <Route path="/booking/:productId" element={<BookingPage />} />
             <Route path="/billing" element={<PricingPage />} />
-            <Route path="/workplace/analytics/:zoneId" element={role === UserRole.TUTOR ? <AnalyticsDashboard /> : <Navigate to="/dashboard" />} />
+            <Route path="/workplace/analytics/:zoneId" element={
+              role === UserRole.TUTOR ? (
+                <ErrorBoundary>
+                  <AnalyticsDashboard />
+                </ErrorBoundary>
+              ) : <Navigate to="/dashboard" />
+            } />
 
           </Routes>
         </main>

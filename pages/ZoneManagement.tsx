@@ -255,13 +255,14 @@ const ZoneManagement: React.FC = () => {
   const [valuationContext, setValuationContext] = useState<{ examId: string; studentId: string } | null>(null);
 
   const getExamStatus = (exam: Exam) => {
-    if (exam.status === 'CONDUCTED') return 'CONDUCTED';
+    if (exam?.status === 'CONDUCTED') return 'CONDUCTED';
+    if (!exam?.date || !exam?.time) return 'TBD';
 
     // Parse exam date and time
-    const examDateParts = exam.date.split('-'); // Expected YYYY-MM-DD
-    const examTimeParts = exam.time.split(':'); // Expected HH:MM
+    const examDateParts = (exam.date || "").split('-'); // Expected YYYY-MM-DD
+    const examTimeParts = (exam.time || "").split(':'); // Expected HH:MM
 
-    if (examDateParts.length !== 3 || examTimeParts.length !== 2) return exam.status || 'UPCOMING';
+    if (examDateParts.length !== 3 || examTimeParts.length !== 2) return exam?.status || 'UPCOMING';
 
     const examStart = new Date(
       parseInt(examDateParts[0]),
@@ -442,9 +443,9 @@ const ZoneManagement: React.FC = () => {
 
       const headers = json[0] as string[];
       // Find the index of the column that might contain marks (e.g., "Mark", "Score", "Marks")
-      const markIndex = headers.findIndex(h => typeof h === 'string' && ['mark', 'marks', 'score'].includes(h.toLowerCase()));
+      const markIndex = headers.findIndex(h => typeof h === 'string' && ['mark', 'marks', 'score'].includes(h.toLowerCase() || ""));
       // Find the index of the column that might contain student names (or we just map by row assuming order if needed)
-      const nameIndex = headers.findIndex(h => typeof h === 'string' && ['name', 'student'].includes(h.toLowerCase()));
+      const nameIndex = headers.findIndex(h => typeof h === 'string' && ['name', 'student'].includes(h.toLowerCase() || ""));
 
       if (markIndex === -1) {
         alert("Could not find a 'Mark' or 'Score' column in the Excel sheet.");
@@ -467,7 +468,7 @@ const ZoneManagement: React.FC = () => {
 
         // Attempt to match with existing student by name (naive matching for now)
         // In a real scenario, an ID or Email column is safer.
-        const matchedStudent = students.find(s => s.name?.toLowerCase() === nameValue.toLowerCase());
+        const matchedStudent = (students || []).find(s => (s.name || "").toLowerCase() === (nameValue || "").toLowerCase());
 
         parsedResults.push({
           id: `${examId}_${matchedStudent ? matchedStudent.id : `mock_${i}`}`,
@@ -581,13 +582,13 @@ const ZoneManagement: React.FC = () => {
     // 3. Exams
     const examsq = query(collection(db, 'zones', zoneId, 'exams'));
     const examsUnsub = onSnapshot(examsq, (snapshot) => {
-      setExams(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Exam)));
+      setExams((snapshot.docs || []).map(doc => ({ ...doc.data(), id: doc.id } as Exam)));
     });
 
     // 4. Students (Enrolled)
     const studentsq = query(collection(db, 'zones', zoneId, 'students'));
     const studentsUnsub = onSnapshot(studentsq, (snapshot) => {
-      setStudents(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student)));
+      setStudents((snapshot.docs || []).map(doc => ({ ...doc.data(), id: doc.id } as Student)));
     });
 
     // 5. Scheduled Sessions (unified sessions collection)
@@ -596,13 +597,13 @@ const ZoneManagement: React.FC = () => {
       where('status', '==', 'scheduled')
     );
     const sessionsUnsub = onSnapshot(sessionsq, (snapshot) => {
-      setScheduledSessions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+      setScheduledSessions((snapshot.docs || []).map(doc => ({ ...doc.data(), id: doc.id })));
     });
 
     // 6. Attendance Sessions
     const attSessionsq = query(collection(db, 'zones', zoneId, 'attendance_sessions'));
     const attSessionsUnsub = onSnapshot(attSessionsq, (snapshot) => {
-      setAttendanceSessions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AttendanceSession)));
+      setAttendanceSessions((snapshot.docs || []).map(doc => ({ ...doc.data(), id: doc.id } as AttendanceSession)));
     });
 
     // 7. Active Invite Listener (Hotfix)
@@ -707,7 +708,7 @@ const ZoneManagement: React.FC = () => {
             { id: '1', name: 'Sundaram S M', email: 'sundaramsm55@gmail.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sundaram' },
             { id: '2', name: 'John Doe', email: 'john.doe@example.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john' },
             { id: '3', name: 'Jane Smith', email: 'jane.smith@test.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=jane' }
-          ].filter(u => u.email.toLowerCase().includes(newStudentEmail.toLowerCase()));
+          ].filter(u => (u?.email || "").toLowerCase().includes((newStudentEmail || "").toLowerCase()));
           setUserSearchResults(mockUsers);
           setIsSearchingUsers(false);
         }, 300);
@@ -1186,11 +1187,11 @@ const ZoneManagement: React.FC = () => {
 
       // 2. Remove from whitelistedEmails if present
       const zoneRef = doc(db, 'zones', zoneId);
-      const updatedWhitelist = (zone.whitelistedEmails || []).filter((e: any) => {
-        const email = typeof e === 'string' ? e : e.email;
-        return email !== student.email;
+      const updatedWhitelist = ((zone?.whitelistedEmails || []) as any[]).filter((e: any) => {
+        const email = typeof e === 'string' ? e : e?.email;
+        return (email || "").toLowerCase() !== (student?.email || "").toLowerCase();
       });
-      if (updatedWhitelist.length !== (zone.whitelistedEmails || []).length) {
+      if (updatedWhitelist.length !== (zone?.whitelistedEmails || []).length) {
         await updateDoc(zoneRef, { whitelistedEmails: updatedWhitelist });
       }
 
@@ -1241,14 +1242,14 @@ const ZoneManagement: React.FC = () => {
   };
 
   const calculateAttendancePercentage = (student: Student) => {
-    if (!student.attendanceHistory || student.attendanceHistory.length === 0) return 0;
-    const presentCount = student.attendanceHistory.filter(h => h.status === 'Present').length;
-    return Math.round((presentCount / student.attendanceHistory.length) * 100);
+    if (!student?.attendanceHistory || (student?.attendanceHistory || []).length === 0) return 0;
+    const presentCount = (student?.attendanceHistory || []).filter(h => h?.status === 'Present').length;
+    return Math.round((presentCount / (student?.attendanceHistory || []).length) * 100);
   };
 
   const handleCopyLink = () => {
     if (!activeSession) return;
-    const link = `${window.location.origin}/#/classroom/zone/${zoneId}?session=${activeSession.id}`;
+    const link = `${window?.location?.origin || ""}/#/classroom/zone/${zoneId || ""}?session=${activeSession?.id || ""}`;
     navigator.clipboard.writeText(link);
     setIsCopying(true);
     setTimeout(() => setIsCopying(false), 2000);
@@ -1709,8 +1710,8 @@ const ZoneManagement: React.FC = () => {
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Result</span>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                    {students.map(student => {
-                      const result = examResults.find(r => r.examId === selectedExamForMarks.id && r.studentId === student.id);
+                    {(students || []).map(student => {
+                      const result = (examResults || []).find(r => r?.examId === selectedExamForMarks?.id && r?.studentId === student?.id);
                       return (
                         <div key={student.id} className="grid grid-cols-4 items-center bg-white p-5 rounded-2xl shadow-sm">
                           <div className="flex items-center gap-4">
@@ -1737,7 +1738,8 @@ const ZoneManagement: React.FC = () => {
                               value={result?.marks || ''}
                               onChange={e => {
                                 const mark = parseInt(e.target.value);
-                                const status = mark >= selectedExamForMarks.minMark ? 'passed' : 'failed';
+                                const minPassMark = selectedExamForMarks?.minMark ?? 40;
+                                const status = mark >= minPassMark ? 'passed' : 'failed';
                                 setExamResults(prev => [
                                   ...prev.filter(r => !(r.examId === selectedExamForMarks.id && r.studentId === student.id)),
                                   { id: Math.random().toString(), examId: selectedExamForMarks.id, studentId: student.id, studentName: student.name, marks: mark, status, warnings: 0 }
@@ -1805,21 +1807,21 @@ const ZoneManagement: React.FC = () => {
                     <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><Globe size={16} /> Promote Workshop</h4>
                     <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">
                       <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100 flex-shrink-0">
-                        <QRCodeSVG value={`${window.location.origin}/workplace?join=${zoneId}`} size={100} fgColor="#040457" />
+                        <QRCodeSVG value={`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`} size={100} fgColor="#040457" />
                       </div>
                       <div className="space-y-4 flex-1 w-full">
                         <p className="text-xs text-gray-500 font-bold">Share your unique event link or QR code to gather registrations.</p>
                         <div className="flex gap-2">
-                          <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/workplace?join=${zoneId}`).then(() => alert('Link copied!'))} className="flex-1 py-3 bg-white border border-gray-200 text-[#040457] rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2">
+                          <button onClick={() => navigator?.clipboard?.writeText(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`).then(() => alert('Link copied!'))} className="flex-1 py-3 bg-white border border-gray-200 text-[#040457] rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2">
                             <Copy size={14} /> Copy Link
                           </button>
-                          <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join my workshop: ${zone?.title}`)}&url=${encodeURIComponent(`${window.location.origin}/workplace?join=${zoneId}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-sm">
+                          <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join my workshop: ${zone?.title || ""}`)}&url=${encodeURIComponent(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-sm">
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" /></svg>
                           </a>
-                          <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window.location.origin}/workplace?join=${zoneId}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-700 hover:text-white transition-all shadow-sm">
+                          <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-700 hover:text-white transition-all shadow-sm">
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" clipRule="evenodd" /></svg>
                           </a>
-                          <a href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my workshop: ${zone?.title} ${window.location.origin}/workplace?join=${zoneId}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-green-50 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-sm">
+                          <a href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my workshop: ${zone?.title || ""} ${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-green-50 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-sm">
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
                           </a>
                         </div>
@@ -1887,8 +1889,8 @@ const ZoneManagement: React.FC = () => {
 
                             const newStudent: Student = {
                               id: userId,
-                              name: userData.name || newStudentEmail.split('@')[0],
-                              avatar: userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+                              name: userData?.name || (newStudentEmail || "").split('@')[0],
+                              avatar: userData?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId || ""}`,
                               joinedAt: new Date().toLocaleDateString(),
                               status: 'Present',
                               engagementScore: 0,
@@ -1908,7 +1910,7 @@ const ZoneManagement: React.FC = () => {
                             // Call invitation function
                             try {
                               const sendInvite = httpsCallable(functions, 'sendWhitelistInvite');
-                              await sendInvite({ email: newStudentEmail, zoneTitle: zone.title });
+                              await sendInvite({ email: newStudentEmail, zoneTitle: zone?.title || "New Zone" });
                               alert(`Email ${newStudentEmail} whitelisted. Invitation sent!`);
                             } catch (inviteError) {
                               console.warn("Failed to send invitation email, but email was whitelisted:", inviteError);
@@ -1964,9 +1966,9 @@ const ZoneManagement: React.FC = () => {
                             const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 });
 
                             // Skip header row if it seems to be one
-                            const startIdx = (rows[0]?.[0]?.toLowerCase() === 'name' || rows[0]?.[1]?.toLowerCase() === 'email') ? 1 : 0;
+                            const startIdx = ((rows[0]?.[0] || "").toString().toLowerCase() === 'name' || (rows[0]?.[1] || "").toString().toLowerCase() === 'email') ? 1 : 0;
                             const studentsToProcess = rows.slice(startIdx)
-                              .map(row => ({ name: row[0], email: row[1]?.toString().trim().toLowerCase() }))
+                              .map(row => ({ name: row[0], email: (row[1]?.toString() || "").trim().toLowerCase() }))
                               .filter(s => s.email && s.email.includes('@'));
 
                             if (studentsToProcess.length === 0) {
@@ -1991,8 +1993,8 @@ const ZoneManagement: React.FC = () => {
                                 const userId = userSnap.docs[0].id;
                                 await setDoc(doc(studentsRef, userId), {
                                   id: userId,
-                                  name: s.name || userData.name || s.email.split('@')[0],
-                                  avatar: userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+                                  name: s.name || userData?.name || (s.email || "").split('@')[0],
+                                  avatar: userData?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId || ""}`,
                                   joinedAt: new Date().toLocaleDateString(),
                                   status: 'Present',
                                   engagementScore: 0,
@@ -2319,8 +2321,8 @@ const ZoneManagement: React.FC = () => {
                           {attendanceSessions
                             .filter(s =>
                               !attendanceSearchQuery ||
-                              s.className?.toLowerCase().includes(attendanceSearchQuery.toLowerCase()) ||
-                              s.date.includes(attendanceSearchQuery)
+                              (s?.className || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) ||
+                              (s?.date || "").includes(attendanceSearchQuery || "")
                             )
                             .slice(-5)
                             .map(session => (
@@ -2333,7 +2335,7 @@ const ZoneManagement: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {students.filter(s => s.name.toLowerCase().includes(attendanceSearchQuery.toLowerCase()) || (s.email || '').toLowerCase().includes(attendanceSearchQuery.toLowerCase())).map(student => (
+                        {(students || []).filter(s => (s?.name || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) || (s?.email || '').toLowerCase().includes((attendanceSearchQuery || "").toLowerCase())).map(student => (
                           <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
                             <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50/30">
                               <div className="flex items-center gap-4">
@@ -2350,13 +2352,13 @@ const ZoneManagement: React.FC = () => {
                             {/* Dynamic Session Status */}
                             {attendanceSessions
                               .filter(s =>
-                                !attendanceSearchQuery ||
-                                s.className?.toLowerCase().includes(attendanceSearchQuery.toLowerCase()) ||
-                                s.date.includes(attendanceSearchQuery)
+                                !(attendanceSearchQuery || "") ||
+                                (s?.className || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) ||
+                                (s?.date || "").includes(attendanceSearchQuery || "")
                               )
                               .slice(-5)
                               .map(session => {
-                                const status = student.attendanceHistory?.find(h => h.sessionId === session.id)?.status || 'Pending';
+                                const status = (student?.attendanceHistory || []).find(h => h?.sessionId === session?.id)?.status || 'Pending';
                                 return (
                                   <td key={session.id} className="px-6 py-6 text-center">
                                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${status === 'Present' ? 'bg-green-50 text-green-600' :
