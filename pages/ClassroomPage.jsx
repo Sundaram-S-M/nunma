@@ -14,7 +14,7 @@ import {
   ParticipantContext,
   useRemoteParticipants
 } from '@livekit/components-react';
-import { Track, ConnectionQuality } from 'livekit-client';
+import { Track, ConnectionQuality, RoomEvent } from 'livekit-client';
 import { httpsCallable } from 'firebase/functions';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db, functions } from '../utils/firebase';
@@ -111,11 +111,20 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
   const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare], { onlyRemote: true });
   
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const { user } = useAuth();
+  const isStudent = user?.role === 'STUDENT';
+
   const [isHD, setIsHD] = useState(() => {
     const saved = localStorage.getItem('nunma_video_quality');
     if (saved) return saved === 'HD';
+    // Force LOW on mobile for students
+    if (window.innerWidth < 768 && isStudent) return false;
     return window.innerWidth >= 480;
   });
+
+  // Track poor connection state
+  const [isConnectionPoor, setIsConnectionPoor] = useState(false);
+  const [showPoorConnToast, setShowPoorConnToast] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -125,10 +134,66 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
 
   useEffect(() => {
     if (localParticipant) {
-      localParticipant.setVideoQuality(isHD ? 'high' : 'low');
+      // Force low quality on mobile students
+      const quality = (isMobile && isStudent) ? 'low' : (isHD ? 'high' : 'low');
+      localParticipant.setVideoQuality(quality);
       localStorage.setItem('nunma_video_quality', isHD ? 'HD' : 'SD');
     }
-  }, [isHD, localParticipant]);
+  }, [isHD, localParticipant, isMobile, isStudent]);
+
+  // Handle Connection Quality Changes
+  useEffect(() => {
+    if (!localParticipant?.room) return;
+
+    const room = localParticipant.room;
+    
+    const onQualityChanged = (quality, participant) => {
+      // We only care about our own connection quality here for the UI state
+      if (participant === localParticipant) {
+        if (quality === ConnectionQuality.Poor || quality === ConnectionQuality.VeryPoor) {
+          setIsConnectionPoor(true);
+          setShowPoorConnToast(true);
+          
+          // Auto-hide toast after 5s
+          setTimeout(() => setShowPoorConnToast(false), 5000);
+        } else if (quality === ConnectionQuality.Excellent || quality === ConnectionQuality.Good) {
+          setIsConnectionPoor(false);
+        }
+      }
+    };
+
+    room.on(RoomEvent.ConnectionQualityChanged, onQualityChanged);
+    return () => {
+      room.off(RoomEvent.ConnectionQualityChanged, onQualityChanged);
+    };
+  }, [localParticipant]);
+
+  // Bandwidth preservation: Disable remote camera tracks if connection is poor
+  useEffect(() => {
+    if (!localParticipant?.room) return;
+    
+    const room = localParticipant.room;
+    
+    if (isConnectionPoor && isStudent) {
+      // Throttling: Unsubscribe from camera tracks to preserve audio/screen
+      room.remoteParticipants.forEach(p => {
+        p.trackPublications.forEach(pub => {
+          if (pub.source === Track.Source.Camera && pub.isSubscribed) {
+            pub.setSubscribed(false);
+          }
+        });
+      });
+    } else {
+      // Restore subscriptions when connection is good
+      room.remoteParticipants.forEach(p => {
+        p.trackPublications.forEach(pub => {
+          if (pub.source === Track.Source.Camera && !pub.isSubscribed) {
+            pub.setSubscribed(true);
+          }
+        });
+      });
+    }
+  }, [isConnectionPoor, isStudent, localParticipant]);
 
   const vibrate = () => {
     if (navigator.vibrate) navigator.vibrate(10);
@@ -213,7 +278,31 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
         </div>
       </footer>
 
+      {/* Poor Connection Toast */}
+      {showPoorConnToast && (
+        <div className="poor-conn-toast bg-red-500 text-white rounded-nunma">
+          <p className="font-black text-[11px] uppercase tracking-widest">Poor connection. Video paused to preserve audio.</p>
+          <button onClick={() => setShowPoorConnToast(false)} className="opacity-50 hover:opacity-100 transition-opacity">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <style>{`
+        .poor-conn-toast {
+          position: fixed;
+          top: 80px;
+          left: 50%;
+          transform: translateX(-50%);
+          padding: 12px 24px;
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          z-index: 1000;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+          animation: slideDown 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
         .classroom-layout {
           display: flex;
           flex-direction: column;
@@ -594,6 +683,8 @@ const ClassroomPage = () => {
         connect={true}
         video={true}
         audio={true}
+        adaptiveStream={true}
+        dynacast={true}
         data-lk-theme="default"
         onDisconnected={() => handleDisconnect('unexpected')}
       >

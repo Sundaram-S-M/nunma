@@ -611,7 +611,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                 {myZones.map((zone) => (
                   <div key={zone.id} className="bg-white rounded-[3.5rem] p-10 border border-gray-100 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
                     <div className="flex justify-between items-start mb-8">
-                      <div className="w-16 h-16 bg-gray-50 rounded-[1.75rem] flex items-center justify-center text-indigo-900 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-500 overflow-hidden">
+                      <div className="w-16 h-16 bg-gray-50 rounded-[1.75rem] flex items-center justify-center text-indigo-900 shadow-inner group-hover:bg-indigo-900 group-hover:text-nunma-lime transition-all duration-500 overflow-hidden">
                         {zone.avatar ? <img src={zone.avatar} alt="" className="w-full h-full object-cover" width="500" height="500" /> : <Zap size={32} />}
                       </div>
                       <div className="text-right">

@@ -1,6 +1,6 @@
 # NUNMA Platform Architecture State
 
-**Last Updated**: 2026-04-06
+**Last Updated**: 2026-04-09
 **Status**: Comprehensive Codebase Analysis (Truth Level: Absolute)
 
 ---
@@ -13,7 +13,7 @@ The NUNMA platform is built on a modern, serverless architecture optimized for h
 - **Frontend**: React 19, Vite, Vanilla CSS ("Anti-Gravity" Design System).
 - **Backend**: Firebase Cloud Functions (v2), Node.js 20.
 - **AI/LLM**: Google Gemini 1.5 Pro via `@google/genai` (v1.x).
-- **Communication**: `resend` (Transactional OTP/System emails).
+- **Communication**: `resend` (Transactional OTP/System emails), `nodemailer` (Zoho SMTP for billing).
 - **Video/Storage**: Bunny Stream (TUS upload, Secure Pull Zones), Bunny Storage (Exam scripts).
 - **Messaging/Interactive**: LiveKit (Real-time classroom), Tldraw (Digital Whiteboard).
 - **Utilities**: `xlsx` (Excel processing), `tus-js-client` (Resumable video uploads), `recharts` (Analytics), `pdf-lib` (Watermarking & merging).
@@ -33,6 +33,7 @@ The platform requires the following keys for full functionality:
 | `LIVEKIT_API_KEY/SECRET` | Backend (Secret) | Generating JWT access tokens for live classrooms. |
 | `ZOHO_ORG_ID` | Backend (Secret) | Organization ID for Zoho Books invoicing. |
 | `ZOHO_REFRESH_TOKEN` | Backend (Secret) | OAuth2 refresh token for Zoho API access. |
+| `SMTP_PASS` | Backend (Secret) | Zoho SMTP application password for billing emails. |
 
 ---
 
@@ -70,8 +71,10 @@ The platform requires the following keys for full functionality:
 ### Razorpay Route: Escrow & KYC
 - **Currency**: Strictly **INR/₹**. PPP (Purchasing Power Parity) has been deprecated and removed.
 - **Onboarding**: Thalas complete financial KYC via `createTutorLinkedAccount`.
-- **Split Payments**: `createRazorpayOrder` calculates platform commission (10/5/2% based on plan).
-- **Invoicing**: `razorpayRouteWebhook` triggers `generatePlatformFeeInvoice` (Zoho) upon successful payment capture.
+- **Split Payments**: `createRazorpayOrder` calculates platform commission (15/7/3% based on plan).
+- **Hardened Webhook**: `razorpayWebhook` implements strict HMAC validation and a two-step idempotency transaction.
+- **Atomic Fulfillment**: Webhook ensures atomicity across `orders`, `zones/students`, and `users/enrollments` collections.
+- **Invoicing**: Triggers non-blocking Zoho SMTP invoice emails after successful fulfillment.
 
 ### Bunny Stream & Storage: Content Security
 - **Video**: Uses TUS protocol for resumable uploads.
@@ -82,7 +85,7 @@ The platform requires the following keys for full functionality:
 ## 4. Core Platform Workflows
 
 ### Enrollment Flow
-1. **Direct Purchase**: Student pays via Razorpay -> `payment.captured` webhook triggers enrollment.
+1. **Direct Purchase**: Student pays via Razorpay -> `razorpayWebhook` triggers two-step idempotency check and atomic enrollment in zone + user dashboard.
 2. **Whitelist/Invite**: Thala generates a UUID invite token -> Student joins via token bypass -> enrolled with `source: 'whitelist'`.
 
 ### Assessment Workflow
@@ -98,11 +101,13 @@ The platform requires the following keys for full functionality:
 - **Fixed-Price INR Transition**: Removed all PPP logic from frontend and backend.
 - **Zone Invitation System**: Fully functional link-based enrollment with 48h expiry.
 - **Gemini SDK Upgrade**: Migrated to `@google/genai` v1.x with strict schema enforcement.
+- **Hardened Razorpay Pipeline**: Implemented secure webhook with HMAC verification and transactional fulfillment across three collections.
 - **Infrastructure Hardening**: Standardized `admin.initializeApp()` at the top of entry points and moved Firestore references inside function scopes for deployment stability.
 
 ### Immediate Constraints & Next Steps
 - **Tailwind Migration**: Moving from external CDN to local build in `index.html`.
 - **Mobile Experience**: Optimizing classroom UI for mobile latency.
+- **Asynchronous Invoicing**: Migrate legacy Zoho Books HTTP triggers to the new non-blocking SMTP pipeline.
 
 ---
 

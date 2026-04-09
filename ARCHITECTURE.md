@@ -24,6 +24,7 @@ Organized by feature capability for high maintainability:
 | **Styling** | Tailwind CSS (Custom "Deep Professional" Design System) |
 | **Backend** | Firebase (Auth, Firestore, Storage, Cloud Functions) |
 | **Real-time** | LiveKit (Video/Audio WebRTC), Firestore (Chat/State) |
+| **Email/Billing** | Resend (OTP), Nodemailer (Zoho SMTP Invoicing) |
 | **AI Engine** | Google Gemini 1.5 Pro & Multimodal Live API |
 | **Security** | W3C Verifiable Credentials + Ed25519 Signatures |
 
@@ -51,7 +52,7 @@ Nunma transitions from "certificates that are pictures" to "certificates that ar
 
 ### 4. Global Accessibility & Localization
 Education should be accessible regardless of geography:
-- **Direct Monetization**: Our integrated Razorpay split-payment architecture handles global transactions in INR, ensuring seamless payouts for tutors.
+- **Direct Monetization**: Our secure Razorpay webhook architecture handles global transactions in INR, ensuring transactional integrity with strict HMAC validation and atomic fulfillment.
 - **Regional Edge Nodes**: Leveraging Firebase and LiveKit's global infra for low-latency streaming everywhere.
 
 ---

@@ -14,6 +14,13 @@ const WhiteboardPage = () => {
   const [zone, setZone] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -85,7 +92,11 @@ const WhiteboardPage = () => {
   const isThala = user?.uid === zone?.createdBy;
 
   const handleMount = (editor) => {
-    if (!isThala) {
+    // Requirement Step 2: If !isThala && isMobile, force isReadonly
+    if (!isThala && isMobile) {
+      editor.updateInstanceState({ isReadonly: true });
+    } else if (!isThala) {
+      // Keep existing non-creator restriction
       editor.updateInstanceState({ isReadonly: true });
     }
   };
@@ -126,7 +137,7 @@ const WhiteboardPage = () => {
         <Tldraw 
           persistenceKey={zoneId} 
           onMount={handleMount} 
-          hideUi={!isThala}
+          hideUi={(!isThala && isMobile) || !isThala}
         />
       </main>
 
@@ -256,9 +267,9 @@ const WhiteboardPage = () => {
           }
         }
 
-        /* Hide full tldraw UI when not Thala */
+        /* Hide full tldraw UI for non-creators on mobile or generally for non-creators */
         .tl-ui-container {
-          display: ${isThala ? 'block' : 'none'} !important;
+          display: (!isThala && isMobile) || !isThala ? 'none !important' : 'block';
         }
       `}</style>
     </div>

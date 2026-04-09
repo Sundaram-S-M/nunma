@@ -215,14 +215,14 @@ exports.createBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUN
     if (!zoneId)
         throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
     const libraryId = process.env.BUNNY_LIBRARY_ID;
-    const apiKey = process.env.BUNNY_API_KEY;
-    if (!libraryId || !apiKey) {
-        throw new functions.https.HttpsError("failed-precondition", "Bunny security configuration missing.");
+    const bunnyKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
+    if (!libraryId || !bunnyKey) {
+        throw new functions.https.HttpsError('internal', 'BUNNY_API_KEY or BUNNY_LIBRARY_ID is missing or undefined on the server.');
     }
     // Step 2: Bunny Init (Get GUID)
     let videoId;
     try {
-        const response = await axios_1.default.post(`https://video.bunnycdn.com/library/${libraryId}/videos`, { title: title || 'Untitled' }, { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } });
+        const response = await axios_1.default.post(`https://video.bunnycdn.com/library/${libraryId}/videos`, { title: title || 'Untitled' }, { headers: { 'AccessKey': bunnyKey, 'Content-Type': 'application/json' } });
         videoId = response.data.guid;
     }
     catch (apiError) {
@@ -231,7 +231,7 @@ exports.createBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUN
     }
     // Step 3: Signature Generation
     const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
-    const signature = crypto.createHash('sha256').update(libraryId + apiKey + expirationTime + videoId).digest('hex');
+    const signature = crypto.createHash('sha256').update(libraryId + bunnyKey + expirationTime + videoId).digest('hex');
     // Step 4: DB Write (Direct indexing under Zone subcollection)
     const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
     await videoRef.set({

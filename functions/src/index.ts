@@ -4,7 +4,7 @@ admin.initializeApp();
 import * as functions from "firebase-functions";
 import { onRequest, onCall } from "firebase-functions/v2/https";
 import * as crypto from "crypto";
-// import * as nodemailer from "nodemailer";
+import * as nodemailer from "nodemailer";
 
 import { AccessToken, RoomServiceClient, TrackSource } from "livekit-server-sdk";
 import axios from "axios";
@@ -19,7 +19,6 @@ export { gradePdfSubmission } from "./ai/gradeSubmission";
 
 
 // Global transporter for billing and OTP emails
-/*
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587'),
@@ -29,7 +28,6 @@ const transporter = nodemailer.createTransport({
         pass: process.env.SMTP_PASS,
     },
 });
-*/
 
 
 
@@ -249,10 +247,10 @@ export const createBunnyVideo = onCall(
         if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
 
         const libraryId = process.env.BUNNY_LIBRARY_ID;
-        const apiKey = process.env.BUNNY_API_KEY;
-        
-        if (!libraryId || !apiKey) {
-            throw new functions.https.HttpsError("failed-precondition", "Bunny security configuration missing.");
+        const bunnyKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
+
+        if (!libraryId || !bunnyKey) {
+            throw new functions.https.HttpsError('internal', 'BUNNY_API_KEY or BUNNY_LIBRARY_ID is missing or undefined on the server.');
         }
 
         // Step 2: Bunny Init (Get GUID)
@@ -261,7 +259,7 @@ export const createBunnyVideo = onCall(
             const response = await axios.post(
                 `https://video.bunnycdn.com/library/${libraryId}/videos`, 
                 { title: title || 'Untitled' }, 
-                { headers: { 'AccessKey': apiKey, 'Content-Type': 'application/json' } }
+                { headers: { 'AccessKey': bunnyKey, 'Content-Type': 'application/json' } }
             );
             videoId = response.data.guid;
         } catch (apiError: any) {
@@ -271,13 +269,15 @@ export const createBunnyVideo = onCall(
         
         // Step 3: Signature Generation
         const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
-        const signature = crypto.createHash('sha256').update(libraryId + apiKey + expirationTime + videoId).digest('hex');
+        const signature = crypto.createHash('sha256').update(libraryId + bunnyKey + expirationTime + videoId).digest('hex');
 
         // Step 4: DB Write (Direct indexing under Zone subcollection)
+        // TODO: NUNMA-V2 - The ultimate source of truth for status transitions should be 
+        // the Bunny Stream Webhook (bunnyStreamWebhook), not the frontend client.
         const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
         await videoRef.set({
             bunnyVideoId: videoId,
-            status: 'pending',
+            status: 'uploading',
             title: title || 'Untitled Video',
             tutorId: request.auth.uid,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -594,9 +594,9 @@ export const createRazorpayOrder = onCall(
             throw new functions.https.HttpsError("unauthenticated", "You must be signed in to create an order.");
         }
 
-        const { zoneId, amount } = request.data;
-        if (!zoneId || !amount) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or amount.");
+        const { zoneId, planId, amount: requestedAmount } = request.data;
+        if (!zoneId && !planId) {
+            throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or planId.");
         }
 
         const keyId = process.env.RAZORPAY_KEY_ID;
@@ -605,88 +605,125 @@ export const createRazorpayOrder = onCall(
             throw new functions.https.HttpsError("failed-precondition", "Razorpay secrets not configured.");
         }
 
-        // 2. Fetch Zone and Validate Price
-        const zoneDoc = await db.collection("zones").doc(zoneId).get();
-        if (!zoneDoc.exists) {
-            throw new functions.https.HttpsError("not-found", "Zone not found.");
+        let finalAmount: number;
+        let rzpAccountId: string | undefined;
+        let tutorShare: number | undefined;
+
+        if (zoneId) {
+            // -- Case A: Student buying a Zone Course --
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            if (!zoneDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "Zone not found.");
+            }
+
+            const zoneData = zoneDoc.data()!;
+            const expectedAmountPaise = Math.round((zoneData.price || 0) * 100);
+
+            if (Number(requestedAmount) !== expectedAmountPaise) {
+                throw new functions.https.HttpsError("invalid-argument", `Amount mismatch. Expected ${expectedAmountPaise} paise.`);
+            }
+            finalAmount = expectedAmountPaise;
+
+            const tutorUid = zoneData.createdBy;
+            const tutorDoc = await db.collection("users").doc(tutorUid).get();
+            if (!tutorDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
+            }
+
+            const tutorData = tutorDoc.data()!;
+            rzpAccountId = tutorData.razorpayAccountId || tutorData.razorpay_account_id;
+            const kycStatus = tutorData.kycStatus;
+
+            if (!rzpAccountId || kycStatus !== 'VERIFIED') {
+                throw new functions.https.HttpsError(
+                    "failed-precondition", 
+                    "Tutor is not eligible for payments (KYC or Account ID missing)."
+                );
+            }
+
+            // Commission Logic for Zone sales
+            let commissionPct = 15; // Default/FREE
+            const plan = tutorData.subscriptionPlan;
+            if (plan === 'STANDARD') commissionPct = 5;
+            else if (plan === 'PREMIUM') commissionPct = 2;
+
+            const commission = Math.round(finalAmount * (commissionPct / 100));
+            tutorShare = finalAmount - commission;
+
+        } else {
+            // -- Case B: Tutor upgrading Platform Plan --
+            const allowedPlans: Record<string, number> = {
+                'standard': 149900,
+                'premium': 499900
+            };
+
+            if (!allowedPlans[planId]) {
+                throw new functions.https.HttpsError("invalid-argument", "Invalid subscription plan selected.");
+            }
+
+            finalAmount = allowedPlans[planId];
+            // No transfers for platform subscription payments (goes 100% to Nunma)
         }
-
-        const zoneData = zoneDoc.data()!;
-        const expectedAmountPaise = Math.round((zoneData.price || 0) * 100);
-
-        if (amount !== expectedAmountPaise) {
-            throw new functions.https.HttpsError("invalid-argument", `Amount mismatch. Expected ${expectedAmountPaise} paise.`);
-        }
-
-        // 3. Fetch Tutor and Validate Account
-        const tutorUid = zoneData.createdBy;
-        const tutorDoc = await db.collection("users").doc(tutorUid).get();
-        if (!tutorDoc.exists) {
-            throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
-        }
-
-        const tutorData = tutorDoc.data()!;
-        const rzpAccountId = tutorData.razorpayAccountId || tutorData.razorpay_account_id;
-        const kycStatus = tutorData.kycStatus;
-
-        if (!rzpAccountId || kycStatus !== 'VERIFIED') {
-            throw new functions.https.HttpsError(
-                "failed-precondition", 
-                "Tutor is not eligible for payments (KYC or Account ID missing)."
-            );
-        }
-
-        // 4. Commission Logic
-        let commissionPct = 15; // Default/FREE
-        const plan = tutorData.subscriptionPlan;
-        if (plan === 'PRO') commissionPct = 7;
-        else if (plan === 'ELITE') commissionPct = 3;
-
-        const commission = Math.round(amount * (commissionPct / 100));
-        const tutorShare = amount - commission;
 
         // 5. Create Razorpay Order via Axios
         try {
             const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
+            const orderPayload: any = {
+                amount: finalAmount,
+                currency: 'INR',
+                notes: {
+                    type: planId ? 'PLATFORM_SUBSCRIPTION' : 'ZONE_ENROLLMENT',
+                    planId: planId || '',
+                    zoneId: zoneId || '',
+                    userId: request.auth.uid
+                }
+            };
+
+            // Add Route transfers ONLY for Zone enrollment
+            if (zoneId && rzpAccountId && tutorShare) {
+                orderPayload.transfers = [
+                    {
+                        account: rzpAccountId,
+                        amount: tutorShare,
+                        currency: 'INR',
+                        on_hold: false
+                    }
+                ];
+            }
+
             const response = await axios.post(
                 'https://api.razorpay.com/v1/orders',
-                {
-                    amount: amount,
-                    currency: 'INR',
-                    transfers: [
-                        {
-                            account: rzpAccountId,
-                            amount: tutorShare,
-                            currency: 'INR',
-                            on_hold: false
-                        }
-                    ]
-                },
-                {
-                    headers: {
-                        'Authorization': authHeader,
-                        'Content-Type': 'application/json'
-                    }
-                }
+                orderPayload,
+                { headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' } }
             );
 
-            const orderId = response.data.id;
+            const razorpayOrder = response.data;
 
-            // 6. Write Pending Order to Firestore
-            await db.collection("zones").doc(zoneId).collection("orders").doc(orderId).set({
-                orderId,
-                studentUid: request.auth.uid,
-                amount,
-                commission,
-                commissionPct,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                status: 'CREATED'
-            });
+            // 6. Write Pending Order to Firestore (Only for Zone Sales)
+            if (zoneId) {
+                await db.collection("zones").doc(zoneId).collection("orders").doc(razorpayOrder.id).set({
+                    orderId: razorpayOrder.id,
+                    studentUid: request.auth.uid,
+                    amount: finalAmount,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    status: 'CREATED'
+                });
+            } else {
+                // Platform subscription order
+                await db.collection("platform_orders").doc(razorpayOrder.id).set({
+                    orderId: razorpayOrder.id,
+                    tutorUid: request.auth.uid,
+                    planId,
+                    amount: finalAmount,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    status: 'CREATED'
+                });
+            }
 
             return {
-                orderId,
-                amount,
-                currency: 'INR',
+                orderId: razorpayOrder.id,
+                amount: razorpayOrder.amount,
+                currency: razorpayOrder.currency,
                 keyId
             };
 
@@ -848,6 +885,154 @@ export const razorpayRouteWebhook = onRequest(
         } catch (error: any) {
             console.error("Webhook processing error:", error);
             res.status(500).send('Internal Server Error');
+        }
+    }
+);
+
+/**
+ * SECURE RAZORPAY WEBHOOK
+ * Implements strict signature validation, two-step idempotency, and atomic fulfillment.
+ */
+export const razorpayWebhook = onRequest(
+    { secrets: ["RAZORPAY_WEBHOOK_SECRET", "SMTP_PASS"] },
+    async (req, res) => {
+        const db = admin.firestore();
+        const signature = req.headers['x-razorpay-signature'] as string;
+        const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+        // Step 1: Signature Validation & Fast-Fail
+        if (!signature || !secret) {
+            console.error("Signature or Secret missing.");
+            res.status(400).send('Invalid signature');
+            return;
+        }
+
+        const hmac = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
+        if (hmac !== signature) {
+            console.error("Signature mismatch.");
+            res.status(400).send('Invalid signature');
+            return;
+        }
+
+        try {
+            const payload = req.body;
+            const payment = payload.payload?.payment?.entity;
+            const razorpayOrderId = payment?.order_id;
+            const paymentId = payment?.id;
+
+            if (!razorpayOrderId) {
+                console.warn("No order_id found in payload.");
+                res.status(200).send({ status: 'ignored', reason: 'no_order_id' });
+                return;
+            }
+
+            // Step 2: The Two-Step Idempotency Transaction
+            // Pre-Query (Outside Transaction)
+            const snapshot = await db.collectionGroup('orders')
+                .where('orderId', '==', razorpayOrderId)
+                .limit(1)
+                .get();
+
+            if (snapshot.empty) {
+                console.error(`Order not found for ID: ${razorpayOrderId}`);
+                throw new Error(`Order not found: ${razorpayOrderId}`);
+            }
+
+            const orderDoc = snapshot.docs[0];
+            const orderRef = orderDoc.ref;
+            const orderData = orderDoc.data();
+            
+            // Extract IDs for fulfillment
+            const zoneRef = orderRef.parent.parent;
+            if (!zoneRef) throw new Error("Invalid order document path structure.");
+            
+            const zoneId = zoneRef.id;
+            const studentUid = orderData.studentUid;
+
+            if (!studentUid) throw new Error("Order document missing studentUid.");
+
+            const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentUid);
+            const enrollmentRef = db.collection('users').doc(studentUid).collection('enrollments').doc(zoneId);
+
+            // Atomic Block (Inside Transaction)
+            await db.runTransaction(async (transaction) => {
+                const doc = await transaction.get(orderRef);
+                if (!doc.exists) throw new Error("Order document disappeared during transaction.");
+
+                if (doc.data()?.status === 'paid') {
+                    console.log(`Order ${razorpayOrderId} already processed (idempotent exit).`);
+                    return; // Exit early
+                }
+
+                // Execute all 3 writes atomically
+                transaction.update(orderRef, { 
+                    status: 'paid', 
+                    fulfilled: true,
+                    paymentId,
+                    paidAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                transaction.set(studentRef, { 
+                    status: 'active', 
+                    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    source: 'razorpay_webhook',
+                    paymentId
+                }, { merge: true });
+
+                transaction.set(enrollmentRef, { 
+                    zoneId,
+                    enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                    status: 'active'
+                }, { merge: true });
+            });
+
+            // Step 3: Non-Blocking Notifications (Zoho Invoice Email)
+            const sendInvoice = async () => {
+                try {
+                    const userDoc = await db.collection('users').doc(studentUid).get();
+                    const userEmail = userDoc.data()?.email;
+                    const userName = userDoc.data()?.name || 'Student';
+
+                    if (!userEmail) {
+                        console.warn("User email not found for invoice notification.");
+                        return;
+                    }
+
+                    const mailOptions = {
+                        from: `"Nunma Academy" <${process.env.SMTP_USER}>`,
+                        to: userEmail,
+                        subject: `Enrollment Confirmed: ${orderData.zoneTitle || 'Your Course'}`,
+                        html: `
+                            <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                                <h1 style="color: #1A1A4E;">Payment Successful!</h1>
+                                <p>Hi ${userName},</p>
+                                <p>Your payment for <b>${orderData.zoneTitle || 'the course'}</b> has been confirmed.</p>
+                                <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                                    <p style="margin: 5px 0;"><b>Order ID:</b> ${razorpayOrderId}</p>
+                                    <p style="margin: 5px 0;"><b>Payment ID:</b> ${paymentId}</p>
+                                </div>
+                                <p>You can now access your course in the Dashboard.</p>
+                                <br/>
+                                <p>Happy learning,<br/><b>Nunma Team</b></p>
+                            </div>
+                        `
+                    };
+
+                    await transporter.sendMail(mailOptions);
+                    console.log(`Invoice email sent successfully to ${userEmail}`);
+                } catch (emailError) {
+                    console.error('Invoice failed but access granted', emailError);
+                }
+            };
+
+            // Trigger non-blocking email
+            sendInvoice().catch(err => console.error("Email notification wrapper error:", err));
+
+            res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
+
+        } catch (error: any) {
+            console.error("Webhook processing error:", error);
+            res.status(500).send(`Internal Error: ${error.message}`);
         }
     }
 );

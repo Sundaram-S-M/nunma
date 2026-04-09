@@ -26,7 +26,7 @@ const PricingPage: React.FC = () => {
     }, []);
 
     const handleCheckout = async (e: React.MouseEvent, planId: string, amountPaise: number) => {
-        e.preventDefault();
+        if (e && e.preventDefault) e.preventDefault();
         setCheckoutLoading(planId);
         try {
             if (!razorpayScriptReady.current || !(window as any).Razorpay) {
@@ -35,23 +35,39 @@ const PricingPage: React.FC = () => {
             const createOrder = httpsCallable(functions, 'createRazorpayOrder');
             const result = await createOrder({ amount: String(amountPaise), planId });
             const orderData = result.data as any;
-            if (!orderData || !orderData.id) {
+            
+            if (!orderData || !orderData.orderId) {
                 throw new Error('Failed to create Razorpay order. The server returned an invalid response.');
             }
+
+            const rzpKey = orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY || 'TEST_KEY_ID';
+            
+            // SDK Safeguard: Validate Razorpay Key format
+            if (!rzpKey || !rzpKey.startsWith('rzp_')) {
+                console.error("Invalid Razorpay Key format:", rzpKey);
+                alert("Payment gateway configuration error. Please contact support.");
+                return;
+            }
+
             const options = {
-                key: import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY || 'TEST_KEY_ID',
+                key: rzpKey,
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: 'Nunma Academy',
                 description: `${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan Subscription`,
                 image: 'https://nunma.app/logo.png',
-                order_id: orderData.id,
+                order_id: orderData.orderId,
                 handler: function (response: any) {
                     alert(`Payment Successful! Payment ID: ${response.razorpay_payment_id}`);
                     console.log('Razorpay Success Response:', response);
                 },
                 prefill: { name: '', email: '', contact: '' },
                 theme: { color: '#040457' },
+                modal: {
+                    ondismiss: function () {
+                        setCheckoutLoading(null);
+                    }
+                }
             };
             const rzp = new (window as any).Razorpay(options);
             rzp.on('payment.failed', function (response: any) {
@@ -199,6 +215,7 @@ const PricingPage: React.FC = () => {
                             </div>
 
                             <button
+                                type="button"
                                 onClick={tier.buttonAction}
                                 className={`
                   w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all

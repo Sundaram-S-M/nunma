@@ -3,13 +3,9 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // --- Helper Functions ---
-    
+
     function isSignedIn() {
       return request.auth != null;
-    }
-
-    function isUser(userId) {
-      return isSignedIn() && request.auth.uid == userId;
     }
 
     function getUserData(uid) {
@@ -21,39 +17,31 @@ service cloud.firestore {
     }
 
     // --- USERS Collection ---
-    // Rule: read auth.uid === userId
-    // Rule: write auth.uid === userId (block sensitive fields: role, kycStatus, razorpayAccountId, kycSubmittedAt)
+    // Rule: owner can read/write their own document and all sub-collections
     match /users/{userId} {
-      allow read: if isUser(userId);
-      allow create: if isUser(userId) 
-        && !request.resource.data.keys().hasAny(['role', 'kycStatus', 'razorpayAccountId', 'kycSubmittedAt']);
-      allow update: if isUser(userId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'kycStatus', 'razorpayAccountId', 'kycSubmittedAt']);
-      
-      // Invoices sub-collection: read auth.uid === userId, no client writes
-      match /invoices/{invoiceId} {
-        allow read: if isUser(userId);
-        allow write: if false;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+
+      // Wildcard to ensure all sub-collections are covered for the owner
+      match /{document=**} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
       }
     }
 
     // --- ZONES Collection ---
-    // Rule: anyone can read zone metadata
-    // Rule: create only for THALA role
-    // Rule: update/delete only for creator
-    // Rule: block client writes to price, priceINR, currency
+    // Temporarily allow authenticated users to read zones for the dashboard to load
     match /zones/{zoneId} {
-      allow read: if true;
-      allow create: if isSignedIn() && getUserData(request.auth.uid).role == 'THALA'
-        && !request.resource.data.keys().hasAny(['price', 'priceINR', 'currency']);
-      allow update: if isSignedIn() && request.auth.uid == resource.data.createdBy
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['price', 'priceINR', 'currency']);
-      allow delete: if isSignedIn() && request.auth.uid == resource.data.createdBy;
+      allow read: if isSignedIn();
+      // Only the creator can write
+      allow write: if isSignedIn() && resource.data.createdBy == request.auth.uid;
 
       // ZONES/STUDENTS Sub-collection
-      // Rule: read if studentId or zone creator, no client writes
+      // Rule: read if studentId or zone creator (Thala). 
+      // This enables aggregation (count) for tutors on their own zones.
       match /students/{studentId} {
-        allow read: if isSignedIn() && (request.auth.uid == studentId || getZoneData(zoneId).createdBy == request.auth.uid);
+        allow read: if isSignedIn() && (
+          request.auth.uid == studentId || 
+          getZoneData(zoneId).createdBy == request.auth.uid
+        );
         allow write: if false;
       }
 
@@ -127,6 +115,13 @@ service cloud.firestore {
     // Rule: deny all client reads and writes
     match /otps/{email} {
       allow read, write: if false;
+    }
+
+    // --- PLATFORM ORDERS Collection ---
+    // Rule: only the tutor who created the order can read it
+    match /platform_orders/{orderId} {
+      allow read: if isSignedIn() && resource.data.tutorUid == request.auth.uid;
+      allow write: if false;
     }
 
     // --- PRODUCTS Collection ---

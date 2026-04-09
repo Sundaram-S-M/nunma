@@ -268,7 +268,7 @@ const StudentZoneView: React.FC = () => {
       }
     }
 
-    const allSegments = curriculum.flatMap(c => c.segments || []);
+    const allSegments = curriculum.flatMap(c => (c.segments || []).filter((s: any) => s.status !== 'uploading'));
     if (allSegments.length === 0) return;
 
     const completedIds = studentData.completedSegments || [];
@@ -646,7 +646,7 @@ const StudentZoneView: React.FC = () => {
   };
 
   const autoAdvance = (currentSegmentId: string) => {
-    const allSegments = curriculum.flatMap(c => c.segments);
+    const allSegments = curriculum.flatMap(c => c.segments.filter((s: any) => s.status !== 'uploading'));
     const currentIndex = allSegments.findIndex(s => s.id === currentSegmentId);
 
     if (currentIndex !== -1 && currentIndex < allSegments.length - 1) {
@@ -667,7 +667,7 @@ const StudentZoneView: React.FC = () => {
     }
   };
 
-  const totalSegmentsCount = curriculum.flatMap(c => c.segments).length;
+  const totalSegmentsCount = curriculum.flatMap(c => c.segments.filter((s: any) => s.status !== 'uploading')).length;
   const completedSegmentsCount = studentData?.completedSegments?.length || 0;
   const isCourseComplete = totalSegmentsCount > 0 && completedSegmentsCount >= totalSegmentsCount;
   const progressPercentage = totalSegmentsCount > 0 ? Math.round((completedSegmentsCount / totalSegmentsCount) * 100) : 0;
@@ -977,7 +977,7 @@ const StudentZoneView: React.FC = () => {
                   </button>
                   {expandedChapters.includes(chapter.id) && (
                     <div className="space-y-3 pl-14 animate-in slide-in-from-top-2 duration-300">
-                      {chapter.segments.map(segment => (
+                      {chapter.segments.filter((s: any) => s.status !== 'uploading').map(segment => (
                         <button
                           key={segment.id}
                           onClick={() => setActiveContent(segment)}

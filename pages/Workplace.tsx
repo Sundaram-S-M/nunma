@@ -362,7 +362,7 @@ const Workplace: React.FC = () => {
                           currentTier === 'STANDARD' ? 250 :
                             currentTier === 'PREMIUM' ? 1000 : 100
                       ) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
-                    ))) >= 1 ? 'bg-red-500' : 'bg-[#c2f575]'
+                    ))) >= 1 ? 'bg-red-500' : 'bg-nunma-lime'
                     }`}
                   style={{
                     width: `${Math.min(100, (allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
@@ -391,7 +391,7 @@ const Workplace: React.FC = () => {
               </div>
               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-1000 ${streamsPercent >= 100 ? 'bg-red-500' : 'bg-[#c2f575]'}`}
+                  className={`h-full rounded-full transition-all duration-1000 ${streamsPercent >= 100 ? 'bg-red-500' : 'bg-nunma-lime'}`}
                   style={{ width: `${streamsPercent}%` }}
                 ></div>
               </div>

@@ -2494,7 +2494,7 @@ const ZoneManagement: React.FC = () => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-12">
-                          {(chapter.segments || []).map((seg) => (
+                          {(chapter.segments || []).filter((s: any) => s.status !== 'uploading').map((seg) => (
                             <div key={seg.id} className="p-6 bg-gray-50 border border-transparent hover:border-[#c2f575]/20 rounded-3xl flex items-center justify-between group/seg transition-all">
                               <div className="flex items-center gap-4">
                                 <div className="p-4 bg-white rounded-2xl shadow-sm text-[#040457]">
