@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -924,7 +924,7 @@ const ZoneManagement: React.FC = () => {
     }
   };
 
-  const handleDocumentUploadSuccess = async (docData: { id: string; title: string; fileUrl: string; fileSize: number }) => {
+  const handleDocumentUploadSuccess = useCallback(async (docData: { id: string; title: string; fileUrl: string; fileSize: number }) => {
     if (!activeChapterForUpload || !zoneId) return;
     try {
       const newSeg: Segment = {
@@ -948,9 +948,9 @@ const ZoneManagement: React.FC = () => {
       setActiveChapterForUpload(null);
       setShowDocumentUploader(false);
     }
-  };
+  }, [activeChapterForUpload, zoneId, chapters]);
 
-  const handleVideoUploadSuccess = async (videoData: { videoId: string, title: string }) => {
+  const handleVideoUploadSuccess = useCallback(async (videoData: { videoId: string, title: string }) => {
     if (!activeChapterForUpload || !zoneId) return;
 
     try {
@@ -976,7 +976,7 @@ const ZoneManagement: React.FC = () => {
       console.error("Failed to append video segment to chapter:", error);
       alert("Video was uploaded, but failed to link to chapter. Please refresh and try again.");
     }
-  };
+  }, [activeChapterForUpload, zoneId, chapters]);
 
   const updateChapterTitle = async (chapterId: string, newTitle: string) => {
     if (!zoneId) return;
@@ -1303,7 +1303,7 @@ const ZoneManagement: React.FC = () => {
         {/* EXTERNAL MODALS */}
         <VideoUploadModal
           isOpen={showVideoUploadModal}
-          onClose={() => setShowVideoUploadModal(false)}
+          onClose={useCallback(() => setShowVideoUploadModal(false), [])}
           zoneId={zoneId}
           chapterId={activeChapterForUpload || undefined}
           onUploadSuccess={handleVideoUploadSuccess}
@@ -1313,7 +1313,7 @@ const ZoneManagement: React.FC = () => {
           <DocumentModuleUploader
             courseId={zoneId}
             chapterId={activeChapterForUpload}
-            onClose={() => { setShowDocumentUploader(false); setActiveChapterForUpload(null); }}
+            onClose={useCallback(() => { setShowDocumentUploader(false); setActiveChapterForUpload(null); }, [])}
             onSuccess={handleDocumentUploadSuccess}
           />
         )}

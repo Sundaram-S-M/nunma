@@ -7,6 +7,7 @@ import { functions } from '../utils/firebase';
 const PricingPage: React.FC = () => {
     const navigate = useNavigate();
     const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const razorpayScriptReady = useRef(false);
 
     // Dynamically load Razorpay checkout script and track when it's ready
@@ -26,14 +27,18 @@ const PricingPage: React.FC = () => {
     }, []);
 
     const handleCheckout = async (e: React.MouseEvent, planId: string, amountPaise: number) => {
-        if (e && e.preventDefault) e.preventDefault();
+        if (e && e.preventDefault) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        setErrorMessage(null);
         setCheckoutLoading(planId);
         try {
             if (!razorpayScriptReady.current || !(window as any).Razorpay) {
                 throw new Error('Razorpay payment script has not loaded yet. Please wait and try again.');
             }
             const createOrder = httpsCallable(functions, 'createRazorpayOrder');
-            const result = await createOrder({ amount: String(amountPaise), planId });
+            const result = await createOrder({ planId });
             const orderData = result.data as any;
             
             if (!orderData || !orderData.orderId) {
@@ -77,7 +82,7 @@ const PricingPage: React.FC = () => {
             rzp.open();
         } catch (err: any) {
             console.error('Razorpay Order Error:', err);
-            alert(`Checkout failed to initialize. Check the console for details.\n\nError: ${err.message || 'Unknown error'}`);
+            setErrorMessage(err.message || 'An unexpected error occurred during checkout.');
         } finally {
             setCheckoutLoading(null);
         }
@@ -101,7 +106,7 @@ const PricingPage: React.FC = () => {
                 { name: 'Add-ons Available', included: false },
             ],
             buttonText: 'Current Plan',
-            buttonAction: (e: React.MouseEvent) => { e.preventDefault(); navigate('/dashboard'); },
+            buttonAction: (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); navigate('/dashboard'); },
             buttonVariant: 'outline',
         },
         {
@@ -122,7 +127,11 @@ const PricingPage: React.FC = () => {
                 { name: 'Add-ons Available', included: true },
             ],
             buttonText: checkoutLoading === 'standard' ? 'Processing...' : 'Upgrade to Standard',
-            buttonAction: (e: React.MouseEvent) => handleCheckout(e, 'standard', 149900), // ₹1,499 in paise
+            buttonAction: (e: React.MouseEvent) => { 
+                e.preventDefault();
+                e.stopPropagation();
+                handleCheckout(e, 'standard', 149900); 
+            }, // ₹1,499 in paise
             buttonVariant: 'primary',
         },
         {
@@ -142,7 +151,11 @@ const PricingPage: React.FC = () => {
                 { name: 'Add-ons Available', included: true },
             ],
             buttonText: checkoutLoading === 'premium' ? 'Processing...' : 'Upgrade to Premium',
-            buttonAction: (e: React.MouseEvent) => handleCheckout(e, 'premium', 499900), // ₹4,999 in paise
+            buttonAction: (e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleCheckout(e, 'premium', 499900);
+            }, // ₹4,999 in paise
             buttonVariant: 'dark',
         }
     ];
@@ -151,6 +164,15 @@ const PricingPage: React.FC = () => {
         <div className="min-h-screen bg-[#fbfbfb] py-16 px-4 sm:px-6 lg:px-8 animate-in fade-in duration-500">
             <div className="max-w-7xl mx-auto">
                 <div className="text-center max-w-3xl mx-auto mb-16">
+                    {errorMessage && (
+                        <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-center gap-3 animate-in slide-in-from-top-4 duration-300">
+                            <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-black">!</div>
+                            <p className="text-red-600 font-bold text-sm tracking-tight">{errorMessage}</p>
+                            <button onClick={() => setErrorMessage(null)} className="ml-auto text-red-300 hover:text-red-500 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                    )}
                     <h2 className="text-[#c2f575] font-black tracking-widest uppercase text-sm mb-4">Pricing Plans</h2>
                     <h1 className="text-4xl md:text-6xl font-black text-[#040457] tracking-tighter mb-6">
                         Scale Your Teaching Empire

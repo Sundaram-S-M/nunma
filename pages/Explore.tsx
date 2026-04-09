@@ -174,88 +174,91 @@ const Explore: React.FC = () => {
       ) : filteredZones.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredZones.map((zone) => (
-            <div
-              key={zone.id}
-              className="group bg-white rounded-[3.5rem] border border-gray-100 shadow-[0_20px_60px_rgba(0,0,0,0.03)] hover:shadow-[0_40px_100px_rgba(0,0,0,0.08)] transition-all duration-700 overflow-hidden cursor-pointer flex flex-col"
-              onClick={() => navigate(`/payment/${zone.id}`)}
-            >
-              <div className="aspect-[4/3] relative overflow-hidden">
-                <img
-                  src={zone.image}
-                  alt={zone.title}
-                  className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
-                />
-                <div className="absolute top-8 right-8">
-                  <div className="bg-white/90 backdrop-blur-xl px-6 py-3 rounded-2xl shadow-xl border border-white/50">
-                    <span className="text-xl font-black text-indigo-900">
-                      {zone.currency === 'USD' ? '$' : zone.currency === 'INR' ? '₹' : '€'}
-                      {zone.price}
-                    </span>
-                  </div>
-                </div>
-                <div className="absolute bottom-6 left-6 right-6 flex items-center justify-start opacity-0 group-hover:opacity-100 translate-y-6 group-hover:translate-y-0 transition-all duration-500 z-20 pointer-events-none">
-                  <div className="flex items-center gap-4 bg-white/95 backdrop-blur-xl p-2.5 pr-8 rounded-[2rem] border border-white shadow-[0_20px_40px_rgba(0,0,0,0.2)] transform origin-left hover:scale-[1.02] transition-transform duration-300 pointer-events-auto">
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-indigo-50 shadow-inner ring-4 ring-white shrink-0">
-                      <img
-                        src={tutorData[zone.tutorId]?.photoURL || tutorData[zone.tutorName]?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutorData[zone.tutorId]?.name || zone.tutorName}&backgroundColor=e2e8f0`}
-                        alt="Tutor avatar"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.tutorName}&backgroundColor=e2e8f0`;
-                        }}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[9px] font-black text-indigo-500 uppercase tracking-[0.2em] leading-none mb-1.5 block">
-                        Master
-                      </span>
-                      <span className="text-sm font-black text-[#1A1A4E] uppercase tracking-wide leading-none block line-clamp-1">
-                        {tutorData[zone.tutorId]?.name || zone.tutorName}
+              <div
+                key={zone.id}
+                className="group bg-white rounded-[3.5rem] border border-gray-100 shadow-[0_20px_60px_rgba(0,0,0,0.03)] hover:shadow-[0_40px_100px_rgba(0,0,0,0.08)] transition-all duration-700 overflow-hidden cursor-pointer flex flex-col"
+                onClick={() => navigate(`/zone/${zone.id}`)}
+              >
+                <div className="aspect-[4/3] relative overflow-hidden">
+                  <img
+                    src={zone.image}
+                    alt={zone.title}
+                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                  />
+                  <div className="absolute top-8 right-8">
+                    <div className="bg-white/90 backdrop-blur-xl px-6 py-3 rounded-2xl shadow-xl border border-white/50">
+                      <span className="text-xl font-black text-indigo-900">
+                        {zone.currency === 'USD' ? '$' : zone.currency === 'INR' ? '₹' : '€'}
+                        {zone.price}
                       </span>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              <div className="p-10 space-y-6 flex-1 flex flex-col">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 px-4 py-1.5 bg-indigo-50 rounded-full">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                    <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{zone.domain}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <MonitorPlay size={14} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#c2f575]">{zone.level}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-black text-indigo-900 tracking-tighter group-hover:text-indigo-600 transition-colors leading-tight">
-                    {zone.title}
-                  </h3>
-                  <p className="text-gray-400 text-sm font-medium line-clamp-2 leading-relaxed">
-                    {zone.description}
-                  </p>
-                </div>
-
-                <div className="pt-6 border-t border-gray-50 flex items-center justify-between mt-auto">
-                  <div className="flex -space-x-3">
-                    {[1, 2, 3].map(i => (
-                      <div key={i} className="w-10 h-10 rounded-xl border-4 border-white overflow-hidden bg-gray-100 shadow-sm relative z-[1]">
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.id}${i}`} alt="Student" width="500" height="500" />
+                  <div className="absolute bottom-6 left-6 right-6 flex items-center justify-start opacity-0 group-hover:opacity-100 translate-y-6 group-hover:translate-y-0 transition-all duration-500 z-20 pointer-events-none">
+                    <div className="flex items-center gap-4 bg-white/95 backdrop-blur-xl p-2.5 pr-8 rounded-[2rem] border border-white shadow-[0_20px_40px_rgba(0,0,0,0.2)] transform origin-left hover:scale-[1.02] transition-transform duration-300 pointer-events-auto">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-indigo-50 shadow-inner ring-4 ring-white shrink-0">
+                        <img
+                          src={tutorData[zone.tutorId]?.photoURL || tutorData[zone.tutorName]?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutorData[zone.tutorId]?.name || zone.tutorName}&backgroundColor=e2e8f0`}
+                          alt="Tutor avatar"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.tutorName}&backgroundColor=e2e8f0`;
+                          }}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                    ))}
-                    <div className="w-10 h-10 rounded-xl border-4 border-white bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-400 relative z-0">
-                      +{zone.students || 0}
+                      <div>
+                        <span className="text-[9px] font-black text-indigo-500 uppercase tracking-[0.2em] leading-none mb-1.5 block">
+                          Master
+                        </span>
+                        <span className="text-sm font-black text-[#1A1A4E] uppercase tracking-wide leading-none block line-clamp-1">
+                          {tutorData[zone.tutorId]?.name || zone.tutorName}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-indigo-900 group-hover:bg-[#c2f575] transition-all duration-500">
-                    <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </div>
+
+                <div className="p-10 space-y-6 flex-1 flex flex-col">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 px-4 py-1.5 bg-indigo-50 rounded-full">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                      <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{zone.domain}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <MonitorPlay size={14} />
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#c2f575]">{zone.level}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-2xl font-black text-indigo-900 tracking-tighter group-hover:text-indigo-600 transition-colors leading-tight">
+                      {zone.title}
+                    </h3>
+                    <p className="text-gray-400 text-sm font-medium line-clamp-2 leading-relaxed">
+                      {zone.description}
+                    </p>
+                  </div>
+
+                  <div className="pt-6 border-t border-gray-50 flex items-center justify-between mt-auto">
+                    <div className="flex -space-x-3">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="w-10 h-10 rounded-xl border-4 border-white overflow-hidden bg-gray-100 shadow-sm relative z-[1]">
+                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.id}${i}`} alt="Student" width="500" height="500" />
+                        </div>
+                      ))}
+                      <div className="w-10 h-10 rounded-xl border-4 border-white bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-400 relative z-0">
+                        +{zone.students || 0}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 group/btn">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover/btn:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 duration-500">View Details</span>
+                      <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-indigo-900 group-hover:bg-[#c2f575] transition-all duration-500">
+                        <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
           ))}
         </div>
       ) : (

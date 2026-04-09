@@ -28,6 +28,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
     const [errorMessage, setErrorMessage] = useState('');
     const [title, setTitle] = useState('');
     const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+    const [foundUploads, setFoundUploads] = useState<tus.PreviousUpload[]>([]);
     const { user } = useAuth();
 
     const uploadRef = useRef<tus.Upload | null>(null);
@@ -78,7 +79,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
         setTitle(selectedFile.name.replace(/\.[^/.]+$/, ""));
     };
 
-    const startTusUpload = async (resumeUpload: any = null) => {
+    const handleStartFresh = async () => {
         if (!file) return;
 
         try {
@@ -87,50 +88,20 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
             setIsPaused(false);
             setErrorMessage('');
 
-            let videoId = currentVideoId;
-            let signature = '';
-            let expirationTime = 0;
-            let libraryId = '';
+            // Task 3: The "Start Fresh" Path
+            // Call the createBunnyVideo Cloud Function to generate a new VideoId and Signature.
+            const getSignatureNode = httpsCallable(functions, 'createBunnyVideo');
+            const result = await getSignatureNode({ title, zoneId });
+            const data = result.data as any;
+            
+            const { videoId, signature, expirationTime, libraryId } = data;
+            setCurrentVideoId(videoId);
 
-            // 1. Get Bunny Stream Signature from our Cloud Function (Only if not resuming or if we need fresh credentials)
-            if (!resumeUpload) {
-                const getSignatureNode = httpsCallable(functions, 'createBunnyVideo');
-                const result = await getSignatureNode({ title: file.name, zoneId });
-                const data = result.data as any;
-                videoId = data.videoId;
-                signature = data.signature;
-                expirationTime = data.expirationTime;
-                libraryId = data.libraryId;
-                setCurrentVideoId(videoId);
-            } else {
-                // If resuming, we need to ensure we have the auth headers from the previous session 
-                // or fetch new ones. For now, since Bunny signatures are short-lived, 
-                // it's safer to always get a fresh signature or use the one we just got.
-                // Note: TUS resume typically uses the same URL which might have expired headers 
-                // if we aren't careful. Bunny TUS uses headers for auth.
-                
-                // For a truly robust resume, we'd re-call createBunnyVideo but with the EXISTING videoId
-                // to get a new signature without creating a new GUID. 
-                // TODO: Update backend to support 'getExistingSignature' if needed.
-                
-                const getSignatureNode = httpsCallable(functions, 'createBunnyVideo');
-                const result = await getSignatureNode({ title: file.name, zoneId }); // This currently creates a NEW video. 
-                // We should ideally have a way to resume with the SAME videoId.
-                const data = result.data as any;
-                videoId = data.videoId;
-                signature = data.signature;
-                expirationTime = data.expirationTime;
-                libraryId = data.libraryId;
-                setCurrentVideoId(videoId);
-            }
-
-            if (!videoId) throw new Error("Could not determine Video ID for upload.");
-
-            // 2. Initialize TUS Upload
+            // Inject these credentials into the instance
             const upload = new tus.Upload(file, {
                 endpoint: 'https://video.bunnycdn.com/tusupload',
                 retryDelays: [0, 1000, 3000, 5000, 10000],
-                chunkSize: 50 * 1024 * 1024, // 50MB chunks
+                chunkSize: 50 * 1024 * 1024,
                 removeFingerprintOnSuccess: true,
                 headers: {
                     AuthorizationSignature: signature,
@@ -142,16 +113,14 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     filetype: file.type,
                     title: file.name,
                     collection: zoneId || 'default',
+                    videoId: videoId, // CRITICAL: store for resume
                 },
                 onError: (error) => {
                     console.error('TUS Upload Failed:', error);
                     setUploadStatus('error');
-                    
-                    // Specific handling for network issues
                     if (error.message.includes('timeout') || error.message.includes('Network Error')) {
                         toast.error("Connection unstable. Retrying automatically...", { id: 'tus-retry' });
                     }
-                    
                     setErrorMessage(`Upload failed: ${error.message}`);
                     setIsUploading(false);
                 },
@@ -161,9 +130,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                 },
                 onSuccess: async () => {
                     console.log('TUS Upload completed for videoId:', videoId);
-                    
                     try {
-                        // THE HANDOFF: Update status to processing in Firestore
                         if (zoneId && videoId) {
                             const videoRef = doc(db, `zones/${zoneId}/videos/${videoId}`);
                             await updateDoc(videoRef, {
@@ -171,69 +138,132 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                 updatedAt: serverTimestamp()
                             });
                         }
-
                         setUploadStatus('success');
                         setIsUploading(false);
-
-                        toast.success("Video uploaded! It is now processing.", {
-                            icon: '🎬',
-                            style: { 
-                                borderRadius: '20px', 
-                                background: '#040457', 
-                                color: '#c2f575',
-                                fontWeight: 'bold',
-                                border: '2px solid #c2f575'
-                            }
-                        });
-
-                        // Notify parent component
+                        toast.success("Video uploaded! It is now processing.", { icon: '🎬' });
                         onUploadSuccess({ videoId: videoId!, title: title || file.name });
-
-                        // Auto close after 2 seconds showing success
-                        setTimeout(() => {
-                            handleClose();
-                        }, 2000);
+                        setTimeout(() => handleClose(), 2000);
                     } catch (dbError) {
                         console.error("Critical Handoff Error:", dbError);
                         setUploadStatus('error');
-                        setErrorMessage("Video uploaded, but database sync failed. Please refresh the page or contact support.");
-                        toast.error("Critical: Database sync failed!", { duration: 6000 });
+                        setErrorMessage("Video uploaded, but database sync failed.");
                     }
                 },
             });
 
             uploadRef.current = upload;
-            
-            // 3. Start the upload
             upload.start();
 
         } catch (error: any) {
-            console.error('Bunny Session Error:', error.message, error.details);
+            console.error('Start Fresh Error:', error);
             setUploadStatus('error');
-            
-            const isInternalServerError = error.code === 'internal' || error.message?.includes('500');
-            const friendlyMessage = isInternalServerError 
-                ? "Server Error: Could not generate secure upload ticket. Please contact support." 
-                : (error.message || 'Failed to initiate secure upload session. Please try again.');
-                
-            setErrorMessage(friendlyMessage);
+            setErrorMessage(error.message || 'Failed to initiate upload.');
             setIsUploading(false);
         }
     };
 
-    const checkForPreviousUploads = async (selectedFile: File) => {
+    const handleResumeUpload = async () => {
+        if (!file || foundUploads.length === 0) return;
+
         try {
-            const uploads = await tus.Upload.findPreviousUploads();
-            if (uploads && uploads.length > 0) {
-                // Find upload with same fingerprint
-                // Simplified for this implementation
+            setIsUploading(true);
+            setUploadStatus('uploading');
+            setIsPaused(false);
+            setErrorMessage('');
+
+            // Task 4: The "Resume" Path
+            // Extract the old VideoId from the cached upload metadata
+            const oldVideoId = foundUploads[0].metadata.videoId;
+            if (!oldVideoId) throw new Error("Could not find VideoId in previous upload metadata.");
+
+            // Call Cloud Function to generate a fresh signature for that existing old VideoId.
+            const getSignatureNode = httpsCallable(functions, 'createBunnyVideo');
+            const result = await getSignatureNode({ title, zoneId, videoId: oldVideoId });
+            const data = result.data as any;
+
+            const { videoId, signature, expirationTime, libraryId } = data;
+
+            // Inject the refreshed credentials into the headers
+            const upload = new tus.Upload(file, {
+                endpoint: 'https://video.bunnycdn.com/tusupload',
+                retryDelays: [0, 1000, 3000, 5000, 10000],
+                chunkSize: 50 * 1024 * 1024,
+                removeFingerprintOnSuccess: true,
+                headers: {
+                    AuthorizationSignature: signature,
+                    AuthorizationExpire: expirationTime.toString(),
+                    VideoId: videoId,
+                    LibraryId: libraryId,
+                },
+                metadata: {
+                    filetype: file.type,
+                    title: file.name,
+                    collection: zoneId || 'default',
+                    videoId: videoId,
+                },
+                onError: (error) => {
+                    console.error('TUS Resume Failed:', error);
+                    setUploadStatus('error');
+                    setErrorMessage(`Resume failed: ${error.message}`);
+                    setIsUploading(false);
+                },
+                onProgress: (bytesUploaded, bytesTotal) => {
+                    const percentage = (bytesUploaded / bytesTotal) * 100;
+                    setUploadProgress(percentage);
+                },
+                onSuccess: async () => {
+                    // Success handling is identical to start fresh
+                    if (zoneId && videoId) {
+                        const videoRef = doc(db, `zones/${zoneId}/videos/${videoId}`);
+                        await updateDoc(videoRef, { status: 'processing', updatedAt: serverTimestamp() });
+                    }
+                    setUploadStatus('success');
+                    setIsUploading(false);
+                    onUploadSuccess({ videoId: videoId!, title: title || file.name });
+                    setTimeout(() => handleClose(), 2000);
+                },
+            });
+
+            uploadRef.current = upload;
+            upload.resumeFromPreviousUpload(foundUploads[0]);
+            upload.start();
+
+        } catch (error: any) {
+            console.error('Resume Error:', error);
+            setUploadStatus('error');
+            setErrorMessage(error.message || 'Failed to resume upload.');
+            setIsUploading(false);
+        }
+    };
+
+    const startTusUpload = async () => {
+        if (!file) return;
+        setErrorMessage('');
+
+        try {
+            // Task 1: Pre-Flight Check (No Backend Call Yet)
+            const upload = new tus.Upload(file, {
+                endpoint: 'https://video.bunnycdn.com/tusupload',
+                retryDelays: [0, 1000, 3000, 5000, 10000],
+                chunkSize: 50 * 1024 * 1024,
+                removeFingerprintOnSuccess: true,
+            } as any);
+
+            const previousUploads = await upload.findPreviousUploads();
+            
+            // Task 2: Handle the State & UI
+            if (previousUploads && previousUploads.length > 0) {
+                setFoundUploads(previousUploads);
                 setUploadStatus('resuming');
-            } else {
-                startTusUpload();
+                return; // Halt all network calls
             }
-        } catch (err) {
-            console.warn("Could not check for previous uploads:", err);
-            startTusUpload();
+
+            // No previous uploads, proceed directly to Start Fresh
+            await handleStartFresh();
+
+        } catch (error: any) {
+            console.warn("Could not check for previous uploads:", error);
+            await handleStartFresh();
         }
     };
 
@@ -260,7 +290,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
         setIsUploading(false);
     };
 
-    const handleClose = () => {
+    const handleClose = useCallback(() => {
         if (isUploading) {
             const confirmClose = window.confirm("Closing will cancel your upload. Are you sure?");
             if (!confirmClose) return;
@@ -272,7 +302,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
         setUploadProgress(0);
         setErrorMessage('');
         onClose();
-    };
+    }, [isUploading, onClose]);
 
     const modalRef = useFocusTrap(isOpen, handleClose);
 
@@ -359,8 +389,8 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                             <p className="font-bold text-[#040457]">Incomplete upload detected</p>
                                             <p className="text-sm text-gray-500 mt-1">We found a partial upload for this file. Would you like to resume?</p>
                                             <div className="flex gap-3 mt-4">
-                                                <button onClick={() => startTusUpload()} className="px-4 py-2 bg-[#040457] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:brightness-110 transition-all">Resume</button>
-                                                <button onClick={() => startTusUpload()} className="px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Start Fresh</button>
+                                                <button onClick={() => handleResumeUpload()} className="px-4 py-2 bg-[#040457] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:brightness-110 transition-all">Resume</button>
+                                                <button onClick={() => handleStartFresh()} className="px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Start Fresh</button>
                                             </div>
                                         </div>
                                     </div>
@@ -409,7 +439,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                             <div className="flex gap-4 pt-4">
                                 {uploadStatus === 'idle' && (
                                     <button
-                                        onClick={() => checkForPreviousUploads(file)}
+                                        onClick={() => startTusUpload()}
                                         className="w-full py-4 bg-[#040457] text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:brightness-110 active:scale-95 transition-all shadow-xl"
                                     >
                                         Start Upload

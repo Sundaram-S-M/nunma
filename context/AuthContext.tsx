@@ -125,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoading(false);
           },
           (error) => {
-            console.error("AuthContext: Error listening to user doc:", error);
+            console.warn("Snapshot suppressed (likely permission switch):", error.message);
             setLoading(false);
           }
         );

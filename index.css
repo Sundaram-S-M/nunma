@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /*
   Nunma Design System — 2026 Crisp SaaS
   Aesthetic: Flat, high-contrast, Stripe/Linear-inspired
@@ -17,10 +21,6 @@
     scroll-behavior: auto !important;
   }
 }
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 /* ─── DESIGN TOKENS ─────────────────────────────────────────────────── */
 :root {

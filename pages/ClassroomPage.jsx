@@ -195,15 +195,20 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
     }
   }, [isConnectionPoor, isStudent, localParticipant]);
 
-  const vibrate = () => {
-    if (navigator.vibrate) navigator.vibrate(10);
-  };
 
   // Filter out the local participant
   const remoteTracks = tracks.filter(track => track.participant.sid !== localParticipant.sid);
   
-  // Mobile limitation: Max 4 tiles
-  const displayedTracks = isMobile ? remoteTracks.slice(0, 4) : remoteTracks;
+  // Mobile Optimization: Restrict to Active Speaker and Screen Share ONLY
+  const displayedTracks = isMobile 
+    ? remoteTracks.filter(t => t.source === Track.Source.ScreenShare || t.participant.isSpeaking).slice(0, 1) // Show only the primary active node on mobile
+    : remoteTracks;
+
+  // If mobile and no one is speaking/sharing, show the first person/tutor
+  if (isMobile && displayedTracks.length === 0 && remoteTracks.length > 0) {
+    displayedTracks.push(remoteTracks[0]);
+  }
+
   const moreCount = remoteTracks.length - displayedTracks.length;
 
   return (
@@ -214,7 +219,7 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
           <h1 className="zone-title">{zoneTitle || 'Knowledge Stream'}</h1>
           <button 
             className={`quality-toggle ${isHD ? 'hd' : 'sd'}`}
-            onClick={() => { vibrate(); setIsHD(!isHD); }}
+            onClick={() => { setIsHD(!isHD); }}
           >
             {isHD ? <Zap size={14} /> : <ZapOff size={14} />}
             <span>{isHD ? 'HD' : 'SD'}</span>
@@ -252,16 +257,16 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
       {/* Bottom Bar Controls */}
       <footer className="bottom-bar">
         <div className="controls-group">
-          <TrackToggle source={Track.Source.Microphone} className="control-btn" onClick={vibrate}>
+          <TrackToggle source={Track.Source.Microphone} className="control-btn">
              {({ enabled }) => enabled ? <Mic size={20} /> : <MicOff size={20} />}
           </TrackToggle>
           
-          <TrackToggle source={Track.Source.Camera} className="control-btn" onClick={vibrate}>
+          <TrackToggle source={Track.Source.Camera} className="control-btn">
             {({ enabled }) => enabled ? <Video size={20} /> : <VideoOff size={20} />}
           </TrackToggle>
 
           {!isMobile && (
-            <TrackToggle source={Track.Source.ScreenShare} className="control-btn" onClick={vibrate}>
+            <TrackToggle source={Track.Source.ScreenShare} className="control-btn">
               <Monitor size={20} />
             </TrackToggle>
           )}
@@ -269,7 +274,6 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
           <button 
             className="control-btn leave-btn"
             onClick={() => {
-              vibrate();
               navigate(`/zones/${zoneId}`);
             }}
           >
@@ -329,13 +333,16 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
         .quality-toggle {
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 6px;
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.1);
-          padding: 4px 10px;
-          border-radius: 8px;
+          padding: 8px 16px;
+          min-height: 44px;
+          min-width: 80px;
+          border-radius: 12px;
           color: white;
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 900;
           cursor: pointer;
           transition: all 0.2s;
@@ -399,13 +406,17 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
         }
 
         .bottom-bar {
-          height: 100px;
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: auto;
           display: flex;
           align-items: center;
           justify-content: center;
           background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
-          padding-bottom: 20px;
-          z-index: 30;
+          padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+          z-index: 100;
         }
 
         .controls-group {
@@ -420,17 +431,26 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
         }
 
         .control-btn {
-          width: 48px;
-          height: 48px;
-          border-radius: 16px;
+          width: 44px;
+          height: 44px;
+          min-width: 44px;
+          min-height: 44px;
+          border-radius: 14px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
           border: none;
-          background: transparent;
+          background: rgba(255, 255, 255, 0.05);
           color: white;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          touch-action: manipulation;
+        }
+
+        .control-btn:active {
+          transform: scale(0.92);
+          background: rgba(255, 255, 255, 0.15) !important;
+          transition: transform 0.1s;
         }
 
         @media (max-width: 767px) {
@@ -657,7 +677,8 @@ const ClassroomPage = () => {
             background: #c2f575;
             color: #1a1a4e;
             border: none;
-            padding: 12px 24px;
+            padding: 16px 32px;
+            min-height: 44px;
             border-radius: 12px;
             font-weight: 800;
             cursor: pointer;
@@ -685,6 +706,14 @@ const ClassroomPage = () => {
         audio={true}
         adaptiveStream={true}
         dynacast={true}
+        publishDefaults={{
+          simulcast: true,
+          videoSimulcastLayers: [
+            { width: 1280, height: 720, bitrate: 1500000 },
+            { width: 640, height: 360, bitrate: 500000 },
+            { width: 320, height: 180, bitrate: 150000 }
+          ]
+        }}
         data-lk-theme="default"
         onDisconnected={() => handleDisconnect('unexpected')}
       >

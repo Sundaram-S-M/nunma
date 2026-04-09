@@ -115,12 +115,17 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         let totalEarnings = (user as any).earnings || 0; // Use user.earnings if available, fallback to 0
         
         if (role === UserRole.TUTOR) {
-          for (const z of zonesList) {
-            if (z.role === 'tutor') {
-              const studentsColl = collection(db, 'zones', z.id, 'students');
-              const snap = await getCountFromServer(studentsColl);
-              totalStudents += snap.data().count;
+          try {
+            for (const z of zonesList) {
+              if (z.role === 'tutor') {
+                const studentsColl = collection(db, 'zones', z.id, 'students');
+                const snap = await getCountFromServer(studentsColl);
+                totalStudents += snap.data().count;
+              }
             }
+          } catch (err) {
+            console.warn("Dashboard student aggregation suppressed.");
+            totalStudents = 0;
           }
         }
 

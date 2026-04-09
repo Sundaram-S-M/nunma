@@ -3,6 +3,7 @@ admin.initializeApp();
 
 import * as functions from "firebase-functions";
 import { onRequest, onCall } from "firebase-functions/v2/https";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 
@@ -243,7 +244,7 @@ export const createBunnyVideo = onCall(
             throw new functions.https.HttpsError("permission-denied", "Thala or Tutor access required.");
         }
 
-        const { title, zoneId } = request.data;
+        const { title, zoneId, videoId: existingVideoId } = request.data;
         if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
 
         const libraryId = process.env.BUNNY_LIBRARY_ID;
@@ -253,18 +254,20 @@ export const createBunnyVideo = onCall(
             throw new functions.https.HttpsError('internal', 'BUNNY_API_KEY or BUNNY_LIBRARY_ID is missing or undefined on the server.');
         }
 
-        // Step 2: Bunny Init (Get GUID)
-        let videoId;
-        try {
-            const response = await axios.post(
-                `https://video.bunnycdn.com/library/${libraryId}/videos`, 
-                { title: title || 'Untitled' }, 
-                { headers: { 'AccessKey': bunnyKey, 'Content-Type': 'application/json' } }
-            );
-            videoId = response.data.guid;
-        } catch (apiError: any) {
-            console.error("Bunny API Error:", apiError.response?.data || apiError.message);
-            throw new functions.https.HttpsError("internal", `Bunny API Error: ${apiError.response?.data?.Message || apiError.message}`);
+        // Step 2: Bunny Init (Get GUID or use existing)
+        let videoId = existingVideoId;
+        if (!videoId) {
+            try {
+                const response = await axios.post(
+                    `https://video.bunnycdn.com/library/${libraryId}/videos`, 
+                    { title: title || 'Untitled' }, 
+                    { headers: { 'AccessKey': bunnyKey, 'Content-Type': 'application/json' } }
+                );
+                videoId = response.data.guid;
+            } catch (apiError: any) {
+                console.error("Bunny API Error:", apiError.response?.data || apiError.message);
+                throw new functions.https.HttpsError("internal", `Bunny API Error: ${apiError.response?.data?.Message || apiError.message}`);
+            }
         }
         
         // Step 3: Signature Generation
@@ -272,8 +275,6 @@ export const createBunnyVideo = onCall(
         const signature = crypto.createHash('sha256').update(libraryId + bunnyKey + expirationTime + videoId).digest('hex');
 
         // Step 4: DB Write (Direct indexing under Zone subcollection)
-        // TODO: NUNMA-V2 - The ultimate source of truth for status transitions should be 
-        // the Bunny Stream Webhook (bunnyStreamWebhook), not the frontend client.
         const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
         await videoRef.set({
             bunnyVideoId: videoId,
@@ -282,7 +283,7 @@ export const createBunnyVideo = onCall(
             tutorId: request.auth.uid,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             zoneId
-        });
+        }, { merge: true }); // Use merge to avoid overwriting existing metadata during resume
 
         return { 
             videoId, 
@@ -594,7 +595,10 @@ export const createRazorpayOrder = onCall(
             throw new functions.https.HttpsError("unauthenticated", "You must be signed in to create an order.");
         }
 
-        const { zoneId, planId, amount: requestedAmount } = request.data;
+        const data = request.data;
+        const zoneId = data.zoneId;
+        const planId = data.planId;
+
         if (!zoneId && !planId) {
             throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or planId.");
         }
@@ -608,6 +612,8 @@ export const createRazorpayOrder = onCall(
         let finalAmount: number;
         let rzpAccountId: string | undefined;
         let tutorShare: number | undefined;
+        let tutorUid: string | undefined;
+        let commission: number | undefined;
 
         if (zoneId) {
             // -- Case A: Student buying a Zone Course --
@@ -617,14 +623,14 @@ export const createRazorpayOrder = onCall(
             }
 
             const zoneData = zoneDoc.data()!;
-            const expectedAmountPaise = Math.round((zoneData.price || 0) * 100);
+            // Server-side source of truth for price (prioritize priceINR)
+            const price = zoneData.priceINR || zoneData.price || 0;
+            finalAmount = Math.round(price * 100); // Convert to paise
 
-            if (Number(requestedAmount) !== expectedAmountPaise) {
-                throw new functions.https.HttpsError("invalid-argument", `Amount mismatch. Expected ${expectedAmountPaise} paise.`);
+            tutorUid = zoneData.createdBy;
+            if (!tutorUid) {
+                throw new functions.https.HttpsError("failed-precondition", "Zone creator (tutorUid) is missing.");
             }
-            finalAmount = expectedAmountPaise;
-
-            const tutorUid = zoneData.createdBy;
             const tutorDoc = await db.collection("users").doc(tutorUid).get();
             if (!tutorDoc.exists) {
                 throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
@@ -647,7 +653,7 @@ export const createRazorpayOrder = onCall(
             if (plan === 'STANDARD') commissionPct = 5;
             else if (plan === 'PREMIUM') commissionPct = 2;
 
-            const commission = Math.round(finalAmount * (commissionPct / 100));
+            commission = Math.round(finalAmount * (commissionPct / 100));
             tutorShare = finalAmount - commission;
 
         } else {
@@ -704,7 +710,10 @@ export const createRazorpayOrder = onCall(
                 await db.collection("zones").doc(zoneId).collection("orders").doc(razorpayOrder.id).set({
                     orderId: razorpayOrder.id,
                     studentUid: request.auth.uid,
+                    tutorUid: tutorUid, // Store tutorUid for webhook consumption
                     amount: finalAmount,
+                    commission: commission, // Store commission for webhook invoicing
+                    tutorShare: tutorShare, // Store tutorShare for reference
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     status: 'CREATED'
                 });
@@ -794,7 +803,35 @@ export const razorpayRouteWebhook = onRequest(
             
             const zoneId = zoneRef.id;
             const studentUid = orderData.studentUid;
-            const commissionAmount = orderData.commission || 0; // in paise
+            let tutorUidFromDoc = orderData.tutorUid;
+            let commissionAmount = orderData.commission;
+
+            // Fallback for existing orders that don't have tutorUid or commission stored
+            if (!tutorUidFromDoc || commissionAmount === undefined) {
+                const zoneDoc = await zoneRef.get();
+                const zoneData = zoneDoc.data();
+                tutorUidFromDoc = tutorUidFromDoc || zoneData?.createdBy;
+                
+                if (!tutorUidFromDoc) {
+                    console.error(`Webhook error: Could not determine tutorUid for order ${orderId} in zone ${zoneId}`);
+                    // We shouldn't stop fulfillment, but we can't do the commission invoice
+                    commissionAmount = commissionAmount || 0;
+                } else if (commissionAmount === undefined) {
+                    // Recalculate commission if missing (matches createRazorpayOrder logic)
+                    const tutorDoc = await db.collection("users").doc(tutorUidFromDoc).get();
+                    if (!tutorDoc.exists) {
+                        console.warn(`Webhook warning: Tutor profile ${tutorUidFromDoc} not found for commission calculation.`);
+                        commissionAmount = 0;
+                    } else {
+                        const tutorData = tutorDoc.data()!;
+                        let commissionPct = 15;
+                        const plan = tutorData.subscriptionPlan;
+                        if (plan === 'STANDARD') commissionPct = 5;
+                        else if (plan === 'PREMIUM') commissionPct = 2;
+                        commissionAmount = Math.round(orderData.amount * (commissionPct / 100));
+                    }
+                }
+            }
 
             // 2. Enroll student
             const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentUid);
@@ -808,77 +845,24 @@ export const razorpayRouteWebhook = onRequest(
             // 3. Update order status to CAPTURED
             await orderRef.update({
                 status: 'CAPTURED',
-                capturedAt: admin.firestore.FieldValue.serverTimestamp()
+                capturedAt: admin.firestore.FieldValue.serverTimestamp(),
+                tutorUid: tutorUidFromDoc,
+                commission: commissionAmount
             });
 
-            // 4. Generate Zoho invoice
-            try {
-                // Fetch tutorUid (zone creator)
-                const zoneDoc = await zoneRef.get();
-                const tutorUid = zoneDoc.data()?.createdBy;
+            // 4. Queue Asynchronous Invoicing & Email
+            const amountInInr = (commissionAmount || 0) / 100;
+            const gstAmount = amountInInr * 0.18;
 
-                if (!tutorUid) {
-                    throw new Error(`Tutor UID not found for zone: ${zoneId}`);
-                }
-
-                const orgId = process.env.ZOHO_ORG_ID!;
-                const refreshToken = process.env.ZOHO_REFRESH_TOKEN!;
-                const clientId = process.env.ZOHO_CLIENT_ID!;
-                const clientSecret = process.env.ZOHO_CLIENT_SECRET!;
-
-                // Use the returned access_token as Bearer token for Zoho Books invoice POST.
-                // refresh OAuth token using URL-encoded POST as confirmed by user
-                const tokenParams = new URLSearchParams();
-                tokenParams.append('refresh_token', refreshToken);
-                tokenParams.append('client_id', clientId);
-                tokenParams.append('client_secret', clientSecret);
-                tokenParams.append('grant_type', 'refresh_token');
-
-                const tokenResponse = await axios.post('https://accounts.zoho.in/oauth/v2/token', tokenParams.toString(), {
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                });
-
-                const accessToken = tokenResponse.data.access_token;
-                if (!accessToken) throw new Error("Failed to refresh Zoho access token.");
-
-                // Generate Zoho invoice for platform commission
-                // Invoice line item: platform commission amount, description 'Nunma Platform Fee'
-                const invoicePayload = {
-                    customer_name: (await db.collection("users").doc(tutorUid).get()).data()?.name || "Tutor",
-                    line_items: [{
-                        description: 'Nunma Platform Fee',
-                        rate: commissionAmount / 100, // paise to INR
-                        quantity: 1
-                    }],
-                    reason: `Platform fee for Razorpay Payment ${paymentId}`
-                };
-
-                const invoiceResponse = await axios.post(
-                    `https://www.zohoapis.in/books/v3/invoices?organization_id=${orgId}`,
-                    invoicePayload,
-                    {
-                        headers: {
-                            'Authorization': `Bearer ${accessToken}`,
-                            'Content-Type': 'application/json'
-                        }
-                    }
-                );
-
-                const zohoInvoiceId = invoiceResponse.data.invoice?.invoice_id || "ZOHO_ERR";
-
-                // Write result to users/{tutorUid}/invoices/{zohoInvoiceId}
-                await db.collection('users').doc(tutorUid).collection('invoices').doc(zohoInvoiceId).set({
-                    zohoInvoiceId,
-                    amount: commissionAmount / 100,
-                    paymentId,
-                    createdAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-
-            } catch (zohoError: any) {
-                // Log Zoho errors but still return 200
-                const errorData = zohoError?.response?.data || zohoError.message;
-                console.error("Zoho Invoice Generation Failed:", JSON.stringify(errorData));
-            }
+            await db.collection('mail_queue').add({
+                uid: tutorUidFromDoc,
+                amount: amountInInr,
+                gst: gstAmount,
+                type: 'PLATFORM_FEE',
+                paymentId,
+                status: 'pending',
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
 
             res.status(200).send('OK');
 
@@ -986,47 +970,20 @@ export const razorpayWebhook = onRequest(
                 }, { merge: true });
             });
 
-            // Step 3: Non-Blocking Notifications (Zoho Invoice Email)
-            const sendInvoice = async () => {
-                try {
-                    const userDoc = await db.collection('users').doc(studentUid).get();
-                    const userEmail = userDoc.data()?.email;
-                    const userName = userDoc.data()?.name || 'Student';
+            // Step 3: Queue Asynchronous Invoicing & Email
+            const totalAmountInInr = (payment.amount || 0) / 100;
+            const gstAmount = totalAmountInInr * 0.18;
 
-                    if (!userEmail) {
-                        console.warn("User email not found for invoice notification.");
-                        return;
-                    }
-
-                    const mailOptions = {
-                        from: `"Nunma Academy" <${process.env.SMTP_USER}>`,
-                        to: userEmail,
-                        subject: `Enrollment Confirmed: ${orderData.zoneTitle || 'Your Course'}`,
-                        html: `
-                            <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                                <h1 style="color: #1A1A4E;">Payment Successful!</h1>
-                                <p>Hi ${userName},</p>
-                                <p>Your payment for <b>${orderData.zoneTitle || 'the course'}</b> has been confirmed.</p>
-                                <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                    <p style="margin: 5px 0;"><b>Order ID:</b> ${razorpayOrderId}</p>
-                                    <p style="margin: 5px 0;"><b>Payment ID:</b> ${paymentId}</p>
-                                </div>
-                                <p>You can now access your course in the Dashboard.</p>
-                                <br/>
-                                <p>Happy learning,<br/><b>Nunma Team</b></p>
-                            </div>
-                        `
-                    };
-
-                    await transporter.sendMail(mailOptions);
-                    console.log(`Invoice email sent successfully to ${userEmail}`);
-                } catch (emailError) {
-                    console.error('Invoice failed but access granted', emailError);
-                }
-            };
-
-            // Trigger non-blocking email
-            sendInvoice().catch(err => console.error("Email notification wrapper error:", err));
+            await db.collection('mail_queue').add({
+                uid: studentUid,
+                amount: totalAmountInInr,
+                gst: gstAmount,
+                planId: orderData.planId || '',
+                paymentId,
+                type: orderData.planId ? 'PLATFORM_SUBSCRIPTION' : 'ZONE_ENROLLMENT',
+                status: 'pending',
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
 
             res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
 
@@ -1985,3 +1942,168 @@ export const joinZoneByInvite = onCall(
 
     return { success: true };
 });
+
+// --- ASYNCHRONOUS INVOICING PIPELINE (V2) ---
+
+export const processInvoicingQueue = onDocumentCreated(
+    { 
+        document: 'mail_queue/{docId}', 
+        retry: true,
+        secrets: [
+            "ZOHO_ORG_ID", "ZOHO_REFRESH_TOKEN", "ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET",
+            "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS"
+        ]
+    },
+    async (event) => {
+        const snapshot = event.data;
+        if (!snapshot) return;
+
+        const data = snapshot.data();
+        const db = admin.firestore();
+
+        if (data.status !== 'pending') return;
+
+        try {
+            const { uid, amount, type, paymentId } = data;
+            const orgId = process.env.ZOHO_ORG_ID!;
+            const refreshToken = process.env.ZOHO_REFRESH_TOKEN!;
+            const clientId = process.env.ZOHO_CLIENT_ID!;
+            const clientSecret = process.env.ZOHO_CLIENT_SECRET!;
+
+            // 1. Refresh Zoho OAuth Token
+            const tokenParams = new URLSearchParams();
+            tokenParams.append('refresh_token', refreshToken);
+            tokenParams.append('client_id', clientId);
+            tokenParams.append('client_secret', clientSecret);
+            tokenParams.append('grant_type', 'refresh_token');
+
+            const tokenResponse = await axios.post('https://accounts.zoho.in/oauth/v2/token', tokenParams.toString(), {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            });
+
+            const accessToken = tokenResponse.data.access_token;
+            if (!accessToken) throw new Error("Failed to refresh Zoho access token.");
+
+            const authHeaders = {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            };
+
+            // 2. Fetch User Details for Zoho Customer
+            const userDoc = await db.collection("users").doc(uid).get();
+            const userData = userDoc.data();
+            const userName = userData?.name || "Customer";
+            const userEmail = userData?.email;
+
+            if (!userEmail) throw new Error(`Email not found for user ${uid}`);
+
+            // 3. Ensure Customer exists in Zoho
+            const searchResponse = await axios.get(
+                `https://www.zohoapis.in/books/v3/contacts?organization_id=${orgId}&email=${userEmail}`,
+                { headers: authHeaders }
+            );
+
+            let contactId = "";
+            if (searchResponse.data.contacts && searchResponse.data.contacts.length > 0) {
+                contactId = searchResponse.data.contacts[0].contact_id;
+            } else {
+                const contactResponse = await axios.post(
+                    `https://www.zohoapis.in/books/v3/contacts?organization_id=${orgId}`,
+                    { contact_name: userName, email: userEmail, contact_type: 'customer' },
+                    { headers: authHeaders }
+                );
+                contactId = contactResponse.data.contact.contact_id;
+            }
+
+            // 4. Create Invoice
+            const invoicePayload = {
+                customer_id: contactId,
+                line_items: [{
+                    description: type === 'PLATFORM_FEE' ? 'Nunma Platform Fee' : 'Knowledge Stream Enrollment',
+                    rate: amount,
+                    quantity: 1
+                }],
+                reason: `Payment Received: ${paymentId}`,
+                status: 'sent'
+            };
+
+            const invoiceResponse = await axios.post(
+                `https://www.zohoapis.in/books/v3/invoices?organization_id=${orgId}`,
+                invoicePayload,
+                { headers: authHeaders }
+            );
+
+            const invoiceId = invoiceResponse.data.invoice.invoice_id;
+
+            // 5. Mark Invoice as Paid
+            await axios.post(
+                `https://www.zohoapis.in/books/v3/customerpayments?organization_id=${orgId}`,
+                {
+                    customer_id: contactId,
+                    payment_mode: 'online',
+                    amount: amount,
+                    date: new Date().toISOString().split('T')[0],
+                    invoices: [{
+                        invoice_id: invoiceId,
+                        amount_applied: amount
+                    }]
+                },
+                { headers: authHeaders }
+            );
+
+            // 6. Fetch Invoice PDF
+            const pdfResponse = await axios.get(
+                `https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=${orgId}&accept=pdf`,
+                { 
+                    headers: authHeaders,
+                    responseType: 'arraybuffer' 
+                }
+            );
+
+            const pdfBuffer = Buffer.from(pdfResponse.data, 'binary');
+
+            // 7. Dispatch Email via SMTP
+            const mailOptions = {
+                from: `"Nunma Academy" <${process.env.SMTP_USER}>`,
+                to: userEmail,
+                subject: `Invoice for ${type === 'PLATFORM_FEE' ? 'Platform Fee' : 'Course Enrollment'}`,
+                html: `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                        <h1 style="color: #1A1A4E;">Payment Confirmed</h1>
+                        <p>Hi ${userName},</p>
+                        <p>Your payment has been successfully processed. Please find your invoice attached.</p>
+                        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <p style="margin: 5px 0;"><b>Payment ID:</b> ${paymentId}</p>
+                            <p style="margin: 5px 0;"><b>Amount:</b> ₹${amount}</p>
+                        </div>
+                        <p>Happy learning,<br/><b>Nunma Team</b></p>
+                    </div>
+                `,
+                attachments: [{
+                    filename: `Invoice_${paymentId}.pdf`,
+                    content: pdfBuffer
+                }]
+            };
+
+            await transporter.sendMail(mailOptions);
+
+            // 8. Update Queue Status
+            await snapshot.ref.update({
+                status: 'delivered',
+                zohoInvoiceId: invoiceId,
+                deliveredAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            console.log(`Async Pipeline Success: Invoice ${invoiceId} delivered to ${userEmail}`);
+
+        } catch (error: any) {
+            console.error("Async Invoicing Failed:", error.response?.data || error.message);
+            await snapshot.ref.update({
+                status: 'failed',
+                error: error.response?.data || error.message,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            throw error;
+        }
+    }
+);

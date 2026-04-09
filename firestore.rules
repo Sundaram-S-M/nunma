@@ -40,7 +40,7 @@ service cloud.firestore {
       match /students/{studentId} {
         allow read: if isSignedIn() && (
           request.auth.uid == studentId || 
-          getZoneData(zoneId).createdBy == request.auth.uid
+          get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy == request.auth.uid
         );
         allow write: if false;
       }
@@ -120,7 +120,7 @@ service cloud.firestore {
     // --- PLATFORM ORDERS Collection ---
     // Rule: only the tutor who created the order can read it
     match /platform_orders/{orderId} {
-      allow read: if isSignedIn() && resource.data.tutorUid == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.tutorId == request.auth.uid;
       allow write: if false;
     }
 

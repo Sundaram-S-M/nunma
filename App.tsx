@@ -37,6 +37,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 
 import Payment from './pages/Payment';
+import ZoneDetailView from './pages/ZoneDetailView';
 import LiveNotification from './components/LiveNotification';
 
 const AppContent: React.FC = () => {
@@ -139,6 +140,7 @@ const AppContent: React.FC = () => {
             <Route path="/products" element={<ProductManagement />} />
             <Route path="/u/:id" element={<ProfileView />} />
             <Route path="/payment/:zoneId" element={<Payment />} />
+            <Route path="/zone/:zoneId" element={<ZoneDetailView />} />
             <Route path="/booking/:productId" element={<BookingPage />} />
             <Route path="/billing" element={<PricingPage />} />
             <Route path="/workplace/analytics/:zoneId" element={role === UserRole.TUTOR ? <AnalyticsDashboard /> : <Navigate to="/dashboard" />} />

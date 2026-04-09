@@ -107,12 +107,9 @@ const Payment: React.FC = () => {
 
             const createOrder = httpsCallable(functions, 'createRazorpayOrder');
 
-            const orderResult: any = await createOrder({ 
-                zoneId,
-                type: isMentorship ? 'mentorship' : 'zone'
-            });
+            const orderResult: any = await createOrder({ zoneId });
 
-            if (!orderResult.data.id || !orderResult.data.amount) {
+            if (!orderResult.data.orderId || !orderResult.data.amount) {
                 throw new Error('Failed to create Razorpay order. The server returned an invalid response.');
             }
 
@@ -129,7 +126,7 @@ const Payment: React.FC = () => {
                 currency: orderData.currency || 'INR',
                 name: 'Nunma Academy',
                 description: item.title,
-                order_id: orderData.id,
+                order_id: orderData.orderId,
                 handler: function (response: any) {
                     console.log('Razorpay Success Response:', response);
                     if (isMentorship) {

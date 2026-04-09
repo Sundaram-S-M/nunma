@@ -151,6 +151,8 @@ const WhiteboardPage = () => {
           color: #fcfcfc;
           overflow: hidden;
           font-family: 'Inter', sans-serif;
+          touch-action: none;
+          overscroll-behavior: none;
         }
 
         .top-bar {
