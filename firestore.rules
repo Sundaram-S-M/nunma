@@ -16,6 +16,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/zones/$(zoneId)).data;
     }
 
+    function isZoneCreator(zoneId) {
+      return get(/databases/$(database)/documents/zones/$(zoneId)).data.tutorId == request.auth.uid;
+    }
+
     // --- USERS Collection ---
     // Rule: owner can read/write their own document and all sub-collections
     match /users/{userId} {
@@ -32,7 +36,7 @@ service cloud.firestore {
     match /zones/{zoneId} {
       allow read: if isSignedIn();
       // Only the creator can write
-      allow write: if isSignedIn() && resource.data.createdBy == request.auth.uid;
+      allow write: if isSignedIn() && resource.data.tutorId == request.auth.uid;
 
       // ZONES/STUDENTS Sub-collection
       // Rule: read if studentId or zone creator (Thala). 
@@ -40,7 +44,7 @@ service cloud.firestore {
       match /students/{studentId} {
         allow read: if isSignedIn() && (
           request.auth.uid == studentId || 
-          get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy == request.auth.uid
+          isZoneCreator(zoneId)
         );
         allow write: if false;
       }
@@ -48,7 +52,7 @@ service cloud.firestore {
       // ZONES/INVITES Sub-collection
       // Rule: read/write only for zone creator
       match /invites/{inviteId} {
-        allow read, write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
+        allow read, write: if isSignedIn() && isZoneCreator(zoneId);
       }
 
       // ZONES/EXAMS Sub-collection
@@ -56,14 +60,14 @@ service cloud.firestore {
       match /exams/{examId} {
         allow read: if isSignedIn() && (
           exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid)) ||
-          request.auth.uid == getZoneData(zoneId).createdBy
+          isZoneCreator(zoneId)
         );
-        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
+        allow write: if isSignedIn() && isZoneCreator(zoneId);
 
         // ZONES/EXAMS/SUBMISSIONS Sub-collection
         // Rule: read if studentId or creator, no client writes
         match /submissions/{studentId} {
-          allow read: if isSignedIn() && (request.auth.uid == studentId || getZoneData(zoneId).createdBy == request.auth.uid);
+          allow read: if isSignedIn() && (request.auth.uid == studentId || isZoneCreator(zoneId));
           allow write: if false;
         }
       }
@@ -71,36 +75,36 @@ service cloud.firestore {
       // ZONES/ORDERS Sub-collection
       // Rule: read if studentUid or creator, no client writes
       match /orders/{orderId} {
-        allow read: if isSignedIn() && (request.auth.uid == resource.data.studentUid || getZoneData(zoneId).createdBy == request.auth.uid);
+        allow read: if isSignedIn() && (request.auth.uid == resource.data.studentUid || isZoneCreator(zoneId));
         allow write: if false;
       }
 
       // ZONES/VIDEOS Sub-collection
       match /videos/{videoId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
+        allow write: if isSignedIn() && isZoneCreator(zoneId);
       }
 
       // ZONES/CHAPTERS Sub-collection
       match /chapters/{chapterId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
+        allow write: if isSignedIn() && isZoneCreator(zoneId);
       }
 
       // ZONES/SESSIONS Sub-collection
       match /sessions/{sessionId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
+        allow write: if isSignedIn() && isZoneCreator(zoneId);
 
         match /attendance/{attendeeId} {
-          allow read, write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
+          allow read, write: if isSignedIn() && isZoneCreator(zoneId);
         }
       }
 
       // ZONES/ATTENDANCE_SESSIONS Sub-collection
       match /attendance_sessions/{sessionId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn() && request.auth.uid == getZoneData(zoneId).createdBy;
+        allow write: if isSignedIn() && isZoneCreator(zoneId);
       }
     }
 

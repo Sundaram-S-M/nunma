@@ -325,6 +325,13 @@ const ZoneManagement: React.FC = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [activeInvite, setActiveInvite] = useState<{ inviteToken: string, expiresAt: number } | null>(null);
 
+  // Extracted Callbacks to prevent hook violations
+  const handleCloseVideoUpload = useCallback(() => setShowVideoUploadModal(false), []);
+  const handleCloseDocumentUploader = useCallback(() => { 
+    setShowDocumentUploader(false); 
+    setActiveChapterForUpload(null); 
+  }, []);
+
   const handleOpenShareModal = async () => {
     if (!zoneId) return;
     try {
@@ -1255,7 +1262,13 @@ const ZoneManagement: React.FC = () => {
     setTimeout(() => setIsCopying(false), 2000);
   };
 
-  if (!zone) return <div className="p-20 text-center text-gray-400 font-bold uppercase tracking-widest animate-pulse">Launching Infrastructure...</div>;
+  if (!zone) {
+    return (
+      <div className="p-20 text-center text-gray-400 font-bold uppercase tracking-widest animate-pulse">
+        Launching Infrastructure...
+      </div>
+    );
+  }
 
   return (
     <React.Fragment>
@@ -1304,7 +1317,7 @@ const ZoneManagement: React.FC = () => {
         {/* EXTERNAL MODALS */}
         <VideoUploadModal
           isOpen={showVideoUploadModal}
-          onClose={useCallback(() => setShowVideoUploadModal(false), [])}
+          onClose={handleCloseVideoUpload}
           zoneId={zoneId}
           chapterId={activeChapterForUpload || undefined}
           onUploadSuccess={handleVideoUploadSuccess}
@@ -1314,7 +1327,7 @@ const ZoneManagement: React.FC = () => {
           <DocumentModuleUploader
             courseId={zoneId}
             chapterId={activeChapterForUpload}
-            onClose={useCallback(() => { setShowDocumentUploader(false); setActiveChapterForUpload(null); }, [])}
+            onClose={handleCloseDocumentUploader}
             onSuccess={handleDocumentUploadSuccess}
           />
         )}
