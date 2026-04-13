@@ -34,6 +34,8 @@ import WhiteboardPage from './pages/WhiteboardPage';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 
 
+import { Toaster } from 'react-hot-toast';
+
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 
@@ -182,6 +184,7 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <Router>
+        <Toaster position="top-center" reverseOrder={false} />
         <AppContent />
       </Router>
     </AuthProvider>

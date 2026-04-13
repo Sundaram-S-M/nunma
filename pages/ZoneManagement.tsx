@@ -192,6 +192,7 @@ const ZoneManagement: React.FC = () => {
   // Input States
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentEmail, setNewStudentEmail] = useState('');
+  const [isWhitelisting, setIsWhitelisting] = useState(false);
   const [examToStart, setExamToStart] = useState<Exam | null>(null);
   const [newAttendanceClassName, setNewAttendanceClassName] = useState('');
   const [attendanceTime, setAttendanceTime] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -324,6 +325,7 @@ const ZoneManagement: React.FC = () => {
   // Share Modal State
   const [showShareModal, setShowShareModal] = useState(false);
   const [activeInvite, setActiveInvite] = useState<{ inviteToken: string, expiresAt: number } | null>(null);
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
 
   // Extracted Callbacks to prevent hook violations
   const handleCloseVideoUpload = useCallback(() => setShowVideoUploadModal(false), []);
@@ -358,6 +360,7 @@ const ZoneManagement: React.FC = () => {
   const handleGenerateInvite = async () => {
     if (!zoneId) return;
     try {
+      setIsGeneratingInvite(true);
       const genFunc = httpsCallable(functions, 'generateZoneInvite');
       const result = await genFunc({ zoneId });
       const { inviteToken, expiresAt } = result.data as any;
@@ -365,6 +368,8 @@ const ZoneManagement: React.FC = () => {
     } catch (err: any) {
       console.error('Generation failed:', err);
       toast.error(err.message || 'Failed to generate invite');
+    } finally {
+      setIsGeneratingInvite(false);
     }
   };
 
@@ -613,18 +618,23 @@ const ZoneManagement: React.FC = () => {
       setAttendanceSessions((snapshot.docs || []).map(doc => ({ ...doc.data(), id: doc.id } as AttendanceSession)));
     });
 
-    // 7. Active Invite Listener (Hotfix)
-    const invitesRef = collection(db, 'zones', zoneId, 'invites');
-    const invitesq = query(invitesRef, where('isActive', '==', true), limit(1));
-    const invitesUnsub = onSnapshot(invitesq, (snapshot) => {
-      if (!snapshot.empty) {
-        const docSnap = snapshot.docs[0];
-        const data = docSnap.data();
-        setActiveInvite({ inviteToken: docSnap.id, expiresAt: data.expiresAt });
-      } else {
-        setActiveInvite(null);
-      }
-    });
+    // 7. Active Invite Listener (Hotfix) - Only run if zoneId is truthy
+    let invitesUnsub = () => {};
+    if (zoneId) {
+      const invitesRef = collection(db, 'zones', zoneId, 'invites');
+      const invitesq = query(invitesRef, where('isActive', '==', true), limit(1));
+      invitesUnsub = onSnapshot(invitesq, (snapshot) => {
+        if (!snapshot.empty) {
+          const docSnap = snapshot.docs[0];
+          const data = docSnap.data();
+          setActiveInvite({ inviteToken: docSnap.id, expiresAt: data.expiresAt });
+        } else {
+          setActiveInvite(null);
+        }
+      }, (error) => {
+        console.error("Invites snapshot error:", error);
+      });
+    }
 
     return () => {
       zoneUnsub();
@@ -1886,61 +1896,42 @@ const ZoneManagement: React.FC = () => {
                       )}
                     </div>
                     <button
+                      disabled={isWhitelisting}
                       onClick={async () => {
                         if (!newStudentEmail || !zoneId) return;
 
+                        setIsWhitelisting(true);
                         try {
-                          // 1. Check if user exists in Firebase
-                          const usersRef = collection(db, 'users');
-                          const q = query(usersRef, where('email', '==', newStudentEmail), limit(1));
-                          const querySnapshot = await getDocs(q);
+                          const processWhitelistFn = httpsCallable(functions, 'processWhitelist');
+                          const result: any = await processWhitelistFn({ zoneId, emails: [newStudentEmail] });
+                          const data = result.data;
 
-                          if (!querySnapshot.empty) {
-                            // User exists - Enroll directly
-                            const userData = querySnapshot.docs[0].data();
-                            const userId = querySnapshot.docs[0].id;
-
-                            const newStudent: Student = {
-                              id: userId,
-                              name: userData?.name || (newStudentEmail || "").split('@')[0],
-                              avatar: userData?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId || ""}`,
-                              joinedAt: new Date().toLocaleDateString(),
-                              status: 'Present',
-                              engagementScore: 0,
-                              email: newStudentEmail,
-                              phone: userData.phone || ''
-                            };
-
-                            await setDoc(doc(db, 'zones', zoneId, 'students', userId), newStudent);
-
-                            alert(`Student added to zone.`);
+                          if (data.enrolled > 0) {
+                            toast.success('Student successfully whitelisted and notified.', { icon: '✅' });
+                          } else if (data.pending > 0) {
+                            toast.success('Email whitelisted. Access will be granted when they register.', { icon: '📧' });
+                          } else if (data.alreadyEnrolled > 0) {
+                            toast('Student is already enrolled in this Zone.', { icon: 'ℹ️' });
                           } else {
-                            // User doesn't exist - Whitelist email and invite
-                            await updateDoc(doc(db, 'zones', zoneId), {
-                              whitelistedEmails: arrayUnion({ email: newStudentEmail, name: newStudentName })
-                            });
-
-                            // Call invitation function
-                            try {
-                              const sendInvite = httpsCallable(functions, 'sendWhitelistInvite');
-                              await sendInvite({ email: newStudentEmail, zoneTitle: zone?.title || "New Zone" });
-                              alert(`Email ${newStudentEmail} whitelisted. Invitation sent!`);
-                            } catch (inviteError) {
-                              console.warn("Failed to send invitation email, but email was whitelisted:", inviteError);
-                              alert(`Email ${newStudentEmail} whitelisted. However, the invitation email failed to send. They can still log in.`);
-                            }
+                            toast.error('Failed to process this email. Please check the address.');
                           }
 
                           setNewStudentEmail('');
                           setShowUserSuggestions(false);
-                        } catch (e) {
-                          console.error("Error granting access:", e);
-                          alert("Failed to grant access to the zone. Please check your connection and try again.");
+                        } catch (e: any) {
+                          console.error("Whitelist error:", e);
+                          toast.error(e.message || 'Failed to grant access. Please try again.');
+                        } finally {
+                          setIsWhitelisting(false);
                         }
                       }}
-                      className="px-8 py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
+                      className={`px-8 py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl ${isWhitelisting ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
-                      Grant Access
+                      {isWhitelisting ? (
+                        <div className="w-4 h-4 border-2 border-[#c2f575] border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        'Grant Access'
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1972,6 +1963,7 @@ const ZoneManagement: React.FC = () => {
                           const file = e.target.files?.[0];
                           if (!file || !zoneId) return;
 
+                          setIsWhitelisting(true);
                           try {
                             const data = await file.arrayBuffer();
                             const workbook = XLSX.read(data);
@@ -1980,55 +1972,29 @@ const ZoneManagement: React.FC = () => {
 
                             // Skip header row if it seems to be one
                             const startIdx = ((rows[0]?.[0] || "").toString().toLowerCase() === 'name' || (rows[0]?.[1] || "").toString().toLowerCase() === 'email') ? 1 : 0;
-                            const studentsToProcess = rows.slice(startIdx)
-                              .map(row => ({ name: row[0], email: (row[1]?.toString() || "").trim().toLowerCase() }))
-                              .filter(s => s.email && s.email.includes('@'));
+                            const emailsToProcess = rows.slice(startIdx)
+                              .map(row => (row[1]?.toString() || "").trim().toLowerCase())
+                              .filter(email => email && email.includes('@'));
 
-                            if (studentsToProcess.length === 0) {
-                              alert("No valid student data found in the file.");
+                            if (emailsToProcess.length === 0) {
+                              toast.error('No valid email addresses found in the file.');
                               return;
                             }
 
-                            const zoneRef = doc(db, 'zones', zoneId);
-                            const studentsRef = collection(db, 'zones', zoneId, 'students');
-                            const usersRef = collection(db, 'users');
+                            const processWhitelistFn = httpsCallable(functions, 'processWhitelist');
+                            const result: any = await processWhitelistFn({ zoneId, emails: emailsToProcess });
+                            const res = result.data;
 
-                            let enrolled = 0;
-                            let whitelisted = 0;
-
-                            for (const s of studentsToProcess) {
-                              // Check if user exists
-                              const q = query(usersRef, where('email', '==', s.email), limit(1));
-                              const userSnap = await getDocs(q);
-
-                              if (!userSnap.empty) {
-                                const userData = userSnap.docs[0].data();
-                                const userId = userSnap.docs[0].id;
-                                await setDoc(doc(studentsRef, userId), {
-                                  id: userId,
-                                  name: s.name || userData?.name || (s.email || "").split('@')[0],
-                                  avatar: userData?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId || ""}`,
-                                  joinedAt: new Date().toLocaleDateString(),
-                                  status: 'Present',
-                                  engagementScore: 0,
-                                  email: s.email,
-                                  addedAt: new Date().toISOString()
-                                });
-
-                                enrolled++;
-                              } else {
-                                await updateDoc(zoneRef, {
-                                  whitelistedEmails: arrayUnion({ email: s.email, name: s.name })
-                                });
-                                whitelisted++;
-                              }
-                            }
-
-                            alert(`Processed ${studentsToProcess.length} students. Enrolled: ${enrolled}, Whitelisted: ${whitelisted}`);
+                            toast.success(
+                              `Processed ${emailsToProcess.length} students. Enrolled: ${res.enrolled}, Pending: ${res.pending}${res.alreadyEnrolled > 0 ? `, Already enrolled: ${res.alreadyEnrolled}` : ''}`,
+                              { duration: 5000, icon: '📋' }
+                            );
                             e.target.value = ''; // Reset file input
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error("Error processing bulk upload:", err);
-                            alert("Failed to process file. Please ensure it's a valid Excel or CSV.");
+                            toast.error(err.message || 'Failed to process file. Please try again.');
+                          } finally {
+                            setIsWhitelisting(false);
                           }
                         }}
                       />
@@ -2413,9 +2379,10 @@ const ZoneManagement: React.FC = () => {
                       <ShareModal
                         isOpen={showShareModal}
                         onClose={() => setShowShareModal(false)}
-                        zoneId={zoneId!}
-                        zoneTitle={zone?.title || 'Zone'}
+                        zoneId={zoneId || ''}
+                        zoneTitle={zone?.title || 'this Zone'}
                         activeInvite={activeInvite}
+                        isGenerating={isGeneratingInvite}
                         onRevoke={() => setActiveInvite(null)}
                         onGenerate={handleGenerateInvite}
                       />

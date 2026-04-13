@@ -39,131 +39,143 @@ const transporter = nodemailer.createTransport({
 export const generateLiveToken = onCall(
     { secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"], cors: true },
     async (request) => {
-        const db = admin.firestore();
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "Login required.");
+        try {
+            const db = admin.firestore();
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "Login required.");
+            }
+
+            const { zoneId, sessionId } = request.data;
+            if (!zoneId || !sessionId) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or sessionId.");
+            }
+
+            const uid = request.auth.uid;
+
+            // Fetch user document to check role and name
+            const userDoc = await db.collection("users").doc(uid).get();
+            if (!userDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "User profile not found.");
+            }
+
+            const userData = userDoc.data();
+            const userName = userData?.name || "Anonymous";
+            const userRole = userData?.role || "STUDENT";
+
+            // Fetch zone to check if user is the creator
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            const zoneData = zoneDoc.data();
+            const isCreator = zoneData?.createdBy === uid;
+
+            const apiKey = process.env.LIVEKIT_API_KEY;
+            const apiSecret = process.env.LIVEKIT_API_SECRET;
+            const liveKitUrl = process.env.LIVEKIT_URL;
+
+            if (!apiKey || !apiSecret || !liveKitUrl) {
+                throw new functions.https.HttpsError("failed-precondition", "LiveKit secrets not configured.");
+            }
+
+            const at = new AccessToken(apiKey, apiSecret, {
+                identity: userName,
+                name: userName,
+            });
+
+            const isTutor = userRole === "TUTOR" || isCreator;
+
+            // Add matching grants
+            at.addGrant({
+                roomJoin: true,
+                room: sessionId,
+                canPublish: isTutor,
+                canSubscribe: true,
+                canPublishData: true,
+            });
+
+            return {
+                token: await at.toJwt(),
+                serverUrl: liveKitUrl
+            };
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in generateLiveToken:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to generate live token.");
         }
-
-        const { zoneId, sessionId } = request.data;
-        if (!zoneId || !sessionId) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or sessionId.");
-        }
-
-        const uid = request.auth.uid;
-
-        // Fetch user document to check role and name
-        const userDoc = await db.collection("users").doc(uid).get();
-        if (!userDoc.exists) {
-            throw new functions.https.HttpsError("not-found", "User profile not found.");
-        }
-
-        const userData = userDoc.data();
-        const userName = userData?.name || "Anonymous";
-        const userRole = userData?.role || "STUDENT";
-
-        // Fetch zone to check if user is the creator
-        const zoneDoc = await db.collection("zones").doc(zoneId).get();
-        const zoneData = zoneDoc.data();
-        const isCreator = zoneData?.createdBy === uid;
-
-        const apiKey = process.env.LIVEKIT_API_KEY;
-        const apiSecret = process.env.LIVEKIT_API_SECRET;
-        const liveKitUrl = process.env.LIVEKIT_URL;
-
-        if (!apiKey || !apiSecret || !liveKitUrl) {
-            throw new functions.https.HttpsError("failed-precondition", "LiveKit secrets not configured.");
-        }
-
-        const at = new AccessToken(apiKey, apiSecret, {
-            identity: userName,
-            name: userName,
-        });
-
-        const isTutor = userRole === "TUTOR" || isCreator;
-
-        // Add matching grants
-        at.addGrant({
-            roomJoin: true,
-            room: sessionId,
-            canPublish: isTutor,
-            canSubscribe: true,
-            canPublishData: true,
-        });
-
-        return {
-            token: await at.toJwt(),
-            serverUrl: liveKitUrl
-        };
     }
 );
 
 export const getLiveKitToken = onCall(
     { secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"], cors: true },
     async (request) => {
-        const db = admin.firestore();
+        try {
+            const db = admin.firestore();
 
-        // 1. Authenticate caller
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "You must be signed in to access live hub sessions.");
-        }
+            // 1. Authenticate caller
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "You must be signed in to access live hub sessions.");
+            }
 
-        const uid = request.auth.uid;
-        const { roomName, identity } = request.data;
+            const uid = request.auth.uid;
+            const { roomName, identity } = request.data;
 
-        // 2. Validate input strings
-        if (typeof roomName !== "string" || !roomName || typeof identity !== "string" || !identity) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing required parameters: roomName or identity.");
-        }
+            // 2. Validate input strings
+            if (typeof roomName !== "string" || !roomName || typeof identity !== "string" || !identity) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing required parameters: roomName or identity.");
+            }
 
-        // 3. Force identity to the authenticated UID for security
-        const secureIdentity = uid;
+            // 3. Force identity to the authenticated UID for security
+            const secureIdentity = uid;
 
-        // 4. Authorization Check
-        let isAuthorized = false;
+            // 4. Authorization Check
+            let isAuthorized = false;
 
-        // Case A: Is an active student in the zone?
-        const studentDoc = await db.collection("zones").doc(roomName).collection("students").doc(uid).get();
-        if (studentDoc.exists && studentDoc.data()?.status === "active") {
-            isAuthorized = true;
-        }
-
-        // Case B: Is the 'Thala' (creator) of the zone?
-        if (!isAuthorized) {
-            const userDoc = await db.collection("users").doc(uid).get();
-            const userData = userDoc.data();
-            
-            const zoneDoc = await db.collection("zones").doc(roomName).get();
-            const zoneData = zoneDoc.data();
-
-            if (userData?.role === "THALA" && zoneData?.createdBy === uid) {
+            // Case A: Is an active student in the zone?
+            const studentDoc = await db.collection("zones").doc(roomName).collection("students").doc(uid).get();
+            if (studentDoc.exists && studentDoc.data()?.status === "active") {
                 isAuthorized = true;
             }
+
+            // Case B: Is the 'Thala' (creator) of the zone?
+            if (!isAuthorized) {
+                const userDoc = await db.collection("users").doc(uid).get();
+                const userData = userDoc.data();
+                
+                const zoneDoc = await db.collection("zones").doc(roomName).get();
+                const zoneData = zoneDoc.data();
+
+                if (userData?.role === "THALA" && zoneData?.createdBy === uid) {
+                    isAuthorized = true;
+                }
+            }
+
+            if (!isAuthorized) {
+                throw new functions.https.HttpsError("permission-denied", "You are not authorized to enter this knowledge stream.");
+            }
+
+            // 5. Generate and Return Token
+            const apiKey = process.env.LIVEKIT_API_KEY;
+            const apiSecret = process.env.LIVEKIT_API_SECRET;
+
+            if (!apiKey || !apiSecret) {
+                throw new functions.https.HttpsError("failed-precondition", "LiveKit configuration is missing on the server.");
+            }
+
+            const at = new AccessToken(apiKey, apiSecret, {
+                identity: secureIdentity,
+                ttl: 3600 // 1 hour expiry
+            });
+
+            at.addGrant({
+                roomJoin: true,
+                room: roomName
+            });
+
+            const token = await at.toJwt();
+            return { token };
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in getLiveKitToken:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to get live token.");
         }
-
-        if (!isAuthorized) {
-            throw new functions.https.HttpsError("permission-denied", "You are not authorized to enter this knowledge stream.");
-        }
-
-        // 5. Generate and Return Token
-        const apiKey = process.env.LIVEKIT_API_KEY;
-        const apiSecret = process.env.LIVEKIT_API_SECRET;
-
-        if (!apiKey || !apiSecret) {
-            throw new functions.https.HttpsError("failed-precondition", "LiveKit configuration is missing on the server.");
-        }
-
-        const at = new AccessToken(apiKey, apiSecret, {
-            identity: secureIdentity,
-            ttl: 3600 // 1 hour expiry
-        });
-
-        at.addGrant({
-            roomJoin: true,
-            room: roomName
-        });
-
-        const token = await at.toJwt();
-        return { token };
     }
 );
 
@@ -171,56 +183,62 @@ export const getLiveKitToken = onCall(
 export const toggleStudentAudio = onCall(
     { secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"], cors: true },
     async (request) => {
-        const db = admin.firestore();
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "Login required.");
+        try {
+            const db = admin.firestore();
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "Login required.");
+            }
+
+            const { zoneId, sessionId, studentIdentity, allowAudio } = request.data;
+            if (!zoneId || !sessionId || !studentIdentity) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing required parameters.");
+            }
+
+            const uid = request.auth.uid;
+
+            // Security Check: Ensure caller is the Creator or a Tutor of the zone
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            if (!zoneDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "Zone not found.");
+            }
+
+            const zoneData = zoneDoc.data();
+            const isCreator = zoneData?.createdBy === uid;
+
+            // Also check if user is a TUTOR in the users collection
+            const userDoc = await db.collection("users").doc(uid).get();
+            const userRole = userDoc.data()?.role;
+            const isTutor = userRole === "TUTOR";
+
+            if (!isCreator && !isTutor) {
+                throw new functions.https.HttpsError("permission-denied", "Only tutors can manage permissions.");
+            }
+
+            const apiKey = process.env.LIVEKIT_API_KEY;
+            const apiSecret = process.env.LIVEKIT_API_SECRET;
+            const liveKitUrl = process.env.LIVEKIT_URL;
+
+            if (!apiKey || !apiSecret || !liveKitUrl) {
+                throw new functions.https.HttpsError("failed-precondition", "LiveKit secrets not configured.");
+            }
+
+            const roomService = new RoomServiceClient(liveKitUrl, apiKey, apiSecret);
+
+            // Update participant permissions
+            // canPublish is the key here. We set canPublish: true for microphone.
+            // We keep video publish strictly false for students.
+            await roomService.updateParticipant(sessionId, studentIdentity, undefined, {
+                canPublish: allowAudio,
+                canPublishSources: allowAudio ? [TrackSource.MICROPHONE] : [],
+                canSubscribe: true,
+            });
+
+            return { success: true, message: `Student audio ${allowAudio ? 'enabled' : 'disabled'}` };
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in toggleStudentAudio:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to toggle student audio.");
         }
-
-        const { zoneId, sessionId, studentIdentity, allowAudio } = request.data;
-        if (!zoneId || !sessionId || !studentIdentity) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing required parameters.");
-        }
-
-        const uid = request.auth.uid;
-
-        // Security Check: Ensure caller is the Creator or a Tutor of the zone
-        const zoneDoc = await db.collection("zones").doc(zoneId).get();
-        if (!zoneDoc.exists) {
-            throw new functions.https.HttpsError("not-found", "Zone not found.");
-        }
-
-        const zoneData = zoneDoc.data();
-        const isCreator = zoneData?.createdBy === uid;
-
-        // Also check if user is a TUTOR in the users collection
-        const userDoc = await db.collection("users").doc(uid).get();
-        const userRole = userDoc.data()?.role;
-        const isTutor = userRole === "TUTOR";
-
-        if (!isCreator && !isTutor) {
-            throw new functions.https.HttpsError("permission-denied", "Only tutors can manage permissions.");
-        }
-
-        const apiKey = process.env.LIVEKIT_API_KEY;
-        const apiSecret = process.env.LIVEKIT_API_SECRET;
-        const liveKitUrl = process.env.LIVEKIT_URL;
-
-        if (!apiKey || !apiSecret || !liveKitUrl) {
-            throw new functions.https.HttpsError("failed-precondition", "LiveKit secrets not configured.");
-        }
-
-        const roomService = new RoomServiceClient(liveKitUrl, apiKey, apiSecret);
-
-        // Update participant permissions
-        // canPublish is the key here. We set canPublish: true for microphone.
-        // We keep video publish strictly false for students.
-        await roomService.updateParticipant(sessionId, studentIdentity, undefined, {
-            canPublish: allowAudio,
-            canPublishSources: allowAudio ? [TrackSource.MICROPHONE] : [],
-            canSubscribe: true,
-        });
-
-        return { success: true, message: `Student audio ${allowAudio ? 'enabled' : 'disabled'}` };
     }
 );
 
@@ -230,68 +248,74 @@ export const toggleStudentAudio = onCall(
 export const createBunnyVideo = onCall(
     { secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true },
     async (request) => {
-        const db = admin.firestore();
-        if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
-        
-        // Step 1: Role Check
-        let role = request.auth.token.role;
-        if (!role) {
-            const userDoc = await db.collection("users").doc(request.auth.uid).get();
-            role = userDoc.data()?.role;
-        }
-
-        if (role !== "THALA" && role !== "TUTOR") {
-            throw new functions.https.HttpsError("permission-denied", "Thala or Tutor access required.");
-        }
-
-        const { title, zoneId, videoId: existingVideoId } = request.data;
-        if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
-
-        const libraryId = process.env.BUNNY_LIBRARY_ID;
-        const bunnyKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
-
-        if (!libraryId || !bunnyKey) {
-            throw new functions.https.HttpsError('internal', 'BUNNY_API_KEY or BUNNY_LIBRARY_ID is missing or undefined on the server.');
-        }
-
-        // Step 2: Bunny Init (Get GUID or use existing)
-        let videoId = existingVideoId;
-        if (!videoId) {
-            try {
-                const response = await axios.post(
-                    `https://video.bunnycdn.com/library/${libraryId}/videos`, 
-                    { title: title || 'Untitled' }, 
-                    { headers: { 'AccessKey': bunnyKey, 'Content-Type': 'application/json' } }
-                );
-                videoId = response.data.guid;
-            } catch (apiError: any) {
-                console.error("Bunny API Error:", apiError.response?.data || apiError.message);
-                throw new functions.https.HttpsError("internal", `Bunny API Error: ${apiError.response?.data?.Message || apiError.message}`);
+        try {
+            const db = admin.firestore();
+            if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+            
+            // Step 1: Role Check
+            let role = request.auth.token.role;
+            if (!role) {
+                const userDoc = await db.collection("users").doc(request.auth.uid).get();
+                role = userDoc.data()?.role;
             }
+
+            if (role !== "THALA" && role !== "TUTOR") {
+                throw new functions.https.HttpsError("permission-denied", "Thala or Tutor access required.");
+            }
+
+            const { title, zoneId, videoId: existingVideoId } = request.data;
+            if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
+
+            const libraryId = process.env.BUNNY_LIBRARY_ID;
+            const bunnyKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
+
+            if (!libraryId || !bunnyKey) {
+                throw new functions.https.HttpsError('internal', 'BUNNY_API_KEY or BUNNY_LIBRARY_ID is missing or undefined on the server.');
+            }
+
+            // Step 2: Bunny Init (Get GUID or use existing)
+            let videoId = existingVideoId;
+            if (!videoId) {
+                try {
+                    const response = await axios.post(
+                        `https://video.bunnycdn.com/library/${libraryId}/videos`, 
+                        { title: title || 'Untitled' }, 
+                        { headers: { 'AccessKey': bunnyKey, 'Content-Type': 'application/json' } }
+                    );
+                    videoId = response.data.guid;
+                } catch (apiError: any) {
+                    functions.logger.error("Bunny API Error:", apiError.response?.data || apiError.message);
+                    throw new functions.https.HttpsError("internal", `Bunny API Error: ${apiError.response?.data?.Message || apiError.message}`);
+                }
+            }
+            
+            // Step 3: Signature Generation
+            const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
+            const signature = crypto.createHash('sha256').update(libraryId + bunnyKey + expirationTime + videoId).digest('hex');
+
+            // Step 4: DB Write (Direct indexing under Zone subcollection)
+            const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
+            await videoRef.set({
+                bunnyVideoId: videoId,
+                status: 'uploading',
+                title: title || 'Untitled Video',
+                tutorId: request.auth.uid,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                zoneId
+            }, { merge: true }); // Use merge to avoid overwriting existing metadata during resume
+
+            return { 
+                videoId, 
+                signature, 
+                expirationTime, 
+                libraryId,
+                uploadUrl: 'https://video.bunnycdn.com/tusupload'
+            };
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in createBunnyVideo:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to initiate video upload.");
         }
-        
-        // Step 3: Signature Generation
-        const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
-        const signature = crypto.createHash('sha256').update(libraryId + bunnyKey + expirationTime + videoId).digest('hex');
-
-        // Step 4: DB Write (Direct indexing under Zone subcollection)
-        const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
-        await videoRef.set({
-            bunnyVideoId: videoId,
-            status: 'uploading',
-            title: title || 'Untitled Video',
-            tutorId: request.auth.uid,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            zoneId
-        }, { merge: true }); // Use merge to avoid overwriting existing metadata during resume
-
-        return { 
-            videoId, 
-            signature, 
-            expirationTime, 
-            libraryId,
-            uploadUrl: 'https://video.bunnycdn.com/tusupload'
-        };
     }
 );
 
@@ -345,101 +369,116 @@ export const bunnyStreamWebhook = onRequest(
 export const generateBunnyToken = onCall(
     { secrets: ["BUNNY_TOKEN_KEY", "BUNNY_LIBRARY_ID"], cors: true },
     async (request) => {
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "Login required.");
+        try {
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "Login required.");
+            }
+
+            const { videoId } = request.data;
+            if (!videoId) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing videoId.");
+            }
+
+            const tokenKey = process.env.BUNNY_TOKEN_KEY;
+            const libraryId = process.env.BUNNY_LIBRARY_ID;
+
+            if (!tokenKey || !libraryId) {
+                throw new functions.https.HttpsError("failed-precondition", "Bunny token configuration missing.");
+            }
+
+            const expires = Math.floor(Date.now() / 1000) + 21600; // 6 hours from now
+
+            // Bunny signature logic: Token Security Key + Video ID + Expiration Time
+            const hash = crypto.createHash('sha256').update(tokenKey + videoId + expires).digest('hex');
+
+            return { token: hash, expires, libraryId };
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in generateBunnyToken:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to generate bunny token.");
         }
-
-        const { videoId } = request.data;
-        if (!videoId) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing videoId.");
-        }
-
-        const tokenKey = process.env.BUNNY_TOKEN_KEY;
-        const libraryId = process.env.BUNNY_LIBRARY_ID;
-
-        if (!tokenKey || !libraryId) {
-            throw new functions.https.HttpsError("failed-precondition", "Bunny token configuration missing.");
-        }
-
-        const expires = Math.floor(Date.now() / 1000) + 21600; // 6 hours from now
-
-        // Bunny signature logic: Token Security Key + Video ID + Expiration Time
-        const hash = crypto.createHash('sha256').update(tokenKey + videoId + expires).digest('hex');
-
-        return { token: hash, expires, libraryId };
     }
 );
 
 export const getBunnyPlaybackToken = onCall(
     { secrets: ["BUNNY_TOKEN_KEY", "BUNNY_PULL_ZONE_URL"], cors: true },
     async (request) => {
-        const db = admin.firestore();
-        
-        // 1. Authenticate caller
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "Login required.");
-        }
-
-        const uid = request.auth.uid;
-        const { zoneId, videoId } = request.data;
-
-        if (!zoneId || !videoId) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or videoId.");
-        }
-
-        // 2. Fetch Zone document
-        const zoneDoc = await db.collection("zones").doc(zoneId).get();
-        if (!zoneDoc.exists) {
-            throw new functions.https.HttpsError("not-found", "Zone not found.");
-        }
-
-        const zoneData = zoneDoc.data()!;
-        
-        // 3. Authorization Check
-        let isAuthorized = zoneData.createdBy === uid;
-
-        if (!isAuthorized) {
-            const studentDoc = await db.collection("zones").doc(zoneId).collection("students").doc(uid).get();
-            if (studentDoc.exists && studentDoc.data()?.status === "active") {
-                isAuthorized = true;
+        try {
+            const db = admin.firestore();
+            
+            // 1. Authenticate caller
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "Login required.");
             }
+
+            const uid = request.auth.uid;
+            const { zoneId, videoId } = request.data;
+
+            if (!zoneId || !videoId) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or videoId.");
+            }
+
+            // 2. Fetch Zone document
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            if (!zoneDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "Zone not found.");
+            }
+
+            const zoneData = zoneDoc.data()!;
+            
+            // 3. Authorization Check
+            let isAuthorized = zoneData.createdBy === uid || zoneData.tutorId === uid;
+
+            if (!isAuthorized) {
+                const studentDoc = await db.collection("zones").doc(zoneId).collection("students").doc(uid).get();
+                if (studentDoc.exists && studentDoc.data()?.status === "active") {
+                    isAuthorized = true;
+                }
+            }
+
+            if (!isAuthorized) {
+                throw new functions.https.HttpsError("permission-denied", "Unauthorized access to this content.");
+            }
+
+            // 4. Validate videoId in segments array
+            const segments = zoneData.segments || [];
+            const videoExists = segments.some((s: any) => s.videoId === videoId);
+
+            if (!videoExists) {
+                const videoDoc = await db.doc(`zones/${zoneId}/videos/${videoId}`).get();
+                if (!videoDoc.exists) {
+                    throw new functions.https.HttpsError("not-found", "Video not found in this zone.");
+                }
+            }
+
+            // 5. Generate Bunny CDN Token
+            const tokenKey = process.env.BUNNY_TOKEN_KEY;
+            const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
+
+            if (!tokenKey || !pullZoneUrl) {
+                throw new functions.https.HttpsError("failed-precondition", "Bunny CDN configuration missing.");
+            }
+
+            const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+            const videoPath = `/${videoId}/play`;
+            const tokenString = tokenKey + videoPath + expirationTime;
+
+            const token = crypto.createHash("sha256")
+                .update(tokenString)
+                .digest("base64")
+                .replace(/\+/g, "-")
+                .replace(/\//g, "_")
+                .replace(/=/g, "");
+
+            return {
+                signedUrl: `${pullZoneUrl}${videoPath}?token=${token}&expires=${expirationTime}`,
+                expiresAt: expirationTime
+            };
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in getBunnyPlaybackToken:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to get playback token.");
         }
-
-        if (!isAuthorized) {
-            throw new functions.https.HttpsError("permission-denied", "Unauthorized access to this content.");
-        }
-
-        // 4. Validate videoId in segments array
-        const segments = zoneData.segments || [];
-        const videoExists = segments.some((s: any) => s.videoId === videoId);
-
-        if (!videoExists) {
-            throw new functions.https.HttpsError("not-found", "Video not found in this zone.");
-        }
-
-        // 5. Generate Bunny CDN Token
-        const tokenKey = process.env.BUNNY_TOKEN_KEY;
-        const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
-
-        if (!tokenKey || !pullZoneUrl) {
-            throw new functions.https.HttpsError("failed-precondition", "Bunny CDN configuration missing.");
-        }
-
-        const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour
-        const videoPath = `/${videoId}/play`;
-        const tokenString = tokenKey + videoPath + expirationTime;
-
-        const token = crypto.createHash("sha256")
-            .update(tokenString)
-            .digest("base64")
-            .replace(/\+/g, "-")
-            .replace(/\//g, "_")
-            .replace(/=/g, "");
-
-        return {
-            signedUrl: `${pullZoneUrl}${videoPath}?token=${token}&expires=${expirationTime}`,
-            expiresAt: expirationTime
-        };
     }
 );
 
@@ -465,61 +504,58 @@ function extractRazorpayError(error: any): string {
 export const createTutorLinkedAccount = onCall(
     { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], cors: true },
     async (request) => {
-        const db = admin.firestore();
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "You must be signed in to create a linked account.");
-        }
-
-        const uid = request.auth.uid;
-        const { businessName, businessType, legalName, email, phone, pan } = request.data || {};
-
-        if (!businessName || !businessType || !legalName || !email || !phone || !pan) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing required business details: { businessName, businessType, legalName, email, phone, pan }.");
-        }
-
-        const keyId = process.env.RAZORPAY_KEY_ID;
-        const keySecret = process.env.RAZORPAY_KEY_SECRET;
-        if (!keyId || !keySecret) {
-            throw new functions.https.HttpsError("failed-precondition", "Razorpay credentials are not configured on the server.");
-        }
-
-        const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
-        const headers = { 'Authorization': authHeader, 'Content-Type': 'application/json' };
-
-        // 1. Validate calling user has role 'THALA'
-        const userRef = db.collection("users").doc(uid);
-        const userDoc = await userRef.get();
-        if (!userDoc.exists) {
-            throw new functions.https.HttpsError("not-found", "User profile not found.");
-        }
-
-        const userData = userDoc.data()!;
-        if (userData.role !== "THALA") {
-            throw new functions.https.HttpsError("permission-denied", "Unauthorized: Only users with role 'THALA' can create linked accounts.");
-        }
-
-        // 2. Check for existing razorpayAccountId
-        // Note: we check both 'razorpayAccountId' (new) and 'razorpay_account_id' (old) for safety
-        let accountId = userData.razorpayAccountId || userData.razorpay_account_id;
-        const existingKycStatus = userData.kycStatus;
-
-        if (accountId && existingKycStatus !== "STAKEHOLDER_FAILED") {
-            throw new functions.https.HttpsError("already-exists", "A Razorpay account already exists for this user.");
-        }
-
         try {
-            // 3. Create Razorpay Account (if not already created and failed at stakeholder level)
+            const db = admin.firestore();
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "You must be signed in to create a linked account.");
+            }
+
+            const uid = request.auth.uid;
+            const { businessName, businessType, legalName, email, phone, pan } = request.data || {};
+
+            if (!businessName || !businessType || !legalName || !email || !phone || !pan) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing required business details: { businessName, businessType, legalName, email, phone, pan }.");
+            }
+
+            const keyId = process.env.RAZORPAY_KEY_ID;
+            const keySecret = process.env.RAZORPAY_KEY_SECRET;
+            if (!keyId || !keySecret) {
+                throw new functions.https.HttpsError("failed-precondition", "Razorpay credentials are not configured on the server.");
+            }
+
+            const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
+            const headers = { 'Authorization': authHeader, 'Content-Type': 'application/json' };
+
+            // 1. Validate calling user has role 'THALA'
+            const userRef = db.collection("users").doc(uid);
+            const userDoc = await userRef.get();
+            if (!userDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "User profile not found.");
+            }
+
+            const userData = userDoc.data()!;
+            if (userData.role !== "THALA") {
+                throw new functions.https.HttpsError("permission-denied", "Unauthorized: Only users with role 'THALA' can create linked accounts.");
+            }
+
+            // 2. Check for existing razorpayAccountId
+            let accountId = userData.razorpayAccountId || userData.razorpay_account_id;
+            const existingKycStatus = userData.kycStatus;
+
+            if (accountId && existingKycStatus !== "STAKEHOLDER_FAILED") {
+                throw new functions.https.HttpsError("already-exists", "A Razorpay account already exists for this user.");
+            }
+
+            // 3. Create Razorpay Account
             if (!accountId) {
                 const createPayload = {
                     email,
                     phone: phone.startsWith('+91') ? phone : `+91${phone}`,
                     type: "route",
                     legal_business_name: legalName,
-                    business_type: businessType, // expected: 'proprietorship', 'individual', etc.
+                    business_type: businessType,
                     customer_facing_business_name: businessName,
-                    profile: {
-                        category: "education" // Standard default for platform
-                    }
+                    profile: { category: "education" }
                 };
 
                 const accountResponse = await axios.post(
@@ -529,22 +565,19 @@ export const createTutorLinkedAccount = onCall(
                 );
                 accountId = accountResponse.data.id;
 
-                // Sync accountId back to Firestore immediately so we don't lose it if stakeholders call fails
                 await userRef.update({
                     razorpayAccountId: accountId,
                     kycStatus: 'PENDING'
                 });
             }
 
-            // 4. Create Stakeholder (separate try/catch)
+            // 4. Create Stakeholder
             try {
                 const stakeholderPayload = {
                     name: legalName,
                     email: email,
                     phone: phone.startsWith('+91') ? phone : `+91${phone}`,
-                    kyc: {
-                        pan: pan.toUpperCase()
-                    }
+                    kyc: { pan: pan.toUpperCase() }
                 };
 
                 await axios.post(
@@ -553,7 +586,6 @@ export const createTutorLinkedAccount = onCall(
                     { headers }
                 );
 
-                // Update success metadata
                 await userRef.update({
                     kycStatus: 'PENDING',
                     kycSubmittedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -562,24 +594,17 @@ export const createTutorLinkedAccount = onCall(
                 return { accountId, status: 'PENDING' };
             } catch (stakeholderError: any) {
                 const msg = extractRazorpayError(stakeholderError);
-                console.error("Razorpay Stakeholder creation failed:", msg);
+                functions.logger.error("Razorpay Stakeholder creation failed:", msg);
                 
-                await userRef.update({
-                    kycStatus: 'STAKEHOLDER_FAILED'
-                });
-
+                await userRef.update({ kycStatus: 'STAKEHOLDER_FAILED' });
                 return { accountId, status: 'STAKEHOLDER_FAILED' };
             }
 
         } catch (error: any) {
             if (error instanceof functions.https.HttpsError) throw error;
             const msg = extractRazorpayError(error);
-            console.error("createTutorLinkedAccount internal error:", msg);
-            
-            throw new functions.https.HttpsError(
-                "internal", 
-                `Razorpay Account Creation Failed: ${msg}`
-            );
+            functions.logger.error("Global crash in createTutorLinkedAccount:", msg);
+            throw new functions.https.HttpsError("internal", `Razorpay Account Creation Failed: ${msg}`);
         }
     }
 );
@@ -588,91 +613,91 @@ export const createTutorLinkedAccount = onCall(
 export const createRazorpayOrder = onCall(
     { secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], cors: true },
     async (request) => {
-        const db = admin.firestore();
-        
-        // 1. Authenticated check
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "You must be signed in to create an order.");
-        }
-
-        const data = request.data;
-        const zoneId = data.zoneId;
-        const planId = data.planId;
-
-        if (!zoneId && !planId) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or planId.");
-        }
-
-        const keyId = process.env.RAZORPAY_KEY_ID;
-        const keySecret = process.env.RAZORPAY_KEY_SECRET;
-        if (!keyId || !keySecret) {
-            throw new functions.https.HttpsError("failed-precondition", "Razorpay secrets not configured.");
-        }
-
-        let finalAmount: number;
-        let rzpAccountId: string | undefined;
-        let tutorShare: number | undefined;
-        let tutorUid: string | undefined;
-        let commission: number | undefined;
-
-        if (zoneId) {
-            // -- Case A: Student buying a Zone Course --
-            const zoneDoc = await db.collection("zones").doc(zoneId).get();
-            if (!zoneDoc.exists) {
-                throw new functions.https.HttpsError("not-found", "Zone not found.");
-            }
-
-            const zoneData = zoneDoc.data()!;
-            // Server-side source of truth for price (prioritize priceINR)
-            const price = zoneData.priceINR || zoneData.price || 0;
-            finalAmount = Math.round(price * 100); // Convert to paise
-
-            tutorUid = zoneData.createdBy;
-            if (!tutorUid) {
-                throw new functions.https.HttpsError("failed-precondition", "Zone creator (tutorUid) is missing.");
-            }
-            const tutorDoc = await db.collection("users").doc(tutorUid).get();
-            if (!tutorDoc.exists) {
-                throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
-            }
-
-            const tutorData = tutorDoc.data()!;
-            rzpAccountId = tutorData.razorpayAccountId || tutorData.razorpay_account_id;
-            const kycStatus = tutorData.kycStatus;
-
-            if (!rzpAccountId || kycStatus !== 'VERIFIED') {
-                throw new functions.https.HttpsError(
-                    "failed-precondition", 
-                    "Tutor is not eligible for payments (KYC or Account ID missing)."
-                );
-            }
-
-            // Commission Logic for Zone sales
-            let commissionPct = 15; // Default/FREE
-            const plan = tutorData.subscriptionPlan;
-            if (plan === 'STANDARD') commissionPct = 5;
-            else if (plan === 'PREMIUM') commissionPct = 2;
-
-            commission = Math.round(finalAmount * (commissionPct / 100));
-            tutorShare = finalAmount - commission;
-
-        } else {
-            // -- Case B: Tutor upgrading Platform Plan --
-            const allowedPlans: Record<string, number> = {
-                'standard': 149900,
-                'premium': 499900
-            };
-
-            if (!allowedPlans[planId]) {
-                throw new functions.https.HttpsError("invalid-argument", "Invalid subscription plan selected.");
-            }
-
-            finalAmount = allowedPlans[planId];
-            // No transfers for platform subscription payments (goes 100% to Nunma)
-        }
-
-        // 5. Create Razorpay Order via Axios
         try {
+            const db = admin.firestore();
+            
+            // 1. Authenticated check
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "You must be signed in to create an order.");
+            }
+
+            const data = request.data;
+            const zoneId = data.zoneId;
+            const planId = data.planId;
+
+            if (!zoneId && !planId) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or planId.");
+            }
+
+            const keyId = process.env.RAZORPAY_KEY_ID;
+            const keySecret = process.env.RAZORPAY_KEY_SECRET;
+            if (!keyId || !keySecret) {
+                throw new functions.https.HttpsError("failed-precondition", "Razorpay secrets not configured.");
+            }
+
+            let finalAmount: number;
+            let rzpAccountId: string | undefined;
+            let tutorShare: number | undefined;
+            let tutorUid: string | undefined;
+            let commission: number | undefined;
+
+            if (zoneId) {
+                // -- Case A: Student buying a Zone Course --
+                const zoneDoc = await db.collection("zones").doc(zoneId).get();
+                if (!zoneDoc.exists) {
+                    throw new functions.https.HttpsError("not-found", "Zone not found.");
+                }
+
+                const zoneData = zoneDoc.data()!;
+                // Server-side source of truth for price (prioritize priceINR)
+                const price = zoneData.priceINR || zoneData.price || 0;
+                finalAmount = Math.round(price * 100); // Convert to paise
+
+                tutorUid = zoneData.createdBy;
+                if (!tutorUid) {
+                    throw new functions.https.HttpsError("failed-precondition", "Zone creator (tutorUid) is missing.");
+                }
+                const tutorDoc = await db.collection("users").doc(tutorUid).get();
+                if (!tutorDoc.exists) {
+                    throw new functions.https.HttpsError("not-found", "Tutor profile not found.");
+                }
+
+                const tutorData = tutorDoc.data()!;
+                rzpAccountId = tutorData.razorpayAccountId || tutorData.razorpay_account_id;
+                const kycStatus = tutorData.kycStatus;
+
+                if (!rzpAccountId || kycStatus !== 'VERIFIED') {
+                    throw new functions.https.HttpsError(
+                        "failed-precondition", 
+                        "Tutor is not eligible for payments (KYC or Account ID missing)."
+                    );
+                }
+
+                // Commission Logic for Zone sales
+                let commissionPct = 15; // Default/FREE
+                const plan = tutorData.subscriptionPlan;
+                if (plan === 'STANDARD') commissionPct = 5;
+                else if (plan === 'PREMIUM') commissionPct = 2;
+
+                commission = Math.round(finalAmount * (commissionPct / 100));
+                tutorShare = finalAmount - commission;
+
+            } else {
+                // -- Case B: Tutor upgrading Platform Plan --
+                const allowedPlans: Record<string, number> = {
+                    'standard': 149900,
+                    'premium': 499900
+                };
+
+                if (!allowedPlans[planId]) {
+                    throw new functions.https.HttpsError("invalid-argument", "Invalid subscription plan selected.");
+                }
+
+                finalAmount = allowedPlans[planId];
+                // No transfers for platform subscription payments (goes 100% to Nunma)
+            }
+
+            // 5. Create Razorpay Order via Axios
             const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
             const orderPayload: any = {
                 amount: finalAmount,
@@ -737,218 +762,113 @@ export const createRazorpayOrder = onCall(
             };
 
         } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
             const msg = extractRazorpayError(error);
-            console.error("Razorpay order creation failed:", msg);
+            functions.logger.error("Global crash in createRazorpayOrder:", msg);
             throw new functions.https.HttpsError("internal", `Order creation failed: ${msg}`);
         }
     }
 );
 
-export const razorpayRouteWebhook = onRequest(
-    { secrets: ["RAZORPAY_WEBHOOK_SECRET", "ZOHO_ORG_ID", "ZOHO_REFRESH_TOKEN", "ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET"] },
-    async (req, res) => {
-        const db = admin.firestore();
-        const signature = req.headers['x-razorpay-signature'] as string;
-        const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-        if (!signature || !secret) {
-            console.error("Missing Razorpay signature or secret.");
-            res.status(400).send('Bad Request: Signature missing');
-            return;
-        }
+/**
+ * DEPRECATED: Consolidated into the unified razorpayWebhook below.
+ * Keeping a stub for transitional safety if needed, but redirects to 404/200.
+ */
+export const razorpayRouteWebhook = onRequest(async (req, res) => {
+    functions.logger.warn("Deprecated razorpayRouteWebhook called. Please update your Razorpay dashboard to use /razorpayWebhook.");
+    res.status(200).send('Deprecated: Please use /razorpayWebhook instead.');
+});
 
-        // Verify Razorpay webhook signature using raw body and HMAC-SHA256
-        const hmac = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
-
-        if (hmac !== signature) {
-            console.error("Razorpay signature mismatch.");
-            res.status(400).send('Bad Request: Invalid signature');
-            return;
-        }
-
-        const event = req.body.event;
-        if (event !== 'payment.captured') {
-            // Handle only payment.captured, ignore others with 200
-            res.status(200).send('Event Ignored');
-            return;
-        }
-
-        try {
-            const payload = req.body.payload;
-            const payment = payload.payment.entity;
-            const orderId = payment.order_id;
-            const paymentId = payment.id;
-
-            if (!orderId) {
-                console.warn("Webhook received payment.captured without order_id.");
-                res.status(200).send('No order_id found');
-                return;
-            }
-
-            // 1. Query collectionGroup('orders') where orderId matches
-            const ordersSnapshot = await db.collectionGroup('orders').where('orderId', '==', orderId).get();
-            if (ordersSnapshot.empty) {
-                console.error(`Order query failed: No order found with orderId: ${orderId}`);
-                res.status(200).send('Order not found');
-                return;
-            }
-
-            const orderDoc = ordersSnapshot.docs[0];
-            const orderData = orderDoc.data();
-            const orderRef = orderDoc.ref;
-            
-            // Extract zoneId and studentUid from document path/data
-            const zoneRef = orderRef.parent.parent;
-            if (!zoneRef) throw new Error("Invalid order path structure.");
-            
-            const zoneId = zoneRef.id;
-            const studentUid = orderData.studentUid;
-            let tutorUidFromDoc = orderData.tutorUid;
-            let commissionAmount = orderData.commission;
-
-            // Fallback for existing orders that don't have tutorUid or commission stored
-            if (!tutorUidFromDoc || commissionAmount === undefined) {
-                const zoneDoc = await zoneRef.get();
-                const zoneData = zoneDoc.data();
-                tutorUidFromDoc = tutorUidFromDoc || zoneData?.createdBy;
-                
-                if (!tutorUidFromDoc) {
-                    console.error(`Webhook error: Could not determine tutorUid for order ${orderId} in zone ${zoneId}`);
-                    // We shouldn't stop fulfillment, but we can't do the commission invoice
-                    commissionAmount = commissionAmount || 0;
-                } else if (commissionAmount === undefined) {
-                    // Recalculate commission if missing (matches createRazorpayOrder logic)
-                    const tutorDoc = await db.collection("users").doc(tutorUidFromDoc).get();
-                    if (!tutorDoc.exists) {
-                        console.warn(`Webhook warning: Tutor profile ${tutorUidFromDoc} not found for commission calculation.`);
-                        commissionAmount = 0;
-                    } else {
-                        const tutorData = tutorDoc.data()!;
-                        let commissionPct = 15;
-                        const plan = tutorData.subscriptionPlan;
-                        if (plan === 'STANDARD') commissionPct = 5;
-                        else if (plan === 'PREMIUM') commissionPct = 2;
-                        commissionAmount = Math.round(orderData.amount * (commissionPct / 100));
-                    }
-                }
-            }
-
-            // 2. Enroll student
-            const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentUid);
-            await studentRef.set({
-                status: 'active',
-                joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-                source: 'payment',
-                paymentId
-            }, { merge: true });
-
-            // 3. Update order status to CAPTURED
-            await orderRef.update({
-                status: 'CAPTURED',
-                capturedAt: admin.firestore.FieldValue.serverTimestamp(),
-                tutorUid: tutorUidFromDoc,
-                commission: commissionAmount
-            });
-
-            // 4. Queue Asynchronous Invoicing & Email
-            const amountInInr = (commissionAmount || 0) / 100;
-            const gstAmount = amountInInr * 0.18;
-
-            await db.collection('mail_queue').add({
-                uid: tutorUidFromDoc,
-                amount: amountInInr,
-                gst: gstAmount,
-                type: 'PLATFORM_FEE',
-                paymentId,
-                status: 'pending',
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            res.status(200).send('OK');
-
-        } catch (error: any) {
-            console.error("Webhook processing error:", error);
-            res.status(500).send('Internal Server Error');
-        }
-    }
-);
 
 /**
  * SECURE RAZORPAY WEBHOOK
  * Implements strict signature validation, two-step idempotency, and atomic fulfillment.
  */
 export const razorpayWebhook = onRequest(
-    { secrets: ["RAZORPAY_WEBHOOK_SECRET", "SMTP_PASS"] },
+    { secrets: ["RAZORPAY_WEBHOOK_SECRET"], cors: true }, // Removed SMTP_PASS as it's not used here anymore
     async (req, res) => {
         const db = admin.firestore();
         const signature = req.headers['x-razorpay-signature'] as string;
         const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-        // Step 1: Signature Validation & Fast-Fail
+        // Step 1: Signature Validation
+        functions.logger.info("Executing Razorpay Webhook Signature Validation...");
         if (!signature || !secret) {
-            console.error("Signature or Secret missing.");
-            res.status(400).send('Invalid signature');
+            functions.logger.error("Rejecting Webhook: Signature or Secret missing in environment.");
+            res.status(400).send('Invalid signature configuration');
             return;
         }
 
         const hmac = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
         if (hmac !== signature) {
-            console.error("Signature mismatch.");
-            res.status(400).send('Invalid signature');
+            functions.logger.error("Rejecting Webhook: HMAC signature mismatch.", { provided: signature, calculated: hmac });
+            res.status(400).send('Invalid signature match');
             return;
         }
+        functions.logger.info("Razorpay Signature Verified Successfully.");
 
         try {
             const payload = req.body;
+            const event = payload.event;
+            
+            // Only handle payment.captured for core fulfillment
+            if (event !== 'payment.captured' && event !== 'order.paid') {
+                functions.logger.info(`Ignoring Razorpay event type: ${event}`);
+                res.status(200).send({ status: 'ignored', event });
+                return;
+            }
+
             const payment = payload.payload?.payment?.entity;
-            const razorpayOrderId = payment?.order_id;
+            const razorpayOrderId = payment?.order_id || payload.payload?.order?.entity?.id;
             const paymentId = payment?.id;
 
             if (!razorpayOrderId) {
-                console.warn("No order_id found in payload.");
+                functions.logger.warn("No order_id found in Razorpay payload.", payload);
                 res.status(200).send({ status: 'ignored', reason: 'no_order_id' });
                 return;
             }
 
-            // Step 2: The Two-Step Idempotency Transaction
-            // Pre-Query (Outside Transaction)
-            const snapshot = await db.collectionGroup('orders')
+            // Step 2: Identify and Fetch Order (Zone vs Platform)
+            functions.logger.info(`Processing fulfillment for Razorpay Order: ${razorpayOrderId}`);
+            
+            let orderDoc: admin.firestore.QueryDocumentSnapshot | admin.firestore.DocumentSnapshot;
+            let isPlatformOrder = false;
+
+            // Strategy: Check Zone Orders (Subcollections) first
+            const zoneOrderSnapshot = await db.collectionGroup('orders')
                 .where('orderId', '==', razorpayOrderId)
                 .limit(1)
                 .get();
 
-            if (snapshot.empty) {
-                console.error(`Order not found for ID: ${razorpayOrderId}`);
-                throw new Error(`Order not found: ${razorpayOrderId}`);
+            if (!zoneOrderSnapshot.empty) {
+                orderDoc = zoneOrderSnapshot.docs[0];
+            } else {
+                // Check Platform Orders (Top-level)
+                const platformOrderDoc = await db.collection('platform_orders').doc(razorpayOrderId).get();
+                if (!platformOrderDoc.exists) {
+                    functions.logger.error(`Critical Error: Order ${razorpayOrderId} not found in any collection.`);
+                    res.status(200).send({ status: 'error', message: 'order_not_found' });
+                    return;
+                }
+                orderDoc = platformOrderDoc;
+                isPlatformOrder = true;
             }
 
-            const orderDoc = snapshot.docs[0];
             const orderRef = orderDoc.ref;
-            const orderData = orderDoc.data();
+            const orderData = orderDoc.data()!;
             
-            // Extract IDs for fulfillment
-            const zoneRef = orderRef.parent.parent;
-            if (!zoneRef) throw new Error("Invalid order document path structure.");
-            
-            const zoneId = zoneRef.id;
-            const studentUid = orderData.studentUid;
-
-            if (!studentUid) throw new Error("Order document missing studentUid.");
-
-            const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentUid);
-            const enrollmentRef = db.collection('users').doc(studentUid).collection('enrollments').doc(zoneId);
-
-            // Atomic Block (Inside Transaction)
+            // Step 3: Atomic Fulfillment Transaction
             await db.runTransaction(async (transaction) => {
-                const doc = await transaction.get(orderRef);
-                if (!doc.exists) throw new Error("Order document disappeared during transaction.");
+                const freshDoc = await transaction.get(orderRef);
+                if (!freshDoc.exists) throw new Error("Order document vanished.");
 
-                if (doc.data()?.status === 'paid') {
-                    console.log(`Order ${razorpayOrderId} already processed (idempotent exit).`);
-                    return; // Exit early
+                if (freshDoc.data()?.status === 'paid' || freshDoc.data()?.status === 'CAPTURED') {
+                    functions.logger.info(`Idempotency: Order ${razorpayOrderId} already processed.`);
+                    return;
                 }
 
-                // Execute all 3 writes atomically
+                // A. Update Order Status
                 transaction.update(orderRef, { 
                     status: 'paid', 
                     fulfilled: true,
@@ -956,43 +876,101 @@ export const razorpayWebhook = onRequest(
                     paidAt: admin.firestore.FieldValue.serverTimestamp()
                 });
 
-                transaction.set(studentRef, { 
-                    status: 'active', 
-                    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    source: 'razorpay_webhook',
-                    paymentId
-                }, { merge: true });
+                if (isPlatformOrder) {
+                    // B. Platform Subscription Logic
+                    const tutorUid = orderData.tutorUid;
+                    const planId = orderData.planId;
+                    if (tutorUid && planId) {
+                        const userRef = db.collection('users').doc(tutorUid);
+                        // Convert planId to uppercase for DB consistency (STANDARD/PREMIUM)
+                        transaction.update(userRef, {
+                            subscriptionPlan: planId.toUpperCase(),
+                            subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+                        });
+                        functions.logger.info(`Upgraded Tutor ${tutorUid} to plan: ${planId}`);
+                    }
+                } else {
+                    // C. Zone Enrollment Logic
+                    const zoneRef = orderRef.parent.parent;
+                    if (!zoneRef) throw new Error("Invalid order hierarchy.");
+                    
+                    const zoneId = zoneRef.id;
+                    const studentUid = orderData.studentUid;
 
-                transaction.set(enrollmentRef, { 
-                    zoneId,
-                    enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
-                    status: 'active'
-                }, { merge: true });
+                    if (studentUid) {
+                        const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentUid);
+                        const enrollmentRef = db.collection('users').doc(studentUid).collection('enrollments').doc(zoneId);
+
+                        transaction.set(studentRef, { 
+                            status: 'active', 
+                            joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            source: 'razorpay_webhook',
+                            paymentId
+                        }, { merge: true });
+
+                        transaction.set(enrollmentRef, { 
+                            zoneId,
+                            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                            status: 'active'
+                        }, { merge: true });
+                        functions.logger.info(`Enrolled Student ${studentUid} in Zone ${zoneId}`);
+                    }
+                }
             });
 
-            // Step 3: Queue Asynchronous Invoicing & Email
-            const totalAmountInInr = (payment.amount || 0) / 100;
-            const gstAmount = totalAmountInInr * 0.18;
+            // Step 4: Post-Fulfillment Mail Queueing
+            const amountInInr = (payment?.amount || orderData.amount || 0) / 100;
+            const gstAmount = amountInInr * 0.18;
 
-            await db.collection('mail_queue').add({
-                uid: studentUid,
-                amount: totalAmountInInr,
-                gst: gstAmount,
-                planId: orderData.planId || '',
-                paymentId,
-                type: orderData.planId ? 'PLATFORM_SUBSCRIPTION' : 'ZONE_ENROLLMENT',
-                status: 'pending',
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
+            if (isPlatformOrder) {
+                // Receipt for Tutor Platform Subscription
+                await db.collection('mail_queue').add({
+                    uid: orderData.tutorUid,
+                    amount: amountInInr,
+                    gst: gstAmount,
+                    planId: orderData.planId,
+                    type: 'PLATFORM_SUBSCRIPTION',
+                    paymentId,
+                    status: 'pending',
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                // 1. Invoice for Student Enrollment
+                await db.collection('mail_queue').add({
+                    uid: orderData.studentUid,
+                    amount: amountInInr,
+                    gst: gstAmount,
+                    type: 'ZONE_ENROLLMENT',
+                    paymentId,
+                    status: 'pending',
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                // 2. Platform Fee Receipt for Tutor (Commission)
+                if (orderData.commission && orderData.tutorUid) {
+                    const commissionInInr = orderData.commission / 100;
+                    const commissionGst = commissionInInr * 0.18;
+                    await db.collection('mail_queue').add({
+                        uid: orderData.tutorUid,
+                        amount: commissionInInr,
+                        gst: commissionGst,
+                        type: 'PLATFORM_FEE',
+                        paymentId,
+                        status: 'pending',
+                        createdAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            }
 
             res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
 
         } catch (error: any) {
-            console.error("Webhook processing error:", error);
+            functions.logger.error("CRITICAL: Webhook processing failed.", error);
             res.status(500).send(`Internal Error: ${error.message}`);
         }
     }
 );
+
 
 export const bunnyWebhook = onRequest(
     { secrets: ["BUNNY_WEBHOOK_SECRET"] },
@@ -1123,18 +1101,18 @@ export const serveSecurePdf = onRequest({ cors: true }, async (req, res) => {
 export const deleteUserAccount = onCall(
     { secrets: ["BUNNY_API_KEY"], cors: true },
     async (request) => {
-        const db = admin.firestore();
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "Login required for account deletion.");
-        }
-
-        const uid = request.auth.uid;
-        const libraryId = process.env.BUNNY_LIBRARY_ID;
-        const apiKey = process.env.BUNNY_API_KEY;
-
-        console.log(`Starting permanent deletion for user: ${uid}`);
-
         try {
+            const db = admin.firestore();
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "Login required for account deletion.");
+            }
+
+            const uid = request.auth.uid;
+            const libraryId = process.env.BUNNY_LIBRARY_ID;
+            const apiKey = process.env.BUNNY_API_KEY;
+
+            console.log(`Starting permanent deletion for user: ${uid}`);
+
             // 1. Cleanup Bunny.net Videos
             const tutorVideosSnapshot = await db.collection("videos").where("tutorId", "==", uid).get();
             if (!tutorVideosSnapshot.empty && libraryId && apiKey) {
@@ -1162,12 +1140,10 @@ export const deleteUserAccount = onCall(
             await bucket.deleteFiles({ prefix: `workspaces/${uid}/` });
 
             // 3. Cleanup Firestore Data
-            // Delete taxDetails subcollection
             const taxDetailsSnapshot = await db.collection("users").doc(uid).collection("taxDetails").get();
             const taxDeletePromises = taxDetailsSnapshot.docs.map(doc => doc.ref.delete());
             await Promise.all(taxDeletePromises);
 
-            // Delete main user document
             await db.collection("users").doc(uid).delete();
 
             // 4. Delete from Firebase Auth
@@ -1177,8 +1153,9 @@ export const deleteUserAccount = onCall(
             return { success: true };
 
         } catch (error: any) {
-            console.error("Critical error during account deletion:", error);
-            throw new functions.https.HttpsError("internal", `Deletion failed: ${error.message}`);
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in deleteUserAccount:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Deletion failed.");
         }
     }
 );
@@ -1191,41 +1168,41 @@ export const uploadExamScript = onCall(
         cors: true
     },
     async (request) => {
-        const db = admin.firestore();
-
-        // 1. Authenticate caller
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "You must be signed in to upload your exam script.");
-        }
-
-        const uid = request.auth.uid;
-        const { zoneId, examId, fileBase64, fileName } = request.data;
-
-        // 2. Validate input strings
-        if (!zoneId || !examId || !fileBase64 || !fileName) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing required parameters: zoneId, examId, fileBase64, or fileName.");
-        }
-
-        // 3. Authorization Check: Active student in the zone
-        const studentDoc = await db.collection("zones").doc(zoneId).collection("students").doc(uid).get();
-        if (!studentDoc.exists || studentDoc.data()?.status !== "active") {
-            throw new functions.https.HttpsError("permission-denied", "You are not an active student in this zone.");
-        }
-
-        // 4. Validate Exam Existence
-        const examDoc = await db.collection("zones").doc(zoneId).collection("exams").doc(examId).get();
-        if (!examDoc.exists) {
-            throw new functions.https.HttpsError("not-found", "The specified exam does not exist.");
-        }
-
-        // 5. Check for existing submission
-        const submissionRef = db.collection("zones").doc(zoneId).collection("exams").doc(examId).collection("submissions").doc(uid);
-        const submissionDoc = await submissionRef.get();
-        if (submissionDoc.exists) {
-            throw new functions.https.HttpsError("already-exists", "You have already submitted your answer script for this exam.");
-        }
-
         try {
+            const db = admin.firestore();
+
+            // 1. Authenticate caller
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "You must be signed in to upload your exam script.");
+            }
+
+            const uid = request.auth.uid;
+            const { zoneId, examId, fileBase64, fileName } = request.data;
+
+            // 2. Validate input strings
+            if (!zoneId || !examId || !fileBase64 || !fileName) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing required parameters: zoneId, examId, fileBase64, or fileName.");
+            }
+
+            // 3. Authorization Check: Active student in the zone
+            const studentDoc = await db.collection("zones").doc(zoneId).collection("students").doc(uid).get();
+            if (!studentDoc.exists || studentDoc.data()?.status !== "active") {
+                throw new functions.https.HttpsError("permission-denied", "You are not an active student in this zone.");
+            }
+
+            // 4. Validate Exam Existence
+            const examDoc = await db.collection("zones").doc(zoneId).collection("exams").doc(examId).get();
+            if (!examDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "The specified exam does not exist.");
+            }
+
+            // 5. Check for existing submission
+            const submissionRef = db.collection("zones").doc(zoneId).collection("exams").doc(examId).collection("submissions").doc(uid);
+            const submissionDoc = await submissionRef.get();
+            if (submissionDoc.exists) {
+                throw new functions.https.HttpsError("already-exists", "You have already submitted your answer script for this exam.");
+            }
+
             // 6. PDF Watermarking
             const pdfBuffer = Buffer.from(fileBase64, 'base64');
             const pdfDoc = await PDFDocument.load(pdfBuffer);
@@ -1237,7 +1214,7 @@ export const uploadExamScript = onCall(
             for (const page of pages) {
                 const { width } = page.getSize();
                 page.drawText(watermarkText, {
-                    x: width / 2 - 100, // Rough estimate for centering
+                    x: width / 2 - 100,
                     y: 20,
                     size: 10,
                     color: rgb(1, 0, 0),
@@ -1269,9 +1246,9 @@ export const uploadExamScript = onCall(
                 }
             });
 
-            // 8. Update Tutor Storage Metrics (Legacy behavior maintained)
+            // 8. Update Tutor Storage Metrics
             const zoneDoc = await db.collection('zones').doc(zoneId).get();
-            const tutorUid = zoneDoc.data()?.createdBy;
+            const tutorUid = zoneDoc.data()?.createdBy || zoneDoc.data()?.tutorId;
             if (tutorUid) {
                 await db.collection("users").doc(tutorUid).update({
                     usedStorageBytes: admin.firestore.FieldValue.increment(fileSizeInBytes)
@@ -1296,58 +1273,57 @@ export const uploadExamScript = onCall(
                 answerSheetUrl, 
                 status: 'PENDING_GRADING' 
             };
-
         } catch (error: any) {
-            console.error("uploadExamScript internal error:", error);
             if (error instanceof functions.https.HttpsError) throw error;
-            throw new functions.https.HttpsError("internal", `An error occurred while processing your upload: ${error.message}`);
+            functions.logger.error("Global crash in uploadExamScript:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to upload exam script.");
         }
     }
 );
 
 export const recordCheatViolation = onCall(
-    { secrets: ["BUNNY_API_KEY"], cors: true }, // Bunny API key reused for consistency if needed later
+    { secrets: ["BUNNY_API_KEY"], cors: true }, 
     async (request) => {
-        const db = admin.firestore();
-
-        // 1. Authenticate caller
-        if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "Login required.");
-        }
-
-        const uid = request.auth.uid;
-        const { zoneId, examId, violationType } = request.data;
-
-        // 2. Validate input strings and violationType
-        const allowedViolations = ['TAB_SWITCH', 'COPY_PASTE', 'WINDOW_BLUR', 'FULLSCREEN_EXIT'];
-        if (!zoneId || !examId || !violationType || !allowedViolations.includes(violationType)) {
-            throw new functions.https.HttpsError("invalid-argument", "Invalid or missing parameters: { zoneId, examId, violationType }.");
-        }
-
-        // 3. Authorization Check: Active student in the zone
-        const studentEnrollmentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
-        const studentDoc = await studentEnrollmentRef.get();
-        if (!studentDoc.exists || studentDoc.data()?.status !== "active") {
-            throw new functions.https.HttpsError("permission-denied", "You are not an active student in this zone.");
-        }
-
-        // 4. Validate Exam Existence and Time
-        const examRef = db.collection("zones").doc(zoneId).collection("exams").doc(examId);
-        const examDoc = await examRef.get();
-        if (!examDoc.exists) {
-            throw new functions.https.HttpsError("not-found", "The specified exam does not exist.");
-        }
-
-        const examData = examDoc.data()!;
-        const now = admin.firestore.Timestamp.now();
-        if (examData.endTime && examData.endTime.toMillis() <= now.toMillis()) {
-            throw new functions.https.HttpsError("failed-precondition", "This exam has already ended.");
-        }
-
-        // 5. Transaction: Fetch/Create submission and record violation
-        const submissionRef = examRef.collection("submissions").doc(uid);
-
         try {
+            const db = admin.firestore();
+
+            // 1. Authenticate caller
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "Login required.");
+            }
+
+            const uid = request.auth.uid;
+            const { zoneId, examId, violationType } = request.data;
+
+            // 2. Validate input strings and violationType
+            const allowedViolations = ['TAB_SWITCH', 'COPY_PASTE', 'WINDOW_BLUR', 'FULLSCREEN_EXIT'];
+            if (!zoneId || !examId || !violationType || !allowedViolations.includes(violationType)) {
+                throw new functions.https.HttpsError("invalid-argument", "Invalid or missing parameters: { zoneId, examId, violationType }.");
+            }
+
+            // 3. Authorization Check: Active student in the zone
+            const studentEnrollmentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
+            const studentDoc = await studentEnrollmentRef.get();
+            if (!studentDoc.exists || studentDoc.data()?.status !== "active") {
+                throw new functions.https.HttpsError("permission-denied", "You are not an active student in this zone.");
+            }
+
+            // 4. Validate Exam Existence and Time
+            const examRef = db.collection("zones").doc(zoneId).collection("exams").doc(examId);
+            const examDoc = await examRef.get();
+            if (!examDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "The specified exam does not exist.");
+            }
+
+            const examData = examDoc.data()!;
+            const now = admin.firestore.Timestamp.now();
+            if (examData.endTime && examData.endTime.toMillis() <= now.toMillis()) {
+                throw new functions.https.HttpsError("failed-precondition", "This exam has already ended.");
+            }
+
+            // 5. Transaction: Fetch/Create submission and record violation
+            const submissionRef = examRef.collection("submissions").doc(uid);
+
             const result = await db.runTransaction(async (transaction) => {
                 const subDoc = await transaction.get(submissionRef);
                 
@@ -1409,33 +1385,34 @@ export const recordCheatViolation = onCall(
             };
 
         } catch (error: any) {
-            console.error("recordCheatViolation transaction failed:", error);
-            throw new functions.https.HttpsError("internal", "Failed to record violation due to a server error.");
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in recordCheatViolation:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to record violation due to a server error.");
         }
     }
 );
 
 export const submitGradedScript = onCall({ cors: true }, async (request) => {
-    const db = admin.firestore();
-    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
-    const { zoneId, examId, studentId, score, feedback, mergedPdf, oldFileUrl } = request.data;
-
-    // Authorization
-    const zoneDoc = await db.collection('zones').doc(zoneId).get();
-    const tutorUid = zoneDoc.data()?.createdBy;
-    if (request.auth.uid !== tutorUid) {
-        throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
-    }
-
-    const bunnyApiKey = process.env.BUNNY_STORAGE_API_KEY;
-    const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
-    const pullZone = process.env.BUNNY_PULL_ZONE_URL;
-
-    if (!bunnyApiKey || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
-        throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
-    }
-
     try {
+        const db = admin.firestore();
+        if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+        const { zoneId, examId, studentId, score, feedback, mergedPdf, oldFileUrl } = request.data;
+
+        // Authorization
+        const zoneDoc = await db.collection('zones').doc(zoneId).get();
+        const tutorUid = zoneDoc.data()?.createdBy || zoneDoc.data()?.tutorId;
+        if (request.auth.uid !== tutorUid) {
+            throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
+        }
+
+        const bunnyApiKey = process.env.BUNNY_STORAGE_API_KEY;
+        const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
+        const pullZone = process.env.BUNNY_PULL_ZONE_URL;
+
+        if (!bunnyApiKey || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
+            throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
+        }
+
         // Evaluate the new file size
         const base64Data = mergedPdf.replace(/^data:.*\/.*;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
@@ -1452,7 +1429,6 @@ export const submitGradedScript = onCall({ cors: true }, async (request) => {
         );
 
         // Delete Old
-        // oldFileUrl format: https://[pullzone]/exams/[zoneId]/[examId]/[studentId]_[fileName]
         let oldFileSizeInBytes = 0;
         try {
             const oldPath = oldFileUrl.replace(`https://${pullZone}/`, '');
@@ -1497,188 +1473,193 @@ export const submitGradedScript = onCall({ cors: true }, async (request) => {
         return { success: true, gradedUrl: newFileUrl };
 
     } catch (error: any) {
-        console.error("Grade submit error", error);
-        throw new functions.https.HttpsError("internal", "Failed to upload merged script to edge storage.");
+        if (error instanceof functions.https.HttpsError) throw error;
+        functions.logger.error("Global crash in submitGradedScript:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to submit graded script.");
     }
 });
 
 export const submitExam = onCall({ cors: true }, async (request) => {
-    const db = admin.firestore();
-    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
-    const { zoneId, examId, answers, violationLogs, answerSheetUrl } = request.data;
-    const uid = request.auth.uid;
+    try {
+        const db = admin.firestore();
+        if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+        const { zoneId, examId, answers, violationLogs, answerSheetUrl } = request.data;
+        const uid = request.auth.uid;
 
-    // Time Window Validation
-    const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(uid).get();
-    const studentData = studentDoc.data();
-    if (!studentData || studentData.activeExamId !== examId) {
-        throw new functions.https.HttpsError("failed-precondition", "No active exam found.");
-    }
-
-    if (studentData.examEndsAt) {
-        const serverNow = Date.now();
-        const absoluteCutoff = new Date(studentData.examEndsAt).getTime() + (20 * 60 * 1000);
-
-        if (serverNow > absoluteCutoff) {
-            throw new functions.https.HttpsError("permission-denied", "Submission window has permanently closed.");
+        // Time Window Validation
+        const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(uid).get();
+        const studentData = studentDoc.data();
+        if (!studentData || studentData.activeExamId !== examId) {
+            throw new functions.https.HttpsError("failed-precondition", "No active exam found.");
         }
-    }
 
-    const examDoc = await db.collection('zones').doc(zoneId).collection('exams').doc(examId).get();
-    const examData = examDoc.data();
-    if (!examData) {
-        throw new functions.https.HttpsError("not-found", "Exam not found.");
-    }
+        if (studentData.examEndsAt) {
+            const serverNow = Date.now();
+            const absoluteCutoff = new Date(studentData.examEndsAt).getTime() + (20 * 60 * 1000);
 
-    let marks = 0;
-    let status = 'ongoing';
-    const isTerminatedByCheat = violationLogs && violationLogs.length >= 3;
-
-    // Secure Scoring
-    if (examData.type === 'online-mcq' || examData.type === 'online-test') {
-        if (examData.questions && answers) {
-            let score = 0;
-            examData.questions.forEach((q: any) => {
-                if (answers[q.id] === q.correctAnswer) score++;
-            });
-            marks = Math.round((score / examData.questions.length) * (examData.maxMark || 100));
-            const minMark = examData.minMark || 0;
-            status = marks >= minMark ? 'passed' : 'failed';
+            if (serverNow > absoluteCutoff) {
+                throw new functions.https.HttpsError("permission-denied", "Submission window has permanently closed.");
+            }
         }
+
+        const examDoc = await db.collection('zones').doc(zoneId).collection('exams').doc(examId).get();
+        const examData = examDoc.data();
+        if (!examData) {
+            throw new functions.https.HttpsError("not-found", "Exam not found.");
+        }
+
+        let marks = 0;
+        let status = 'ongoing';
+        const isTerminatedByCheat = violationLogs && violationLogs.length >= 3;
+
+        // Secure Scoring
+        if (examData.type === 'online-mcq' || examData.type === 'online-test') {
+            if (examData.questions && answers) {
+                let score = 0;
+                examData.questions.forEach((q: any) => {
+                    if (answers[q.id] === q.correctAnswer) score++;
+                });
+                marks = Math.round((score / examData.questions.length) * (examData.maxMark || 100));
+                const minMark = examData.minMark || 0;
+                status = marks >= minMark ? 'passed' : 'failed';
+            }
+        }
+
+        if (isTerminatedByCheat) {
+            status = 'failed';
+            marks = 0;
+        }
+
+        const submissionPayload: any = {
+            examId,
+            studentId: uid,
+            studentName: request.auth.token.name || 'Student',
+            marks,
+            status,
+            cheatViolations: violationLogs || [],
+            completedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        if (answerSheetUrl) {
+            submissionPayload.answerSheetUrl = answerSheetUrl;
+        }
+
+        await db.collection('zones').doc(zoneId).collection('exams').doc(examId).collection('submissions').doc(uid).set(submissionPayload);
+
+        await studentDoc.ref.update({
+            activeExamId: admin.firestore.FieldValue.delete(),
+            examEndsAt: admin.firestore.FieldValue.delete(),
+            currentExamWarnings: admin.firestore.FieldValue.delete(),
+            violationLogs: admin.firestore.FieldValue.delete(),
+            examStartedAt: admin.firestore.FieldValue.delete()
+        });
+
+        return { success: true, marks, status };
+    } catch (error: any) {
+        if (error instanceof functions.https.HttpsError) throw error;
+        functions.logger.error("Global crash in submitExam:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to submit exam.");
     }
-
-    if (isTerminatedByCheat) {
-        status = 'failed';
-        marks = 0;
-    }
-
-    const submissionPayload: any = {
-        examId,
-        studentId: uid,
-        studentName: request.auth.token.name || 'Student',
-        marks,
-        status,
-        cheatViolations: violationLogs || [],
-        completedAt: admin.firestore.FieldValue.serverTimestamp()
-    };
-    if (answerSheetUrl) {
-        submissionPayload.answerSheetUrl = answerSheetUrl;
-    }
-
-    await db.collection('zones').doc(zoneId).collection('exams').doc(examId).collection('submissions').doc(uid).set(submissionPayload);
-
-    await studentDoc.ref.update({
-        activeExamId: admin.firestore.FieldValue.delete(),
-        examEndsAt: admin.firestore.FieldValue.delete(),
-        currentExamWarnings: admin.firestore.FieldValue.delete(),
-        violationLogs: admin.firestore.FieldValue.delete(),
-        examStartedAt: admin.firestore.FieldValue.delete()
-    });
-
-    return { success: true, marks, status };
 });
 
 export const registerIssuance = onCall({ cors: true }, async (request) => {
-    const db = admin.firestore();
-    
-    // 1. Authenticated check
-    if (!request.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "You must be signed in to register a certificate issuance.");
-    }
-
-    const { zoneId, studentUid } = request.data;
-    if (!zoneId || !studentUid) {
-        throw new functions.https.HttpsError("invalid-argument", "Missing required parameters: zoneId or studentUid.");
-    }
-
-    const issuerUid = request.auth.uid;
-
-    // 2. Fetch Zone to get title and creator (Thala check)
-    const zoneDoc = await db.collection("zones").doc(zoneId).get();
-    if (!zoneDoc.exists) {
-        throw new functions.https.HttpsError("not-found", "The specified zone does not exist.");
-    }
-
-    const zoneData = zoneDoc.data()!;
-    if (zoneData.createdBy !== issuerUid) {
-        throw new functions.https.HttpsError("permission-denied", "Unauthorized: Only the zone creator (Thala) can register issuance.");
-    }
-
-    const zoneTitle = zoneData.title || zoneData.name || "Untitled Course";
-
-    // 3. Fetch Student (User) to get name and email
-    const studentUserDoc = await db.collection("users").doc(studentUid).get();
-    if (!studentUserDoc.exists) {
-        throw new functions.https.HttpsError("not-found", "Student profile not found.");
-    }
-
-    const studentUserData = studentUserDoc.data()!;
-    const studentName = studentUserData.name || "Student";
-    const studentEmail = studentUserData.email || "no-email@nunma.in";
-
-    // 4. Validate Student Enrollment is active in the zone
-    const enrollmentDoc = await db.collection("zones").doc(zoneId).collection("students").doc(studentUid).get();
-    if (!enrollmentDoc.exists || enrollmentDoc.data()?.status !== 'active') {
-        throw new functions.https.HttpsError("failed-precondition", "Student is not an active participant in this zone.");
-    }
-
-    // 5. Duplicate Check: Ensure no certificate already exists for this student + zone in the root certificates collection
-    const certQuery = await db.collection("certificates")
-        .where("studentId", "==", studentUid)
-        .where("zoneId", "==", zoneId)
-        .limit(1)
-        .get();
-
-    if (!certQuery.empty) {
-        throw new functions.https.HttpsError("already-exists", "A certificate has already been issued for this student in this zone.");
-    }
-
-    // 6. Generate Verifiable JSON-LD Credential
-    const uuid = crypto.randomUUID();
-    const urnUuid = `urn:uuid:${uuid}`;
-    const isoTimestamp = new Date().toISOString();
-
-    const payload = {
-        "@context": ["https://www.w3.org/2018/credentials/v1"],
-        "id": urnUuid,
-        "type": ["VerifiableCredential", "CourseCompletionCertificate"],
-        "issuer": `https://nunma.in/issuers/${issuerUid}`,
-        "issuanceDate": isoTimestamp,
-        "credentialSubject": {
-            "id": `did:email:${studentEmail}`,
-            "name": studentName,
-            "completedCourse": zoneTitle,
-            "zoneId": zoneId,
-            "completionDate": isoTimestamp
-        }
-    };
-
-    // 7. Atomic Batch Write: Certificates root collection and Student doc update
-    const batch = db.batch();
-
-    // Create entry in certificates root collection
-    const certRef = db.collection("certificates").doc(urnUuid);
-    batch.set(certRef, {
-        payload,
-        studentId: studentUid,
-        zoneId,
-        issuedAt: admin.firestore.FieldValue.serverTimestamp(),
-        issuedBy: issuerUid
-    });
-
-    // Update student's enrollment record in the zone (merge: true via update on selected fields)
-    const studentEnrollmentRef = db.collection("zones").doc(zoneId).collection("students").doc(studentUid);
-    batch.update(studentEnrollmentRef, {
-        certificateId: urnUuid,
-        certificateIssuedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
     try {
+        const db = admin.firestore();
+        
+        // 1. Authenticated check
+        if (!request.auth) {
+            throw new functions.https.HttpsError("unauthenticated", "You must be signed in to register a certificate issuance.");
+        }
+
+        const { zoneId, studentUid } = request.data;
+        if (!zoneId || !studentUid) {
+            throw new functions.https.HttpsError("invalid-argument", "Missing required parameters: zoneId or studentUid.");
+        }
+
+        const issuerUid = request.auth.uid;
+
+        // 2. Fetch Zone to get title and creator (Thala check)
+        const zoneDoc = await db.collection("zones").doc(zoneId).get();
+        if (!zoneDoc.exists) {
+            throw new functions.https.HttpsError("not-found", "The specified zone does not exist.");
+        }
+
+        const zoneData = zoneDoc.data()!;
+        if (zoneData.createdBy !== issuerUid && zoneData.tutorId !== issuerUid) {
+            throw new functions.https.HttpsError("permission-denied", "Unauthorized: Only the zone creator (Thala) can register issuance.");
+        }
+
+        const zoneTitle = zoneData.title || zoneData.name || "Untitled Course";
+
+        // 3. Fetch Student (User) to get name and email
+        const studentUserDoc = await db.collection("users").doc(studentUid).get();
+        if (!studentUserDoc.exists) {
+            throw new functions.https.HttpsError("not-found", "Student profile not found.");
+        }
+
+        const studentUserData = studentUserDoc.data()!;
+        const studentName = studentUserData.name || "Student";
+        const studentEmail = studentUserData.email || "no-email@nunma.in";
+
+        // 4. Validate Student Enrollment is active in the zone
+        const enrollmentDoc = await db.collection("zones").doc(zoneId).collection("students").doc(studentUid).get();
+        if (!enrollmentDoc.exists || enrollmentDoc.data()?.status !== 'active') {
+            throw new functions.https.HttpsError("failed-precondition", "Student is not an active participant in this zone.");
+        }
+
+        // 5. Duplicate Check
+        const certQuery = await db.collection("certificates")
+            .where("studentId", "==", studentUid)
+            .where("zoneId", "==", zoneId)
+            .limit(1)
+            .get();
+
+        if (!certQuery.empty) {
+            throw new functions.https.HttpsError("already-exists", "A certificate has already been issued for this student in this zone.");
+        }
+
+        // 6. Generate Verifiable Credential
+        const uuid = crypto.randomUUID();
+        const urnUuid = `urn:uuid:${uuid}`;
+        const isoTimestamp = new Date().toISOString();
+
+        const payload = {
+            "@context": ["https://www.w3.org/2018/credentials/v1"],
+            "id": urnUuid,
+            "type": ["VerifiableCredential", "CourseCompletionCertificate"],
+            "issuer": `https://nunma.in/issuers/${issuerUid}`,
+            "issuanceDate": isoTimestamp,
+            "credentialSubject": {
+                "id": `did:email:${studentEmail}`,
+                "name": studentName,
+                "completedCourse": zoneTitle,
+                "zoneId": zoneId,
+                "completionDate": isoTimestamp
+            }
+        };
+
+        // 7. Atomic Batch Write
+        const batch = db.batch();
+        const certRef = db.collection("certificates").doc(urnUuid);
+        batch.set(certRef, {
+            payload,
+            studentId: studentUid,
+            zoneId,
+            issuedAt: admin.firestore.FieldValue.serverTimestamp(),
+            issuedBy: issuerUid
+        });
+
+        const studentEnrollmentRef = db.collection("zones").doc(zoneId).collection("students").doc(studentUid);
+        batch.update(studentEnrollmentRef, {
+            certificateId: urnUuid,
+            certificateIssuedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
         await batch.commit();
         return { certificateId: urnUuid, payload };
     } catch (error: any) {
-        console.error("Batch write failed during certificate issuance:", error);
-        throw new functions.https.HttpsError("internal", "Failed to finalize certificate registration on the server.");
+        if (error instanceof functions.https.HttpsError) throw error;
+        functions.logger.error("Global crash in registerIssuance:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to finalize certificate registration.");
     }
 });
 
@@ -1688,37 +1669,32 @@ export const registerIssuance = onCall({ cors: true }, async (request) => {
 // --- OTP AUTHENTICATION ---
 
 export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"], cors: true }, async (request) => {
-    let { email } = request.data;
-    if (!email) {
-        throw new functions.https.HttpsError("invalid-argument", "Email is required.");
-    }
-
-    email = email.toLowerCase().trim();
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)); // 10 mins
-
-    // Strict Firestore path: otps/{email}
-    await admin.firestore().collection("otps").doc(email).set({
-        otp,
-        expiresAt,
-        isVerified: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    // Initialize Resend client inside the function using the injected secret
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (!resendApiKey) {
-        console.error("RESEND ERROR: RESEND_API_KEY secret is not available in this function invocation.");
-        throw new functions.https.HttpsError("failed-precondition", "Email service is not configured.");
-    }
-    const resend = new Resend(resendApiKey);
-
     try {
-        // IMPORTANT: Use support@nunma.in (the primary verified Resend sender).
-        // notification@nunma.in is an email alias — Resend validates the exact From
-        // address against verified domains; using an alias that isn't explicitly
-        // added as a sender in the Resend dashboard will cause silent delivery failure.
+        let { email } = request.data;
+        if (!email) {
+            throw new functions.https.HttpsError("invalid-argument", "Email is required.");
+        }
+
+        email = email.toLowerCase().trim();
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)); // 10 mins
+
+        // Strict Firestore path: otps/{email}
+        await admin.firestore().collection("otps").doc(email).set({
+            otp,
+            expiresAt,
+            isVerified: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Initialize Resend client
+        const resendApiKey = process.env.RESEND_API_KEY;
+        if (!resendApiKey) {
+            throw new functions.https.HttpsError("failed-precondition", "Email service is not configured.");
+        }
+        const resend = new Resend(resendApiKey);
+
         const sendResult = await resend.emails.send({
             from: 'Nunma <support@nunma.in>',
             to: email,
@@ -1734,214 +1710,392 @@ export const requestOTP = onCall({ secrets: ["RESEND_API_KEY"], cors: true }, as
                 </div>
             `
         });
-        console.log("RESEND SUCCESS: Email sent for", email, "| Resend response:", JSON.stringify(sendResult));
+        console.log("RESEND SUCCESS for", email, "| Resend response:", JSON.stringify(sendResult));
         return { success: true };
     } catch (error: any) {
-        // Log the full error object so we can see the exact Resend rejection reason in Firebase logs
-        console.error("RESEND DELIVERY FAILURE for", email, "| Full error:", JSON.stringify(error), "| Message:", error?.message);
+        if (error instanceof functions.https.HttpsError) throw error;
+        functions.logger.error("Global crash in requestOTP:", error);
         throw new functions.https.HttpsError("internal", error.message || "Failed to send OTP email.");
     }
 });
 
 export const verifyOTPAndSignIn = onCall({ cors: true }, async (request) => {
-    let { email, otp, registrationData, password } = request.data;
-    if (!email) {
-        throw new functions.https.HttpsError("invalid-argument", "Email is required.");
-    }
-
-    email = email.toLowerCase().trim();
-
-    // Strict Firestore path: otps/{email} — must match requestOTP exactly
-    const otpDoc = await admin.firestore().collection("otps").doc(email).get();
-    if (!otpDoc.exists) {
-        console.error(`verifyOTPAndSignIn: No OTP document found for email: ${email}`);
-        throw new functions.https.HttpsError("not-found", "No OTP found. Please request a new code.");
-    }
-
-    const data = otpDoc.data()!;
-    const isAlreadyVerified = data.isVerified === true;
-    const otpMatch = otp && data.otp === otp;
-
-    // --- Step 1 path: OTP not yet verified, validate the code ---
-    if (!isAlreadyVerified) {
-        if (!otpMatch) {
-            throw new functions.https.HttpsError("permission-denied", "Invalid OTP. Please check the code and try again.");
-        }
-        // Check original 10-minute expiry only on first verification
-        if (data.expiresAt.toDate() < new Date()) {
-            await otpDoc.ref.delete();
-            throw new functions.https.HttpsError("permission-denied", "OTP has expired. Please request a new code.");
-        }
-    }
-
-    // --- Step 2 path: isVerified=true, check the 15-minute grace window ---
-    if (isAlreadyVerified && password) {
-        const verifiedAt: Date = data.verifiedAt?.toDate ? data.verifiedAt.toDate() : (data.createdAt?.toDate ? data.createdAt.toDate() : new Date());
-        const gracePeriodMs = 15 * 60 * 1000; // 15 minutes to complete password step
-        if (Date.now() - verifiedAt.getTime() > gracePeriodMs) {
-            console.warn(`verifyOTPAndSignIn: Verification session expired for ${email}`);
-            await otpDoc.ref.delete();
-            throw new functions.https.HttpsError("permission-denied", "Verification session expired. Please request a new code.");
-        }
-    }
-
-    // Determine Step 1 vs Step 2 by presence of password
-    if (!password) {
-        // Step 1: Mark as verified and record the timestamp for the grace window
-        await otpDoc.ref.update({
-            isVerified: true,
-            verifiedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        return { verified: true };
-    }
-
-    // Step 2: Finalize registration with password and registrationData
-    // Find or create user
-    let user;
     try {
-        user = await admin.auth().getUserByEmail(email);
-    } catch (error: any) {
-        if (error.code === 'auth/user-not-found') {
-            // Registration flow
-            if (registrationData && password) {
-                try {
-                    user = await admin.auth().createUser({
-                        email,
-                        password,
-                        displayName: registrationData.name
-                    });
+        let { email, otp, registrationData, password } = request.data;
+        if (!email) {
+            throw new functions.https.HttpsError("invalid-argument", "Email is required.");
+        }
 
-                    // Create Firestore profile
-                    await admin.firestore().collection("users").doc(user.uid).set({
-                        email,
-                        name: registrationData.name,
-                        role: registrationData.role || "STUDENT",
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
-                        subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
-                        storage_used_bytes: 0,
-                        studentProfile: { isComplete: false },
-                        tutorProfile: { isComplete: false }
-                    });
-                } catch (creationError: any) {
-                    console.error("verifyOTPAndSignIn: Error creating user account:", creationError);
-                    throw new functions.https.HttpsError("failed-precondition", creationError.message || "Could not create user account.");
+        email = email.toLowerCase().trim();
+
+        const otpDoc = await admin.firestore().collection("otps").doc(email).get();
+        if (!otpDoc.exists) {
+            throw new functions.https.HttpsError("not-found", "No OTP found. Please request a new code.");
+        }
+
+        const data = otpDoc.data()!;
+        const isAlreadyVerified = data.isVerified === true;
+        const otpMatch = otp && data.otp === otp;
+
+        if (!isAlreadyVerified) {
+            if (!otpMatch) {
+                throw new functions.https.HttpsError("permission-denied", "Invalid OTP. Please check the code and try again.");
+            }
+            if (data.expiresAt.toDate() < new Date()) {
+                await otpDoc.ref.delete();
+                throw new functions.https.HttpsError("permission-denied", "OTP has expired. Please request a new code.");
+            }
+        }
+
+        if (isAlreadyVerified && password) {
+            const verifiedAt: Date = data.verifiedAt?.toDate ? data.verifiedAt.toDate() : (data.createdAt?.toDate ? data.createdAt.toDate() : new Date());
+            const gracePeriodMs = 15 * 60 * 1000;
+            if (Date.now() - verifiedAt.getTime() > gracePeriodMs) {
+                await otpDoc.ref.delete();
+                throw new functions.https.HttpsError("permission-denied", "Verification session expired. Please request a new code.");
+            }
+        }
+
+        if (!password) {
+            await otpDoc.ref.update({
+                isVerified: true,
+                verifiedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            return { verified: true };
+        }
+
+        let user;
+        try {
+            user = await admin.auth().getUserByEmail(email);
+        } catch (error: any) {
+            if (error.code === 'auth/user-not-found') {
+                if (registrationData && password) {
+                    try {
+                        user = await admin.auth().createUser({
+                            email,
+                            password,
+                            displayName: registrationData.name
+                        });
+
+                        await admin.firestore().collection("users").doc(user.uid).set({
+                            email,
+                            name: registrationData.name,
+                            role: registrationData.role || "STUDENT",
+                            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
+                            subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+                            storage_used_bytes: 0,
+                            studentProfile: { isComplete: false },
+                            tutorProfile: { isComplete: false }
+                        });
+                    } catch (creationError: any) {
+                        throw new functions.https.HttpsError("failed-precondition", creationError.message || "Could not create user account.");
+                    }
+                } else {
+                    throw new functions.https.HttpsError("invalid-argument", "Registration details missing.");
                 }
             } else {
-                // Should not happen if validation is correct
-                throw new functions.https.HttpsError("invalid-argument", "Registration details missing.");
+                throw new functions.https.HttpsError("internal", error.message);
             }
-        } else {
-            console.error("verifyOTPAndSignIn: Error fetching user:", error);
-            throw new functions.https.HttpsError("internal", error.message);
         }
+
+        await otpDoc.ref.delete();
+        
+        try {
+            const customToken = await admin.auth().createCustomToken(user.uid);
+            return { verified: true, customToken };
+        } catch (iamError: any) {
+            functions.logger.error("IAM Minting Error:", iamError);
+            throw new functions.https.HttpsError('internal', 'IAM Configuration Error: Cannot mint token');
+        }
+    } catch (error: any) {
+        if (error instanceof functions.https.HttpsError) throw error;
+        functions.logger.error("Global crash in verifyOTPAndSignIn:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Verification failed.");
     }
-
-    // Final Stage cleanup: delete the OTP record
-    await otpDoc.ref.delete();
-
-    // Generate custom token
-    const customToken = await admin.auth().createCustomToken(user.uid);
-    return { verified: true, customToken };
 });
 
 // --- ZONE INVITATION SYSTEM ---
 
 export const generateZoneInvite = onCall(
-    { cors: ["https://www.nunma.in", "https://nunma.in", "http://localhost:5173"] }, 
+    { cors: true }, 
     async (request) => {
-    const db = admin.firestore();
-    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
-    
-    const { zoneId } = request.data;
-    if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId.");
+        try {
+            const db = admin.firestore();
+            if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+            
+            const { zoneId } = request.data;
+            if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId.");
 
-    try {
-        const zoneDoc = await db.collection("zones").doc(zoneId).get();
-        if (!zoneDoc.exists) throw new functions.https.HttpsError("not-found", "Zone not found.");
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            if (!zoneDoc.exists) throw new functions.https.HttpsError("not-found", "Zone not found.");
 
-        const zoneData = zoneDoc.data();
-        if (zoneData?.createdBy !== request.auth.uid) {
-            throw new functions.https.HttpsError("permission-denied", "Only the zone creator can generate invites.");
+            const zoneData = zoneDoc.data();
+            if (zoneData?.createdBy !== request.auth.uid && zoneData?.tutorId !== request.auth.uid) {
+                throw new functions.https.HttpsError("permission-denied", "Only the zone creator can generate invites.");
+            }
+
+            const inviteToken = uuidv4();
+            const expiresAt = Date.now() + (48 * 60 * 60 * 1000); // 48 hours
+
+            await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).set({
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                expiresAt,
+                createdBy: request.auth.uid,
+                isActive: true
+            });
+
+            functions.logger.log(`[INVITE] Token generated for zone ${zoneId} by user ${request.auth.uid}: ${inviteToken}`);
+            return { inviteToken, expiresAt, isActive: true };
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in generateZoneInvite:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to generate invite.");
         }
-
-        const inviteToken = uuidv4();
-        const expiresAt = Date.now() + (48 * 60 * 60 * 1000); // 48 hours
-
-        await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).set({
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            expiresAt,
-            createdBy: request.auth.uid,
-            isActive: true
-        });
-
-        console.log(`[INVITE] Token generated for zone ${zoneId} by user ${request.auth.uid}: ${inviteToken}`);
-        return { inviteToken, expiresAt, isActive: true };
-    } catch (err: any) {
-        console.error(`[INVITE_ERROR] Failed to generate token for zone ${zoneId}:`, err);
-        throw new functions.https.HttpsError("internal", err.message || "Failed to generate invite token.");
     }
-});
+);
 
 export const revokeZoneInvite = onCall(
-    { cors: ["https://www.nunma.in", "https://nunma.in", "http://localhost:5173"] }, 
+    { cors: true }, 
     async (request) => {
-    const db = admin.firestore();
-    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+        try {
+            const db = admin.firestore();
+            if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
-    const { zoneId, inviteToken } = request.data;
-    if (!zoneId || !inviteToken) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or inviteToken.");
+            const { zoneId, inviteToken } = request.data;
+            if (!zoneId || !inviteToken) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or inviteToken.");
 
-    const zoneDoc = await db.collection("zones").doc(zoneId).get();
-    if (!zoneDoc.exists) throw new functions.https.HttpsError("not-found", "Zone not found.");
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            if (!zoneDoc.exists) throw new functions.https.HttpsError("not-found", "Zone not found.");
 
-    if (zoneDoc.data()?.createdBy !== request.auth.uid) {
-        throw new functions.https.HttpsError("permission-denied", "Only the zone creator can revoke invites.");
+            const zoneData = zoneDoc.data();
+            if (zoneData?.createdBy !== request.auth.uid && zoneData?.tutorId !== request.auth.uid) {
+                throw new functions.https.HttpsError("permission-denied", "Only the zone creator can revoke invites.");
+            }
+
+            await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).update({
+                isActive: false
+            });
+
+            return { success: true };
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in revokeZoneInvite:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to revoke invite.");
+        }
     }
-
-    await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).update({
-        isActive: false
-    });
-
-    return { success: true };
-});
+);
 
 export const joinZoneByInvite = onCall(
-    { cors: ["https://www.nunma.in", "https://nunma.in", "http://localhost:5173"] }, 
+    { cors: true }, 
     async (request) => {
-    const db = admin.firestore();
-    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+        try {
+            const db = admin.firestore();
+            if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
-    const { zoneId, inviteToken } = request.data;
-    if (!zoneId || !inviteToken) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or inviteToken.");
+            const { zoneId, inviteToken } = request.data;
+            if (!zoneId || !inviteToken) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or inviteToken.");
 
-    const inviteDoc = await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).get();
-    
-    if (!inviteDoc.exists) {
-        throw new functions.https.HttpsError("not-found", "Invite token not found.");
+            const inviteDoc = await db.collection("zones").doc(zoneId).collection("invites").doc(inviteToken).get();
+            
+            if (!inviteDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "Invite token not found.");
+            }
+
+            const inviteData = inviteDoc.data();
+            if (!inviteData?.isActive || inviteData.expiresAt < Date.now()) {
+                throw new functions.https.HttpsError("failed-precondition", "Invite token is invalid or expired.");
+            }
+
+            const uid = request.auth.uid;
+            const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
+            const studentDoc = await studentRef.get();
+
+            if (studentDoc.exists) {
+                return { success: true, message: "Already enrolled" };
+            }
+
+            await studentRef.set({
+                status: "active",
+                joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                source: "whitelist"
+            });
+
+            return { success: true };
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in joinZoneByInvite:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to join zone.");
+        }
     }
+);
 
-    const inviteData = inviteDoc.data();
-    if (!inviteData?.isActive || inviteData.expiresAt < Date.now()) {
-        throw new functions.https.HttpsError("failed-precondition", "Invite token is invalid or expired.");
+// --- SECURE WHITELIST ACCESS ---
+
+export const processWhitelist = onCall(
+    { secrets: ["RESEND_API_KEY"], cors: true },
+    async (request) => {
+        try {
+            const db = admin.firestore();
+
+            // 1. Authentication check
+            if (!request.auth) {
+                throw new functions.https.HttpsError("unauthenticated", "You must be signed in to whitelist students.");
+            }
+
+            const { zoneId, emails } = request.data;
+
+            // 2. Input validation
+            if (!zoneId || typeof zoneId !== "string") {
+                throw new functions.https.HttpsError("invalid-argument", "Missing or invalid zoneId.");
+            }
+            if (!emails || !Array.isArray(emails) || emails.length === 0) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing or empty emails array.");
+            }
+            if (emails.length > 200) {
+                throw new functions.https.HttpsError("invalid-argument", "Cannot process more than 200 emails at once.");
+            }
+
+            // 3. Security check: verify caller owns this zone
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            if (!zoneDoc.exists) {
+                throw new functions.https.HttpsError("not-found", "Zone not found.");
+            }
+
+            const zoneData = zoneDoc.data()!;
+            const callerUid = request.auth.uid;
+
+            if (zoneData.createdBy !== callerUid && zoneData.tutorId !== callerUid) {
+                throw new functions.https.HttpsError("permission-denied", "Only the zone creator can whitelist students.");
+            }
+
+            const zoneTitle = zoneData.title || "Untitled Zone";
+
+            // 4. Initialize Resend for notifications
+            const resendApiKey = process.env.RESEND_API_KEY;
+            let resend: InstanceType<typeof Resend> | null = null;
+            if (resendApiKey) {
+                resend = new Resend(resendApiKey);
+            } else {
+                functions.logger.warn("RESEND_API_KEY not configured — notification emails will be skipped.");
+            }
+
+            // 5. Process each email
+            const results: { enrolled: string[]; pending: string[]; alreadyEnrolled: string[]; failed: string[] } = {
+                enrolled: [],
+                pending: [],
+                alreadyEnrolled: [],
+                failed: [],
+            };
+
+            for (const rawEmail of emails) {
+                const email = (rawEmail || "").toString().toLowerCase().trim();
+                if (!email || !email.includes("@")) {
+                    results.failed.push(rawEmail);
+                    continue;
+                }
+
+                try {
+                    // 5a. Resolve user via Admin SDK
+                    const userRecord = await admin.auth().getUserByEmail(email);
+                    const uid = userRecord.uid;
+
+                    // 5b. Check if already enrolled
+                    const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
+                    const studentDoc = await studentRef.get();
+
+                    if (studentDoc.exists) {
+                        results.alreadyEnrolled.push(email);
+                        continue;
+                    }
+
+                    // 5c. Enroll the student atomically
+                    await studentRef.set({
+                        status: "active",
+                        source: "whitelist",
+                        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+
+                    results.enrolled.push(email);
+
+                    // 5d. Send notification email (fire-and-forget, don't block on failure)
+                    if (resend) {
+                        try {
+                            await resend.emails.send({
+                                from: "Nunma <support@nunma.in>",
+                                to: email,
+                                subject: "You've been granted access to a new Zone on NUNMA",
+                                html: `
+                                    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: auto; padding: 40px 20px;">
+                                        <div style="text-align: center; margin-bottom: 32px;">
+                                            <h1 style="color: #040457; font-size: 28px; font-weight: 900; margin: 0;">Welcome to ${zoneTitle} 🎓</h1>
+                                        </div>
+                                        <div style="background: #f8f9fa; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
+                                            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
+                                                You've been granted <strong style="color: #040457;">premium access</strong> to a new Zone on Nunma.
+                                            </p>
+                                            <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
+                                                Your instructor has whitelisted you — no payment required. Jump in and start learning immediately.
+                                            </p>
+                                        </div>
+                                        <div style="text-align: center; margin: 32px 0;">
+                                            <a href="https://www.nunma.in/classroom/${zoneId}" 
+                                               style="display: inline-block; background: #c2f575; color: #040457; padding: 16px 40px; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; letter-spacing: 0.05em; text-transform: uppercase;">
+                                                Enter Classroom →
+                                            </a>
+                                        </div>
+                                        <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 32px;">
+                                            Nunma — The Trust Layer for Education
+                                        </p>
+                                    </div>
+                                `,
+                            });
+                        } catch (emailError: any) {
+                            functions.logger.warn(`Failed to send whitelist email to ${email}:`, emailError.message);
+                            // Don't fail the enrollment just because the email didn't send
+                        }
+                    }
+
+                } catch (lookupError: any) {
+                    if (lookupError.code === "auth/user-not-found") {
+                        // 5e. User doesn't exist yet — add to pending_whitelists
+                        try {
+                            await db.collection("zones").doc(zoneId)
+                                .collection("pending_whitelists").doc(email).set({
+                                    email,
+                                    addedAt: admin.firestore.FieldValue.serverTimestamp(),
+                                    addedBy: callerUid,
+                                });
+                            results.pending.push(email);
+                        } catch (pendingError: any) {
+                            functions.logger.error(`Failed to save pending whitelist for ${email}:`, pendingError);
+                            results.failed.push(email);
+                        }
+                    } else {
+                        functions.logger.error(`Unexpected error processing ${email}:`, lookupError);
+                        results.failed.push(email);
+                    }
+                }
+            }
+
+            functions.logger.log(`[WHITELIST] Zone ${zoneId}: enrolled=${results.enrolled.length}, pending=${results.pending.length}, alreadyEnrolled=${results.alreadyEnrolled.length}, failed=${results.failed.length}`);
+
+            return {
+                success: true,
+                enrolled: results.enrolled.length,
+                pending: results.pending.length,
+                alreadyEnrolled: results.alreadyEnrolled.length,
+                failed: results.failed.length,
+                details: results,
+            };
+
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) throw error;
+            functions.logger.error("Global crash in processWhitelist:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to process whitelist.");
+        }
     }
-
-    const uid = request.auth.uid;
-    const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
-    const studentDoc = await studentRef.get();
-
-    if (studentDoc.exists) {
-        return { success: true, message: "Already enrolled" };
-    }
-
-    await studentRef.set({
-        status: "active",
-        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-        source: "whitelist"
-    });
-
-    return { success: true };
-});
+);
 
 // --- ASYNCHRONOUS INVOICING PIPELINE (V2) ---
 

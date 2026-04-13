@@ -161,12 +161,33 @@ const OnboardingSystem: React.FC = () => {
             const { httpsCallable } = await import('firebase/functions');
             const { functions } = await import('../utils/firebase');
             
-            const initAccount = httpsCallable<{businessType: string, legalName: string, phone: string, pan: string, bankAccount: string, ifsc: string, gstin?: string, street: string, street2: string, city: string, state: string, pinCode: string}, {onboardingUrl: string}>(functions, 'createTutorLinkedAccount');
+            const initAccount = httpsCallable<{
+                businessName: string,
+                businessType: string, 
+                legalName: string, 
+                email: string,
+                phone: string, 
+                pan: string, 
+                bankAccount: string, 
+                ifsc: string, 
+                gstin?: string, 
+                street: string, 
+                street2: string, 
+                city: string, 
+                state: string, 
+                pinCode: string
+            }, {onboardingUrl?: string}>(functions, 'createTutorLinkedAccount');
             
             try {
+                // Task 3: Implement conditional mapping for Individual Tutor
+                const businessName = data.businessType === 'individual' ? data.legalName : (data as any).businessName || data.legalName;
+                const businessType = data.businessType;
+
                 const res = await initAccount({ 
-                    businessType: data.businessType, 
+                    businessName,
+                    businessType, 
                     legalName: data.legalName,
+                    email: user.email || '',
                     phone: data.phone,
                     pan: data.pan,
                     bankAccount: data.bankAccount,

@@ -15,6 +15,7 @@ interface ShareModalProps {
         inviteToken: string;
         expiresAt: number;
     } | null;
+    isGenerating?: boolean;
     onRevoke: () => void;
     onGenerate: () => void;
 }
@@ -25,6 +26,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     zoneId, 
     zoneTitle,
     activeInvite,
+    isGenerating,
     onRevoke,
     onGenerate
 }) => {
@@ -112,9 +114,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                         </div>
                         <button 
                             onClick={onGenerate}
-                            className="px-12 py-6 bg-[#040457] text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4"
+                            disabled={isGenerating}
+                            className="px-12 py-6 bg-[#040457] text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <RefreshCw size={20} className="text-[#c2f575]" /> Generate Link
+                            <RefreshCw size={20} className={`text-[#c2f575] ${isGenerating ? 'animate-spin' : ''}`} /> 
+                            {isGenerating ? 'Generating...' : 'Generate Link'}
                         </button>
                     </div>
                 ) : (

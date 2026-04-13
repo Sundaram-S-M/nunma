@@ -206,9 +206,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   }
                 }}
               >
-                <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>{link.icon}</span>
+                <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20 }}>{link.icon}</span>
                 {isOpen && (
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginLeft: '0.75rem' }}>
                     {link.label}
                   </span>
                 )}

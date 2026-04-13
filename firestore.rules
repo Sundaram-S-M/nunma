@@ -17,7 +17,8 @@ service cloud.firestore {
     }
 
     function isZoneCreator(zoneId) {
-      return get(/databases/$(database)/documents/zones/$(zoneId)).data.tutorId == request.auth.uid;
+      let zoneData = get(/databases/$(database)/documents/zones/$(zoneId)).data;
+      return request.auth.uid == zoneData.tutorId || request.auth.uid == zoneData.createdBy;
     }
 
     // --- USERS Collection ---
@@ -36,7 +37,7 @@ service cloud.firestore {
     match /zones/{zoneId} {
       allow read: if isSignedIn();
       // Only the creator can write
-      allow write: if isSignedIn() && resource.data.tutorId == request.auth.uid;
+      allow write: if isSignedIn() && (resource.data.tutorId == request.auth.uid || resource.data.createdBy == request.auth.uid);
 
       // ZONES/STUDENTS Sub-collection
       // Rule: read if studentId or zone creator (Thala). 

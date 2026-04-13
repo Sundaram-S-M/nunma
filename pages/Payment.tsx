@@ -109,16 +109,13 @@ const Payment: React.FC = () => {
 
             const orderResult: any = await createOrder({ zoneId });
 
-            if (!orderResult.data.orderId || !orderResult.data.amount) {
-                throw new Error('Failed to create Razorpay order. The server returned an invalid response.');
-            }
-
-            const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY;
+            const orderData = orderResult.data as any;
+            const razorpayKey = orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY;
+            
             if (!razorpayKey) {
                 throw new Error('Razorpay payment gateway is not configured. Please contact support.');
             }
 
-            const orderData = orderResult.data as any;
 
             const options = {
                 key: razorpayKey,
@@ -258,25 +255,16 @@ const Payment: React.FC = () => {
                         <p className="text-gray-400 font-medium text-sm">Select your preferred way to pay securely.</p>
                     </div>
 
-                    <div className="space-y-4">
-                        <div className="p-8 border-2 border-[#1A1A4E] rounded-3xl flex items-center justify-between bg-indigo-50/30 group">
-                            <div className="flex items-center gap-6">
-                                <CreditCard size={32} className="text-indigo-900" />
-                                <div>
-                                    <p className="font-black text-indigo-900">Credit or Debit Card</p>
-                                    <p className="text-xs text-gray-400 font-bold">Visa, Mastercard, AMEX</p>
-                                </div>
-                            </div>
-                            <div className="w-6 h-6 rounded-full bg-indigo-900 flex items-center justify-center">
-                                <Check size={14} className="text-white" />
+                    <div className="p-8 border-2 border-[#1A1A4E] rounded-3xl flex items-center justify-between bg-indigo-50/30">
+                        <div className="flex items-center gap-6">
+                            <ShieldCheck size={32} className="text-indigo-900" />
+                            <div>
+                                <p className="font-black text-indigo-900">Razorpay Payment Gateway</p>
+                                <p className="text-xs text-gray-400 font-bold">Secure Cards, UPI, Netbanking & Wallets</p>
                             </div>
                         </div>
-
-                        <div className="p-8 border border-gray-100 rounded-3xl flex items-center justify-between hover:bg-gray-50 transition-all cursor-pointer">
-                            <div className="flex items-center gap-6">
-                                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-xs">P</div>
-                                <p className="font-black text-gray-400">PayPal Checkout</p>
-                            </div>
+                        <div className="w-6 h-6 rounded-full bg-indigo-900 flex items-center justify-center">
+                            <Check size={14} className="text-white" />
                         </div>
                     </div>
 
@@ -331,7 +319,7 @@ const Payment: React.FC = () => {
                             <div className="w-6 h-6 border-4 border-[#c1e60d] border-t-transparent rounded-full animate-spin"></div>
                         ) : (
                             <>
-                                <ShieldCheck size={20} /> Complete Payment
+                                <ShieldCheck size={20} /> Proceed to Payment
                             </>
                         )}
                     </button>

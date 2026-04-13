@@ -157,7 +157,10 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
         } catch (error: any) {
             console.error('Start Fresh Error:', error);
             setUploadStatus('error');
-            setErrorMessage(error.message || 'Failed to initiate upload.');
+            const userFriendlyMsg = (error.code === 'internal' || error.message?.includes('failed-precondition')) 
+                ? "Backend failed to generate secure upload token."
+                : (error.message || 'Failed to initiate upload.');
+            setErrorMessage(userFriendlyMsg);
             setIsUploading(false);
         }
     };
@@ -231,7 +234,10 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
         } catch (error: any) {
             console.error('Resume Error:', error);
             setUploadStatus('error');
-            setErrorMessage(error.message || 'Failed to resume upload.');
+            const userFriendlyMsg = (error.code === 'internal' || error.message?.includes('failed-precondition')) 
+                ? "Backend failed to generate secure upload token."
+                : (error.message || 'Failed to resume upload.');
+            setErrorMessage(userFriendlyMsg);
             setIsUploading(false);
         }
     };

@@ -194,7 +194,7 @@ const Auth: React.FC = () => {
 
             <div className="animate-in fade-in slide-in-from-left-8 duration-1000">
               <h1 className="text-7xl xl:text-[6rem] font-black tracking-tighter leading-[0.9] mb-12">
-                {branding[role].title} <br />
+                <span className="text-white/20">{branding[role].title}</span> <br />
                 <span className="text-[#c2f575]">{branding[role].highlight}</span>
               </h1>
               <p className="text-indigo-200/60 text-xl xl:text-2xl font-medium leading-relaxed max-w-lg">
@@ -224,8 +224,8 @@ const Auth: React.FC = () => {
         <div className="p-10 md:p-16 lg:p-24 flex flex-col justify-center bg-white">
           <div className="max-w-md mx-auto w-full">
             <div className="lg:hidden flex items-center gap-3 mb-16">
-              <div className="w-10 h-10 bg-[#040457] rounded-xl flex items-center justify-center text-[#c2f575]">
-                <Globe size={20} strokeWidth={2.5} />
+              <div className="w-10 h-10 bg-[#040457] rounded-xl flex items-center justify-center overflow-hidden">
+                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" width="500" height="500" />
               </div>
               <span className="text-2xl font-black tracking-tighter text-[#040457]">nunma</span>
             </div>

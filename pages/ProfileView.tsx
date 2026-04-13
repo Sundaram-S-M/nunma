@@ -31,10 +31,13 @@ import {
   TrendingUp,
   CreditCard as CardIcon,
   Plus as PlusIcon,
-  HelpCircle
+  HelpCircle,
+  Edit2
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../utils/firebase';
+import { db, storage } from '../utils/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
   doc,
   onSnapshot,
@@ -64,7 +67,8 @@ const ProfileHeader = ({
   isFollowing, handleFollow, bannerInputRef, handleFileChange,
   avatarInputRef, setIsEditing, handleSaveProfile,
   setShowProductModal, navigate,
-  handleViewFollowers, tutorStudentsCount
+  handleViewFollowers, tutorStudentsCount,
+  uploadingAvatar
 }: any) => (
   <div className="flex flex-col w-full relative">
     {/* Dark Banner Section */}
@@ -100,20 +104,25 @@ const ProfileHeader = ({
           <div className="flex-1 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 text-white">
             {/* User Details */}
             <div className="flex-1">
-              <div className="flex flex-wrap items-center gap-3 mb-1">
+              <div className="flex flex-wrap items-center gap-4 mb-2">
                 {isEditing ? (
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="Your Name"
-                    className="text-3xl md:text-[42px] font-black tracking-tight drop-shadow-md bg-transparent border-b border-white/20 outline-none w-full"
+                    className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-md bg-transparent border-none outline-none w-full"
                   />
                 ) : (
-                  <h1 className="text-3xl md:text-[42px] font-black tracking-tight drop-shadow-md">{profileUser.name}</h1>
-                )}
-                {role === UserRole.TUTOR && (
-                  <div className="bg-[#5c7a36]/40 border border-[#6b8e23] text-[#c2f575] px-2.5 py-1 rounded flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest backdrop-blur-sm">
-                    <ShieldCheck size={12} strokeWidth={3} /> Verified Expert
+                  <div className="flex items-center gap-4 group/name">
+                    <h1 className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-md">{profileUser.name}</h1>
+                    {isMe && (
+                      <button 
+                        onClick={() => setIsEditing(true)}
+                        className="p-2 bg-white/10 backdrop-blur-md rounded-lg opacity-0 group-hover/name:opacity-100 transition-all hover:bg-white hover:text-[#1A1A4E]"
+                      >
+                        <Edit2 size={20} />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -174,12 +183,19 @@ const ProfileHeader = ({
           <div className="relative group shrink-0 -mt-[80px] md:-mt-[110px] mb-6 md:mb-0 md:mr-8 z-30">
             <div className={`w-36 h-36 md:w-44 md:h-44 rounded-3xl md:rounded-[2.2rem] p-[5px] bg-gradient-to-tr from-[#c2f575] via-[#4d56c8] to-[#1A1A4E] shadow-2xl overflow-hidden`}>
               <div className="w-full h-full bg-[#1A1A4E] rounded-[1.8rem] overflow-hidden border-2 border-[#1A1A4E] relative group">
-                <img src={profileUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + profileUser.uid} alt="Profile" className="w-full h-full object-cover" width="500" height="500" />
-                {isMe && (
+                {uploadingAvatar ? (
+                  <div className="w-full h-full flex items-center justify-center bg-navy/50 backdrop-blur-md">
+                    <div className="w-10 h-10 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : (
+                  <img src={profileUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + profileUser.uid} alt="Profile" className="w-full h-full object-cover" width="500" height="500" />
+                )}
+                {isMe && !uploadingAvatar && (
                   <div className="absolute bottom-2 right-2">
                     <button onClick={() => avatarInputRef.current?.click()} className="w-8 h-8 md:w-10 md:h-10 bg-white text-indigo-900 rounded-full shadow-lg flex items-center justify-center hover:bg-[#c2f575] border border-transparent transition-all opacity-0 group-hover:opacity-100"><Camera size={14} /></button>
                   </div>
                 )}
+                <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'avatar')} />
               </div>
             </div>
           </div>
@@ -545,6 +561,7 @@ const ProfileView: React.FC = () => {
   const [editExperience, setEditExperience] = useState<any[]>([]);
   const [editEducation, setEditEducation] = useState<any[]>([]);
   const [editSkills, setEditSkills] = useState<string[]>([]);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -782,15 +799,91 @@ const ProfileView: React.FC = () => {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner') => {
+  const compressImage = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxSize = 500;
+
+          if (width > height) {
+            if (width > maxSize) {
+              height *= maxSize / width;
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width *= maxSize / height;
+              height = maxSize;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) resolve(blob);
+              else reject(new Error('Canvas toBlob failed'));
+            },
+            'image/jpeg',
+            0.8
+          );
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner') => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    if (type === 'banner') {
       const reader = new FileReader();
       reader.onloadend = () => {
         setAdjustingImage(reader.result as string);
         setAdjustType(type);
       };
       reader.readAsDataURL(file);
+      return;
+    }
+
+    // Avatar optimization logic
+    if (type === 'avatar' && currentUser && db && storage) {
+      setUploadingAvatar(true);
+      const loadingToast = toast.loading('Optimizing & uploading avatar...');
+      try {
+        const compressedBlob = await compressImage(file);
+        const storageRef = ref(storage, `avatars/${currentUser.uid}`);
+        
+        await uploadBytes(storageRef, compressedBlob);
+        const downloadURL = await getDownloadURL(storageRef);
+        
+        // Cache busting append
+        const finalURL = `${downloadURL}${downloadURL.includes('?') ? '&' : '?'}t=${Date.now()}`;
+        
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          avatar: finalURL
+        });
+
+        toast.success('Profile picture updated successfully!', { id: loadingToast });
+      } catch (error: any) {
+        console.error('Avatar upload failed:', error);
+        toast.error(`Upload failed: ${error.message}`, { id: loadingToast });
+      } finally {
+        setUploadingAvatar(false);
+        if (e.target) e.target.value = ''; // Reset input
+      }
     }
   };
 
@@ -864,6 +957,7 @@ const ProfileView: React.FC = () => {
         bannerInputRef={bannerInputRef} handleFileChange={handleFileChange} avatarInputRef={avatarInputRef}
         setIsEditing={setIsEditing} handleSaveProfile={handleSaveProfile} setShowProductModal={setShowProductModal} navigate={navigate}
         handleViewFollowers={handleViewFollowers} tutorStudentsCount={tutorStudentsCount}
+        uploadingAvatar={uploadingAvatar}
       />
 
       <div className="max-w-7xl mx-auto mt-8 px-10 relative z-20">
