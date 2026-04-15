@@ -107,13 +107,17 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     AuthorizationSignature: signature,
                     AuthorizationExpire: expirationTime.toString(),
                     VideoId: videoId,
-                    LibraryId: libraryId,
+                    LibraryId: libraryId.toString(),
                 },
                 metadata: {
                     filetype: file.type,
                     title: file.name,
                     collection: zoneId || 'default',
-                    videoId: videoId, // CRITICAL: store for resume
+                    // Redundancy: Bunny sometimes parses these from metadata in certain TUS versions
+                    VideoId: videoId,
+                    LibraryId: libraryId.toString(),
+                    AuthorizationSignature: signature,
+                    AuthorizationExpire: expirationTime.toString(),
                 },
                 onError: (error) => {
                     console.error('TUS Upload Failed:', error);
@@ -196,13 +200,16 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     AuthorizationSignature: signature,
                     AuthorizationExpire: expirationTime.toString(),
                     VideoId: videoId,
-                    LibraryId: libraryId,
+                    LibraryId: libraryId.toString(),
                 },
                 metadata: {
                     filetype: file.type,
                     title: file.name,
                     collection: zoneId || 'default',
-                    videoId: videoId,
+                    VideoId: videoId,
+                    LibraryId: libraryId.toString(),
+                    AuthorizationSignature: signature,
+                    AuthorizationExpire: expirationTime.toString(),
                 },
                 onError: (error) => {
                     console.error('TUS Resume Failed:', error);
@@ -252,6 +259,9 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                 endpoint: 'https://video.bunnycdn.com/tusupload',
                 retryDelays: [0, 1000, 3000, 5000, 10000],
                 chunkSize: 50 * 1024 * 1024,
+                headers: {
+                    LibraryId: '608015' // Pass Library ID for pre-flight check if possible
+                },
                 removeFingerprintOnSuccess: true,
             } as any);
 

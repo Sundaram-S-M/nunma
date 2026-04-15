@@ -261,7 +261,7 @@ const Auth: React.FC = () => {
                       <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457] transition-colors" size={20} />
                       <input
                         type="email" required placeholder="name@domain.com"
-                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
+                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
                         value={email} onChange={(e) => setEmail(e.target.value)}
                       />
                     </div>
@@ -276,7 +276,7 @@ const Auth: React.FC = () => {
                       <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457] transition-colors" size={20} />
                       <input
                         type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
+                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-16 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
                         value={password} onChange={(e) => setPassword(e.target.value)}
                       />
                       <button
@@ -335,7 +335,7 @@ const Auth: React.FC = () => {
                         <User className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
                         <input
                           type="text" required placeholder="Legal full name"
-                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-2 font-bold text-[#040457] outline-none transition-all placeholder-slate-500"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-bold text-[#040457] outline-none transition-all placeholder-slate-500"
                           value={name} onChange={(e) => setName(e.target.value)}
                         />
                       </div>
@@ -347,7 +347,7 @@ const Auth: React.FC = () => {
                         <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
                         <input
                           type="email" required placeholder="name@domain.com"
-                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-2 font-bold text-[#040457] outline-none transition-all placeholder-slate-500"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-bold text-[#040457] outline-none transition-all placeholder-slate-500"
                           value={email} onChange={(e) => setEmail(e.target.value)}
                         />
                       </div>
@@ -385,7 +385,7 @@ const Auth: React.FC = () => {
                         <KeyRound className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
                         <input
                           type="text" required placeholder="••••••" maxLength={6}
-                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-8 py-2 font-black text-[#040457] outline-none transition-all text-2xl tracking-[0.5em] placeholder-slate-500"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-black text-[#040457] outline-none transition-all text-2xl tracking-[0.5em] placeholder-slate-500"
                           value={otp} onChange={(e) => setOtp(e.target.value)}
                         />
                       </div>
@@ -420,7 +420,7 @@ const Auth: React.FC = () => {
                         <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
                         <input
                           type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-16 pr-16 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-16 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
                           value={password} onChange={(e) => setPassword(e.target.value)}
                         />
                         <button

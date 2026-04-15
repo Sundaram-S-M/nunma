@@ -125,7 +125,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoading(false);
           },
           (error) => {
-            console.warn("Snapshot suppressed (likely permission switch):", error.message);
+            console.warn("AuthContext: Snapshot listener error (possibly permission denied):", error.message);
+            // Don't leave the app in a permanent loading state on permission error
             setLoading(false);
           }
         );
@@ -202,13 +203,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     if (db && selectedRole) {
         try {
+            console.log(`AuthContext: Checking profile for Google User ${result.user.uid}...`);
             const userRef = doc(db, 'users', result.user.uid);
             const userSnap = await getDoc(userRef);
+            
             if (!userSnap.exists()) {
-                await setDoc(userRef, { role: selectedRole }, { merge: true });
+                console.log(`AuthContext: Creating new profile for Google User with role: ${selectedRole}`);
+                await setDoc(userRef, { 
+                  uid: result.user.uid,
+                  email: result.user.email,
+                  name: result.user.displayName,
+                  avatar: result.user.photoURL,
+                  role: selectedRole,
+                  createdAt: new Date().toISOString()
+                }, { merge: true });
             }
         } catch (error) {
-            console.error("AuthContext: Failed to update role after Google Login", error);
+            console.error("AuthContext: Critical Error - Failed to update role after Google Login:", error);
+            // Option: Alert user or allow proceeding with default role if rules permit
         }
     }
   };

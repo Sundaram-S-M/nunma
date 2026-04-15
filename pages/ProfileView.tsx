@@ -36,8 +36,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { db, storage } from '../utils/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth } from '../utils/firebase';
 import {
   doc,
   onSnapshot,
@@ -859,18 +858,33 @@ const ProfileView: React.FC = () => {
     }
 
     // Avatar optimization logic
-    if (type === 'avatar' && currentUser && db && storage) {
+    if (type === 'avatar' && currentUser && db) {
       setUploadingAvatar(true);
       const loadingToast = toast.loading('Optimizing & uploading avatar...');
       try {
         const compressedBlob = await compressImage(file);
-        const storageRef = ref(storage, `avatars/${currentUser.uid}`);
-        
-        await uploadBytes(storageRef, compressedBlob);
-        const downloadURL = await getDownloadURL(storageRef);
-        
-        // Cache busting append
-        const finalURL = `${downloadURL}${downloadURL.includes('?') ? '&' : '?'}t=${Date.now()}`;
+        const idToken = await (currentUser as any).getIdToken?.() || await auth?.currentUser?.getIdToken();
+
+        if (!idToken) throw new Error("Authentication token expired. Please refresh.");
+
+        const formData = new FormData();
+        formData.append('file', compressedBlob, 'avatar.jpg');
+        formData.append('folder', 'avatars');
+
+        const region = 'us-central1';
+        const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+        const uploadUrl = `https://${region}-${projectId}.cloudfunctions.net/uploadFileToBunny`;
+
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${idToken}` },
+          body: formData
+        });
+
+        if (!response.ok) throw new Error(await response.text());
+
+        const data = await response.json();
+        const finalURL = `${data.fileUrl}?t=${Date.now()}`;
         
         await updateDoc(doc(db, 'users', currentUser.uid), {
           avatar: finalURL
@@ -907,15 +921,52 @@ const ProfileView: React.FC = () => {
 
   const handleSavePhoto = async (croppedImage: string) => {
     if (!currentUser || !adjustType) return;
+    const loadingToast = toast.loading(`Uploading ${adjustType}...`);
     try {
+      // 1. Convert Base64 to Blob
+      const base64Data = croppedImage.split(',')[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+      // 2. Get ID Token
+      const idToken = await (currentUser as any).getIdToken?.() || await auth?.currentUser?.getIdToken();
+      if (!idToken) throw new Error("Auth token missing");
+
+      // 3. Upload to Bunny
+      const formData = new FormData();
+      formData.append('file', blob, `${adjustType}.jpg`);
+      formData.append('folder', adjustType === 'avatar' ? 'avatars' : 'banners');
+
+      const region = 'us-central1';
+      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+      const uploadUrl = `https://${region}-${projectId}.cloudfunctions.net/uploadFileToBunny`;
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${idToken}` },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error(await response.text());
+      const uploadData = await response.json();
+
+      // 4. Update Profile
       const updates: any = {};
-      if (adjustType === 'avatar') updates.avatar = croppedImage;
-      else updates.banner = croppedImage;
+      if (adjustType === 'avatar') updates.avatar = uploadData.fileUrl;
+      else updates.banner = uploadData.fileUrl;
+      
       await updateProfile(updates);
       setAdjustingImage(null);
       setAdjustType(null);
-    } catch (error) {
+      toast.success(`${adjustType} updated!`, { id: loadingToast });
+    } catch (error: any) {
       console.error("Failed to save photo:", error);
+      toast.error(`Upload failed: ${error.message}`, { id: loadingToast });
     }
   };
 

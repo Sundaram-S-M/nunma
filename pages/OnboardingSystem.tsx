@@ -176,7 +176,7 @@ const OnboardingSystem: React.FC = () => {
                 city: string, 
                 state: string, 
                 pinCode: string
-            }, {onboardingUrl?: string}>(functions, 'createTutorLinkedAccount');
+            }, {accountId?: string}>(functions, 'createTutorLinkedAccount');
             
             try {
                 // Task 3: Implement conditional mapping for Individual Tutor
@@ -199,12 +199,12 @@ const OnboardingSystem: React.FC = () => {
                     state: data.state,
                     pinCode: data.pinCode
                 });
-                if (res.data?.onboardingUrl) {
-                    toast.success("Redirecting to Razorpay...", { id: 'rzp' });
-                    window.location.href = res.data.onboardingUrl;
+                if (res.data?.accountId) {
+                    toast.success("Identity & Bank Details submitted for verification!", { id: 'rzp' });
+                    navigate('/workplace');
                 } else {
                     toast.dismiss('rzp');
-                    toast.error("Account created, but no onboarding URL returned.");
+                    toast.error("Account creation failed. Please contact support.");
                     navigate('/workplace');
                 }
             } catch (error: any) {

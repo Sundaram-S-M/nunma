@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processInvoicingQueue = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.gradePdfSubmission = void 0;
+exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.gradePdfSubmission = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
@@ -41,6 +41,7 @@ const pdf_lib_1 = require("pdf-lib");
 // import { generatePlatformFeeInvoice } from "./zohoUtils";
 const uuid_1 = require("uuid");
 const resend_1 = require("resend");
+const busboy_1 = __importDefault(require("busboy"));
 var gradeSubmission_1 = require("./ai/gradeSubmission");
 Object.defineProperty(exports, "gradePdfSubmission", { enumerable: true, get: function () { return gradeSubmission_1.gradePdfSubmission; } });
 // const db = admin.firestore(); // Moved inside function scopes for deployment stability
@@ -257,7 +258,9 @@ exports.createBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUN
         }
         // Step 3: Signature Generation
         const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
-        const signature = crypto.createHash('sha256').update(libraryId + bunnyKey + expirationTime + videoId).digest('hex');
+        const signature = crypto.createHash('sha256')
+            .update(String(libraryId) + String(bunnyKey) + String(expirationTime) + String(videoId))
+            .digest('hex');
         // Step 4: DB Write (Direct indexing under Zone subcollection)
         const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
         await videoRef.set({
@@ -650,219 +653,182 @@ exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID",
         throw new functions.https.HttpsError("internal", `Order creation failed: ${msg}`);
     }
 });
-exports.razorpayRouteWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBHOOK_SECRET", "ZOHO_ORG_ID", "ZOHO_REFRESH_TOKEN", "ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET"] }, async (req, res) => {
-    const db = admin.firestore();
-    const signature = req.headers['x-razorpay-signature'];
-    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    if (!signature || !secret) {
-        console.error("Missing Razorpay signature or secret.");
-        res.status(400).send('Bad Request: Signature missing');
-        return;
-    }
-    // Verify Razorpay webhook signature using raw body and HMAC-SHA256
-    const hmac = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
-    if (hmac !== signature) {
-        console.error("Razorpay signature mismatch.");
-        res.status(400).send('Bad Request: Invalid signature');
-        return;
-    }
-    const event = req.body.event;
-    if (event !== 'payment.captured') {
-        // Handle only payment.captured, ignore others with 200
-        res.status(200).send('Event Ignored');
-        return;
-    }
-    try {
-        const payload = req.body.payload;
-        const payment = payload.payment.entity;
-        const orderId = payment.order_id;
-        const paymentId = payment.id;
-        if (!orderId) {
-            console.warn("Webhook received payment.captured without order_id.");
-            res.status(200).send('No order_id found');
-            return;
-        }
-        // 1. Query collectionGroup('orders') where orderId matches
-        const ordersSnapshot = await db.collectionGroup('orders').where('orderId', '==', orderId).get();
-        if (ordersSnapshot.empty) {
-            console.error(`Order query failed: No order found with orderId: ${orderId}`);
-            res.status(200).send('Order not found');
-            return;
-        }
-        const orderDoc = ordersSnapshot.docs[0];
-        const orderData = orderDoc.data();
-        const orderRef = orderDoc.ref;
-        // Extract zoneId and studentUid from document path/data
-        const zoneRef = orderRef.parent.parent;
-        if (!zoneRef)
-            throw new Error("Invalid order path structure.");
-        const zoneId = zoneRef.id;
-        const studentUid = orderData.studentUid;
-        let tutorUidFromDoc = orderData.tutorUid;
-        let commissionAmount = orderData.commission;
-        // Fallback for existing orders that don't have tutorUid or commission stored
-        if (!tutorUidFromDoc || commissionAmount === undefined) {
-            const zoneDoc = await zoneRef.get();
-            const zoneData = zoneDoc.data();
-            tutorUidFromDoc = tutorUidFromDoc || (zoneData === null || zoneData === void 0 ? void 0 : zoneData.createdBy);
-            if (!tutorUidFromDoc) {
-                console.error(`Webhook error: Could not determine tutorUid for order ${orderId} in zone ${zoneId}`);
-                // We shouldn't stop fulfillment, but we can't do the commission invoice
-                commissionAmount = commissionAmount || 0;
-            }
-            else if (commissionAmount === undefined) {
-                // Recalculate commission if missing (matches createRazorpayOrder logic)
-                const tutorDoc = await db.collection("users").doc(tutorUidFromDoc).get();
-                if (!tutorDoc.exists) {
-                    console.warn(`Webhook warning: Tutor profile ${tutorUidFromDoc} not found for commission calculation.`);
-                    commissionAmount = 0;
-                }
-                else {
-                    const tutorData = tutorDoc.data();
-                    let commissionPct = 15;
-                    const plan = tutorData.subscriptionPlan;
-                    if (plan === 'STANDARD')
-                        commissionPct = 5;
-                    else if (plan === 'PREMIUM')
-                        commissionPct = 2;
-                    commissionAmount = Math.round(orderData.amount * (commissionPct / 100));
-                }
-            }
-        }
-        // 2. Enroll student
-        const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentUid);
-        await studentRef.set({
-            status: 'active',
-            joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-            source: 'payment',
-            paymentId
-        }, { merge: true });
-        // 3. Update order status to CAPTURED
-        await orderRef.update({
-            status: 'CAPTURED',
-            capturedAt: admin.firestore.FieldValue.serverTimestamp(),
-            tutorUid: tutorUidFromDoc,
-            commission: commissionAmount
-        });
-        // 4. Queue Asynchronous Invoicing & Email
-        const amountInInr = (commissionAmount || 0) / 100;
-        const gstAmount = amountInInr * 0.18;
-        await db.collection('mail_queue').add({
-            uid: tutorUidFromDoc,
-            amount: amountInInr,
-            gst: gstAmount,
-            type: 'PLATFORM_FEE',
-            paymentId,
-            status: 'pending',
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        res.status(200).send('OK');
-    }
-    catch (error) {
-        console.error("Webhook processing error:", error);
-        res.status(500).send('Internal Server Error');
-    }
+/**
+ * DEPRECATED: Consolidated into the unified razorpayWebhook below.
+ * Keeping a stub for transitional safety if needed, but redirects to 404/200.
+ */
+exports.razorpayRouteWebhook = (0, https_1.onRequest)(async (req, res) => {
+    functions.logger.warn("Deprecated razorpayRouteWebhook called. Please update your Razorpay dashboard to use /razorpayWebhook.");
+    res.status(200).send('Deprecated: Please use /razorpayWebhook instead.');
 });
 /**
  * SECURE RAZORPAY WEBHOOK
  * Implements strict signature validation, two-step idempotency, and atomic fulfillment.
  */
-exports.razorpayWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBHOOK_SECRET", "SMTP_PASS"] }, async (req, res) => {
-    var _a, _b;
+exports.razorpayWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBHOOK_SECRET"], cors: true }, // Removed SMTP_PASS as it's not used here anymore
+async (req, res) => {
+    var _a, _b, _c, _d, _e;
     const db = admin.firestore();
     const signature = req.headers['x-razorpay-signature'];
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    // Step 1: Signature Validation & Fast-Fail
+    // Step 1: Signature Validation
+    functions.logger.info("Executing Razorpay Webhook Signature Validation...");
     if (!signature || !secret) {
-        console.error("Signature or Secret missing.");
-        res.status(400).send('Invalid signature');
+        functions.logger.error("Rejecting Webhook: Signature or Secret missing in environment.");
+        res.status(400).send('Invalid signature configuration');
         return;
     }
     const hmac = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
     if (hmac !== signature) {
-        console.error("Signature mismatch.");
-        res.status(400).send('Invalid signature');
+        functions.logger.error("Rejecting Webhook: HMAC signature mismatch.", { provided: signature, calculated: hmac });
+        res.status(400).send('Invalid signature match');
         return;
     }
+    functions.logger.info("Razorpay Signature Verified Successfully.");
     try {
         const payload = req.body;
+        const event = payload.event;
+        // Only handle payment.captured for core fulfillment
+        if (event !== 'payment.captured' && event !== 'order.paid') {
+            functions.logger.info(`Ignoring Razorpay event type: ${event}`);
+            res.status(200).send({ status: 'ignored', event });
+            return;
+        }
         const payment = (_b = (_a = payload.payload) === null || _a === void 0 ? void 0 : _a.payment) === null || _b === void 0 ? void 0 : _b.entity;
-        const razorpayOrderId = payment === null || payment === void 0 ? void 0 : payment.order_id;
+        const razorpayOrderId = (payment === null || payment === void 0 ? void 0 : payment.order_id) || ((_e = (_d = (_c = payload.payload) === null || _c === void 0 ? void 0 : _c.order) === null || _d === void 0 ? void 0 : _d.entity) === null || _e === void 0 ? void 0 : _e.id);
         const paymentId = payment === null || payment === void 0 ? void 0 : payment.id;
         if (!razorpayOrderId) {
-            console.warn("No order_id found in payload.");
+            functions.logger.warn("No order_id found in Razorpay payload.", payload);
             res.status(200).send({ status: 'ignored', reason: 'no_order_id' });
             return;
         }
-        // Step 2: The Two-Step Idempotency Transaction
-        // Pre-Query (Outside Transaction)
-        const snapshot = await db.collectionGroup('orders')
+        // Step 2: Identify and Fetch Order (Zone vs Platform)
+        functions.logger.info(`Processing fulfillment for Razorpay Order: ${razorpayOrderId}`);
+        let orderDoc;
+        let isPlatformOrder = false;
+        // Strategy: Check Zone Orders (Subcollections) first
+        const zoneOrderSnapshot = await db.collectionGroup('orders')
             .where('orderId', '==', razorpayOrderId)
             .limit(1)
             .get();
-        if (snapshot.empty) {
-            console.error(`Order not found for ID: ${razorpayOrderId}`);
-            throw new Error(`Order not found: ${razorpayOrderId}`);
+        if (!zoneOrderSnapshot.empty) {
+            orderDoc = zoneOrderSnapshot.docs[0];
         }
-        const orderDoc = snapshot.docs[0];
+        else {
+            // Check Platform Orders (Top-level)
+            const platformOrderDoc = await db.collection('platform_orders').doc(razorpayOrderId).get();
+            if (!platformOrderDoc.exists) {
+                functions.logger.error(`Critical Error: Order ${razorpayOrderId} not found in any collection.`);
+                res.status(200).send({ status: 'error', message: 'order_not_found' });
+                return;
+            }
+            orderDoc = platformOrderDoc;
+            isPlatformOrder = true;
+        }
         const orderRef = orderDoc.ref;
         const orderData = orderDoc.data();
-        // Extract IDs for fulfillment
-        const zoneRef = orderRef.parent.parent;
-        if (!zoneRef)
-            throw new Error("Invalid order document path structure.");
-        const zoneId = zoneRef.id;
-        const studentUid = orderData.studentUid;
-        if (!studentUid)
-            throw new Error("Order document missing studentUid.");
-        const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentUid);
-        const enrollmentRef = db.collection('users').doc(studentUid).collection('enrollments').doc(zoneId);
-        // Atomic Block (Inside Transaction)
+        // Step 3: Atomic Fulfillment Transaction
         await db.runTransaction(async (transaction) => {
-            var _a;
-            const doc = await transaction.get(orderRef);
-            if (!doc.exists)
-                throw new Error("Order document disappeared during transaction.");
-            if (((_a = doc.data()) === null || _a === void 0 ? void 0 : _a.status) === 'paid') {
-                console.log(`Order ${razorpayOrderId} already processed (idempotent exit).`);
-                return; // Exit early
+            var _a, _b;
+            const freshDoc = await transaction.get(orderRef);
+            if (!freshDoc.exists)
+                throw new Error("Order document vanished.");
+            if (((_a = freshDoc.data()) === null || _a === void 0 ? void 0 : _a.status) === 'paid' || ((_b = freshDoc.data()) === null || _b === void 0 ? void 0 : _b.status) === 'CAPTURED') {
+                functions.logger.info(`Idempotency: Order ${razorpayOrderId} already processed.`);
+                return;
             }
-            // Execute all 3 writes atomically
+            // A. Update Order Status
             transaction.update(orderRef, {
                 status: 'paid',
                 fulfilled: true,
                 paymentId,
                 paidAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            transaction.set(studentRef, {
-                status: 'active',
-                joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-                source: 'razorpay_webhook',
-                paymentId
-            }, { merge: true });
-            transaction.set(enrollmentRef, {
-                zoneId,
-                enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
-                status: 'active'
-            }, { merge: true });
+            if (isPlatformOrder) {
+                // B. Platform Subscription Logic
+                const tutorUid = orderData.tutorUid;
+                const planId = orderData.planId;
+                if (tutorUid && planId) {
+                    const userRef = db.collection('users').doc(tutorUid);
+                    // Convert planId to uppercase for DB consistency (STANDARD/PREMIUM)
+                    transaction.update(userRef, {
+                        subscriptionPlan: planId.toUpperCase(),
+                        subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                    functions.logger.info(`Upgraded Tutor ${tutorUid} to plan: ${planId}`);
+                }
+            }
+            else {
+                // C. Zone Enrollment Logic
+                const zoneRef = orderRef.parent.parent;
+                if (!zoneRef)
+                    throw new Error("Invalid order hierarchy.");
+                const zoneId = zoneRef.id;
+                const studentUid = orderData.studentUid;
+                if (studentUid) {
+                    const studentRef = db.collection('zones').doc(zoneId).collection('students').doc(studentUid);
+                    const enrollmentRef = db.collection('users').doc(studentUid).collection('enrollments').doc(zoneId);
+                    transaction.set(studentRef, {
+                        status: 'active',
+                        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        source: 'razorpay_webhook',
+                        paymentId
+                    }, { merge: true });
+                    transaction.set(enrollmentRef, {
+                        zoneId,
+                        enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                        status: 'active'
+                    }, { merge: true });
+                    functions.logger.info(`Enrolled Student ${studentUid} in Zone ${zoneId}`);
+                }
+            }
         });
-        // Step 3: Queue Asynchronous Invoicing & Email
-        const totalAmountInInr = (payment.amount || 0) / 100;
-        const gstAmount = totalAmountInInr * 0.18;
-        await db.collection('mail_queue').add({
-            uid: studentUid,
-            amount: totalAmountInInr,
-            gst: gstAmount,
-            planId: orderData.planId || '',
-            paymentId,
-            type: orderData.planId ? 'PLATFORM_SUBSCRIPTION' : 'ZONE_ENROLLMENT',
-            status: 'pending',
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+        // Step 4: Post-Fulfillment Mail Queueing
+        const amountInInr = ((payment === null || payment === void 0 ? void 0 : payment.amount) || orderData.amount || 0) / 100;
+        const gstAmount = amountInInr * 0.18;
+        if (isPlatformOrder) {
+            // Receipt for Tutor Platform Subscription
+            await db.collection('mail_queue').add({
+                uid: orderData.tutorUid,
+                amount: amountInInr,
+                gst: gstAmount,
+                planId: orderData.planId,
+                type: 'PLATFORM_SUBSCRIPTION',
+                paymentId,
+                status: 'pending',
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+        else {
+            // 1. Invoice for Student Enrollment
+            await db.collection('mail_queue').add({
+                uid: orderData.studentUid,
+                amount: amountInInr,
+                gst: gstAmount,
+                type: 'ZONE_ENROLLMENT',
+                paymentId,
+                status: 'pending',
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            // 2. Platform Fee Receipt for Tutor (Commission)
+            if (orderData.commission && orderData.tutorUid) {
+                const commissionInInr = orderData.commission / 100;
+                const commissionGst = commissionInInr * 0.18;
+                await db.collection('mail_queue').add({
+                    uid: orderData.tutorUid,
+                    amount: commissionInInr,
+                    gst: commissionGst,
+                    type: 'PLATFORM_FEE',
+                    paymentId,
+                    status: 'pending',
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        }
         res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
     }
     catch (error) {
-        console.error("Webhook processing error:", error);
+        functions.logger.error("CRITICAL: Webhook processing failed.", error);
         res.status(500).send(`Internal Error: ${error.message}`);
     }
 });
@@ -1015,6 +981,125 @@ exports.deleteUserAccount = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY"], co
         throw new functions.https.HttpsError("internal", error.message || "Deletion failed.");
     }
 });
+// --- STORAGE QUOTA HELPERS ---
+const DEFAULT_TUTOR_QUOTA = 1024 * 1024 * 1024; // 1GB
+const DEFAULT_STUDENT_QUOTA = 100 * 1024 * 1024; // 100MB
+/**
+ * Checks if the user has enough storage quota for an incoming file.
+ */
+async function checkStorageQuota(uid, incomingSize) {
+    const db = admin.firestore();
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists)
+        return { isAllowed: false, used: 0, max: 0 };
+    const data = userDoc.data();
+    const role = data.role || "STUDENT";
+    const used = data.usedStorageBytes || 0;
+    const max = data.maxStorageQuota || (role === "TUTOR" || role === "THALA" ? DEFAULT_TUTOR_QUOTA : DEFAULT_STUDENT_QUOTA);
+    return {
+        isAllowed: (used + incomingSize) <= max,
+        used,
+        max
+    };
+}
+// --- GENERIC MULTIPART UPLOAD (onRequest) ---
+/**
+ * Handles multipart document uploads and streams them to Bunny Edge Storage.
+ * Enforces user storage quotas.
+ */
+exports.uploadFileToBunny = (0, https_1.onRequest)({ secrets: ["BUNNY_API_KEY", "BUNNY_STORAGE_ZONE_NAME", "BUNNY_STORAGE_HOSTNAME", "BUNNY_PULL_ZONE_URL"], cors: true }, async (req, res) => {
+    // Handle CORS manually for multipart/form-data
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+        res.status(204).send('');
+        return;
+    }
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+    const db = admin.firestore();
+    // 1. Verify Auth Token manually for onRequest
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).send('Unauthorized: Missing token');
+        return;
+    }
+    const idToken = authHeader.split('Bearer ')[1];
+    let uid;
+    try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        uid = decodedToken.uid;
+    }
+    catch (error) {
+        res.status(401).send('Unauthorized: Invalid token');
+        return;
+    }
+    // 2. Parse Multipart Body using Busboy
+    const bb = (0, busboy_1.default)({ headers: req.headers });
+    let fileBuffer = null;
+    let fileName = '';
+    let folder = 'general';
+    bb.on('field', (fieldname, val) => {
+        if (fieldname === 'folder')
+            folder = val;
+    });
+    bb.on('file', (fieldname, file, info) => {
+        const chunks = [];
+        fileName = info.filename;
+        file.on('data', (data) => chunks.push(data));
+        file.on('end', () => {
+            fileBuffer = Buffer.concat(chunks);
+        });
+    });
+    bb.on('finish', async () => {
+        if (!fileBuffer) {
+            res.status(400).send('No file uploaded');
+            return;
+        }
+        try {
+            const fileSize = fileBuffer.length;
+            // 3. Quota Check
+            const quota = await checkStorageQuota(uid, fileSize);
+            if (!quota.isAllowed) {
+                res.status(403).send(`Storage quota exceeded. Used: ${quota.used}, Max: ${quota.max}, New: ${fileSize}`);
+                return;
+            }
+            // 4. Bunny Upload
+            const bunnyApiKey = process.env.BUNNY_API_KEY;
+            const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME;
+            const hostname = process.env.BUNNY_STORAGE_HOSTNAME;
+            const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
+            if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
+                res.status(500).send('Bunny Storage configuration missing');
+                return;
+            }
+            const timestamp = Date.now();
+            const storagePath = `${folder}/${uid}/${timestamp}_${fileName}`;
+            const uploadUrl = `https://${hostname}/${storageZoneName}/${storagePath}`;
+            await axios_1.default.put(uploadUrl, fileBuffer, {
+                headers: {
+                    'AccessKey': bunnyApiKey,
+                    'Content-Type': 'application/octet-stream'
+                }
+            });
+            // 5. Update Metrics
+            await db.collection("users").doc(uid).update({
+                usedStorageBytes: admin.firestore.FieldValue.increment(fileSize)
+            });
+            const fileUrl = `${pullZoneUrl}/${storagePath}`;
+            res.status(200).json({ fileUrl, fileName, size: fileSize });
+        }
+        catch (err) {
+            functions.logger.error("Upload error:", err);
+            res.status(500).send(err.message || 'Internal Upload Error');
+        }
+    });
+    // @ts-ignore
+    bb.end(req.rawBody);
+});
 // --- EXAM SUBMISSION LOGIC ---
 exports.uploadExamScript = (0, https_1.onCall)({
     secrets: ["BUNNY_API_KEY", "BUNNY_STORAGE_ZONE_NAME", "BUNNY_STORAGE_HOSTNAME", "BUNNY_PULL_ZONE_URL"],
@@ -1049,8 +1134,13 @@ exports.uploadExamScript = (0, https_1.onCall)({
         if (submissionDoc.exists) {
             throw new functions.https.HttpsError("already-exists", "You have already submitted your answer script for this exam.");
         }
-        // 6. PDF Watermarking
+        // 5a. Quota Check
         const pdfBuffer = Buffer.from(fileBase64, 'base64');
+        const quota = await checkStorageQuota(uid, pdfBuffer.length);
+        if (!quota.isAllowed) {
+            throw new functions.https.HttpsError("resource-exhausted", "Storage quota exceeded. Please contact support.");
+        }
+        // 6. PDF Watermarking
         const pdfDoc = await pdf_lib_1.PDFDocument.load(pdfBuffer);
         const pages = pdfDoc.getPages();
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -1222,21 +1312,16 @@ exports.submitGradedScript = (0, https_1.onCall)({ cors: true }, async (request)
         if (request.auth.uid !== tutorUid) {
             throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
         }
-        const bunnyApiKey = process.env.BUNNY_STORAGE_API_KEY;
+        const bunnyApiKey = process.env.BUNNY_API_KEY;
         const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
         const pullZone = process.env.BUNNY_PULL_ZONE_URL;
         if (!bunnyApiKey || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
             throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
         }
-        // Evaluate the new file size
         const base64Data = mergedPdf.replace(/^data:.*\/.*;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
         const newFileSizeInBytes = buffer.length;
-        const newFileName = `graded_${studentId}_exam.pdf`;
-        const storagePath = `exams/${zoneId}/${examId}/${newFileName}`;
-        // Upload New
-        await axios_1.default.put(`https://storage.bunnycdn.com/${storageZone}/${storagePath}`, buffer, { headers: { 'AccessKey': bunnyApiKey, 'Content-Type': 'application/pdf' } });
-        // Delete Old
+        // Quota Check (Delta)
         let oldFileSizeInBytes = 0;
         try {
             const oldPath = oldFileUrl.replace(`https://${pullZone}/`, '');
@@ -1245,6 +1330,26 @@ exports.submitGradedScript = (0, https_1.onCall)({ cors: true }, async (request)
                 headers: { 'AccessKey': bunnyApiKey }
             });
             oldFileSizeInBytes = parseInt(res.headers['content-length'] || "0");
+        }
+        catch (e) {
+            console.error("Failed to head old file for quota check", e);
+        }
+        const quota = await checkStorageQuota(request.auth.uid, newFileSizeInBytes - oldFileSizeInBytes);
+        if (!quota.isAllowed) {
+            throw new functions.https.HttpsError("resource-exhausted", "Quota exceeded during grading update.");
+        }
+        const newFileName = `graded_${studentId}_exam.pdf`;
+        const storagePath = `exams/${zoneId}/${examId}/${newFileName}`;
+        // Upload New
+        await axios_1.default.put(`https://storage.bunnycdn.com/${storageZone}/${storagePath}`, buffer, { headers: { 'AccessKey': bunnyApiKey, 'Content-Type': 'application/pdf' } });
+        // Delete Old
+        try {
+            const oldPath = oldFileUrl.replace(`https://${pullZone}/`, '');
+            // Get original file size to maintain exact quota diff
+            const respVal = await axios_1.default.head(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
+                headers: { 'AccessKey': bunnyApiKey }
+            });
+            oldFileSizeInBytes = parseInt(respVal.headers['content-length'] || "0");
             await axios_1.default.delete(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
                 headers: { 'AccessKey': bunnyApiKey }
             });
@@ -1568,8 +1673,14 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)({ cors: true }, async (request)
             }
         }
         await otpDoc.ref.delete();
-        const customToken = await admin.auth().createCustomToken(user.uid);
-        return { verified: true, customToken };
+        try {
+            const customToken = await admin.auth().createCustomToken(user.uid);
+            return { verified: true, customToken };
+        }
+        catch (iamError) {
+            functions.logger.error("IAM Minting Error:", iamError);
+            throw new functions.https.HttpsError('internal', 'IAM Configuration Error: Cannot mint token');
+        }
     }
     catch (error) {
         if (error instanceof functions.https.HttpsError)
@@ -1673,6 +1784,161 @@ exports.joinZoneByInvite = (0, https_1.onCall)({ cors: true }, async (request) =
             throw error;
         functions.logger.error("Global crash in joinZoneByInvite:", error);
         throw new functions.https.HttpsError("internal", error.message || "Failed to join zone.");
+    }
+});
+// --- SECURE WHITELIST ACCESS ---
+exports.processWhitelist = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], cors: true }, async (request) => {
+    var _a, _b, _c;
+    try {
+        const db = admin.firestore();
+        // 1. Authentication check
+        if (!request.auth) {
+            throw new https_1.HttpsError("unauthenticated", "You must be signed in to whitelist students.");
+        }
+        const { zoneId, emails } = request.data;
+        // 2. Input validation
+        if (!zoneId || typeof zoneId !== "string") {
+            throw new https_1.HttpsError("invalid-argument", "Missing or invalid zoneId.");
+        }
+        if (!emails || !Array.isArray(emails) || emails.length === 0) {
+            throw new https_1.HttpsError("invalid-argument", "Missing or empty emails array.");
+        }
+        if (emails.length > 200) {
+            throw new https_1.HttpsError("invalid-argument", "Cannot process more than 200 emails at once.");
+        }
+        // 3. Security check: verify caller owns this zone
+        const zoneDoc = await db.collection("zones").doc(zoneId).get();
+        if (!zoneDoc.exists) {
+            throw new https_1.HttpsError("not-found", "Zone not found.");
+        }
+        const zoneData = zoneDoc.data();
+        const callerUid = request.auth.uid;
+        if (zoneData.createdBy !== callerUid && zoneData.tutorId !== callerUid) {
+            throw new https_1.HttpsError("permission-denied", "Only the zone creator can whitelist students.");
+        }
+        const zoneTitle = zoneData.title || "Untitled Zone";
+        // 4. Initialize Resend for notifications
+        const resendApiKey = process.env.RESEND_API_KEY;
+        let resend = null;
+        if (resendApiKey) {
+            resend = new resend_1.Resend(resendApiKey);
+        }
+        else {
+            functions.logger.warn("RESEND_API_KEY not configured — notification emails will be skipped.");
+        }
+        // 5. Process each email
+        const results = {
+            enrolled: [],
+            pending: [],
+            alreadyEnrolled: [],
+            failed: [],
+        };
+        for (const rawEmail of emails) {
+            const email = (rawEmail || "").toString().toLowerCase().trim();
+            if (!email || !email.includes("@")) {
+                results.failed.push(rawEmail);
+                continue;
+            }
+            try {
+                // 5a. Resolve user via Admin SDK
+                const userRecord = await admin.auth().getUserByEmail(email);
+                const uid = userRecord.uid;
+                // 5b. Check if already enrolled
+                const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
+                const studentDoc = await studentRef.get();
+                if (studentDoc.exists) {
+                    results.alreadyEnrolled.push(email);
+                    continue;
+                }
+                // 5c. Enroll the student atomically
+                await studentRef.set({
+                    status: "active",
+                    source: "whitelist",
+                    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                results.enrolled.push(email);
+                // 5d. Send notification email (fire-and-forget, don't block on failure)
+                if (resend) {
+                    try {
+                        await resend.emails.send({
+                            from: "Nunma <support@nunma.in>",
+                            to: email,
+                            subject: "You've been granted access to a new Zone on NUNMA",
+                            html: `
+                                    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: auto; padding: 40px 20px;">
+                                        <div style="text-align: center; margin-bottom: 32px;">
+                                            <h1 style="color: #040457; font-size: 28px; font-weight: 900; margin: 0;">Welcome to ${zoneTitle} 🎓</h1>
+                                        </div>
+                                        <div style="background: #f8f9fa; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
+                                            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
+                                                You've been granted <strong style="color: #040457;">premium access</strong> to a new Zone on Nunma.
+                                            </p>
+                                            <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
+                                                Your instructor has whitelisted you — no payment required. Jump in and start learning immediately.
+                                            </p>
+                                        </div>
+                                        <div style="text-align: center; margin: 32px 0;">
+                                            <a href="https://www.nunma.in/classroom/${zoneId}" 
+                                               style="display: inline-block; background: #c2f575; color: #040457; padding: 16px 40px; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; letter-spacing: 0.05em; text-transform: uppercase;">
+                                                Enter Classroom →
+                                            </a>
+                                        </div>
+                                        <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 32px;">
+                                            Nunma — The Trust Layer for Education
+                                        </p>
+                                    </div>
+                                `,
+                        });
+                    }
+                    catch (emailError) {
+                        functions.logger.warn(`Failed to send whitelist email to ${email}:`, emailError.message);
+                        // Don't fail the enrollment just because the email didn't send
+                    }
+                }
+            }
+            catch (lookupError) {
+                if (lookupError.code === "auth/user-not-found") {
+                    // 5e. User doesn't exist yet — add to pending_whitelists
+                    try {
+                        await db.collection("zones").doc(zoneId)
+                            .collection("pending_whitelists").doc(email).set({
+                            email,
+                            addedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            addedBy: callerUid,
+                        });
+                        results.pending.push(email);
+                    }
+                    catch (pendingError) {
+                        functions.logger.error(`Failed to save pending whitelist for ${email}:`, pendingError);
+                        results.failed.push(email);
+                    }
+                }
+                else {
+                    functions.logger.error(`Unexpected error processing ${email}:`, lookupError);
+                    results.failed.push(email);
+                }
+            }
+        }
+        functions.logger.log(`[WHITELIST] Zone ${zoneId}: enrolled=${results.enrolled.length}, pending=${results.pending.length}, alreadyEnrolled=${results.alreadyEnrolled.length}, failed=${results.failed.length}`);
+        return {
+            success: true,
+            enrolled: results.enrolled.length,
+            pending: results.pending.length,
+            alreadyEnrolled: results.alreadyEnrolled.length,
+            failed: results.failed.length,
+            details: results,
+        };
+    }
+    catch (error) {
+        functions.logger.error("CRITICAL: processWhitelist execution failed", {
+            message: error.message,
+            stack: error.stack,
+            zoneId: (_a = request.data) === null || _a === void 0 ? void 0 : _a.zoneId,
+            emailsCount: (_c = (_b = request.data) === null || _b === void 0 ? void 0 : _b.emails) === null || _c === void 0 ? void 0 : _c.length
+        });
+        if (error instanceof https_1.HttpsError)
+            throw error;
+        throw new https_1.HttpsError("internal", error.message || "Failed to process whitelist.");
     }
 });
 // --- ASYNCHRONOUS INVOICING PIPELINE (V2) ---

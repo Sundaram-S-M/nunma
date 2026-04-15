@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 
 import * as functions from "firebase-functions";
-import { onRequest, onCall } from "firebase-functions/v2/https";
+import { onRequest, onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
@@ -14,6 +14,7 @@ import { PDFDocument, rgb } from "pdf-lib";
 // import { generatePlatformFeeInvoice } from "./zohoUtils";
 import { v4 as uuidv4 } from "uuid";
 import { Resend } from "resend";
+import Busboy from 'busboy';
 export { gradePdfSubmission } from "./ai/gradeSubmission";
 
 // const db = admin.firestore(); // Moved inside function scopes for deployment stability
@@ -291,7 +292,9 @@ export const createBunnyVideo = onCall(
             
             // Step 3: Signature Generation
             const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
-            const signature = crypto.createHash('sha256').update(libraryId + bunnyKey + expirationTime + videoId).digest('hex');
+            const signature = crypto.createHash('sha256')
+                .update(String(libraryId) + String(bunnyKey) + String(expirationTime) + String(videoId))
+                .digest('hex');
 
             // Step 4: DB Write (Direct indexing under Zone subcollection)
             const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
@@ -511,10 +514,10 @@ export const createTutorLinkedAccount = onCall(
             }
 
             const uid = request.auth.uid;
-            const { businessName, businessType, legalName, email, phone, pan } = request.data || {};
+            const { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc } = request.data || {};
 
-            if (!businessName || !businessType || !legalName || !email || !phone || !pan) {
-                throw new functions.https.HttpsError("invalid-argument", "Missing required business details: { businessName, businessType, legalName, email, phone, pan }.");
+            if (!businessName || !businessType || !legalName || !email || !phone || !pan || !bankAccount || !ifsc) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing required business details: { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc }.");
             }
 
             const keyId = process.env.RAZORPAY_KEY_ID;
@@ -534,8 +537,8 @@ export const createTutorLinkedAccount = onCall(
             }
 
             const userData = userDoc.data()!;
-            if (userData.role !== "THALA") {
-                throw new functions.https.HttpsError("permission-denied", "Unauthorized: Only users with role 'THALA' can create linked accounts.");
+            if (userData.role !== "THALA" && userData.role !== "TUTOR") {
+                throw new functions.https.HttpsError("permission-denied", "Unauthorized: Only users with role 'TUTOR' or 'THALA' can create linked accounts.");
             }
 
             // 2. Check for existing razorpayAccountId
@@ -585,6 +588,31 @@ export const createTutorLinkedAccount = onCall(
                     stakeholderPayload,
                     { headers }
                 );
+
+                // 5. Add Product Configuration for Route (Bank Details)
+                try {
+                    const productPayload = {
+                        product_name: "route",
+                        tnc_accepted: true,
+                        ip: request.rawRequest?.ip || "127.0.0.1",
+                        settlements: {
+                            account_number: bankAccount,
+                            ifsc_code: ifsc,
+                            beneficiary_name: legalName
+                        }
+                    };
+
+                    await axios.post(
+                        `https://api.razorpay.com/v2/accounts/${accountId}/products`,
+                        productPayload,
+                        { headers }
+                    );
+                    functions.logger.info(`Razorpay Route Product Configured for ${accountId}`);
+                } catch (productError: any) {
+                    const msg = extractRazorpayError(productError);
+                    functions.logger.error("Razorpay Product Configuration failed:", msg);
+                    // Continue anyway, we can manually configure or retry if it fails
+                }
 
                 await userRef.update({
                     kycStatus: 'PENDING',
@@ -1160,6 +1188,151 @@ export const deleteUserAccount = onCall(
     }
 );
 
+// --- STORAGE QUOTA HELPERS ---
+
+const DEFAULT_TUTOR_QUOTA = 1024 * 1024 * 1024; // 1GB
+const DEFAULT_STUDENT_QUOTA = 100 * 1024 * 1024; // 100MB
+
+/**
+ * Checks if the user has enough storage quota for an incoming file.
+ */
+async function checkStorageQuota(uid: string, incomingSize: number): Promise<{ isAllowed: boolean, used: number, max: number }> {
+    const db = admin.firestore();
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists) return { isAllowed: false, used: 0, max: 0 };
+    
+    const data = userDoc.data()!;
+    const role = data.role || "STUDENT";
+    const used = data.usedStorageBytes || 0;
+    const max = data.maxStorageQuota || (role === "TUTOR" || role === "THALA" ? DEFAULT_TUTOR_QUOTA : DEFAULT_STUDENT_QUOTA);
+    
+    return {
+        isAllowed: (used + incomingSize) <= max,
+        used,
+        max
+    };
+}
+
+// --- GENERIC MULTIPART UPLOAD (onRequest) ---
+
+/**
+ * Handles multipart document uploads and streams them to Bunny Edge Storage.
+ * Enforces user storage quotas.
+ */
+export const uploadFileToBunny = onRequest(
+    { secrets: ["BUNNY_API_KEY", "BUNNY_STORAGE_ZONE_NAME", "BUNNY_STORAGE_HOSTNAME", "BUNNY_PULL_ZONE_URL"], cors: true },
+    async (req, res) => {
+        // Handle CORS manually for multipart/form-data
+        res.set('Access-Control-Allow-Origin', '*');
+        res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        if (req.method === 'OPTIONS') {
+            res.status(204).send('');
+            return;
+        }
+
+        if (req.method !== 'POST') {
+            res.status(405).send('Method Not Allowed');
+            return;
+        }
+
+        const db = admin.firestore();
+
+        // 1. Verify Auth Token manually for onRequest
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            res.status(401).send('Unauthorized: Missing token');
+            return;
+        }
+
+        const idToken = authHeader.split('Bearer ')[1];
+        let uid: string;
+        try {
+            const decodedToken = await admin.auth().verifyIdToken(idToken);
+            uid = decodedToken.uid;
+        } catch (error) {
+            res.status(401).send('Unauthorized: Invalid token');
+            return;
+        }
+
+        // 2. Parse Multipart Body using Busboy
+        const bb = Busboy({ headers: req.headers });
+        let fileBuffer: Buffer | null = null;
+        let fileName = '';
+        let folder = 'general';
+
+        bb.on('field', (fieldname: string, val: string) => {
+            if (fieldname === 'folder') folder = val;
+        });
+
+        bb.on('file', (fieldname: string, file: any, info: any) => {
+            const chunks: any[] = [];
+            fileName = info.filename;
+            file.on('data', (data: any) => chunks.push(data));
+            file.on('end', () => {
+                fileBuffer = Buffer.concat(chunks);
+            });
+        });
+
+        bb.on('finish', async () => {
+            if (!fileBuffer) {
+                res.status(400).send('No file uploaded');
+                return;
+            }
+
+            try {
+                const fileSize = fileBuffer.length;
+
+                // 3. Quota Check
+                const quota = await checkStorageQuota(uid, fileSize);
+                if (!quota.isAllowed) {
+                    res.status(403).send(`Storage quota exceeded. Used: ${quota.used}, Max: ${quota.max}, New: ${fileSize}`);
+                    return;
+                }
+
+                // 4. Bunny Upload
+                const bunnyApiKey = process.env.BUNNY_API_KEY;
+                const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME;
+                const hostname = process.env.BUNNY_STORAGE_HOSTNAME;
+                const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
+
+                if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
+                    res.status(500).send('Bunny Storage configuration missing');
+                    return;
+                }
+
+                const timestamp = Date.now();
+                const storagePath = `${folder}/${uid}/${timestamp}_${fileName}`;
+                const uploadUrl = `https://${hostname}/${storageZoneName}/${storagePath}`;
+
+                await axios.put(uploadUrl, fileBuffer, {
+                    headers: {
+                        'AccessKey': bunnyApiKey,
+                        'Content-Type': 'application/octet-stream'
+                    }
+                });
+
+                // 5. Update Metrics
+                await db.collection("users").doc(uid).update({
+                    usedStorageBytes: admin.firestore.FieldValue.increment(fileSize)
+                });
+
+                const fileUrl = `${pullZoneUrl}/${storagePath}`;
+                res.status(200).json({ fileUrl, fileName, size: fileSize });
+
+            } catch (err: any) {
+                functions.logger.error("Upload error:", err);
+                res.status(500).send(err.message || 'Internal Upload Error');
+            }
+        });
+
+        // @ts-ignore
+        bb.end(req.rawBody);
+    }
+);
+
+
 // --- EXAM SUBMISSION LOGIC ---
 
 export const uploadExamScript = onCall(
@@ -1189,7 +1362,6 @@ export const uploadExamScript = onCall(
             if (!studentDoc.exists || studentDoc.data()?.status !== "active") {
                 throw new functions.https.HttpsError("permission-denied", "You are not an active student in this zone.");
             }
-
             // 4. Validate Exam Existence
             const examDoc = await db.collection("zones").doc(zoneId).collection("exams").doc(examId).get();
             if (!examDoc.exists) {
@@ -1203,8 +1375,14 @@ export const uploadExamScript = onCall(
                 throw new functions.https.HttpsError("already-exists", "You have already submitted your answer script for this exam.");
             }
 
-            // 6. PDF Watermarking
+            // 5a. Quota Check
             const pdfBuffer = Buffer.from(fileBase64, 'base64');
+            const quota = await checkStorageQuota(uid, pdfBuffer.length);
+            if (!quota.isAllowed) {
+                throw new functions.https.HttpsError("resource-exhausted", "Storage quota exceeded. Please contact support.");
+            }
+
+            // 6. PDF Watermarking
             const pdfDoc = await PDFDocument.load(pdfBuffer);
             const pages = pdfDoc.getPages();
             
@@ -1405,7 +1583,7 @@ export const submitGradedScript = onCall({ cors: true }, async (request) => {
             throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
         }
 
-        const bunnyApiKey = process.env.BUNNY_STORAGE_API_KEY;
+        const bunnyApiKey = process.env.BUNNY_API_KEY;
         const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
         const pullZone = process.env.BUNNY_PULL_ZONE_URL;
 
@@ -1413,10 +1591,28 @@ export const submitGradedScript = onCall({ cors: true }, async (request) => {
             throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
         }
 
-        // Evaluate the new file size
         const base64Data = mergedPdf.replace(/^data:.*\/.*;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
         const newFileSizeInBytes = buffer.length;
+
+        // Quota Check (Delta)
+        let oldFileSizeInBytes = 0;
+        try {
+            const oldPath = oldFileUrl.replace(`https://${pullZone}/`, '');
+
+            // Get original file size to maintain exact quota diff
+            const res = await axios.head(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
+                headers: { 'AccessKey': bunnyApiKey }
+            });
+            oldFileSizeInBytes = parseInt(res.headers['content-length'] || "0");
+        } catch (e) {
+            console.error("Failed to head old file for quota check", e);
+        }
+
+        const quota = await checkStorageQuota(request.auth.uid, newFileSizeInBytes - oldFileSizeInBytes);
+        if (!quota.isAllowed) {
+            throw new functions.https.HttpsError("resource-exhausted", "Quota exceeded during grading update.");
+        }
 
         const newFileName = `graded_${studentId}_exam.pdf`;
         const storagePath = `exams/${zoneId}/${examId}/${newFileName}`;
@@ -1429,15 +1625,14 @@ export const submitGradedScript = onCall({ cors: true }, async (request) => {
         );
 
         // Delete Old
-        let oldFileSizeInBytes = 0;
         try {
             const oldPath = oldFileUrl.replace(`https://${pullZone}/`, '');
 
             // Get original file size to maintain exact quota diff
-            const res = await axios.head(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
+            const respVal = await axios.head(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
                 headers: { 'AccessKey': bunnyApiKey }
             });
-            oldFileSizeInBytes = parseInt(res.headers['content-length'] || "0");
+            oldFileSizeInBytes = parseInt(respVal.headers['content-length'] || "0");
 
             await axios.delete(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
                 headers: { 'AccessKey': bunnyApiKey }
@@ -1940,33 +2135,33 @@ export const processWhitelist = onCall(
 
             // 1. Authentication check
             if (!request.auth) {
-                throw new functions.https.HttpsError("unauthenticated", "You must be signed in to whitelist students.");
+                throw new HttpsError("unauthenticated", "You must be signed in to whitelist students.");
             }
 
             const { zoneId, emails } = request.data;
 
             // 2. Input validation
             if (!zoneId || typeof zoneId !== "string") {
-                throw new functions.https.HttpsError("invalid-argument", "Missing or invalid zoneId.");
+                throw new HttpsError("invalid-argument", "Missing or invalid zoneId.");
             }
             if (!emails || !Array.isArray(emails) || emails.length === 0) {
-                throw new functions.https.HttpsError("invalid-argument", "Missing or empty emails array.");
+                throw new HttpsError("invalid-argument", "Missing or empty emails array.");
             }
             if (emails.length > 200) {
-                throw new functions.https.HttpsError("invalid-argument", "Cannot process more than 200 emails at once.");
+                throw new HttpsError("invalid-argument", "Cannot process more than 200 emails at once.");
             }
 
             // 3. Security check: verify caller owns this zone
             const zoneDoc = await db.collection("zones").doc(zoneId).get();
             if (!zoneDoc.exists) {
-                throw new functions.https.HttpsError("not-found", "Zone not found.");
+                throw new HttpsError("not-found", "Zone not found.");
             }
 
             const zoneData = zoneDoc.data()!;
             const callerUid = request.auth.uid;
 
             if (zoneData.createdBy !== callerUid && zoneData.tutorId !== callerUid) {
-                throw new functions.https.HttpsError("permission-denied", "Only the zone creator can whitelist students.");
+                throw new HttpsError("permission-denied", "Only the zone creator can whitelist students.");
             }
 
             const zoneTitle = zoneData.title || "Untitled Zone";
@@ -2090,9 +2285,15 @@ export const processWhitelist = onCall(
             };
 
         } catch (error: any) {
-            if (error instanceof functions.https.HttpsError) throw error;
-            functions.logger.error("Global crash in processWhitelist:", error);
-            throw new functions.https.HttpsError("internal", error.message || "Failed to process whitelist.");
+             functions.logger.error("CRITICAL: processWhitelist execution failed", {
+                message: error.message,
+                stack: error.stack,
+                zoneId: request.data?.zoneId,
+                emailsCount: request.data?.emails?.length
+            });
+
+            if (error instanceof HttpsError) throw error;
+            throw new HttpsError("internal", error.message || "Failed to process whitelist.");
         }
     }
 );

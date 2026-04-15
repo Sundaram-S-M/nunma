@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { X, File as FileIcon, AlertCircle, Upload } from 'lucide-react';
-import { storage, db } from '../utils/firebase';
-import { ref, uploadBytesResumable, getDownloadURL, UploadTask } from 'firebase/storage';
+import { db } from '../utils/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
@@ -20,7 +19,7 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const uploadTaskRef = useRef<UploadTask | null>(null);
+    const uploadTaskRef = useRef<any>(null);
 
     const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
 
@@ -45,41 +44,74 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
         if (!file || !user) return;
         setIsUploading(true);
         setError(null);
+        setProgress(0);
 
         try {
-            const storageRef = ref(storage, `workspaces/${user.uid}/zones/${courseId}/documents/${file.name}`);
-            const uploadTask = uploadBytesResumable(storageRef, file);
-            uploadTaskRef.current = uploadTask;
-            uploadTask.on('state_changed',
-                (snapshot) => setProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
-                (uploadError) => {
-                    // Cancelled uploads trigger an error — don't show an alert for those
-                    if (uploadError.code === 'storage/canceled') return;
-                    console.error('Firebase Storage Upload error:', uploadError);
-                    alert(`Upload blocked: ${uploadError.message}`);
-                    setError('Upload failed: ' + uploadError.message);
-                    setIsUploading(false);
-                    uploadTaskRef.current = null;
-                },
-                async () => {
+            // 1. Get Firebase ID Token
+            const idToken = await user.getIdToken();
+
+            // 2. Prepare Multipart Data
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('folder', `zones/${courseId}/documents`);
+
+            // 3. Upload via XMLHttpRequest (to track progress)
+            const xhr = new XMLHttpRequest();
+            
+            // Construct the URL using the environment project ID. 
+            // Defaulting to us-central1 as per common Firebase setups.
+            const region = 'us-central1';
+            const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+            const uploadUrl = `https://${region}-${projectId}.cloudfunctions.net/uploadFileToBunny`;
+
+            xhr.open('POST', uploadUrl, true);
+            xhr.setRequestHeader('Authorization', `Bearer ${idToken}`);
+
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const percentComplete = (event.loaded / event.total) * 100;
+                    setProgress(percentComplete);
+                }
+            };
+
+            xhr.onload = () => {
+                setIsUploading(false);
+                if (xhr.status === 200) {
                     try {
-                        const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-                        // Record creation is now handled by the parent component using onSuccess
-                        setIsUploading(false);
+                        const response = JSON.parse(xhr.responseText);
                         onSuccess({
                             id: `doc_${Date.now()}`,
-                            title: title || file.name,
-                            fileUrl: downloadUrl,
-                            fileSize: file.size
+                            title: title || response.fileName || file.name,
+                            fileUrl: response.fileUrl,
+                            fileSize: response.size || file.size
                         });
                         onClose();
-                    } catch (err: any) {
-                        setError('Failed to save record.');
-                        setIsUploading(false);
-                        uploadTaskRef.current = null;
+                    } catch (err) {
+                        setError('Failed to parse final upload response.');
                     }
+                } else {
+                    const errorMsg = xhr.responseText || `Upload failed with status ${xhr.status}`;
+                    console.error('Bunny Upload error:', errorMsg);
+                    setError(errorMsg);
                 }
-            );
+            };
+
+            xhr.onerror = () => {
+                setIsUploading(false);
+                setError('Network error during upload. Please check your connection.');
+            };
+
+            xhr.onabort = () => {
+                setIsUploading(false);
+                setProgress(0);
+            };
+
+            // Store XHR in ref for cancellation if needed
+            // @ts-ignore
+            uploadTaskRef.current = xhr;
+
+            xhr.send(formData);
+
         } catch (err: any) {
             console.error('Document Upload Initiation Error:', err);
             setError(`Failed to start upload: ${err.message}`);
@@ -89,7 +121,14 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
 
     const handleCancel = () => {
         if (uploadTaskRef.current) {
-            uploadTaskRef.current.cancel();
+            // Check if it's an XHR or a Firebase UploadTask
+            if ('abort' in uploadTaskRef.current) {
+                // @ts-ignore
+                uploadTaskRef.current.abort();
+            } else if ('cancel' in uploadTaskRef.current) {
+                 // @ts-ignore
+                uploadTaskRef.current.cancel();
+            }
             uploadTaskRef.current = null;
         }
         setIsUploading(false);

@@ -199,15 +199,16 @@ const AdvancedColorPicker = ({ color, onChange, onClose }: { color: string, onCh
         >
           OK
         </button>
-        <div className="flex-1 flex items-center bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 gap-2">
-          <div className="w-8 h-8 rounded-full shadow-sm" style={{ backgroundColor: hsvToHex(hsv.h, hsv.s, hsv.v) }} />
+        <div className="flex-1 flex items-center bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 gap-3">
+          <div className="w-8 h-8 rounded-full shadow-sm shrink-0" style={{ backgroundColor: hsvToHex(hsv.h, hsv.s, hsv.v) }} />
           <input
             type="text"
             value={hexInput}
             onChange={(e) => handleHexChange(e.target.value)}
-            className="bg-transparent font-bold text-xs text-[#040457] w-16 outline-none"
+            className="bg-transparent font-bold text-xs text-[#040457] w-24 outline-none"
+            placeholder="#000000"
           />
-          <div className="h-4 w-[1px] bg-gray-200" />
+          <div className="h-4 w-[1px] bg-gray-200 shrink-0" />
           <input
             type="text"
             value={`${alpha}%`}
@@ -215,7 +216,7 @@ const AdvancedColorPicker = ({ color, onChange, onClose }: { color: string, onCh
               const val = parseInt(e.target.value.replace('%', ''));
               if (!isNaN(val)) setAlpha(Math.max(0, Math.min(100, val)));
             }}
-            className="bg-transparent font-bold text-xs text-[#040457] w-12 outline-none"
+            className="bg-transparent font-bold text-xs text-[#040457] w-14 outline-none"
           />
         </div>
         <button

@@ -502,6 +502,7 @@ const PricingPlans = () => {
 
 const Billings = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // State for form fields to ensure they are fully clearable
   const [accountHolder, setAccountHolder] = useState('');
@@ -686,30 +687,8 @@ const Billings = () => {
 
               <div className="sm:ml-auto w-full sm:w-auto shrink-0">
                 <button
-                  onClick={async (e) => {
-                    try {
-                      const btn = e.currentTarget;
-                      const originalText = btn.innerText;
-                      btn.innerText = "LOADING...";
-                      btn.disabled = true;
-
-                      const onboard = httpsCallable(functions, 'createTutorLinkedAccount');
-                      const result: any = await onboard();
-
-                      if (result.data.success && result.data.onboardingUrl) {
-                        window.location.href = result.data.onboardingUrl;
-                      } else {
-                        alert('Failed to launch Razorpay dashboard.');
-                        btn.innerText = originalText;
-                        btn.disabled = false;
-                      }
-                    } catch (err: any) {
-                      console.error("KYC Dashboard Error:", err);
-                      alert("Error loading dashboard: " + err.message);
-                      const btn = e.currentTarget;
-                      btn.innerText = "MANAGE ON RAZORPAY";
-                      btn.disabled = false;
-                    }
+                  onClick={() => {
+                    alert('Bank capabilities are securely linked via Razorpay API. If you need to update bank details, please contact Nunma Support.');
                   }}
                   className="text-[11px] font-black text-indigo-900 uppercase tracking-[0.1em] hover:text-[#c2f575] bg-white border-2 border-indigo-50 hover:border-indigo-900 hover:bg-indigo-900 transition-all px-8 py-4 rounded-2xl shadow-sm hover:shadow-xl w-full sm:w-auto active:scale-95 disabled:opacity-50"
                 >
@@ -774,30 +753,8 @@ const Billings = () => {
 
                 <button
                   disabled={!agreedToServiceTerms}
-                  onClick={async (e) => {
-                    try {
-                      const btn = e.currentTarget;
-                      const originalText = btn.innerText;
-                      btn.innerText = "REDIRECTING...";
-                      btn.disabled = true;
-
-                      const onboard = httpsCallable(functions, 'createTutorLinkedAccount');
-                      const result: any = await onboard();
-
-                      if (result.data.success && result.data.onboardingUrl) {
-                        window.location.href = result.data.onboardingUrl;
-                      } else {
-                        alert('Failed to generate onboarding URL.');
-                        btn.innerText = originalText;
-                        btn.disabled = !agreedToServiceTerms;
-                      }
-                    } catch (err: any) {
-                      console.error("KYC Init Error:", err);
-                      alert("Error initiating KYC: " + err.message);
-                      const btn = e.currentTarget;
-                      btn.innerText = "VERIFY IDENTITY & BANK DETAILS";
-                      btn.disabled = !agreedToServiceTerms;
-                    }
+                  onClick={() => {
+                    navigate('/onboarding?role=tutor');
                   }}
                   className="w-full md:w-auto px-8 py-4 bg-orange-500 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-600 transition-all whitespace-nowrap active:scale-95 disabled:opacity-50 disabled:grayscale"
                 >

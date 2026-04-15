@@ -15,8 +15,10 @@
     "dependencies": {
         "@google-cloud/tasks": "^6.2.1",
         "@google/genai": "^1.0.0",
+        "@types/busboy": "^1.5.4",
         "@types/cors": "^2.8.19",
         "axios": "^1.13.6",
+        "busboy": "^1.6.0",
         "cors": "^2.8.6",
         "date-fns": "^4.1.0",
         "dotenv": "^17.2.4",

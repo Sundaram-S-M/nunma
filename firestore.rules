@@ -17,97 +17,87 @@ service cloud.firestore {
     }
 
     function isZoneCreator(zoneId) {
-      let zoneData = get(/databases/$(database)/documents/zones/$(zoneId)).data;
-      return request.auth.uid == zoneData.tutorId || request.auth.uid == zoneData.createdBy;
-    }
-
-    // --- USERS Collection ---
-    // Rule: owner can read/write their own document and all sub-collections
-    match /users/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
-
-      // Wildcard to ensure all sub-collections are covered for the owner
-      match /{document=**} {
-        allow read, write: if isSignedIn() && request.auth.uid == userId;
-      }
+      let zoneDoc = get(/databases/$(database)/documents/zones/$(zoneId));
+      return request.auth != null && (
+        request.auth.uid == zoneDoc.data.tutorId || 
+        request.auth.uid == zoneDoc.data.createdBy
+      );
     }
 
     // --- ZONES Collection ---
-    // Temporarily allow authenticated users to read zones for the dashboard to load
     match /zones/{zoneId} {
+      // Zone read is public for authenticated users to support explore/dashboard
       allow read: if isSignedIn();
-      // Only the creator can write
-      allow write: if isSignedIn() && (resource.data.tutorId == request.auth.uid || resource.data.createdBy == request.auth.uid);
+      // Only creators can update metadata
+      allow write: if isSignedIn() && (
+        resource == null || // allow creation
+        resource.data.tutorId == request.auth.uid || 
+        resource.data.createdBy == request.auth.uid
+      );
+    }
 
-      // ZONES/STUDENTS Sub-collection
-      // Rule: read if studentId or zone creator (Thala). 
-      // This enables aggregation (count) for tutors on their own zones.
-      match /students/{studentId} {
-        allow read: if isSignedIn() && (
-          request.auth.uid == studentId || 
-          isZoneCreator(zoneId)
-        );
+    // --- ZONES SUB-COLLECTIONS (Hardened Paths) ---
+
+    // ZONES/STUDENTS
+    match /zones/{zoneId}/students/{studentId} {
+      allow read: if isSignedIn() && (request.auth.uid == studentId || isZoneCreator(zoneId));
+      allow write: if false; // Managed by Cloud Functions
+    }
+
+    // ZONES/CHAPTERS (Priority Fix)
+    match /zones/{zoneId}/chapters/{chapterId} {
+      // Broad read for authenticated users to avoid snapshot listener failures
+      allow read: if isSignedIn(); 
+      // Only creators can manage curriculum
+      allow write: if isSignedIn() && isZoneCreator(zoneId);
+    }
+
+    // ZONES/VIDEOS
+    match /zones/{zoneId}/videos/{videoId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isZoneCreator(zoneId);
+    }
+
+    // ZONES/EXAMS
+    match /zones/{zoneId}/exams/{examId} {
+      allow read: if isSignedIn() && (
+        exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid)) ||
+        isZoneCreator(zoneId)
+      );
+      allow write: if isSignedIn() && isZoneCreator(zoneId);
+
+      match /submissions/{studentId} {
+        allow read: if isSignedIn() && (request.auth.uid == studentId || isZoneCreator(zoneId));
         allow write: if false;
-      }
-
-      // ZONES/INVITES Sub-collection
-      // Rule: read/write only for zone creator
-      match /invites/{inviteId} {
-        allow read, write: if isSignedIn() && isZoneCreator(zoneId);
-      }
-
-      // ZONES/EXAMS Sub-collection
-      // Rule: read if active student OR creator, write if creator only
-      match /exams/{examId} {
-        allow read: if isSignedIn() && (
-          exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid)) ||
-          isZoneCreator(zoneId)
-        );
-        allow write: if isSignedIn() && isZoneCreator(zoneId);
-
-        // ZONES/EXAMS/SUBMISSIONS Sub-collection
-        // Rule: read if studentId or creator, no client writes
-        match /submissions/{studentId} {
-          allow read: if isSignedIn() && (request.auth.uid == studentId || isZoneCreator(zoneId));
-          allow write: if false;
-        }
-      }
-
-      // ZONES/ORDERS Sub-collection
-      // Rule: read if studentUid or creator, no client writes
-      match /orders/{orderId} {
-        allow read: if isSignedIn() && (request.auth.uid == resource.data.studentUid || isZoneCreator(zoneId));
-        allow write: if false;
-      }
-
-      // ZONES/VIDEOS Sub-collection
-      match /videos/{videoId} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn() && isZoneCreator(zoneId);
-      }
-
-      // ZONES/CHAPTERS Sub-collection
-      match /chapters/{chapterId} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn() && isZoneCreator(zoneId);
-      }
-
-      // ZONES/SESSIONS Sub-collection
-      match /sessions/{sessionId} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn() && isZoneCreator(zoneId);
-
-        match /attendance/{attendeeId} {
-          allow read, write: if isSignedIn() && isZoneCreator(zoneId);
-        }
-      }
-
-      // ZONES/ATTENDANCE_SESSIONS Sub-collection
-      match /attendance_sessions/{sessionId} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn() && isZoneCreator(zoneId);
       }
     }
+
+    // ZONES/ORDERS
+    match /zones/{zoneId}/orders/{orderId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.studentUid || isZoneCreator(zoneId));
+      allow write: if false;
+    }
+
+    // ZONES/INVITES
+    match /zones/{zoneId}/invites/{inviteId} {
+      allow read, write: if isSignedIn() && isZoneCreator(zoneId);
+    }
+
+    // ZONES/SESSIONS & ATTENDANCE
+    match /zones/{zoneId}/sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isZoneCreator(zoneId);
+      
+      match /attendance/{attendeeId} {
+        allow read, write: if isSignedIn() && isZoneCreator(zoneId);
+      }
+    }
+
+    match /zones/{zoneId}/attendance_sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isZoneCreator(zoneId);
+    }
+
 
     // --- CERTIFICATES Collection ---
     // Rule: read if studentId or issuedBy, no client writes
@@ -136,6 +126,10 @@ service cloud.firestore {
       allow write: if isSignedIn() 
         && getUserData(request.auth.uid).role == 'THALA'
         && (request.method == 'delete' ? resource.data.tutorId == request.auth.uid : request.resource.data.tutorId == request.auth.uid);
+    }
+    // --- USERS Collection ---
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
