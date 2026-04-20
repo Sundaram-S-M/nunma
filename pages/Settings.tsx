@@ -75,7 +75,7 @@ const Preferences = () => {
     setIsSaving(true);
     try {
       const updates: any = {};
-      if (user?.role === UserRole.TUTOR) {
+      if (user?.role === UserRole.THALA) {
         updates.expertise = selectedInterests;
       } else {
         updates.studentProfile = {
@@ -659,7 +659,7 @@ const Billings = () => {
       </div>
 
       {/* Revenue Payout Section - Only for Tutors */}
-      {user?.role === UserRole.TUTOR && (
+      {user?.role === UserRole.THALA && (
         <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] p-12">
           <div className="flex items-center gap-6 mb-12">
             <div className="w-16 h-16 bg-[#eef2ff] rounded-[2rem] flex items-center justify-center text-[#1A1A4E] shadow-sm">
@@ -861,7 +861,7 @@ const Settings: React.FC = () => {
   const tabs = [
     { label: 'PREFERENCES', path: '/settings/preferences', icon: <Sliders size={14} /> },
     { label: 'SECURITY OPTIONS', path: '/settings/security', icon: <ShieldCheck size={14} /> },
-    ...(user.role === UserRole.TUTOR ? [
+    ...(user.role === UserRole.THALA ? [
       { label: 'BILLINGS', path: '/settings/billing', icon: <CreditCard size={14} /> },
       { label: 'PRICING', path: '/settings/pricing', icon: <Gem size={14} /> },
     ] : [])

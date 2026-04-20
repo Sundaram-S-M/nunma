@@ -92,7 +92,7 @@ const Inbox: React.FC = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) return;
 
     const q = query(
       collection(db, 'conversations'),
@@ -234,7 +234,7 @@ const Inbox: React.FC = () => {
   }, [user, targetUserId, chats, loading]);
 
   useEffect(() => {
-    if (!selectedChatId) {
+    if (!user || !user.uid || !selectedChatId) {
       setMessages([]);
       return;
     }

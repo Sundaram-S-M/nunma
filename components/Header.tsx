@@ -284,7 +284,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
                     height: 20,
                     borderRadius: 999,
                     border: 'none',
-                    background: user.role === UserRole.TUTOR ? 'var(--nunma-lime)' : 'var(--border)',
+                    background: user.role === UserRole.THALA ? 'var(--nunma-lime)' : 'var(--border)',
                     cursor: 'pointer',
                     padding: 2,
                     display: 'flex',
@@ -298,7 +298,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
                     borderRadius: '50%',
                     background: 'var(--surface)',
                     boxShadow: 'var(--shadow-sm)',
-                    transform: user.role === UserRole.TUTOR ? 'translateX(18px)' : 'translateX(0)',
+                    transform: user.role === UserRole.THALA ? 'translateX(18px)' : 'translateX(0)',
                     transition: 'transform 0.2s cubic-bezier(0.4,0,0.2,1)',
                   }} />
                 </button>

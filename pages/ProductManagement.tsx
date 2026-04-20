@@ -60,7 +60,7 @@ const ProductManagement: React.FC = () => {
     const [isListingProduct, setIsListingProduct] = useState(false);
 
     useEffect(() => {
-        if (!user) return;
+        if (!user || !user.uid) return;
 
         // Fetch Products
         const qProducts = query(collection(db, 'products'), where('tutorId', '==', user.uid));

@@ -171,7 +171,7 @@ const Auth: React.FC = () => {
       highlight: "Learning Path.",
       description: "The professional ecosystem built for creators, experts, and lifelong achievers."
     },
-    [UserRole.TUTOR]: {
+    [UserRole.THALA]: {
       title: "Scale Your",
       highlight: "Global Expertise.",
       description: "Transform your knowledge into a sustainable professional stream and reach thousands of learners."
@@ -363,8 +363,8 @@ const Auth: React.FC = () => {
                           Learner
                         </button>
                         <button
-                          type="button" onClick={() => setRole(UserRole.TUTOR)}
-                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.TUTOR ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
+                          type="button" onClick={() => setRole(UserRole.THALA)}
+                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.THALA ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
                         >
                           Expert
                         </button>

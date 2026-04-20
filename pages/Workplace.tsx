@@ -38,6 +38,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot 
 import { db, functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../context/AuthContext';
+import { UserRole } from '../types';
 
 const Workplace: React.FC = () => {
   const navigate = useNavigate();
@@ -115,7 +116,7 @@ const Workplace: React.FC = () => {
   const streamsPercent = Math.min(Math.round((streamsUsed / streamLimit) * 100), 100);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) return;
 
     // 1. Zones
     const qZones = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
@@ -144,7 +145,7 @@ const Workplace: React.FC = () => {
 
   // Separate effect for sessions
   useEffect(() => {
-    if (zonesList.length === 0) return;
+    if (!user || !user.uid || zonesList.length === 0) return;
     const unsubs: (() => void)[] = [];
 
     zonesList.forEach(zone => {
@@ -276,7 +277,7 @@ const Workplace: React.FC = () => {
         </div>
 
         {/* KYC Status Banner */}
-        {user?.role === 'TUTOR' && (
+        {user?.role === UserRole.THALA && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-700">
             {(user.kycStatus === 'VERIFIED' && user.razorpay_account_id) || user.isDevBypass ? (
               <div className="bg-[#c2f575]/10 border border-[#c2f575]/30 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">

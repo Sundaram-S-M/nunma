@@ -7,7 +7,7 @@ import {
 import { 
   Users, TrendingUp, IndianRupee, Percent, Target, 
   Flag, ArrowLeft, Loader2, BarChart3, PieChart as PieChartIcon, 
-  Search, ShieldAlert, GraduationCap, TrendingDown, Clock
+  Search, ShieldAlert, GraduationCap, TrendingDown, Clock, Sparkles
 } from 'lucide-react';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -225,7 +225,15 @@ const AnalyticsDashboard = () => {
           <ArrowLeft size={20} />
         </button>
         <div className="header-text">
-          <h1>{zone?.title} <span className="badge">Analytics</span></h1>
+          <div className="flex items-center gap-4">
+            <h1 className="flex items-center gap-4">{zone?.title} <span className="badge">Analytics</span></h1>
+            <button 
+              onClick={() => navigate(`/workplace/analytics/${zoneId}/chat`)}
+              className="flex items-center gap-2 px-6 py-3 bg-[#1A1A4E] text-[#c2f575] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-900/20"
+            >
+              <Sparkles size={14} /> Ask AI Analyst
+            </button>
+          </div>
           <p>Real-time performance metrics and student insights</p>
         </div>
       </header>

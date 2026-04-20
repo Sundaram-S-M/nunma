@@ -15,7 +15,7 @@ const Notifications: React.FC = () => {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) return;
 
     // Fetch enrollments to know which zones to listen to
     const fetchSessions = async () => {

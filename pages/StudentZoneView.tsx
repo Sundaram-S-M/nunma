@@ -88,7 +88,9 @@ const StudentZoneView: React.FC = () => {
 
 
   useEffect(() => {
-    if (!zoneId || !db) return;
+    if (!authUser || !authUser.uid || !zoneId || !db) return;
+    
+    const zoneId_val = zoneId; // local capture
 
     // 1. Zone Details
     const zoneUnsub = onSnapshot(doc(db, 'zones', zoneId), (docSnap) => {

@@ -81,15 +81,15 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
   // 1. Fetch My Zones
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) return;
     const fetchZones = async () => {
       try {
         const zonesList: any[] = [];
 
         // A. Created Zones (Tutor)
         // Note: Use simple query without compound index requirements if possible
-        // A. Created Zones (Tutor)
-        if (role === UserRole.TUTOR) {
+        // A. Created Zones (Thala)
+        if (role === UserRole.THALA) {
           const q = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
           const snap = await getDocs(q);
           snap.forEach(d => zonesList.push({ id: d.id, ...d.data(), role: 'tutor' }));
@@ -114,7 +114,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         let totalStudents = 0;
         let totalEarnings = (user as any).earnings || 0; // Use user.earnings if available, fallback to 0
         
-        if (role === UserRole.TUTOR) {
+        if (role === UserRole.THALA) {
           try {
             for (const z of zonesList) {
               if (z.role === 'tutor') {
@@ -155,7 +155,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
   // 2. Listen to Sessions in My Zones
   useEffect(() => {
-    if (myZones.length === 0) return;
+    if (!user || !user.uid || myZones.length === 0) return;
 
     const unsubs: (() => void)[] = [];
 
@@ -190,7 +190,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
   // 4. Listen to Personal Calendar Events (Firestore)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) return;
     const q = query(collection(db, 'users', user.uid, 'calendar_events'));
     const unsub = onSnapshot(q, (snap) => {
       const data: Record<string, any[]> = {};
@@ -212,7 +212,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
   // 5. Calculate Streamed Hours for Current Month dynamically
   useEffect(() => {
-    if (role !== UserRole.TUTOR) return;
+    if (role !== UserRole.THALA) return;
     const currentMonthStr = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}`;
     let totalMinutes = 0;
     
@@ -572,7 +572,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
           Greetings, {user?.name || 'Achiever'}
         </h1>
         <p className="text-gray-400 font-semibold text-lg max-w-2xl leading-relaxed">
-          The future belongs to those who prepare. Manage your {role === UserRole.STUDENT ? 'learning path' : 'tutor workspace'} with surgical precision.
+          The future belongs to those who prepare. Manage your {role === UserRole.STUDENT ? 'learning path' : 'Thala workspace'} with surgical precision.
         </p>
       </div>
 

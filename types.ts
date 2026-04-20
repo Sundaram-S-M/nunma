@@ -3,7 +3,7 @@ import React from 'react';
 
 export enum UserRole {
   STUDENT = 'STUDENT',
-  TUTOR = 'TUTOR'
+  THALA = 'THALA'
 }
 
 export interface NavItem {

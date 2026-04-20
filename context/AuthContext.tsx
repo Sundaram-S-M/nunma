@@ -265,9 +265,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const toggleRole = async () => {
     if (!user) return;
     try {
-      const newRole = user.role === UserRole.STUDENT ? UserRole.TUTOR : UserRole.STUDENT;
+      const newRole = user.role === UserRole.STUDENT ? UserRole.THALA : UserRole.STUDENT;
       await updateProfile({ role: newRole });
-      alert(`Switched to ${newRole === UserRole.TUTOR ? 'Tutor' : 'Student'} mode`);
+      alert(`Switched to ${newRole === UserRole.THALA ? 'Thala' : 'Student'} mode`);
     } catch (error) {
       console.error("AuthContext: Toggle role failed:", error);
       alert("Failed to switch roles. Please try again.");

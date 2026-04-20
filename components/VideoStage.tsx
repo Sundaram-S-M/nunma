@@ -36,7 +36,7 @@ const StudentMicToggle = () => {
 
 const VideoStage: React.FC<VideoStageProps> = ({ token, serverUrl }) => {
     const { user } = useAuth();
-    const isTutor = user?.role === UserRole.TUTOR;
+    const isTutor = user?.role === UserRole.THALA;
 
     return (
         <div className="w-full h-full bg-[#040413]" data-lk-theme="default">

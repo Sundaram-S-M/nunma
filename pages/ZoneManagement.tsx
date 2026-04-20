@@ -73,6 +73,7 @@ import MCQBuilder from '../components/MCQBuilder';
 import { QRCodeSVG } from 'qrcode.react';
 import ZoneCapacityMeter from '../components/ZoneCapacityMeter';
 
+import { useAuth } from '../context/AuthContext';
 import { Student, AttendanceHistory, UserRole } from '../types';
 
 export interface MCQ {
@@ -196,9 +197,10 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   );
 };
 
-const ZoneManagement: React.FC = () => {
+  const ZoneManagement: React.FC = () => {
   const { zoneId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'attendance' | 'curriculum' | 'exams' | 'schedule' | 'students' | 'landing' | 'post-session'>('exams');
   const [view, setView] = useState<'management' | 'review' | 'grading'>('management');
   const [zone, setZone] = useState<any>(null);
@@ -607,7 +609,7 @@ const ZoneManagement: React.FC = () => {
 
   // Firestore Listeners
   useEffect(() => {
-    if (!zoneId || !db) return;
+    if (!user || !user.uid || !zoneId || !db) return;
 
     // 1. Zone Details
     const zoneUnsub = onSnapshot(doc(db, 'zones', zoneId), (docSnap) => {
@@ -726,7 +728,7 @@ const ZoneManagement: React.FC = () => {
 
   // Check for active live session (Firestore)
   useEffect(() => {
-    if (!zoneId || !db) return;
+    if (!user || !user.uid || !zoneId || !db) return;
     const q = query(
       collection(db, 'zones', zoneId, 'sessions'),
       where('status', '==', 'live'),
@@ -743,7 +745,7 @@ const ZoneManagement: React.FC = () => {
   }, [zoneId]);
 
   useEffect(() => {
-    if (!zoneId || !activeSession) return;
+    if (!user || !user.uid || !zoneId || !activeSession) return;
     let unsubscribe = () => { };
 
     if (db) {

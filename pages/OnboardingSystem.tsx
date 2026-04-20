@@ -43,7 +43,7 @@ const OnboardingSystem: React.FC = () => {
 
     const [step, setStep] = useState<number>(requestedRole ? 2 : 1);
     const [selectedRole, setSelectedRole] = useState<UserRole | null>(
-        requestedRole === 'tutor' ? UserRole.TUTOR :
+        requestedRole === 'tutor' ? UserRole.THALA :
             requestedRole === 'student' ? UserRole.STUDENT :
                 (user?.role || null)
     );
@@ -275,7 +275,7 @@ const OnboardingSystem: React.FC = () => {
                             </button>
 
                             <button
-                                onClick={() => onSelectRole(UserRole.TUTOR)}
+                                onClick={() => onSelectRole(UserRole.THALA)}
                                 className="group relative flex flex-col items-start p-8 rounded-[2rem] border-2 border-transparent bg-[#040457] hover:-translate-y-1 hover:shadow-2xl hover:shadow-[#040457]/40 transition-all text-left overflow-hidden z-10"
                             >
                                 <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700 -z-10"></div>
@@ -386,8 +386,8 @@ const OnboardingSystem: React.FC = () => {
                     </div>
                 )}
 
-                {/* Step 2: Tutor Form */}
-                {step === 2 && selectedRole === UserRole.TUTOR && (
+                {/* Step 2: Thala Form */}
+                {step === 2 && selectedRole === UserRole.THALA && (
                     <div className="animate-in slide-in-from-right-8 duration-500">
                         <div className="mb-8 flex items-start justify-between">
                             <div>

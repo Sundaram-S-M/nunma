@@ -133,7 +133,7 @@ const ProfileHeader = ({
                   className="text-indigo-100/90 text-[16px] italic max-w-xl bg-transparent border-b border-white/20 outline-none w-full"
                 />
               ) : (
-                <p className="text-indigo-100/90 text-[16px] italic line-clamp-1">{profileUser.headline || (role === UserRole.TUTOR ? 'Expert Educator' : 'Aspiring Learner')}</p>
+                <p className="text-indigo-100/90 text-[16px] italic line-clamp-1">{profileUser.headline || (role === UserRole.THALA ? 'Expert Educator' : 'Aspiring Learner')}</p>
               )}
             </div>
 
@@ -150,7 +150,7 @@ const ProfileHeader = ({
                       Edit Profile
                     </button>
                   )}
-                  {role === UserRole.TUTOR && (
+                  {role === UserRole.THALA && (
                     <button onClick={() => setShowProductModal(true)} className="px-8 py-3 bg-[#c2f575] text-[#1A1A4E] rounded-xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
                       <ShoppingBag size={14} /> List Product
                     </button>
@@ -215,7 +215,7 @@ const ProfileHeader = ({
               )}
             </div>
 
-            {role === UserRole.TUTOR ? (
+            {profileUser.role === UserRole.THALA ? (
               <div className="flex items-center gap-10">
                 <div className="flex items-center gap-3">
                   <span className="text-xl font-black text-indigo-900">{tutorStudentsCount || 0}</span>
@@ -593,7 +593,7 @@ const ProfileView: React.FC = () => {
   const targetId = id === 'me' ? currentUser?.uid : id;
 
   useEffect(() => {
-    if (!targetId) {
+    if (!currentUser || !currentUser.uid || !targetId) {
       if (!currentUser) navigate('/auth');
       return;
     }
@@ -975,7 +975,7 @@ const ProfileView: React.FC = () => {
 
   let displayRole = profileUser.role || UserRole.STUDENT;
   if (!isMe && profileUser.bankingDetailsProvided) {
-    displayRole = UserRole.TUTOR;
+    displayRole = UserRole.THALA;
   }
   const role = displayRole;
 

@@ -6,7 +6,7 @@ import { UserRole } from '../types';
 
 const WhiteboardStage: React.FC = () => {
     const { user } = useAuth();
-    const isTutor = user?.role === UserRole.TUTOR;
+    const isTutor = user?.role === UserRole.THALA;
 
     const handleMount = (editor: Editor) => {
         editor.updateInstanceState({ isReadonly: !isTutor });

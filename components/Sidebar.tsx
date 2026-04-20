@@ -124,7 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     },
     { id: 'explore', icon: <Layers size={16} />,      path: '/explore',  label: 'Explore' },
     { id: 'inbox',   icon: <Mail size={16} />,         path: '/inbox',    label: 'Inbox'   },
-    ...(role === UserRole.TUTOR && user?.onboardingCompleted
+    ...(role === UserRole.THALA && user?.onboardingCompleted
       ? [{ id: 'products', icon: <ShoppingBag size={16} />, path: '/products', label: 'Products' }]
       : []),
   ];
@@ -217,7 +217,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
           </div>
 
           {/* ── Tutor public page ──────────────────────── */}
-          {role === UserRole.TUTOR && (
+          {role === UserRole.THALA && (
             <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
               <Link
                 to="/u/sundaram"
@@ -253,7 +253,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
         </nav>
 
         {/* ── Storage widget ────────────────────────────── */}
-        {role === UserRole.TUTOR && (
+        {role === UserRole.THALA && (
           <div style={{ padding: '0.75rem 0.625rem', borderTop: '1px solid var(--border-light)', flexShrink: 0 }}>
             {isOpen ? (
               <div style={{

@@ -32,6 +32,7 @@ import PublicLayout from './layouts/PublicLayout';
 import LegalPolicy from './pages/LegalPolicy';
 import WhiteboardPage from './pages/WhiteboardPage';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
+import AnalyticsChat from './pages/AnalyticsChat.tsx';
 
 
 import { Toaster } from 'react-hot-toast';
@@ -90,12 +91,14 @@ const AppContent: React.FC = () => {
   }
 
   const role = user?.role || UserRole.STUDENT;
-  const needsOnboarding =
-    (role === UserRole.STUDENT && !user?.studentProfile?.isComplete) ||
-    (role === UserRole.TUTOR && !user?.tutorProfile?.isComplete);
+  const showOnboarding = isAuthenticated && role && (
+    (role === UserRole.THALA && !user?.tutorProfile?.isComplete) ||
+    (role === UserRole.STUDENT && !user?.studentProfile?.isComplete)
+  );
 
-  if (isAuthenticated && needsOnboarding && !isOnboardingRoute && !isPublicRoute) {
-    const targetRole = role === UserRole.TUTOR ? 'tutor' : 'student';
+  const targetRole = role === UserRole.THALA ? 'tutor' : 'student';
+
+  if (showOnboarding && !isOnboardingRoute && !isPublicRoute) {
     return <Navigate to={`/onboarding?role=${targetRole}`} replace />;
   }
 
@@ -126,17 +129,17 @@ const AppContent: React.FC = () => {
             <Route path="/dashboard" element={<Dashboard role={role} />} />
             <Route path="/classroom" element={role === UserRole.STUDENT ? <Classroom /> : <Navigate to="/workplace" />} />
             <Route path="/classroom/zone/:zoneId" element={role === UserRole.STUDENT ? <StudentZoneView /> : <Navigate to="/dashboard" />} />
-            <Route path="/workplace" element={role === UserRole.TUTOR ? <Workplace /> : <Navigate to="/classroom" />} />
+            <Route path="/workplace" element={role === UserRole.THALA ? <Workplace /> : <Navigate to="/classroom" />} />
             <Route path="/workplace/manage/:zoneId" element={
-              role === UserRole.TUTOR ? (
+              role === UserRole.THALA ? (
                 <ErrorBoundary>
                   <ZoneManagement />
                 </ErrorBoundary>
               ) : <Navigate to="/dashboard" />
             } />
-            <Route path="/workplace/launch" element={role === UserRole.TUTOR ? <LaunchZone /> : <Navigate to="/dashboard" />} />
-            <Route path="/certificate-engine" element={role === UserRole.TUTOR ? <CertificateEngine /> : <Navigate to="/dashboard" />} />
-            <Route path="/list-product/flow" element={role === UserRole.TUTOR ? <ListProductFlow /> : <Navigate to="/dashboard" />} />
+            <Route path="/workplace/launch" element={role === UserRole.THALA ? <LaunchZone /> : <Navigate to="/dashboard" />} />
+            <Route path="/certificate-engine" element={role === UserRole.THALA ? <CertificateEngine /> : <Navigate to="/dashboard" />} />
+            <Route path="/list-product/flow" element={role === UserRole.THALA ? <ListProductFlow /> : <Navigate to="/dashboard" />} />
             <Route path="/classroom/:zoneId" element={
               <ErrorBoundary>
                 <ClassroomPage />
@@ -165,9 +168,16 @@ const AppContent: React.FC = () => {
             <Route path="/booking/:productId" element={<BookingPage />} />
             <Route path="/billing" element={<PricingPage />} />
             <Route path="/workplace/analytics/:zoneId" element={
-              role === UserRole.TUTOR ? (
+              role === UserRole.THALA ? (
                 <ErrorBoundary>
                   <AnalyticsDashboard />
+                </ErrorBoundary>
+              ) : <Navigate to="/dashboard" />
+            } />
+            <Route path="/workplace/analytics/:zoneId/chat" element={
+              role === UserRole.THALA ? (
+                <ErrorBoundary>
+                  <AnalyticsChat />
                 </ErrorBoundary>
               ) : <Navigate to="/dashboard" />
             } />
