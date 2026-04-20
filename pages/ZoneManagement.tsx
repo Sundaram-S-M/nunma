@@ -149,6 +149,53 @@ interface AttendanceSession {
   className?: string;
 }
 
+const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type and press Enter", required = false }: any) => {
+  const [inputVal, setInputVal] = useState('');
+  
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (inputVal.trim() && items.length < maxItems) {
+        setItems([...items, inputVal.trim()]);
+        setInputVal('');
+      }
+    }
+  };
+
+  const removeTag = (index: number) => {
+    setItems(items.filter((_: any, i: number) => i !== index));
+  };
+
+  return (
+    <div>
+      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center justify-between ml-1">
+        <span>{label} {required && <span className="text-[9px] text-[#040457] bg-[#c2f575] px-2 py-0.5 rounded-full ml-2">Mandatory</span>}</span>
+        {items.length >= maxItems && <span className="text-[9px] text-red-500 uppercase border border-red-200 px-2 py-0.5 rounded-full">Max reached</span>}
+      </label>
+      <div className="w-full bg-gray-50 border border-gray-100 rounded-[2rem] p-4 min-h-[70px] flex flex-wrap gap-3 items-center focus-within:ring-4 focus-within:ring-[#c1e60d]/20 transition-all shadow-sm">
+        {items.map((item: string, i: number) => (
+          <span key={i} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2.5 rounded-2xl text-sm font-bold border border-indigo-100/50 hover:bg-indigo-100 transition-colors">
+            {item}
+            <button type="button" onClick={() => removeTag(i)} className="text-indigo-400 hover:text-indigo-900 focus:outline-none transition-colors">
+              <X size={16} />
+            </button>
+          </span>
+        ))}
+        {items.length < maxItems && (
+          <input
+            type="text"
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={items.length === 0 ? placeholder : "Add another..."}
+            className="flex-1 min-w-[150px] bg-transparent border-none outline-none font-bold text-indigo-900 px-4 py-2"
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ZoneManagement: React.FC = () => {
   const { zoneId } = useParams();
   const navigate = useNavigate();
@@ -156,6 +203,52 @@ const ZoneManagement: React.FC = () => {
   const [view, setView] = useState<'management' | 'review' | 'grading'>('management');
   const [zone, setZone] = useState<any>(null);
   const [activeSession, setActiveSession] = useState<any>(null);
+
+  // Zone Settings State
+  const [showZoneSettingsModal, setShowZoneSettingsModal] = useState(false);
+  const [editZoneTitle, setEditZoneTitle] = useState('');
+  const [editZoneSubtitle, setEditZoneSubtitle] = useState('');
+  const [editZoneDescription, setEditZoneDescription] = useState('');
+  const [editLearningOutcomes, setEditLearningOutcomes] = useState<string[]>([]);
+  const [editSkillsGained, setEditSkillsGained] = useState<string[]>([]);
+  const [editSubjects, setEditSubjects] = useState<string[]>([]);
+  const [editZoneLevel, setEditZoneLevel] = useState('Beginner');
+
+  const handleOpenZoneSettings = () => {
+    if (!zone) return;
+    setEditZoneTitle(zone.title || '');
+    setEditZoneSubtitle(zone.subtitle || '');
+    setEditZoneDescription(zone.description || '');
+    setEditLearningOutcomes(zone.learningOutcomes || []);
+    setEditSkillsGained(zone.skillsGained || []);
+    setEditSubjects(zone.subjects || []);
+    setEditZoneLevel(zone.level || 'Beginner');
+    setShowZoneSettingsModal(true);
+  };
+
+  const handleUpdateZoneSettings = async () => {
+    if (!zoneId) return;
+    if (editSubjects.length > 5) {
+      alert("You can strictly only add up to 5 subjects.");
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'zones', zoneId), {
+        title: editZoneTitle,
+        subtitle: editZoneSubtitle,
+        description: editZoneDescription,
+        learningOutcomes: editLearningOutcomes,
+        skillsGained: editSkillsGained,
+        subjects: editSubjects,
+        level: editZoneLevel
+      });
+      setShowZoneSettingsModal(false);
+      toast.success("Zone settings updated successfully!");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to update zone settings");
+    }
+  };
 
   // Landing Page State
   const [lpPaid, setLpPaid] = useState(false);
@@ -1284,6 +1377,74 @@ const ZoneManagement: React.FC = () => {
     <React.Fragment>
       <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-20 relative">
 
+        {/* EDIT ZONE SETTINGS MODAL */}
+        {showZoneSettingsModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+            <div className="bg-white rounded-[3rem] w-full max-w-3xl shadow-2xl p-10 animate-in zoom-in-95 duration-500 max-h-[90vh] flex flex-col">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-3xl font-black text-[#040457]">Zone Settings</h3>
+                <button onClick={() => setShowZoneSettingsModal(false)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400"><X size={24} /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8 pb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-8">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Zone Title</label>
+                      <input
+                        type="text"
+                        value={editZoneTitle}
+                        onChange={e => setEditZoneTitle(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-8 py-5 font-black text-xl text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all shadow-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Subtitle</label>
+                      <input
+                        type="text"
+                        value={editZoneSubtitle}
+                        onChange={e => setEditZoneSubtitle(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-8 py-5 font-bold text-lg text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all shadow-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Detailed Description</label>
+                      <textarea
+                        value={editZoneDescription}
+                        onChange={e => setEditZoneDescription(e.target.value)}
+                        rows={4}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-3xl px-8 py-6 font-medium text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all shadow-sm resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Experience Level</label>
+                      <div className="flex p-2 bg-gray-50 rounded-[1.75rem] border border-gray-100 shadow-inner">
+                        {(['Beginner', 'Intermediate', 'Expert'] as const).map(lvl => (
+                          <button
+                            key={lvl}
+                            onClick={() => setEditZoneLevel(lvl)}
+                            className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${editZoneLevel === lvl ? 'bg-white text-indigo-900 shadow-md border border-gray-50' : 'text-gray-400 hover:text-indigo-900'}`}
+                          >
+                            {lvl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-8">
+                    <TagInput label="Learning Outcomes" items={editLearningOutcomes} setItems={setEditLearningOutcomes} placeholder="Type outcome & press Enter" />
+                    <TagInput label="Skills Gained" items={editSkillsGained} setItems={setEditSkillsGained} placeholder="Type skill & press Enter" />
+                    <TagInput label="Subjects (Max 5)" items={editSubjects} setItems={setEditSubjects} maxItems={5} placeholder="Type subject & press Enter" />
+                  </div>
+                </div>
+              </div>
+              <div className="pt-6 border-t border-gray-100 flex gap-4 mt-2">
+                <button onClick={() => setShowZoneSettingsModal(false)} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest hover:bg-gray-100 transition-all">Cancel</button>
+                <button onClick={handleUpdateZoneSettings} className="flex-[2] py-5 bg-[#040457] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-[0_20px_40px_rgba(4,4,87,0.2)] hover:scale-[1.02] hover:brightness-110 active:scale-95 transition-all">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* START EXAM MODAL */}
         {showStartExamModal && (
           <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
@@ -1363,7 +1524,7 @@ const ZoneManagement: React.FC = () => {
         {/* SCHEDULE SESSION MODAL */}
         {showScheduleModal && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500">
+            <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-visible p-12 animate-in zoom-in-95 duration-500">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-3xl font-black text-[#040457]">{editingSession ? 'Edit' : 'Schedule'} Session</h3>
                 <button
@@ -1382,7 +1543,7 @@ const ZoneManagement: React.FC = () => {
                     value={scheduleTitle}
                     onChange={e => setScheduleTitle(e.target.value)}
                     placeholder="e.g. Masterclass on Logic"
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -1392,7 +1553,7 @@ const ZoneManagement: React.FC = () => {
                       type="date"
                       value={scheduleDate}
                       onChange={e => setScheduleDate(e.target.value)}
-                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all"
                     />
                   </div>
                   {/* Interactive Clock Picker */}
@@ -1400,7 +1561,7 @@ const ZoneManagement: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowClockPicker(!showClockPicker)}
-                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] text-left flex items-center justify-between hover:bg-gray-100 transition-all"
+                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] text-left flex items-center justify-between hover:bg-gray-100 transition-all"
                     >
                       <span className={scheduleTime || (selectedHour !== 12 || selectedMinute !== 0) ? 'text-[#040457]' : 'text-gray-400'}>
                         {scheduleTime || `${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`}
@@ -1409,7 +1570,7 @@ const ZoneManagement: React.FC = () => {
                     </button>
 
                     {showClockPicker && (
-                      <div className="absolute top-full left-0 right-0 mt-4 bg-white rounded-[3rem] shadow-2xl border border-gray-100 p-8 z-50 animate-in slide-in-from-top-4 duration-300 w-[max-content] min-w-full">
+                      <div className="absolute top-full left-0 mt-4 bg-white rounded-[3rem] shadow-[0_32px_80px_-8px_rgba(4,4,87,0.25)] border border-gray-100 p-8 z-[9999] animate-in slide-in-from-top-4 duration-300 min-w-[340px]" style={{width:'max-content'}}>
                         {/* Clock Display */}
                         <div className="flex flex-col items-center mb-10 mt-2 relative">
                           <div className="relative w-64 h-64 bg-gradient-to-br from-[#040457] to-indigo-900 rounded-full shadow-2xl p-4">
@@ -1504,7 +1665,7 @@ const ZoneManagement: React.FC = () => {
                     type="number" min="0"
                     value={scheduleDuration}
                     onChange={e => setScheduleDuration(e.target.value)}
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-4">
@@ -1516,7 +1677,7 @@ const ZoneManagement: React.FC = () => {
                       }
                       e.target.value = '';
                     }}
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all cursor-pointer"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all cursor-pointer"
                   >
                     <option value="">Select a student to co-host...</option>
                     {students.map(s => (
@@ -1540,7 +1701,7 @@ const ZoneManagement: React.FC = () => {
               <div className="flex gap-4">
                 <button
                   onClick={() => { setShowScheduleModal(false); setEditingSession(null); setScheduleCoHosts([]); }}
-                  className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest"
+                  className="flex-1 py-5 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-sm tracking-widest hover:bg-gray-200 transition-all"
                 >
                   Cancel
                 </button>
@@ -1576,7 +1737,7 @@ const ZoneManagement: React.FC = () => {
                       alert("Failed to schedule session.");
                     }
                   }}
-                  className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all"
+                  className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all"
                 >
                   {editingSession ? 'Update' : 'Schedule'} Session
                 </button>
@@ -1898,12 +2059,14 @@ const ZoneManagement: React.FC = () => {
                     <button
                       disabled={isWhitelisting}
                       onClick={async () => {
-                        if (!newStudentEmail || !zoneId) return;
+                        if (!zoneId || !newStudentEmail) {
+                          return alert("Missing zoneId or email");
+                        }
 
                         setIsWhitelisting(true);
                         try {
                           const processWhitelistFn = httpsCallable(functions, 'processWhitelist');
-                          const result: any = await processWhitelistFn({ zoneId, emails: [newStudentEmail] });
+                          const result: any = await processWhitelistFn({ zoneId, email: newStudentEmail });
                           const data = result.data;
 
                           if (data.enrolled > 0) {
@@ -1982,11 +2145,22 @@ const ZoneManagement: React.FC = () => {
                             }
 
                             const processWhitelistFn = httpsCallable(functions, 'processWhitelist');
-                            const result: any = await processWhitelistFn({ zoneId, emails: emailsToProcess });
-                            const res = result.data;
+                            const res = { enrolled: 0, pending: 0, alreadyEnrolled: 0, failed: 0 };
+                            
+                            await Promise.all(emailsToProcess.map(async (email) => {
+                                try {
+                                  const result: any = await processWhitelistFn({ zoneId, email });
+                                  const data = result.data;
+                                  if (data.enrolled) res.enrolled++;
+                                  if (data.pending) res.pending++;
+                                  if (data.alreadyEnrolled) res.alreadyEnrolled++;
+                                } catch (e) {
+                                  res.failed++;
+                                }
+                            }));
 
                             toast.success(
-                              `Processed ${emailsToProcess.length} students. Enrolled: ${res.enrolled}, Pending: ${res.pending}${res.alreadyEnrolled > 0 ? `, Already enrolled: ${res.alreadyEnrolled}` : ''}`,
+                              `Processed ${emailsToProcess.length} students. Enrolled: ${res.enrolled}, Pending: ${res.pending}${res.alreadyEnrolled > 0 ? `, Already enrolled: ${res.alreadyEnrolled}` : ''}${res.failed > 0 ? `, Failed: ${res.failed}` : ''}`,
                               { duration: 5000, icon: '📋' }
                             );
                             e.target.value = ''; // Reset file input
@@ -2162,7 +2336,12 @@ const ZoneManagement: React.FC = () => {
           <div className="flex items-center gap-8">
             <button onClick={() => navigate('/workplace')} className="p-5 bg-white border border-gray-100 rounded-[1.5rem] text-[#040457] hover:shadow-2xl transition-all shadow-sm active:scale-90"><ArrowLeft size={28} /></button>
             <div>
-              <h1 className="text-6xl font-black text-[#040457] tracking-tighter leading-none mb-3">{zone.title}</h1>
+              <div className="flex items-center gap-4 mb-3">
+                <h1 className="text-6xl font-black text-[#040457] tracking-tighter leading-none">{zone.title}</h1>
+                <button onClick={handleOpenZoneSettings} className="p-3 bg-white border border-gray-100 text-[#040457] rounded-2xl hover:bg-gray-50 hover:shadow-lg transition-all active:scale-95 shadow-sm" title="Zone Settings">
+                  <Settings size={28} />
+                </button>
+              </div>
               <p className="text-[11px] font-bold text-gray-300 uppercase tracking-[0.4em]">{zone.level} LEVEL FACILITY</p>
             </div>
           </div>

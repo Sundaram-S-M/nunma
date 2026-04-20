@@ -28,9 +28,21 @@ service cloud.firestore {
     match /zones/{zoneId} {
       // Zone read is public for authenticated users to support explore/dashboard
       allow read: if isSignedIn();
-      // Only creators can update metadata
-      allow write: if isSignedIn() && (
-        resource == null || // allow creation
+      
+      // Allow creation for authenticated users
+      allow create: if isSignedIn();
+      
+      // Only creators can update metadata, and pricing fields are immutable
+      allow update: if isSignedIn() && (
+        resource.data.tutorId == request.auth.uid || 
+        resource.data.createdBy == request.auth.uid
+      ) && (
+        request.resource.data.get('price', null) == resource.data.get('price', null) &&
+        request.resource.data.get('priceINR', null) == resource.data.get('priceINR', null) &&
+        request.resource.data.get('currency', null) == resource.data.get('currency', null)
+      );
+
+      allow delete: if isSignedIn() && (
         resource.data.tutorId == request.auth.uid || 
         resource.data.createdBy == request.auth.uid
       );
@@ -129,7 +141,8 @@ service cloud.firestore {
     }
     // --- USERS Collection ---
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

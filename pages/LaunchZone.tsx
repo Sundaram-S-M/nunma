@@ -44,11 +44,62 @@ const DOMAINS = [
   "Healthcare & Life Sciences"
 ];
 
+const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type and press Enter", required = false }: any) => {
+  const [inputVal, setInputVal] = useState('');
+  
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (inputVal.trim() && items.length < maxItems) {
+        setItems([...items, inputVal.trim()]);
+        setInputVal('');
+      }
+    }
+  };
+
+  const removeTag = (index: number) => {
+    setItems(items.filter((_: any, i: number) => i !== index));
+  };
+
+  return (
+    <div>
+      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center justify-between ml-1">
+        <span>{label} {required && <span className="text-[9px] text-[#040457] bg-[#c2f575] px-2 py-0.5 rounded-full ml-2">Mandatory</span>}</span>
+        {items.length >= maxItems && <span className="text-[9px] text-red-500 uppercase border border-red-200 px-2 py-0.5 rounded-full">Max reached</span>}
+      </label>
+      <div className="w-full bg-gray-50 border border-gray-100 rounded-[2rem] p-4 min-h-[70px] flex flex-wrap gap-3 items-center focus-within:ring-4 focus-within:ring-[#c1e60d]/20 transition-all shadow-sm">
+        {items.map((item: string, i: number) => (
+          <span key={i} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2.5 rounded-2xl text-sm font-bold border border-indigo-100/50 hover:bg-indigo-100 transition-colors">
+            {item}
+            <button type="button" onClick={() => removeTag(i)} className="text-indigo-400 hover:text-indigo-900 focus:outline-none transition-colors">
+              <X size={16} />
+            </button>
+          </span>
+        ))}
+        {items.length < maxItems && (
+          <input
+            type="text"
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={items.length === 0 ? placeholder : "Add another..."}
+            className="flex-1 min-w-[150px] bg-transparent border-none outline-none font-bold text-indigo-900 px-4 py-2"
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
 const LaunchZone: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [zoneTitle, setZoneTitle] = useState('');
+  const [zoneSubtitle, setZoneSubtitle] = useState('');
   const [zoneDescription, setZoneDescription] = useState('');
+  const [learningOutcomes, setLearningOutcomes] = useState<string[]>([]);
+  const [skillsGained, setSkillsGained] = useState<string[]>([]);
+  const [subjects, setSubjects] = useState<string[]>([]);
   const [zoneLevel, setZoneLevel] = useState<'Beginner' | 'Intermediate' | 'Expert'>('Beginner');
   const [zonePrice, setZonePrice] = useState('');
   const [zoneCurrency, setZoneCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
@@ -79,6 +130,11 @@ const LaunchZone: React.FC = () => {
       return;
     }
 
+    if (subjects.length > 5) {
+      setError("You can strictly only add up to 5 subjects.");
+      return;
+    }
+
     if (!zoneImage) {
       setError("Providing a cover photo to the zone is mandatory.");
       return;
@@ -95,7 +151,11 @@ const LaunchZone: React.FC = () => {
         tutorId: user.uid,
         tutorName: user.name,
         title: zoneTitle,
+        subtitle: zoneSubtitle,
         description: zoneDescription,
+        learningOutcomes,
+        skillsGained,
+        subjects,
         level: zoneLevel,
         domain: zoneDomain,
         provideCertificate: provideCertificate,
@@ -191,6 +251,17 @@ const LaunchZone: React.FC = () => {
               </div>
 
               <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Subtitle</label>
+                <input
+                  type="text"
+                  placeholder="Short description under the title..."
+                  value={zoneSubtitle}
+                  onChange={e => setZoneSubtitle(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-8 py-5 font-bold text-lg text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all shadow-sm"
+                />
+              </div>
+
+              <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Detailed Description</label>
                 <textarea
                   placeholder="What will your students achieve in this zone? Detail the curriculum and outcomes..."
@@ -200,6 +271,30 @@ const LaunchZone: React.FC = () => {
                   className="w-full bg-gray-50 border border-gray-100 rounded-3xl px-8 py-6 font-medium text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all shadow-sm resize-none leading-relaxed"
                 />
               </div>
+
+              <TagInput 
+                label="Learning Outcomes" 
+                items={learningOutcomes} 
+                setItems={setLearningOutcomes} 
+                placeholder="What will they learn? (Press Enter)..." 
+                maxItems={10} 
+              />
+
+              <TagInput 
+                label="Skills Gained" 
+                items={skillsGained} 
+                setItems={setSkillsGained} 
+                placeholder="Tags for skills (Press Enter)..." 
+                maxItems={10} 
+              />
+              
+              <TagInput 
+                label="Subjects (Max 5)" 
+                items={subjects} 
+                setItems={setSubjects} 
+                placeholder="Subject area (Press Enter)..." 
+                maxItems={5} 
+              />
 
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Learning Domain</label>

@@ -16,20 +16,34 @@ import { v4 as uuidv4 } from "uuid";
 import { Resend } from "resend";
 import Busboy from 'busboy';
 export { gradePdfSubmission } from "./ai/gradeSubmission";
+export { generateQuizDraft } from "./ai/generateQuizDraft";
+export { askZoneAnalytics } from "./ai/askZoneAnalytics";
 
 // const db = admin.firestore(); // Moved inside function scopes for deployment stability
 
 
-// Global transporter for billing and OTP emails
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
-});
+// Global transporter helper for billing and OTP emails
+const getTransporter = () => {
+    const host = process.env.SMTP_HOST;
+    const port = parseInt(process.env.SMTP_PORT || '587');
+    const secure = process.env.SMTP_SECURE === 'true';
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (!host || !user || !pass) {
+        throw new Error("SMTP configuration missing from environment.");
+    }
+
+    return nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth: {
+            user,
+            pass,
+        },
+    });
+};
 
 
 
@@ -2138,17 +2152,20 @@ export const processWhitelist = onCall(
                 throw new HttpsError("unauthenticated", "You must be signed in to whitelist students.");
             }
 
-            const { zoneId, emails } = request.data;
+            const { zoneId, email } = request.data;
 
-            // 2. Input validation
-            if (!zoneId || typeof zoneId !== "string") {
-                throw new HttpsError("invalid-argument", "Missing or invalid zoneId.");
+            // 1. Strict Input Validation
+            if (!zoneId || !email) {
+                throw new HttpsError("invalid-argument", "Missing zoneId or email");
             }
-            if (!emails || !Array.isArray(emails) || emails.length === 0) {
-                throw new HttpsError("invalid-argument", "Missing or empty emails array.");
+
+            if (typeof zoneId !== "string" || typeof email !== "string") {
+                throw new HttpsError("invalid-argument", "zoneId and email must be strings.");
             }
-            if (emails.length > 200) {
-                throw new HttpsError("invalid-argument", "Cannot process more than 200 emails at once.");
+
+            const normalizedEmail = email.trim().toLowerCase();
+            if (!normalizedEmail.includes("@")) {
+                throw new HttpsError("invalid-argument", "Invalid email format.");
             }
 
             // 3. Security check: verify caller owns this zone
@@ -2175,113 +2192,93 @@ export const processWhitelist = onCall(
                 functions.logger.warn("RESEND_API_KEY not configured — notification emails will be skipped.");
             }
 
-            // 5. Process each email
-            const results: { enrolled: string[]; pending: string[]; alreadyEnrolled: string[]; failed: string[] } = {
-                enrolled: [],
-                pending: [],
-                alreadyEnrolled: [],
-                failed: [],
+            const results: { enrolled: number; pending: number; alreadyEnrolled: number } = {
+                enrolled: 0,
+                pending: 0,
+                alreadyEnrolled: 0
             };
 
-            for (const rawEmail of emails) {
-                const email = (rawEmail || "").toString().toLowerCase().trim();
-                if (!email || !email.includes("@")) {
-                    results.failed.push(rawEmail);
-                    continue;
+            // 2. Graceful Auth Check
+            let uid = null;
+            try {
+                const userRecord = await admin.auth().getUserByEmail(normalizedEmail);
+                uid = userRecord.uid;
+            } catch (authError: any) {
+                functions.logger.info(`User ${normalizedEmail} not found, adding to invites.`);
+            }
+
+            if (uid) {
+                // User exists, enroll them directly
+                const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
+                const studentDoc = await studentRef.get();
+
+                if (studentDoc.exists) {
+                    results.alreadyEnrolled = 1;
+                    return { success: true, ...results };
                 }
 
+                await studentRef.set({
+                    status: "active",
+                    source: "whitelist",
+                    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+
+                results.enrolled = 1;
+            } else {
+                // User doesn't exist, proceed to add their email to the invites subcollection
+                const invitesRef = db.collection("zones").doc(zoneId).collection("invites").doc(normalizedEmail);
+                await invitesRef.set({
+                    email: normalizedEmail,
+                    addedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    addedBy: callerUid,
+                    status: "pending"
+                });
+                
+                results.pending = 1;
+            }
+
+            // Send notification email (fire-and-forget)
+            if (resend) {
                 try {
-                    // 5a. Resolve user via Admin SDK
-                    const userRecord = await admin.auth().getUserByEmail(email);
-                    const uid = userRecord.uid;
-
-                    // 5b. Check if already enrolled
-                    const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
-                    const studentDoc = await studentRef.get();
-
-                    if (studentDoc.exists) {
-                        results.alreadyEnrolled.push(email);
-                        continue;
-                    }
-
-                    // 5c. Enroll the student atomically
-                    await studentRef.set({
-                        status: "active",
-                        source: "whitelist",
-                        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    await resend.emails.send({
+                        from: "Nunma <support@nunma.in>",
+                        to: normalizedEmail,
+                        subject: "You've been granted access to a new Zone on NUNMA",
+                        html: `
+                            <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: auto; padding: 40px 20px;">
+                                <div style="text-align: center; margin-bottom: 32px;">
+                                    <h1 style="color: #040457; font-size: 28px; font-weight: 900; margin: 0;">Welcome to ${zoneTitle} 🎓</h1>
+                                </div>
+                                <div style="background: #f8f9fa; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
+                                    <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
+                                        You've been granted <strong style="color: #040457;">premium access</strong> to a new Zone on Nunma.
+                                    </p>
+                                    <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
+                                        Your instructor has whitelisted you — no payment required. Jump in and start learning immediately.
+                                    </p>
+                                </div>
+                                <div style="text-align: center; margin: 32px 0;">
+                                    <a href="https://www.nunma.in/classroom/${zoneId}" 
+                                       style="display: inline-block; background: #c2f575; color: #040457; padding: 16px 40px; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; letter-spacing: 0.05em; text-transform: uppercase;">
+                                        Enter Classroom →
+                                    </a>
+                                </div>
+                                <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 32px;">
+                                    Nunma — The Trust Layer for Education
+                                </p>
+                            </div>
+                        `,
                     });
-
-                    results.enrolled.push(email);
-
-                    // 5d. Send notification email (fire-and-forget, don't block on failure)
-                    if (resend) {
-                        try {
-                            await resend.emails.send({
-                                from: "Nunma <support@nunma.in>",
-                                to: email,
-                                subject: "You've been granted access to a new Zone on NUNMA",
-                                html: `
-                                    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: auto; padding: 40px 20px;">
-                                        <div style="text-align: center; margin-bottom: 32px;">
-                                            <h1 style="color: #040457; font-size: 28px; font-weight: 900; margin: 0;">Welcome to ${zoneTitle} 🎓</h1>
-                                        </div>
-                                        <div style="background: #f8f9fa; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
-                                            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
-                                                You've been granted <strong style="color: #040457;">premium access</strong> to a new Zone on Nunma.
-                                            </p>
-                                            <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
-                                                Your instructor has whitelisted you — no payment required. Jump in and start learning immediately.
-                                            </p>
-                                        </div>
-                                        <div style="text-align: center; margin: 32px 0;">
-                                            <a href="https://www.nunma.in/classroom/${zoneId}" 
-                                               style="display: inline-block; background: #c2f575; color: #040457; padding: 16px 40px; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; letter-spacing: 0.05em; text-transform: uppercase;">
-                                                Enter Classroom →
-                                            </a>
-                                        </div>
-                                        <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 32px;">
-                                            Nunma — The Trust Layer for Education
-                                        </p>
-                                    </div>
-                                `,
-                            });
-                        } catch (emailError: any) {
-                            functions.logger.warn(`Failed to send whitelist email to ${email}:`, emailError.message);
-                            // Don't fail the enrollment just because the email didn't send
-                        }
-                    }
-
-                } catch (lookupError: any) {
-                    if (lookupError.code === "auth/user-not-found") {
-                        // 5e. User doesn't exist yet — add to pending_whitelists
-                        try {
-                            await db.collection("zones").doc(zoneId)
-                                .collection("pending_whitelists").doc(email).set({
-                                    email,
-                                    addedAt: admin.firestore.FieldValue.serverTimestamp(),
-                                    addedBy: callerUid,
-                                });
-                            results.pending.push(email);
-                        } catch (pendingError: any) {
-                            functions.logger.error(`Failed to save pending whitelist for ${email}:`, pendingError);
-                            results.failed.push(email);
-                        }
-                    } else {
-                        functions.logger.error(`Unexpected error processing ${email}:`, lookupError);
-                        results.failed.push(email);
-                    }
+                } catch (emailError: any) {
+                    functions.logger.warn(`Failed to send whitelist email to ${normalizedEmail}:`, emailError.message);
                 }
             }
 
-            functions.logger.log(`[WHITELIST] Zone ${zoneId}: enrolled=${results.enrolled.length}, pending=${results.pending.length}, alreadyEnrolled=${results.alreadyEnrolled.length}, failed=${results.failed.length}`);
+            functions.logger.log(`[WHITELIST] Zone ${zoneId} for ${normalizedEmail}: enrolled=${results.enrolled}, pending=${results.pending}`);
 
             return {
                 success: true,
-                enrolled: results.enrolled.length,
-                pending: results.pending.length,
-                alreadyEnrolled: results.alreadyEnrolled.length,
-                failed: results.failed.length,
-                details: results,
+                ...results
             };
 
         } catch (error: any) {
@@ -2289,7 +2286,7 @@ export const processWhitelist = onCall(
                 message: error.message,
                 stack: error.stack,
                 zoneId: request.data?.zoneId,
-                emailsCount: request.data?.emails?.length
+                email: request.data?.email
             });
 
             if (error instanceof HttpsError) throw error;
@@ -2440,7 +2437,7 @@ export const processInvoicingQueue = onDocumentCreated(
                 }]
             };
 
-            await transporter.sendMail(mailOptions);
+            await getTransporter().sendMail(mailOptions);
 
             // 8. Update Queue Status
             await snapshot.ref.update({

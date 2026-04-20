@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.gradePdfSubmission = void 0;
+exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
@@ -44,17 +44,31 @@ const resend_1 = require("resend");
 const busboy_1 = __importDefault(require("busboy"));
 var gradeSubmission_1 = require("./ai/gradeSubmission");
 Object.defineProperty(exports, "gradePdfSubmission", { enumerable: true, get: function () { return gradeSubmission_1.gradePdfSubmission; } });
+var generateQuizDraft_1 = require("./ai/generateQuizDraft");
+Object.defineProperty(exports, "generateQuizDraft", { enumerable: true, get: function () { return generateQuizDraft_1.generateQuizDraft; } });
+var askZoneAnalytics_1 = require("./ai/askZoneAnalytics");
+Object.defineProperty(exports, "askZoneAnalytics", { enumerable: true, get: function () { return askZoneAnalytics_1.askZoneAnalytics; } });
 // const db = admin.firestore(); // Moved inside function scopes for deployment stability
-// Global transporter for billing and OTP emails
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
-});
+// Global transporter helper for billing and OTP emails
+const getTransporter = () => {
+    const host = process.env.SMTP_HOST;
+    const port = parseInt(process.env.SMTP_PORT || '587');
+    const secure = process.env.SMTP_SECURE === 'true';
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    if (!host || !user || !pass) {
+        throw new Error("SMTP configuration missing from environment.");
+    }
+    return nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth: {
+            user,
+            pass,
+        },
+    });
+};
 // --- LIVEKIT INTEGRATION ---
 exports.generateLiveToken = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"], cors: true }, async (request) => {
     try {
@@ -439,15 +453,16 @@ function extractRazorpayError(error) {
     return (error === null || error === void 0 ? void 0 : error.message) || "An unexpected Razorpay error occurred.";
 }
 exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], cors: true }, async (request) => {
+    var _a;
     try {
         const db = admin.firestore();
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "You must be signed in to create a linked account.");
         }
         const uid = request.auth.uid;
-        const { businessName, businessType, legalName, email, phone, pan } = request.data || {};
-        if (!businessName || !businessType || !legalName || !email || !phone || !pan) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing required business details: { businessName, businessType, legalName, email, phone, pan }.");
+        const { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc } = request.data || {};
+        if (!businessName || !businessType || !legalName || !email || !phone || !pan || !bankAccount || !ifsc) {
+            throw new functions.https.HttpsError("invalid-argument", "Missing required business details: { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc }.");
         }
         const keyId = process.env.RAZORPAY_KEY_ID;
         const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -463,8 +478,8 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
             throw new functions.https.HttpsError("not-found", "User profile not found.");
         }
         const userData = userDoc.data();
-        if (userData.role !== "THALA") {
-            throw new functions.https.HttpsError("permission-denied", "Unauthorized: Only users with role 'THALA' can create linked accounts.");
+        if (userData.role !== "THALA" && userData.role !== "TUTOR") {
+            throw new functions.https.HttpsError("permission-denied", "Unauthorized: Only users with role 'TUTOR' or 'THALA' can create linked accounts.");
         }
         // 2. Check for existing razorpayAccountId
         let accountId = userData.razorpayAccountId || userData.razorpay_account_id;
@@ -499,6 +514,26 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                 kyc: { pan: pan.toUpperCase() }
             };
             await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/stakeholders`, stakeholderPayload, { headers });
+            // 5. Add Product Configuration for Route (Bank Details)
+            try {
+                const productPayload = {
+                    product_name: "route",
+                    tnc_accepted: true,
+                    ip: ((_a = request.rawRequest) === null || _a === void 0 ? void 0 : _a.ip) || "127.0.0.1",
+                    settlements: {
+                        account_number: bankAccount,
+                        ifsc_code: ifsc,
+                        beneficiary_name: legalName
+                    }
+                };
+                await axios_1.default.post(`https://api.razorpay.com/v2/accounts/${accountId}/products`, productPayload, { headers });
+                functions.logger.info(`Razorpay Route Product Configured for ${accountId}`);
+            }
+            catch (productError) {
+                const msg = extractRazorpayError(productError);
+                functions.logger.error("Razorpay Product Configuration failed:", msg);
+                // Continue anyway, we can manually configure or retry if it fails
+            }
             await userRef.update({
                 kycStatus: 'PENDING',
                 kycSubmittedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -1788,23 +1823,24 @@ exports.joinZoneByInvite = (0, https_1.onCall)({ cors: true }, async (request) =
 });
 // --- SECURE WHITELIST ACCESS ---
 exports.processWhitelist = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], cors: true }, async (request) => {
-    var _a, _b, _c;
+    var _a, _b;
     try {
         const db = admin.firestore();
         // 1. Authentication check
         if (!request.auth) {
             throw new https_1.HttpsError("unauthenticated", "You must be signed in to whitelist students.");
         }
-        const { zoneId, emails } = request.data;
-        // 2. Input validation
-        if (!zoneId || typeof zoneId !== "string") {
-            throw new https_1.HttpsError("invalid-argument", "Missing or invalid zoneId.");
+        const { zoneId, email } = request.data;
+        // 1. Strict Input Validation
+        if (!zoneId || !email) {
+            throw new https_1.HttpsError("invalid-argument", "Missing zoneId or email");
         }
-        if (!emails || !Array.isArray(emails) || emails.length === 0) {
-            throw new https_1.HttpsError("invalid-argument", "Missing or empty emails array.");
+        if (typeof zoneId !== "string" || typeof email !== "string") {
+            throw new https_1.HttpsError("invalid-argument", "zoneId and email must be strings.");
         }
-        if (emails.length > 200) {
-            throw new https_1.HttpsError("invalid-argument", "Cannot process more than 200 emails at once.");
+        const normalizedEmail = email.trim().toLowerCase();
+        if (!normalizedEmail.includes("@")) {
+            throw new https_1.HttpsError("invalid-argument", "Invalid email format.");
         }
         // 3. Security check: verify caller owns this zone
         const zoneDoc = await db.collection("zones").doc(zoneId).get();
@@ -1826,115 +1862,92 @@ exports.processWhitelist = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], co
         else {
             functions.logger.warn("RESEND_API_KEY not configured — notification emails will be skipped.");
         }
-        // 5. Process each email
         const results = {
-            enrolled: [],
-            pending: [],
-            alreadyEnrolled: [],
-            failed: [],
+            enrolled: 0,
+            pending: 0,
+            alreadyEnrolled: 0
         };
-        for (const rawEmail of emails) {
-            const email = (rawEmail || "").toString().toLowerCase().trim();
-            if (!email || !email.includes("@")) {
-                results.failed.push(rawEmail);
-                continue;
+        // 2. Graceful Auth Check
+        let uid = null;
+        try {
+            const userRecord = await admin.auth().getUserByEmail(normalizedEmail);
+            uid = userRecord.uid;
+        }
+        catch (authError) {
+            functions.logger.info(`User ${normalizedEmail} not found, adding to invites.`);
+        }
+        if (uid) {
+            // User exists, enroll them directly
+            const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
+            const studentDoc = await studentRef.get();
+            if (studentDoc.exists) {
+                results.alreadyEnrolled = 1;
+                return Object.assign({ success: true }, results);
             }
+            await studentRef.set({
+                status: "active",
+                source: "whitelist",
+                joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            results.enrolled = 1;
+        }
+        else {
+            // User doesn't exist, proceed to add their email to the invites subcollection
+            const invitesRef = db.collection("zones").doc(zoneId).collection("invites").doc(normalizedEmail);
+            await invitesRef.set({
+                email: normalizedEmail,
+                addedAt: admin.firestore.FieldValue.serverTimestamp(),
+                addedBy: callerUid,
+                status: "pending"
+            });
+            results.pending = 1;
+        }
+        // Send notification email (fire-and-forget)
+        if (resend) {
             try {
-                // 5a. Resolve user via Admin SDK
-                const userRecord = await admin.auth().getUserByEmail(email);
-                const uid = userRecord.uid;
-                // 5b. Check if already enrolled
-                const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
-                const studentDoc = await studentRef.get();
-                if (studentDoc.exists) {
-                    results.alreadyEnrolled.push(email);
-                    continue;
-                }
-                // 5c. Enroll the student atomically
-                await studentRef.set({
-                    status: "active",
-                    source: "whitelist",
-                    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                await resend.emails.send({
+                    from: "Nunma <support@nunma.in>",
+                    to: normalizedEmail,
+                    subject: "You've been granted access to a new Zone on NUNMA",
+                    html: `
+                            <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: auto; padding: 40px 20px;">
+                                <div style="text-align: center; margin-bottom: 32px;">
+                                    <h1 style="color: #040457; font-size: 28px; font-weight: 900; margin: 0;">Welcome to ${zoneTitle} 🎓</h1>
+                                </div>
+                                <div style="background: #f8f9fa; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
+                                    <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
+                                        You've been granted <strong style="color: #040457;">premium access</strong> to a new Zone on Nunma.
+                                    </p>
+                                    <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
+                                        Your instructor has whitelisted you — no payment required. Jump in and start learning immediately.
+                                    </p>
+                                </div>
+                                <div style="text-align: center; margin: 32px 0;">
+                                    <a href="https://www.nunma.in/classroom/${zoneId}" 
+                                       style="display: inline-block; background: #c2f575; color: #040457; padding: 16px 40px; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; letter-spacing: 0.05em; text-transform: uppercase;">
+                                        Enter Classroom →
+                                    </a>
+                                </div>
+                                <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 32px;">
+                                    Nunma — The Trust Layer for Education
+                                </p>
+                            </div>
+                        `,
                 });
-                results.enrolled.push(email);
-                // 5d. Send notification email (fire-and-forget, don't block on failure)
-                if (resend) {
-                    try {
-                        await resend.emails.send({
-                            from: "Nunma <support@nunma.in>",
-                            to: email,
-                            subject: "You've been granted access to a new Zone on NUNMA",
-                            html: `
-                                    <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: auto; padding: 40px 20px;">
-                                        <div style="text-align: center; margin-bottom: 32px;">
-                                            <h1 style="color: #040457; font-size: 28px; font-weight: 900; margin: 0;">Welcome to ${zoneTitle} 🎓</h1>
-                                        </div>
-                                        <div style="background: #f8f9fa; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
-                                            <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
-                                                You've been granted <strong style="color: #040457;">premium access</strong> to a new Zone on Nunma.
-                                            </p>
-                                            <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
-                                                Your instructor has whitelisted you — no payment required. Jump in and start learning immediately.
-                                            </p>
-                                        </div>
-                                        <div style="text-align: center; margin: 32px 0;">
-                                            <a href="https://www.nunma.in/classroom/${zoneId}" 
-                                               style="display: inline-block; background: #c2f575; color: #040457; padding: 16px 40px; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; letter-spacing: 0.05em; text-transform: uppercase;">
-                                                Enter Classroom →
-                                            </a>
-                                        </div>
-                                        <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 32px;">
-                                            Nunma — The Trust Layer for Education
-                                        </p>
-                                    </div>
-                                `,
-                        });
-                    }
-                    catch (emailError) {
-                        functions.logger.warn(`Failed to send whitelist email to ${email}:`, emailError.message);
-                        // Don't fail the enrollment just because the email didn't send
-                    }
-                }
             }
-            catch (lookupError) {
-                if (lookupError.code === "auth/user-not-found") {
-                    // 5e. User doesn't exist yet — add to pending_whitelists
-                    try {
-                        await db.collection("zones").doc(zoneId)
-                            .collection("pending_whitelists").doc(email).set({
-                            email,
-                            addedAt: admin.firestore.FieldValue.serverTimestamp(),
-                            addedBy: callerUid,
-                        });
-                        results.pending.push(email);
-                    }
-                    catch (pendingError) {
-                        functions.logger.error(`Failed to save pending whitelist for ${email}:`, pendingError);
-                        results.failed.push(email);
-                    }
-                }
-                else {
-                    functions.logger.error(`Unexpected error processing ${email}:`, lookupError);
-                    results.failed.push(email);
-                }
+            catch (emailError) {
+                functions.logger.warn(`Failed to send whitelist email to ${normalizedEmail}:`, emailError.message);
             }
         }
-        functions.logger.log(`[WHITELIST] Zone ${zoneId}: enrolled=${results.enrolled.length}, pending=${results.pending.length}, alreadyEnrolled=${results.alreadyEnrolled.length}, failed=${results.failed.length}`);
-        return {
-            success: true,
-            enrolled: results.enrolled.length,
-            pending: results.pending.length,
-            alreadyEnrolled: results.alreadyEnrolled.length,
-            failed: results.failed.length,
-            details: results,
-        };
+        functions.logger.log(`[WHITELIST] Zone ${zoneId} for ${normalizedEmail}: enrolled=${results.enrolled}, pending=${results.pending}`);
+        return Object.assign({ success: true }, results);
     }
     catch (error) {
         functions.logger.error("CRITICAL: processWhitelist execution failed", {
             message: error.message,
             stack: error.stack,
             zoneId: (_a = request.data) === null || _a === void 0 ? void 0 : _a.zoneId,
-            emailsCount: (_c = (_b = request.data) === null || _b === void 0 ? void 0 : _b.emails) === null || _c === void 0 ? void 0 : _c.length
+            email: (_b = request.data) === null || _b === void 0 ? void 0 : _b.email
         });
         if (error instanceof https_1.HttpsError)
             throw error;
@@ -2049,7 +2062,7 @@ exports.processInvoicingQueue = (0, firestore_1.onDocumentCreated)({
                     content: pdfBuffer
                 }]
         };
-        await transporter.sendMail(mailOptions);
+        await getTransporter().sendMail(mailOptions);
         // 8. Update Queue Status
         await snapshot.ref.update({
             status: 'delivered',
