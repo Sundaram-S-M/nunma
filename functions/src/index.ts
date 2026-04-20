@@ -260,26 +260,29 @@ export const toggleStudentAudio = onCall(
 
 // --- BUNNY STREAM INTEGRATION ---
 
-export const createBunnyVideo = onCall(
+export const createBunnyUploadSignature = onCall(
     { secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true },
     async (request) => {
         try {
             const db = admin.firestore();
             if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
             
-            // Step 1: Role Check
+            // Step 1: Role Check (Only THALA allowed)
             let role = request.auth.token.role;
             if (!role) {
                 const userDoc = await db.collection("users").doc(request.auth.uid).get();
                 role = userDoc.data()?.role;
             }
 
-            if (role !== "THALA" && role !== "TUTOR") {
-                throw new functions.https.HttpsError("permission-denied", "Thala or Tutor access required.");
+            if (role !== "THALA") {
+                throw new functions.https.HttpsError("permission-denied", "Thala access required.");
             }
 
-            const { title, zoneId, videoId: existingVideoId } = request.data;
-            if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
+            const { fileName, title, zoneId, videoId: existingVideoId } = request.data;
+            const finalTitle = fileName || title || 'Untitled';
+            
+            // Note: zoneId is optional for some flows, but required if indexing in firestore
+            // if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
 
             const libraryId = process.env.BUNNY_LIBRARY_ID;
             const bunnyKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
@@ -294,7 +297,7 @@ export const createBunnyVideo = onCall(
                 try {
                     const response = await axios.post(
                         `https://video.bunnycdn.com/library/${libraryId}/videos`, 
-                        { title: title || 'Untitled' }, 
+                        { title: finalTitle }, 
                         { headers: { 'AccessKey': bunnyKey, 'Content-Type': 'application/json' } }
                     );
                     videoId = response.data.guid;
@@ -305,32 +308,33 @@ export const createBunnyVideo = onCall(
             }
             
             // Step 3: Signature Generation
-            const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
+            const expirationTime = Math.floor(Date.now() / 1000) + 86400; // 24 hours expiry
             const signature = crypto.createHash('sha256')
                 .update(String(libraryId) + String(bunnyKey) + String(expirationTime) + String(videoId))
                 .digest('hex');
 
             // Step 4: DB Write (Direct indexing under Zone subcollection)
-            const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
-            await videoRef.set({
-                bunnyVideoId: videoId,
-                status: 'uploading',
-                title: title || 'Untitled Video',
-                tutorId: request.auth.uid,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                zoneId
-            }, { merge: true }); // Use merge to avoid overwriting existing metadata during resume
+            if (zoneId) {
+                const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
+                await videoRef.set({
+                    bunnyVideoId: videoId,
+                    status: 'uploading',
+                    title: finalTitle,
+                    tutorId: request.auth.uid,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    zoneId
+                }, { merge: true }); // Use merge to avoid overwriting existing metadata during resume
+            }
 
             return { 
                 videoId, 
                 signature, 
-                expirationTime, 
-                libraryId,
-                uploadUrl: 'https://video.bunnycdn.com/tusupload'
+                expireTime: expirationTime,
+                libraryId
             };
         } catch (error: any) {
             if (error instanceof functions.https.HttpsError) throw error;
-            functions.logger.error("Global crash in createBunnyVideo:", error);
+            functions.logger.error("Global crash in createBunnyUploadSignature:", error);
             throw new functions.https.HttpsError("internal", error.message || "Failed to initiate video upload.");
         }
     }

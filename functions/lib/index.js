@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyVideo = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
+exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
@@ -235,24 +235,25 @@ exports.toggleStudentAudio = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", 
     }
 });
 // --- BUNNY STREAM INTEGRATION ---
-exports.createBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true }, async (request) => {
+exports.createBunnyUploadSignature = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true }, async (request) => {
     var _a, _b, _c, _d;
     try {
         const db = admin.firestore();
         if (!request.auth)
             throw new functions.https.HttpsError("unauthenticated", "Login required.");
-        // Step 1: Role Check
+        // Step 1: Role Check (Only THALA allowed)
         let role = request.auth.token.role;
         if (!role) {
             const userDoc = await db.collection("users").doc(request.auth.uid).get();
             role = (_a = userDoc.data()) === null || _a === void 0 ? void 0 : _a.role;
         }
-        if (role !== "THALA" && role !== "TUTOR") {
-            throw new functions.https.HttpsError("permission-denied", "Thala or Tutor access required.");
+        if (role !== "THALA") {
+            throw new functions.https.HttpsError("permission-denied", "Thala access required.");
         }
-        const { title, zoneId, videoId: existingVideoId } = request.data;
-        if (!zoneId)
-            throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
+        const { fileName, title, zoneId, videoId: existingVideoId } = request.data;
+        const finalTitle = fileName || title || 'Untitled';
+        // Note: zoneId is optional for some flows, but required if indexing in firestore
+        // if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
         const libraryId = process.env.BUNNY_LIBRARY_ID;
         const bunnyKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
         if (!libraryId || !bunnyKey) {
@@ -262,7 +263,7 @@ exports.createBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUN
         let videoId = existingVideoId;
         if (!videoId) {
             try {
-                const response = await axios_1.default.post(`https://video.bunnycdn.com/library/${libraryId}/videos`, { title: title || 'Untitled' }, { headers: { 'AccessKey': bunnyKey, 'Content-Type': 'application/json' } });
+                const response = await axios_1.default.post(`https://video.bunnycdn.com/library/${libraryId}/videos`, { title: finalTitle }, { headers: { 'AccessKey': bunnyKey, 'Content-Type': 'application/json' } });
                 videoId = response.data.guid;
             }
             catch (apiError) {
@@ -271,32 +272,33 @@ exports.createBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUN
             }
         }
         // Step 3: Signature Generation
-        const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
+        const expirationTime = Math.floor(Date.now() / 1000) + 86400; // 24 hours expiry
         const signature = crypto.createHash('sha256')
             .update(String(libraryId) + String(bunnyKey) + String(expirationTime) + String(videoId))
             .digest('hex');
         // Step 4: DB Write (Direct indexing under Zone subcollection)
-        const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
-        await videoRef.set({
-            bunnyVideoId: videoId,
-            status: 'uploading',
-            title: title || 'Untitled Video',
-            tutorId: request.auth.uid,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            zoneId
-        }, { merge: true }); // Use merge to avoid overwriting existing metadata during resume
+        if (zoneId) {
+            const videoRef = db.doc(`zones/${zoneId}/videos/${videoId}`);
+            await videoRef.set({
+                bunnyVideoId: videoId,
+                status: 'uploading',
+                title: finalTitle,
+                tutorId: request.auth.uid,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                zoneId
+            }, { merge: true }); // Use merge to avoid overwriting existing metadata during resume
+        }
         return {
             videoId,
             signature,
-            expirationTime,
-            libraryId,
-            uploadUrl: 'https://video.bunnycdn.com/tusupload'
+            expireTime: expirationTime,
+            libraryId
         };
     }
     catch (error) {
         if (error instanceof functions.https.HttpsError)
             throw error;
-        functions.logger.error("Global crash in createBunnyVideo:", error);
+        functions.logger.error("Global crash in createBunnyUploadSignature:", error);
         throw new functions.https.HttpsError("internal", error.message || "Failed to initiate video upload.");
     }
 });

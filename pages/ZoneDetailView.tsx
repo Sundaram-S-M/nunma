@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
+import { useAuth } from '../context/AuthContext';
 
 interface ZoneData {
   id: string;
@@ -82,6 +83,8 @@ const ZoneDetailView: React.FC = () => {
   const [activeTab, setActiveTab] = useState('About');
   const [expandedModules, setExpandedModules] = useState<number[]>([]);
 
+  const { user, isAuthenticated } = useAuth();
+
   useEffect(() => {
     const fetchZone = async () => {
       if (!zoneId) return;
@@ -101,6 +104,23 @@ const ZoneDetailView: React.FC = () => {
 
     fetchZone();
   }, [zoneId]);
+
+  // Smart Redirect: If user is enrolled, send them to the classroom
+  useEffect(() => {
+    const checkEnrollment = async () => {
+      if (isAuthenticated && user && zoneId) {
+        try {
+          const enrollDoc = await getDoc(doc(db, 'zones', zoneId, 'students', user.uid));
+          if (enrollDoc.exists()) {
+            navigate(`/classroom/zone/${zoneId}`);
+          }
+        } catch (err) {
+          console.error("Error checking enrollment for redirect:", err);
+        }
+      }
+    };
+    checkEnrollment();
+  }, [isAuthenticated, user, zoneId, navigate]);
 
   const toggleModule = (index: number) => {
     setExpandedModules(prev => 

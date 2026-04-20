@@ -88,13 +88,12 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
             setIsPaused(false);
             setErrorMessage('');
 
-            // Task 3: The "Start Fresh" Path
-            // Call the createBunnyVideo Cloud Function to generate a new VideoId and Signature.
-            const getSignatureNode = httpsCallable(functions, 'createBunnyVideo');
-            const result = await getSignatureNode({ title, zoneId });
+            // Call the secure createBunnyUploadSignature Cloud Function to generate a new VideoId and Signature.
+            const getSignatureNode = httpsCallable(functions, 'createBunnyUploadSignature');
+            const result = await getSignatureNode({ fileName: file.name, title, zoneId });
             const data = result.data as any;
             
-            const { videoId, signature, expirationTime, libraryId } = data;
+            const { videoId, signature, expireTime, libraryId } = data;
             setCurrentVideoId(videoId);
 
             // Inject these credentials into the instance
@@ -105,7 +104,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                 removeFingerprintOnSuccess: true,
                 headers: {
                     AuthorizationSignature: signature,
-                    AuthorizationExpire: expirationTime.toString(),
+                    AuthorizationExpire: expireTime.toString(),
                     VideoId: videoId,
                     LibraryId: libraryId.toString(),
                 },
@@ -117,7 +116,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     VideoId: videoId,
                     LibraryId: libraryId.toString(),
                     AuthorizationSignature: signature,
-                    AuthorizationExpire: expirationTime.toString(),
+                    AuthorizationExpire: expireTime.toString(),
                 },
                 onError: (error) => {
                     console.error('TUS Upload Failed:', error);
@@ -184,11 +183,11 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
             if (!oldVideoId) throw new Error("Could not find VideoId in previous upload metadata.");
 
             // Call Cloud Function to generate a fresh signature for that existing old VideoId.
-            const getSignatureNode = httpsCallable(functions, 'createBunnyVideo');
-            const result = await getSignatureNode({ title, zoneId, videoId: oldVideoId });
+            const getSignatureNode = httpsCallable(functions, 'createBunnyUploadSignature');
+            const result = await getSignatureNode({ fileName: file.name, title, zoneId, videoId: oldVideoId });
             const data = result.data as any;
 
-            const { videoId, signature, expirationTime, libraryId } = data;
+            const { videoId, signature, expireTime, libraryId } = data;
 
             // Inject the refreshed credentials into the headers
             const upload = new tus.Upload(file, {
@@ -198,7 +197,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                 removeFingerprintOnSuccess: true,
                 headers: {
                     AuthorizationSignature: signature,
-                    AuthorizationExpire: expirationTime.toString(),
+                    AuthorizationExpire: expireTime.toString(),
                     VideoId: videoId,
                     LibraryId: libraryId.toString(),
                 },
@@ -209,7 +208,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     VideoId: videoId,
                     LibraryId: libraryId.toString(),
                     AuthorizationSignature: signature,
-                    AuthorizationExpire: expirationTime.toString(),
+                    AuthorizationExpire: expireTime.toString(),
                 },
                 onError: (error) => {
                     console.error('TUS Resume Failed:', error);

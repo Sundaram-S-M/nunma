@@ -427,27 +427,11 @@ const ZoneManagement: React.FC = () => {
     setActiveChapterForUpload(null); 
   }, []);
 
-  const handleOpenShareModal = async () => {
+  const handleSharePublicLink = () => {
     if (!zoneId) return;
-    try {
-      // Fetch existing active invite
-      const invitesRef = collection(db, 'zones', zoneId, 'invites');
-      const q = query(invitesRef, where('isActive', '==', true), limit(1));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        const docSnap = querySnapshot.docs[0];
-        const data = docSnap.data();
-        setActiveInvite({ inviteToken: docSnap.id, expiresAt: data.expiresAt });
-      } else {
-        // Auto-generate if none exists
-        await handleGenerateInvite();
-      }
-      setShowShareModal(true);
-    } catch (err) {
-      console.error('Error fetching invite:', err);
-      toast.error('Failed to prepare sharing link');
-    }
+    const link = `https://nunma.in/zone/${zoneId}`;
+    navigator.clipboard.writeText(link);
+    toast.success("Public Zone Link copied to clipboard!");
   };
 
   const handleGenerateInvite = async () => {
@@ -2350,7 +2334,7 @@ const ZoneManagement: React.FC = () => {
             <button onClick={() => navigate(`/workplace/analytics/${zoneId}`)} className="px-10 py-5 bg-white border border-gray-100 text-[#040457] rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:shadow-2xl transition-all shadow-sm active:scale-95">
               <BarChart3 size={20} /> Analytics
             </button>
-            <button onClick={handleOpenShareModal} className="px-6 py-5 bg-[#c2f575] text-[#040457] rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-xl">
+            <button onClick={handleSharePublicLink} className="px-6 py-5 bg-[#c2f575] text-[#040457] rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-xl">
               <Share2 size={20} />
             </button>
 
