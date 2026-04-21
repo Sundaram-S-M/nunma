@@ -36,6 +36,7 @@ import { useAuth } from '../context/AuthContext';
 
 const Classroom: React.FC = () => {
    const navigate = useNavigate();
+   const [error, setError] = useState<string | null>(null);
    const [enrolledZones, setEnrolledZones] = useState<any[]>([]);
    const [liveSessions, setLiveSessions] = useState<any[]>([]);
    const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
@@ -135,6 +136,14 @@ const Classroom: React.FC = () => {
                const others = prev.filter(s => s.zoneId !== zId);
                return [...others, ...sessions];
             });
+         },
+         (error) => {
+            console.error('Firestore error:', error.code, error.message);
+            if (error.code === 'permission-denied') {
+               setError('You do not have permission to view this content.');
+            } else {
+               setError('Failed to connect to the server.');
+            }
          });
          unsubs.push(unLive);
 
@@ -146,6 +155,14 @@ const Classroom: React.FC = () => {
                const others = prev.filter(s => s.zoneId !== zId);
                return [...others, ...sessions].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
             });
+         },
+         (error) => {
+            console.error('Firestore error:', error.code, error.message);
+            if (error.code === 'permission-denied') {
+               setError('You do not have permission to view this content.');
+            } else {
+               setError('Failed to connect to the server.');
+            }
          });
          unsubs.push(unSched);
       });
@@ -203,6 +220,52 @@ const Classroom: React.FC = () => {
 
    const topStudents = followedStudents.slice(0, 5);
 
+
+   if (error) {
+     return (
+       <div style={{
+         display: 'flex',
+         flexDirection: 'column',
+         alignItems: 'center',
+         justifyContent: 'center',
+         minHeight: '100vh',
+         textAlign: 'center',
+         padding: '2rem',
+         fontFamily: 'inherit'
+       }}>
+         <h2 style={{
+           fontSize: '1.25rem',
+           fontWeight: '500',
+           marginBottom: '0.5rem',
+           color: 'var(--nunma-navy)'
+         }}>
+           {error}
+         </h2>
+         <p style={{
+           margin: '1rem 0',
+           color: 'var(--nunma-gray, #666)',
+           fontSize: '0.9rem'
+         }}>
+           Please refresh the page or go back to Dashboard.
+         </p>
+         <button
+           onClick={() => window.location.href = '/dashboard'}
+           style={{
+             marginTop: '1rem',
+             padding: '0.75rem 2rem',
+             background: 'var(--nunma-navy)',
+             color: 'var(--nunma-white)',
+             border: 'none',
+             borderRadius: '8px',
+             fontSize: '1rem',
+             cursor: 'pointer'
+           }}
+         >
+           Go to Dashboard
+         </button>
+       </div>
+     );
+   }
 
    return (
       <div className="space-y-12 max-w-[1600px] mx-auto animate-in fade-in duration-700 pb-20 pr-10">

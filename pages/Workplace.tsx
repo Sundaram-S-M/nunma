@@ -42,6 +42,7 @@ import { UserRole } from '../types';
 
 const Workplace: React.FC = () => {
   const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'zones' | 'products' | 'students' | 'payments'>('zones');
   const [productSubTab, setProductSubTab] = useState<'material' | 'service' | 'mentorship'>('material');
   const [showProductModal, setShowProductModal] = useState(false);
@@ -122,12 +123,28 @@ const Workplace: React.FC = () => {
     const qZones = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
     const unsubscribeZones = onSnapshot(qZones, (snapshot) => {
       setZonesList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    },
+    (error) => {
+      console.error('Firestore error:', error.code, error.message);
+      if (error.code === 'permission-denied') {
+        setError('You do not have permission to view this content.');
+      } else {
+        setError('Failed to connect to the server.');
+      }
     });
 
     // 2. Products
     const qProducts = query(collection(db, 'products'), where('tutorId', '==', user.uid));
     const unsubscribeProducts = onSnapshot(qProducts, (snapshot) => {
       setProductsList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    },
+    (error) => {
+      console.error('Firestore error:', error.code, error.message);
+      if (error.code === 'permission-denied') {
+        setError('You do not have permission to view this content.');
+      } else {
+        setError('Failed to connect to the server.');
+      }
     });
 
     // 3. Live Sessions (Across all my zones)
@@ -157,6 +174,14 @@ const Workplace: React.FC = () => {
           const otherSessions = prev.filter(s => s.zoneId !== zone.id);
           return [...otherSessions, ...sessions];
         });
+      },
+      (error) => {
+        console.error('Firestore error:', error.code, error.message);
+        if (error.code === 'permission-denied') {
+          setError('You do not have permission to view this content.');
+        } else {
+          setError('Failed to connect to the server.');
+        }
       });
       unsubs.push(unS);
 
@@ -168,6 +193,14 @@ const Workplace: React.FC = () => {
           const otherStudents = prev.filter(s => s.zoneId !== zone.id);
           return [...otherStudents, ...students];
         });
+      },
+      (error) => {
+        console.error('Firestore error:', error.code, error.message);
+        if (error.code === 'permission-denied') {
+          setError('You do not have permission to view this content.');
+        } else {
+          setError('Failed to connect to the server.');
+        }
       });
       unsubs.push(unSt);
     });
@@ -264,6 +297,52 @@ const Workplace: React.FC = () => {
   };
 
   const upcomingLive = liveSessions.filter(s => s.status === 'scheduled' || s.status === 'live');
+
+  if (error) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        textAlign: 'center',
+        padding: '2rem',
+        fontFamily: 'inherit'
+      }}>
+        <h2 style={{
+          fontSize: '1.25rem',
+          fontWeight: '500',
+          marginBottom: '0.5rem',
+          color: 'var(--nunma-navy)'
+        }}>
+          {error}
+        </h2>
+        <p style={{
+          margin: '1rem 0',
+          color: 'var(--nunma-gray, #666)',
+          fontSize: '0.9rem'
+        }}>
+          Please refresh the page or go back to Dashboard.
+        </p>
+        <button
+          onClick={() => window.location.href = '/dashboard'}
+          style={{
+            marginTop: '1rem',
+            padding: '0.75rem 2rem',
+            background: 'var(--nunma-navy)',
+            color: 'var(--nunma-white)',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '1rem',
+            cursor: 'pointer'
+          }}
+        >
+          Go to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-20 overflow-x-hidden">

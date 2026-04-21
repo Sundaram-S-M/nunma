@@ -26,34 +26,36 @@ service cloud.firestore {
 
     // --- ZONES Collection ---
     match /zones/{zoneId} {
-      // Zone read is public for authenticated users to support explore/dashboard
-      allow read: if isSignedIn();
-      
-      // Allow creation for authenticated users
-      allow create: if isSignedIn();
-      
-      // Only creators can update metadata, and pricing fields are immutable
-      allow update: if isSignedIn() && (
-        resource.data.tutorId == request.auth.uid || 
-        resource.data.createdBy == request.auth.uid
-      ) && (
-        request.resource.data.get('price', null) == resource.data.get('price', null) &&
-        request.resource.data.get('priceINR', null) == resource.data.get('priceINR', null) &&
-        request.resource.data.get('currency', null) == resource.data.get('currency', null)
+      allow read: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid ||
+        exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid))
       );
-
-      allow delete: if isSignedIn() && (
-        resource.data.tutorId == request.auth.uid || 
-        resource.data.createdBy == request.auth.uid
-      );
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && 
+        resource.data.createdBy == request.auth.uid;
     }
 
     // --- ZONES SUB-COLLECTIONS (Hardened Paths) ---
 
     // ZONES/STUDENTS
     match /zones/{zoneId}/students/{studentId} {
-      allow read: if isSignedIn() && (request.auth.uid == studentId || isZoneCreator(zoneId));
-      allow write: if false; // Managed by Cloud Functions
+      allow read: if request.auth != null && (
+        studentId == request.auth.uid ||
+        get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy 
+          == request.auth.uid
+      );
+      allow write: if false;
+    }
+
+    match /zones/{zoneId}/segments/{segmentId} {
+      allow read: if request.auth != null && (
+        get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy 
+          == request.auth.uid ||
+        exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid))
+      );
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy 
+          == request.auth.uid;
     }
 
     // ZONES/CHAPTERS (Priority Fix)
