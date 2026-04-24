@@ -47,6 +47,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
   const [stats, setStats] = useState<any[]>([]);
   const [myZones, setMyZones] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [sessionsMap, setSessionsMap] = useState<Record<string, any[]>>({});
 
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
@@ -148,6 +149,8 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
       } catch (e) {
         console.error("Error fetching my zones:", e);
+        setMyZones([]);
+        setError('Unable to load zones at this time.');
       }
     };
     fetchZones();

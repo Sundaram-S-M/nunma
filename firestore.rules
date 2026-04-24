@@ -25,14 +25,11 @@ service cloud.firestore {
     }
 
     // --- ZONES Collection ---
+    // Zones — authenticated users can read zone metadata (for Discovery/Explore)
     match /zones/{zoneId} {
-      allow read: if request.auth != null && (
-        resource.data.createdBy == request.auth.uid ||
-        exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid))
-      );
+      allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && 
-        resource.data.createdBy == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
     }
 
     // --- ZONES SUB-COLLECTIONS (Hardened Paths) ---

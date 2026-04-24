@@ -18,6 +18,7 @@ interface DiscoveryZone {
 const DiscoveryGrid: React.FC = () => {
   const [zones, setZones] = useState<DiscoveryZone[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -39,6 +40,8 @@ const DiscoveryGrid: React.FC = () => {
         setZones(fetchedZones);
       } catch (error) {
         console.error('Error fetching discovery zones:', error);
+        setZones([]);
+        setError('Unable to load zones at this time.');
       } finally {
         setLoading(false);
       }
