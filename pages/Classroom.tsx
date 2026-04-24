@@ -58,62 +58,94 @@ const Classroom: React.FC = () => {
 
       // 1. Fetch Enrollments & Progress
       const fetchEnrollments = async () => {
-         const snap = await getDocs(collection(db, `users/${user.uid}/enrollments`));
-         const ids = snap.docs.map(d => d.data().zoneId);
-         setEnrollmentIds(ids);
+         try {
+            const snap = await getDocs(collection(db, `users/${user.uid}/enrollments`));
+            const ids = snap.docs.map(d => d.data().zoneId);
+            setEnrollmentIds(ids);
 
-         const zonesData: any[] = [];
-         const tutorsData: any[] = [];
+            const zonesData: any[] = [];
+            const tutorsData: any[] = [];
 
-         for (const id of ids) {
-            const zDoc = await getDoc(doc(db, 'zones', id));
-            if (zDoc.exists()) {
-               const zone = { id: zDoc.id, ...zDoc.data() };
+            for (const id of ids) {
+               try {
+                  const zDoc = await getDoc(doc(db, 'zones', id));
+                  if (zDoc.exists()) {
+                     const zone = { id: zDoc.id, ...zDoc.data() };
 
-               // Fetch Progress
-               // 1. Get total segments
-               const chaptersSnap = await getDocs(collection(db, 'zones', id, 'chapters'));
-               let totalSegments = 0;
-               chaptersSnap.forEach(chap => {
-                  totalSegments += (chap.data().segments || []).length;
-               });
+                     // Fetch Progress
+                     let totalSegments = 0;
+                     try {
+                        const chaptersSnap = await getDocs(collection(db, 'zones', id, 'chapters'));
+                        chaptersSnap.forEach(chap => {
+                           totalSegments += (chap.data().segments || []).length;
+                        });
+                     } catch (error) {
+                        console.error('Error fetching chapters:', error);
+                     }
 
-               // 2. Get student progress
-               const studentSnap = await getDoc(doc(db, 'zones', id, 'students', user.uid));
-               const studentData = studentSnap.exists() ? studentSnap.data() : { completedSegments: [], engagementScore: 0 };
+                     // 2. Get student progress
+                     let studentData: any = { completedSegments: [], engagementScore: 0 };
+                     try {
+                        const studentSnap = await getDoc(doc(db, 'zones', id, 'students', user.uid));
+                        if (studentSnap.exists()) {
+                           studentData = studentSnap.data();
+                        }
+                     } catch (error) {
+                        console.error('Error fetching student progress:', error);
+                     }
 
-               const completedCount = (studentData.completedSegments || []).length;
-               const progressPercent = totalSegments > 0 ? Math.round((completedCount / totalSegments) * 100) : 0;
+                     const completedCount = (studentData.completedSegments || []).length;
+                     const progressPercent = totalSegments > 0 ? Math.round((completedCount / totalSegments) * 100) : 0;
 
-               zonesData.push({
-                  ...zone,
-                  progress: progressPercent,
-                  completedCount,
-                  totalSegments,
-                  engagementScore: studentData.engagementScore || 0
-               });
+                     zonesData.push({
+                        ...zone,
+                        progress: progressPercent,
+                        completedCount,
+                        totalSegments,
+                        engagementScore: studentData.engagementScore || 0
+                     });
 
-               // Collect Tutor Info
-               if ((zone as any).tutorId || (zone as any).createdBy) {
-                  const tId = (zone as any).tutorId || (zone as any).createdBy;
-                  if (!tutorsData.find(t => t.uid === tId)) {
-                     const tDoc = await getDoc(doc(db, 'users', tId));
-                     if (tDoc.exists()) {
-                        tutorsData.push({ uid: tId, ...tDoc.data() });
+                     // Collect Tutor Info
+                     if ((zone as any).tutorId || (zone as any).createdBy) {
+                        const tId = (zone as any).tutorId || (zone as any).createdBy;
+                        if (!tutorsData.find(t => t.uid === tId)) {
+                           try {
+                              const tDoc = await getDoc(doc(db, 'users', tId));
+                              if (tDoc.exists()) {
+                                 tutorsData.push({ uid: tId, ...tDoc.data() });
+                              } else {
+                                 tutorsData.push({ uid: tId, name: 'Unknown Tutor' });
+                              }
+                           } catch (error) {
+                              console.error('Error fetching tutor:', error);
+                              tutorsData.push({ uid: tId, name: 'Unknown Tutor' });
+                           }
+                        }
                      }
                   }
+               } catch (error) {
+                  console.error('Error fetching zone details:', error);
                }
             }
+            setEnrolledZones(zonesData);
+            setFollowedTutors(tutorsData);
+         } catch (error) {
+            console.error('Error fetching enrollments:', error);
+            setEnrolledZones([]);
+            setFollowedTutors([]);
          }
-         setEnrolledZones(zonesData);
-         setFollowedTutors(tutorsData);
       };
 
       // 2. Fetch Certificates
       const fetchCertificates = async () => {
-         const q = query(collection(db, 'issued_certificates'), where('studentId', '==', user.uid));
-         const snap = await getDocs(q);
-         setCertificates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+         try {
+            const q = query(collection(db, 'issued_certificates'), where('studentId', '==', user.uid));
+            const snap = await getDocs(q);
+            setCertificates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+         } catch (error) {
+            console.error('Error fetching certificates:', error);
+            setCertificates([]);
+         }
       };
 
       fetchEnrollments();
@@ -139,6 +171,7 @@ const Classroom: React.FC = () => {
          },
          (error) => {
             console.error('Firestore error:', error.code, error.message);
+            setLiveSessions([]);
             if (error.code === 'permission-denied') {
                setError('You do not have permission to view this content.');
             } else {
@@ -158,6 +191,7 @@ const Classroom: React.FC = () => {
          },
          (error) => {
             console.error('Firestore error:', error.code, error.message);
+            setUpcomingSessions([]);
             if (error.code === 'permission-denied') {
                setError('You do not have permission to view this content.');
             } else {
@@ -177,42 +211,61 @@ const Classroom: React.FC = () => {
       if (!user) return;
 
       const fetchLeaderboard = async () => {
-         // 1. Fetch Followings
-         const followSnap = await getDocs(query(collection(db, 'followers'), where('followerId', '==', user.uid)));
-         const followingIds = followSnap.docs.map(d => d.data().followingId);
+         try {
+            // 1. Fetch Followings
+            const followSnap = await getDocs(query(collection(db, 'followers'), where('followerId', '==', user.uid)));
+            const followingIds = followSnap.docs.map(d => d.data().followingId);
 
-         const students: any[] = [];
+            const students: any[] = [];
 
-         // Include me
-         const meDoc = await getDoc(doc(db, 'users', user.uid));
-         if (meDoc.exists()) {
-            students.push({ uid: user.uid, ...meDoc.data(), isMe: true });
-         }
-
-         for (const fId of followingIds) {
-            const fDoc = await getDoc(doc(db, 'users', fId));
-            if (fDoc.exists()) {
-               students.push({ uid: fId, ...fDoc.data() });
+            // Include me
+            try {
+               const meDoc = await getDoc(doc(db, 'users', user.uid));
+               if (meDoc.exists()) {
+                  students.push({ uid: user.uid, ...meDoc.data(), isMe: true });
+               } else {
+                  students.push({ uid: user.uid, name: 'Unknown User', isMe: true });
+               }
+            } catch (error) {
+               console.error('Error fetching my user data:', error);
+               students.push({ uid: user.uid, name: 'Unknown User', isMe: true });
             }
+
+            for (const fId of followingIds) {
+               try {
+                  const fDoc = await getDoc(doc(db, 'users', fId));
+                  if (fDoc.exists()) {
+                     students.push({ uid: fId, ...fDoc.data() });
+                  } else {
+                     students.push({ uid: fId, name: 'Unknown User' });
+                  }
+               } catch (error) {
+                  console.error('Error fetching followed user:', error);
+                  students.push({ uid: fId, name: 'Unknown User' });
+               }
+            }
+
+            // For each student, we need to calculate XP. 
+            // Since it's per zone, and summing all zones is expensive, 
+            // we'll use 'engagementScore' from their profile if it exists, 
+            // or sum it from their enrollments (which might be many).
+            // For now, let's use a default/mock XP if not present in user doc, 
+            // but the user wants "real". 
+            // I'll check if 'engagementScore' is in the 'users' doc.
+
+            const studentsWithXP = students.map(s => ({
+               ...s,
+               xp: s.engagementScore || 0, // Fallback to 0
+               name: s.name || 'Anonymous',
+               avatar: s.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.uid}`
+            })).sort((a, b) => b.xp - a.xp)
+               .map((s, idx) => ({ ...s, rank: idx + 1 }));
+
+            setFollowedStudents(studentsWithXP);
+         } catch (error) {
+            console.error('Error fetching leaderboard:', error);
+            setFollowedStudents([]);
          }
-
-         // For each student, we need to calculate XP. 
-         // Since it's per zone, and summing all zones is expensive, 
-         // we'll use 'engagementScore' from their profile if it exists, 
-         // or sum it from their enrollments (which might be many).
-         // For now, let's use a default/mock XP if not present in user doc, 
-         // but the user wants "real". 
-         // I'll check if 'engagementScore' is in the 'users' doc.
-
-         const studentsWithXP = students.map(s => ({
-            ...s,
-            xp: s.engagementScore || 0, // Fallback to 0
-            name: s.name || 'Anonymous',
-            avatar: s.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.uid}`
-         })).sort((a, b) => b.xp - a.xp)
-            .map((s, idx) => ({ ...s, rank: idx + 1 }));
-
-         setFollowedStudents(studentsWithXP);
       };
 
       fetchLeaderboard();

@@ -139,8 +139,9 @@ service cloud.firestore {
         && (request.method == 'delete' ? resource.data.tutorId == request.auth.uid : request.resource.data.tutorId == request.auth.uid);
     }
     // --- USERS Collection ---
+    // Users — authenticated users can read profiles (needed to display tutor/student names)
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
   }

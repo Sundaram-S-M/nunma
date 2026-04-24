@@ -652,45 +652,63 @@ const ProfileView: React.FC = () => {
     // 1. Availability
     setAvailability(userData.availability || []);
 
-    // 2. Zones (Created by this user)
-    const qZones = query(collection(db, 'zones'), where('tutorId', '==', uid));
-    const zSnap = await getDocs(qZones);
-    const zonesData = zSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    setZones(zonesData);
-
-    // Fetch student count from each zone's students collection (Safely handled)
-    let studentsCount = 0;
     try {
-      for (const zone of zonesData) {
-        const coll = collection(db, 'zones', zone.id, 'students');
-        const snapshot = await getCountFromServer(coll);
-        studentsCount += snapshot.data().count;
+      // 2. Zones (Created by this user)
+      const qZones = query(collection(db, 'zones'), where('tutorId', '==', uid));
+      const zSnap = await getDocs(qZones);
+      const zonesData = zSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setZones(zonesData);
+
+      // Fetch student count from each zone's students collection (Safely handled)
+      let studentsCount = 0;
+      try {
+        for (const zone of zonesData) {
+          const coll = collection(db, 'zones', zone.id, 'students');
+          const snapshot = await getCountFromServer(coll);
+          studentsCount += snapshot.data().count;
+        }
+      } catch (err) {
+        // Silently catch permission denied errors for unauthorized viewers
+        console.warn("Student count aggregation suppressed due to permissions.");
+        studentsCount = 0;
       }
-    } catch (err) {
-      // Silently catch permission denied errors for unauthorized viewers
-      console.warn("Student count aggregation suppressed due to permissions.");
-      studentsCount = 0;
+      setTutorStudentsCount(studentsCount);
+    } catch (error) {
+      console.error('Error fetching zones:', error);
+      setZones([]);
     }
-    setTutorStudentsCount(studentsCount);
 
-    // Fetch accurate followers count
-    const followersColl = collection(db, 'followers');
-    const followersQuery = query(followersColl, where('followingId', '==', uid));
-    const followersSnap = await getCountFromServer(followersQuery);
-    const actualFollowersCount = followersSnap.data().count;
+    try {
+      // Fetch accurate followers count
+      const followersColl = collection(db, 'followers');
+      const followersQuery = query(followersColl, where('followingId', '==', uid));
+      const followersSnap = await getCountFromServer(followersQuery);
+      const actualFollowersCount = followersSnap.data().count;
+      setProfileUser((prev: any) => prev ? { ...prev, followersCount: actualFollowersCount } : null);
+    } catch (error) {
+      console.error('Error fetching followers count:', error);
+    }
 
-    setProfileUser((prev: any) => prev ? { ...prev, followersCount: actualFollowersCount } : null);
+    try {
+      // 3. Products
+      const qProds = query(collection(db, 'products'), where('tutorId', '==', uid));
+      const pSnap = await getDocs(qProds);
+      setProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setProducts([]);
+    }
 
-    // 3. Products
-    const qProds = query(collection(db, 'products'), where('tutorId', '==', uid));
-    const pSnap = await getDocs(qProds);
-    setProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-
-    // 4. Enrollments (if looking at own profile)
-    if (uid === currentUser?.uid) {
-      const qEnroll = collection(db, `users/${uid}/enrollments`);
-      const eSnap = await getDocs(qEnroll);
-      setEnrolledIds(eSnap.docs.map(d => d.data().zoneId));
+    try {
+      // 4. Enrollments (if looking at own profile)
+      if (uid === currentUser?.uid) {
+        const qEnroll = collection(db, `users/${uid}/enrollments`);
+        const eSnap = await getDocs(qEnroll);
+        setEnrolledIds(eSnap.docs.map(d => d.data().zoneId));
+      }
+    } catch (error) {
+      console.error('Error fetching enrollments:', error);
+      setEnrolledIds([]);
     }
   };
 

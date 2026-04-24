@@ -126,6 +126,7 @@ const Workplace: React.FC = () => {
     },
     (error) => {
       console.error('Firestore error:', error.code, error.message);
+      setZonesList([]);
       if (error.code === 'permission-denied') {
         setError('You do not have permission to view this content.');
       } else {
@@ -140,6 +141,7 @@ const Workplace: React.FC = () => {
     },
     (error) => {
       console.error('Firestore error:', error.code, error.message);
+      setProductsList([]);
       if (error.code === 'permission-denied') {
         setError('You do not have permission to view this content.');
       } else {
@@ -177,6 +179,7 @@ const Workplace: React.FC = () => {
       },
       (error) => {
         console.error('Firestore error:', error.code, error.message);
+        setLiveSessions([]);
         if (error.code === 'permission-denied') {
           setError('You do not have permission to view this content.');
         } else {
@@ -196,6 +199,7 @@ const Workplace: React.FC = () => {
       },
       (error) => {
         console.error('Firestore error:', error.code, error.message);
+        setAllStudents([]);
         if (error.code === 'permission-denied') {
           setError('You do not have permission to view this content.');
         } else {

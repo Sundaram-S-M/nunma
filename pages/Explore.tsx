@@ -40,6 +40,7 @@ const Explore: React.FC = () => {
         setLoading(false);
       }, (error) => {
         console.error("Firestore error:", error);
+        setZones([]);
         setLoading(false);
       });
     } else {
@@ -82,28 +83,35 @@ const Explore: React.FC = () => {
     if (!db || zones.length === 0) return;
 
     const fetchTutors = async () => {
-      const uniqueTutors = [...new Set(zones.map(z => z.tutorId))];
-      const newTutorData: Record<string, { name: string, photoURL?: string }> = {};
+      try {
+        const uniqueTutors = [...new Set(zones.map(z => z.tutorId))];
+        const newTutorData: Record<string, { name: string, photoURL?: string }> = {};
 
-      await Promise.all(uniqueTutors.map(async (tutorId) => {
-        if (!tutorId || tutorData[tutorId]) return;
+        await Promise.all(uniqueTutors.map(async (tutorId) => {
+          if (!tutorId || tutorData[tutorId]) return;
 
-        try {
-          const userDoc = await getDoc(doc(db, 'users', tutorId));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            newTutorData[tutorId] = {
-              name: data.name,
-              photoURL: data.photoURL || data.avatar || data.image || ''
-            };
+          try {
+            const userDoc = await getDoc(doc(db, 'users', tutorId));
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              newTutorData[tutorId] = {
+                name: data.name,
+                photoURL: data.photoURL || data.avatar || data.image || ''
+              };
+            } else {
+              newTutorData[tutorId] = { name: 'Unknown Tutor' };
+            }
+          } catch (error) {
+            console.error("Error fetching tutor:", tutorId, error);
+            newTutorData[tutorId] = { name: 'Unknown Tutor' };
           }
-        } catch (error) {
-          console.error("Error fetching tutor:", tutorId, error);
-        }
-      }));
+        }));
 
-      if (Object.keys(newTutorData).length > 0) {
-        setTutorData(prev => ({ ...prev, ...newTutorData }));
+        if (Object.keys(newTutorData).length > 0) {
+          setTutorData(prev => ({ ...prev, ...newTutorData }));
+        }
+      } catch (error) {
+        console.error("Error in fetchTutors:", error);
       }
     };
 
