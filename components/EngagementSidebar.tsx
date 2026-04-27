@@ -4,6 +4,7 @@ import { db, functions } from '../utils/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, setDoc, doc, deleteDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../context/AuthContext';
+import { UserRole } from '../types';
 import { Send, MessageCircle, Hand, Mic, MicOff, Check, X as CloseIcon } from 'lucide-react';
 
 type Tab = 'chat' | 'hands' | 'qa' | 'polls';
@@ -36,7 +37,7 @@ const EngagementSidebar: React.FC = () => {
     const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
     const [isHandRaised, setIsHandRaised] = useState(false);
 
-    const isTutor = user?.role === 'TUTOR';
+    const isTutor = user?.role === UserRole.THALA;
 
     useEffect(() => {
         if (!zoneId || !sessionId) return;

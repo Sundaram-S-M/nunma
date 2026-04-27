@@ -3301,7 +3301,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                   <div className="absolute top-10 left-10 z-50 flex -space-x-4">
                     {clusters.find(c => c.id === activeClusterId)?.studentIds?.map(sid => (
                       <div key={sid} className="w-16 h-16 rounded-full border-4 border-[#03031f] overflow-hidden shadow-2xl group cursor-help transition-transform hover:scale-125 hover:z-20">
-                        <img src={students.find(s => s.id === sid)?.avatar} className="w-full h-full object-cover" alt="" width="500" height="500" />
+                        <img src={students.find(s => s.id === sid)?.avatar} className="w-full h-full object-cover" alt="" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     ))}

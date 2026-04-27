@@ -964,13 +964,18 @@ export const razorpayWebhook = onRequest(
                 }
             });
 
-            // Step 4: Post-Fulfillment Mail Queueing
+            // Return success to Razorpay immediately after enrollment is confirmed
+            res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
+
+            // Step 4: Post-Fulfillment Mail Queueing (fire-and-forget)
+            // These writes trigger the async Zoho invoicing pipeline via onDocumentCreated.
+            // They are intentionally non-blocking so Razorpay always gets a fast 200 response.
             const amountInInr = (payment?.amount || orderData.amount || 0) / 100;
             const gstAmount = amountInInr * 0.18;
 
             if (isPlatformOrder) {
                 // Receipt for Tutor Platform Subscription
-                await db.collection('mail_queue').add({
+                db.collection('mail_queue').add({
                     uid: orderData.tutorUid,
                     amount: amountInInr,
                     gst: gstAmount,
@@ -979,10 +984,12 @@ export const razorpayWebhook = onRequest(
                     paymentId,
                     status: 'pending',
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
-                });
+                }).catch(err =>
+                    console.error('[Zoho Invoice] Non-blocking mail_queue write failed:', err)
+                );
             } else {
                 // 1. Invoice for Student Enrollment
-                await db.collection('mail_queue').add({
+                db.collection('mail_queue').add({
                     uid: orderData.studentUid,
                     amount: amountInInr,
                     gst: gstAmount,
@@ -990,13 +997,15 @@ export const razorpayWebhook = onRequest(
                     paymentId,
                     status: 'pending',
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
-                });
+                }).catch(err =>
+                    console.error('[Zoho Invoice] Non-blocking mail_queue write failed:', err)
+                );
 
                 // 2. Platform Fee Receipt for Tutor (Commission)
                 if (orderData.commission && orderData.tutorUid) {
                     const commissionInInr = orderData.commission / 100;
                     const commissionGst = commissionInInr * 0.18;
-                    await db.collection('mail_queue').add({
+                    db.collection('mail_queue').add({
                         uid: orderData.tutorUid,
                         amount: commissionInInr,
                         gst: commissionGst,
@@ -1004,11 +1013,11 @@ export const razorpayWebhook = onRequest(
                         paymentId,
                         status: 'pending',
                         createdAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
+                    }).catch(err =>
+                        console.error('[Zoho Invoice] Non-blocking mail_queue write failed:', err)
+                    );
                 }
             }
-
-            res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
 
         } catch (error: any) {
             functions.logger.error("CRITICAL: Webhook processing failed.", error);
@@ -1774,7 +1783,7 @@ export const submitExam = onCall({ cors: true }, async (request) => {
     }
 });
 
-export const registerIssuance = onCall({ cors: true }, async (request) => {
+export const registerIssuance = onCall({ secrets: ["RESEND_API_KEY"], cors: true }, async (request) => {
     try {
         const db = admin.firestore();
         
@@ -1868,6 +1877,35 @@ export const registerIssuance = onCall({ cors: true }, async (request) => {
         });
 
         await batch.commit();
+
+        // 8. Fire-and-forget certificate notification email via Resend
+        const resendApiKey = process.env.RESEND_API_KEY;
+        if (resendApiKey && studentEmail !== "no-email@nunma.in") {
+            const resend = new Resend(resendApiKey);
+            const verificationLink = `https://nunma.in/verify/${urnUuid}`;
+
+            resend.emails.send({
+                from: 'Nunma <support@nunma.in>',
+                to: studentEmail,
+                subject: "Your Nunma Certificate is Ready 🎓",
+                html: `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                        <h1 style="color: #040457;">Congratulations, ${studentName}! 🎉</h1>
+                        <p>Your certificate for <strong>${zoneTitle}</strong> has been successfully issued.</p>
+                        <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                            <p style="margin: 5px 0; font-size: 12px; color: #666;"><b>Certificate ID:</b></p>
+                            <p style="margin: 5px 0; font-size: 14px; color: #040457; word-break: break-all;">${urnUuid}</p>
+                        </div>
+                        <a href="${verificationLink}" style="display: inline-block; background: #040457; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Verify Certificate</a>
+                        <p style="margin-top: 20px; color: #666; font-size: 14px;">You can verify your certificate anytime at:<br/><a href="${verificationLink}" style="color: #040457;">${verificationLink}</a></p>
+                        <p style="margin-top: 20px;">Happy learning,<br/><b>Nunma Team</b></p>
+                    </div>
+                `
+            }).catch(err =>
+                console.error('[Certificate Email] Failed:', err)
+            );
+        }
+
         return { certificateId: urnUuid, payload };
     } catch (error: any) {
         if (error instanceof functions.https.HttpsError) throw error;

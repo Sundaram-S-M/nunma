@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, File as FileIcon, AlertCircle, Upload } from 'lucide-react';
 import { db } from '../utils/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
 
 interface DocumentModuleUploaderProps {
@@ -48,7 +49,7 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
 
         try {
             // 1. Get Firebase ID Token
-            const idToken = await user.getIdToken();
+            const idToken = await getAuth().currentUser?.getIdToken();
 
             // 2. Prepare Multipart Data
             const formData = new FormData();

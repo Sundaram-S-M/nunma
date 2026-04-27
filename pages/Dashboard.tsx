@@ -176,6 +176,8 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
           const newMap = { ...prev, [zone.id]: zoneSessions };
           return newMap;
         });
+      }, (error) => {
+        console.error('Error fetching zone sessions:', error);
       });
       unsubs.push(unsub);
     });
@@ -206,6 +208,9 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         }
       });
       setMeetingsData(data);
+    }, (error) => {
+      console.error('Error fetching calendar events:', error);
+      setMeetingsData({});
     });
     return () => unsub();
   }, [user]);
