@@ -72,6 +72,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   toggleRole: () => Promise<void>;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -274,11 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  if (loading) {
-    return <div className="h-screen w-screen flex items-center justify-center bg-[#fcfcfc]">
-      <div className="w-12 h-12 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
-    </div>;
-  }
+  /* loading check moved to AppContent */
 
   return (
     <AuthContext.Provider value={{
@@ -291,7 +288,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loginWithGoogle,
       logout,
       updateProfile,
-      toggleRole
+      toggleRole,
+      isLoading: loading
     }}>
       {children}
     </AuthContext.Provider>

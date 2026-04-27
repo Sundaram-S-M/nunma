@@ -47,7 +47,7 @@ import LiveNotification from './components/LiveNotification';
 const AppContent: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const location = useLocation();
-  const { user, isAuthenticated, toggleRole } = useAuth();
+  const { user, isAuthenticated, isLoading, toggleRole } = useAuth();
 
   // Task 2.1: Capture invite token and zoneId from URL
   React.useEffect(() => {
@@ -86,14 +86,23 @@ const AppContent: React.FC = () => {
 
   const isLiveMode = isLiveRoute || isWhiteboardRoute;
 
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <div className="w-12 h-12 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p style={{ color: 'var(--text-primary, #ffffff)', fontSize: '1.2rem', fontWeight: 500 }}>Loading Nunma...</p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated && !isPublicRoute && !isAuthRoute) {
     return <Navigate to="/auth" replace />;
   }
 
   const role = user?.role || UserRole.STUDENT;
   const showOnboarding = isAuthenticated && role && (
-    (role === UserRole.THALA && !user?.tutorProfile?.isComplete) ||
-    (role === UserRole.STUDENT && !user?.studentProfile?.isComplete)
+    (role === UserRole.THALA && user?.tutorProfile?.isComplete !== true) ||
+    (role === UserRole.STUDENT && user?.studentProfile?.isComplete !== true)
   );
 
   const targetRole = role === UserRole.THALA ? 'tutor' : 'student';
