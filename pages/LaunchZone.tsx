@@ -131,7 +131,7 @@ const LaunchZone: React.FC = () => {
   const [provideCertificate, setProvideCertificate] = useState(true);
   const [zoneImage, setZoneImage] = useState<string | null>(null);
   const [zoneType, setZoneType] = useState<typeof ZONE_TYPES[number]['id']>('Class Management');
-  const [isLaunching, setIsLaunching] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -149,6 +149,7 @@ const LaunchZone: React.FC = () => {
   };
 
   const handleCreateZone = async () => {
+    if (isSubmitting) return;
     if (!zoneTitle || !zonePrice) {
       setError("Please fill in title and price.");
       return;
@@ -169,7 +170,7 @@ const LaunchZone: React.FC = () => {
       return;
     }
 
-    setIsLaunching(true);
+    setIsSubmitting(true);
     try {
       console.log("Firestore READ: fetching user whitelist status from 'users' collection");
       const userData = await getDoc(doc(db, 'users', user.uid));
@@ -232,7 +233,7 @@ const LaunchZone: React.FC = () => {
       console.error("Error creating zone:", err);
       setError("Failed to initialize learning stream. Please try again.");
     } finally {
-      setIsLaunching(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -463,10 +464,10 @@ const LaunchZone: React.FC = () => {
           <div className="pt-14 border-t border-gray-50">
             <button
               onClick={handleCreateZone}
-              disabled={isLaunching}
+              disabled={isSubmitting}
               className="w-full py-8 bg-[#1A1A4E] text-white rounded-[2.5rem] font-black uppercase text-sm tracking-[0.4em] shadow-[0_30px_60px_rgba(26,26,78,0.2)] flex items-center justify-center gap-5 hover:scale-[1.01] hover:brightness-110 active:scale-95 transition-all disabled:opacity-70 group"
             >
-              {isLaunching ? (
+              {isSubmitting ? (
                 <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 <>
