@@ -59,6 +59,7 @@ export interface UserProfile {
   razorpay_account_id?: string;
   current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
   isDevBypass?: boolean;
+  isWhitelisted?: boolean;
 }
 
 interface AuthContextType {
