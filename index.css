@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -11,7 +12,7 @@
 */
 
 /* ─── GOOGLE FONTS ─────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -261,25 +262,26 @@ img { display: block; max-width: 100%; object-fit: cover; }
 }
 
 /* ─── FORM ELEMENTS ─────────────────────────────────────────────────── */
-input[type="text"], input[type="email"], input[type="password"], input[type="number"], 
-input[type="search"], input[type="tel"], input[type="url"], textarea, select {
-  background-color: var(--bg);
-  border: 1px solid var(--border-light);
-  border-radius: var(--r-lg);
-  padding: 0.875rem 1.25rem;
-  font-size: 0.9375rem;
-  color: var(--text-primary);
-  font-family: inherit;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  width: 100%;
-}
-input[type="search"] {
-  border-radius: var(--r-full);
-}
-input:focus, textarea:focus, select:focus {
-  outline: none;
-  border-color: var(--nunma-lime);
-  box-shadow: 0 0 0 3px var(--color-accent-glow);
+@layer base {
+  input:where([type="text"], [type="email"], [type="password"], [type="number"], [type="search"], [type="tel"], [type="url"]), textarea, select {
+    background-color: var(--bg);
+    border: 1px solid var(--border-light);
+    border-radius: var(--r-lg);
+    padding: 0.875rem 1.25rem;
+    font-size: 0.9375rem;
+    color: var(--text-primary);
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+  }
+  input:where([type="search"]) {
+    border-radius: var(--r-full);
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--nunma-lime);
+    box-shadow: 0 0 0 3px var(--color-accent-glow);
+  }
 }
 
 .floating-action-button {
