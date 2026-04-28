@@ -169,6 +169,7 @@ const Workplace: React.FC = () => {
     const unsubs: (() => void)[] = [];
 
     zonesList.forEach(zone => {
+      if (!zone || !zone.id || typeof zone.id !== 'string') return;
       // Sessions
       const qS = query(collection(db, 'zones', zone.id, 'sessions'));
       const unS = onSnapshot(qS, (snap) => {

@@ -147,7 +147,7 @@ const LaunchZone: React.FC = () => {
 
     setIsLaunching(true);
     try {
-      const newZone = {
+      const zoneData = {
         tutorId: user.uid,
         tutorName: user.name,
         title: zoneTitle,
@@ -174,7 +174,7 @@ const LaunchZone: React.FC = () => {
         throw new Error("Database connection execution failed. Cloud sync unavailable.");
       }
 
-      const zoneRef = await addDoc(collection(db, 'zones'), newZone);
+      const zoneRef = await addDoc(collection(db, 'zones'), zoneData);
 
       // Create community conversation for the zone
       await addDoc(collection(db, 'conversations'), {
