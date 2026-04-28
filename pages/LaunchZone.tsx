@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -147,6 +147,15 @@ const LaunchZone: React.FC = () => {
 
     setIsLaunching(true);
     try {
+      console.log("Firestore READ: fetching user whitelist status from 'users' collection");
+      const userData = await getDoc(doc(db, 'users', user.uid));
+      const isWhitelisted = userData.data()?.isWhitelisted === true;
+      
+      if (isWhitelisted) {
+        console.log("User is whitelisted. Bypassing standard checks.");
+      } else {
+        // If there were any other checks for standard users, they would execute here.
+      }
       const zoneData = {
         tutorId: user.uid,
         tutorName: user.name,
@@ -174,19 +183,25 @@ const LaunchZone: React.FC = () => {
         throw new Error("Database connection execution failed. Cloud sync unavailable.");
       }
 
+      console.log("Firestore WRITE: adding document to 'zones' collection");
       const zoneRef = await addDoc(collection(db, 'zones'), zoneData);
 
+      console.log("Firestore WRITE: adding document to 'conversations' collection");
       // Create community conversation for the zone
-      await addDoc(collection(db, 'conversations'), {
-        name: zoneTitle,
-        avatar: zoneImage,
-        type: 'community',
-        zoneId: zoneRef.id,
-        participants: [user.uid],
-        lastMessage: 'Welcome to the community!',
-        lastMessageTime: serverTimestamp(),
-        createdAt: serverTimestamp()
-      });
+      try {
+        await addDoc(collection(db, 'conversations'), {
+          name: zoneTitle,
+          avatar: zoneImage,
+          type: 'community',
+          zoneId: zoneRef.id,
+          participants: [user.uid],
+          lastMessage: 'Welcome to the community!',
+          lastMessageTime: serverTimestamp(),
+          createdAt: serverTimestamp()
+        });
+      } catch (convErr) {
+        console.warn("Non-fatal: Could not create conversation document (possible permission issue):", convErr);
+      }
 
       navigate('/workplace');
     } catch (err) {
