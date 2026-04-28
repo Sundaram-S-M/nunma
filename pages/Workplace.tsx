@@ -98,7 +98,7 @@ const Workplace: React.FC = () => {
 
   const { user } = useAuth();
   const kycVerified = (user?.kycStatus === 'VERIFIED' && user?.razorpay_account_id) || user?.isDevBypass;
-  const hasAccess = user?.role === UserRole.THALA && (user?.isWhitelisted === true || kycVerified === true);
+  const hasAccess = user?.role === UserRole.THALA || user?.isWhitelisted === true;
 
   if (user && !hasAccess) {
     return (
@@ -141,7 +141,7 @@ const Workplace: React.FC = () => {
   const streamsPercent = Math.min(Math.round((streamsUsed / streamLimit) * 100), 100);
 
   useEffect(() => {
-    if (!user || !user.uid) return;
+    if (!user || !user.uid || user.role !== UserRole.THALA) return;
 
     // 1. Zones
     const qZones = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
@@ -149,13 +149,8 @@ const Workplace: React.FC = () => {
       setZonesList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     },
     (error) => {
-      console.error('Firestore error:', error.code, error.message);
+      console.warn('Firestore error in zones listener:', error.code, error.message);
       setZonesList([]);
-      if (error.code === 'permission-denied') {
-        setError('You do not have permission to view this content.');
-      } else {
-        setError('Failed to connect to the server.');
-      }
     });
 
     // 2. Products
@@ -164,13 +159,8 @@ const Workplace: React.FC = () => {
       setProductsList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     },
     (error) => {
-      console.error('Firestore error:', error.code, error.message);
+      console.warn('Firestore error in products listener:', error.code, error.message);
       setProductsList([]);
-      if (error.code === 'permission-denied') {
-        setError('You do not have permission to view this content.');
-      } else {
-        setError('Failed to connect to the server.');
-      }
     });
 
     // 3. Live Sessions (Across all my zones)
@@ -188,7 +178,7 @@ const Workplace: React.FC = () => {
 
   // Separate effect for sessions
   useEffect(() => {
-    if (!user || !user.uid || zonesList.length === 0) return;
+    if (!user || !user.uid || user.role !== UserRole.THALA || zonesList.length === 0) return;
     const unsubs: (() => void)[] = [];
 
     zonesList.forEach(zone => {
@@ -203,13 +193,7 @@ const Workplace: React.FC = () => {
         });
       },
       (error) => {
-        console.error('Firestore error:', error.code, error.message);
-        setLiveSessions([]);
-        if (error.code === 'permission-denied') {
-          setError('You do not have permission to view this content.');
-        } else {
-          setError('Failed to connect to the server.');
-        }
+        console.warn(`Firestore error in sessions listener for zone ${zone.id}:`, error.code, error.message);
       });
       unsubs.push(unS);
 
@@ -223,13 +207,7 @@ const Workplace: React.FC = () => {
         });
       },
       (error) => {
-        console.error('Firestore error:', error.code, error.message);
-        setAllStudents([]);
-        if (error.code === 'permission-denied') {
-          setError('You do not have permission to view this content.');
-        } else {
-          setError('Failed to connect to the server.');
-        }
+        console.warn(`Firestore error in students listener for zone ${zone.id}:`, error.code, error.message);
       });
       unsubs.push(unSt);
     });

@@ -96,7 +96,7 @@ const LaunchZone: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const kycVerified = (user?.kycStatus === 'VERIFIED' && user?.razorpay_account_id) || user?.isDevBypass;
-  const hasAccess = user?.role === UserRole.THALA && (user?.isWhitelisted === true || kycVerified === true);
+  const hasAccess = user?.role === UserRole.THALA || user?.isWhitelisted === true;
 
   if (user && !hasAccess) {
     return (

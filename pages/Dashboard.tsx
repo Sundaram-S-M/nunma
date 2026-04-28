@@ -115,7 +115,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         let totalStudents = 0;
         let totalEarnings = (user as any).earnings || 0; // Use user.earnings if available, fallback to 0
         
-        if (role === UserRole.THALA) {
+        if (user && role === UserRole.THALA) {
           try {
             for (const z of zonesList) {
               if (z.role === 'tutor') {
@@ -125,7 +125,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
               }
             }
           } catch (err) {
-            console.warn("Dashboard student aggregation suppressed.");
+            console.error('Could not fetch student count:', err);
             totalStudents = 0;
           }
         }

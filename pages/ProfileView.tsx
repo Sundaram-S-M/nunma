@@ -659,18 +659,18 @@ const ProfileView: React.FC = () => {
       const zonesData = zSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setZones(zonesData);
 
-      // Fetch student count from each zone's students collection (Safely handled)
       let studentsCount = 0;
-      try {
-        for (const zone of zonesData) {
-          const coll = collection(db, 'zones', zone.id, 'students');
-          const snapshot = await getCountFromServer(coll);
-          studentsCount += snapshot.data().count;
+      if (currentUser && currentUser.role === UserRole.THALA) {
+        try {
+          for (const zone of zonesData) {
+            const coll = collection(db, 'zones', zone.id, 'students');
+            const snapshot = await getCountFromServer(coll);
+            studentsCount += snapshot.data().count;
+          }
+        } catch (err) {
+          console.error('Could not fetch student count:', err);
+          studentsCount = 0;
         }
-      } catch (err) {
-        // Silently catch permission denied errors for unauthorized viewers
-        console.warn("Student count aggregation suppressed due to permissions.");
-        studentsCount = 0;
       }
       setTutorStudentsCount(studentsCount);
     } catch (error) {
