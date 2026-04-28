@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
+import { UserRole } from '../types';
 import {
   X,
   Layers,
@@ -94,6 +95,29 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 const LaunchZone: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const kycVerified = (user?.kycStatus === 'VERIFIED' && user?.razorpay_account_id) || user?.isDevBypass;
+  const hasAccess = user?.role === UserRole.THALA && (user?.isWhitelisted === true || kycVerified === true);
+
+  if (user && !hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+        <div className="w-24 h-24 bg-red-50 text-red-500 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-xl shadow-red-500/10">
+          <X size={48} strokeWidth={3} />
+        </div>
+        <h1 className="text-4xl font-black text-[#040457] mb-4 tracking-tighter">Access Restricted</h1>
+        <p className="text-gray-400 font-medium max-w-md mx-auto mb-10 text-lg">
+          You do not have permission to view this content. Only verified Thalas can access the professional workplace.
+        </p>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="px-12 py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
+
   const [zoneTitle, setZoneTitle] = useState('');
   const [zoneSubtitle, setZoneSubtitle] = useState('');
   const [zoneDescription, setZoneDescription] = useState('');
