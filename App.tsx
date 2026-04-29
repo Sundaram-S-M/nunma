@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
@@ -17,7 +17,6 @@ import LaunchZone from './pages/LaunchZone';
 import Settings from './pages/Settings';
 import AvailabilitySetup from './pages/AvailabilitySetup';
 import ProfileView from './pages/ProfileView';
-// PublicProfile removed
 import ProductManagement from './pages/ProductManagement';
 import CertificateEngine from './pages/CertificateEngine';
 import ListProductFlow from './pages/ListProductFlow';
@@ -33,19 +32,16 @@ import LegalPolicy from './pages/LegalPolicy';
 import WhiteboardPage from './pages/WhiteboardPage';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import AnalyticsChat from './pages/AnalyticsChat.tsx';
-
-
 import { Toaster } from 'react-hot-toast';
-
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
-
 import Payment from './pages/Payment';
 import ZoneDetailView from './pages/ZoneDetailView';
 import LiveNotification from './components/LiveNotification';
+import { SidebarProvider, useSidebar } from './context/SidebarContext';
 
 const AppContent: React.FC = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const { isSidebarOpen, toggleSidebar } = useSidebar();
   const location = useLocation();
   const { user, isAuthenticated, isLoading, toggleRole } = useAuth();
 
@@ -71,11 +67,7 @@ const AppContent: React.FC = () => {
     }
   }, [location]);
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(prev => !prev);
-  };
-
-  const isPublicRoute = location.pathname.startsWith('/verify/') || location.pathname.startsWith('/u/') || location.pathname === '/';
+  const isPublicRoute = location.pathname.startsWith('/verify/') || location.pathname.startsWith('/u/') || location.pathname.startsWith('/zone/') || location.pathname === '/';
   const isAuthRoute = location.pathname === '/auth';
   const isSandboxRoute = location.pathname.startsWith('/sandbox/');
   const isLiveRoute = location.pathname.startsWith('/live/') || (location.pathname.startsWith('/classroom/') && !location.pathname.startsWith('/classroom/zone/'));
@@ -119,6 +111,7 @@ const AppContent: React.FC = () => {
           <Route path="/verify/:id" element={<VerificationPortal />} />
           <Route path="/u/:id" element={<ProfileView />} />
           <Route path="/profile/:id" element={<ProfileView />} />
+          <Route path="/zone/:zoneId" element={<PublicLayout><ErrorBoundary><ZoneDetailView /></ErrorBoundary></PublicLayout>} />
           <Route path="/legal" element={<PublicLayout><LegalPolicy /></PublicLayout>} />
           <Route path="/" element={<PublicLayout><LandingPage /></PublicLayout>} />
         </Routes>
@@ -169,11 +162,6 @@ const AppContent: React.FC = () => {
             <Route path="/products" element={<ProductManagement />} />
             <Route path="/u/:id" element={<ProfileView />} />
             <Route path="/payment/:zoneId" element={<Payment />} />
-            <Route path="/zone/:zoneId" element={
-              <ErrorBoundary>
-                <ZoneDetailView />
-              </ErrorBoundary>
-            } />
             <Route path="/booking/:productId" element={<BookingPage />} />
             <Route path="/billing" element={<PricingPage />} />
             <Route path="/workplace/analytics/:zoneId" element={
@@ -190,7 +178,6 @@ const AppContent: React.FC = () => {
                 </ErrorBoundary>
               ) : <Navigate to="/dashboard" />
             } />
-
           </Routes>
         </main>
       </div>
@@ -202,10 +189,12 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <Router>
-        <Toaster position="top-center" reverseOrder={false} />
-        <AppContent />
-      </Router>
+      <BrowserRouter>
+        <SidebarProvider>
+          <Toaster position="top-center" reverseOrder={false} />
+          <AppContent />
+        </SidebarProvider>
+      </BrowserRouter>
     </AuthProvider>
   );
 };

@@ -39,6 +39,7 @@ import {
 import LiveSessionStatus from '../components/LiveSessionStatus';
 import { generateOpenBadgeVC, downloadVCAsJSON } from '../utils/vcUtils';
 import { useAuth } from '../context/AuthContext';
+import { useSidebar } from '../context/SidebarContext';
 import { BunnyVideoPlayer } from '../components/BunnyVideoPlayer';
 
 
@@ -48,6 +49,7 @@ const StudentZoneView: React.FC = () => {
   const { zoneId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isSidebarOpen } = useSidebar();
   const [zone, setZone] = useState<any>(null);
   const [activeContent, setActiveContent] = useState<any>(null);
   const [expandedChapters, setExpandedChapters] = useState<string[]>(['c1']);
@@ -55,6 +57,7 @@ const StudentZoneView: React.FC = () => {
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'content' | 'exams' | 'students'>('content');
   const [exams, setExams] = useState<any[]>([]);
+  const [notifiedExams, setNotifiedExams] = useState<string[]>([]);
   const [allStudents, setAllStudents] = useState<any[]>([]);
   const [examResults, setExamResults] = useState<any[]>([]);
   const [activeExam, setActiveExam] = useState<any>(null);
@@ -86,6 +89,41 @@ const StudentZoneView: React.FC = () => {
   const [isGeneratingCert, setIsGeneratingCert] = useState(false);
   const [generatedVC, setGeneratedVC] = useState<any>(null);
 
+
+  // Notification & Exam Re-evaluation interval
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setExams(prev => [...prev]); // trigger re-render
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!authUser?.uid || !zoneId || exams.length === 0) return;
+
+    exams.forEach(exam => {
+      let isLive = false;
+      if (exam.scheduledAt?.toDate) {
+        isLive = exam.scheduledAt.toDate() <= new Date();
+      } else if (exam.scheduledAt?.seconds) {
+        isLive = new Date(exam.scheduledAt.seconds * 1000) <= new Date();
+      } else if (exam.status === 'LIVE') {
+        isLive = true;
+      }
+
+      if (isLive && exam.id && !notifiedExams.includes(exam.id)) {
+        addDoc(collection(db, 'users', authUser.uid, 'notifications'), {
+          type: 'EXAM_LIVE',
+          message: `Your exam "${exam.title}" is now live! You have limited time to attempt it.`,
+          zoneId,
+          examId: exam.id,
+          read: false,
+          createdAt: new Date()
+        }).catch(console.error);
+        setNotifiedExams(prev => [...prev, exam.id]);
+      }
+    });
+  }, [exams, authUser, zoneId, notifiedExams]);
 
   useEffect(() => {
     if (!authUser || !authUser.uid || !zoneId || !db) return;
@@ -852,6 +890,17 @@ const StudentZoneView: React.FC = () => {
             <div className="space-y-8 animate-in fade-in duration-500">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {exams.map(exam => {
+                  let isLive = false;
+                  if (exam.scheduledAt?.toDate) {
+                    isLive = exam.scheduledAt.toDate() <= new Date();
+                  } else if (exam.scheduledAt?.seconds) {
+                    isLive = new Date(exam.scheduledAt.seconds * 1000) <= new Date();
+                  } else if (exam.status === 'LIVE') {
+                    isLive = true;
+                  }
+                  
+                  const computedStatus = isLive ? 'LIVE' : 'UPCOMING';
+
                   const result = examResults.find(r => r.examId === exam.id && r.studentId === (authUser?.uid || 'anon'));
                   return (
                     <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-8 shadow-sm hover:shadow-2xl transition-all group">
@@ -865,7 +914,7 @@ const StudentZoneView: React.FC = () => {
                           </span>
                         ) : (
                           <span className="px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                            {exam.status}
+                            {computedStatus}
                           </span>
                         )}
                       </div>
@@ -892,12 +941,15 @@ const StudentZoneView: React.FC = () => {
                           </div>
                         </div>
                       ) : (
-                        (exam.type === 'online-test' || exam.type === 'online-mcq') && exam.status === 'UPCOMING' ? (
+                        (exam.type === 'online-test' || exam.type === 'online-mcq') && computedStatus === 'LIVE' ? (
                           <button onClick={() => {
+                            if (!exam?.id || !zoneId || !studentData?.id) return;
                             updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), { activeExamId: exam.id });
                             setShowExamRules(true);
                           }} className="w-full py-5 bg-[#1A1A4E] text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
-                        ) : exam.type === 'offline' && exam.status === 'UPCOMING' ? (
+                        ) : (exam.type === 'online-test' || exam.type === 'online-mcq') && computedStatus === 'UPCOMING' ? (
+                          <button disabled className="w-full py-5 bg-gray-100 text-gray-400 rounded-2xl font-black uppercase text-[11px] tracking-widest cursor-not-allowed">Starts Soon</button>
+                        ) : exam.type === 'offline' && computedStatus === 'LIVE' ? (
                           <div className="space-y-4">
                             <a href={exam.pdfUrl || '#'} target="_blank" rel="noreferrer" download className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-200 transition-all flex items-center justify-center gap-2">
                               <FileDown size={16} /> Download Question Paper
@@ -1072,7 +1124,7 @@ const StudentZoneView: React.FC = () => {
       </div>
 
       {showCertModal && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-[#040457]/80 backdrop-blur-2xl p-6 animate-in fade-in duration-500">
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[300] flex items-center justify-center bg-[#040457]/80 backdrop-blur-2xl p-6 animate-in fade-in duration-500 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-500">
             <div className="w-full md:w-1/2 bg-indigo-900 p-12 text-white flex flex-col justify-between relative overflow-hidden">
               <div className="relative z-10">
@@ -1133,7 +1185,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {isGeneratingCert && (
-        <div className="fixed inset-0 z-[310] bg-[#040457]/90 backdrop-blur-sm flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300">
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[310] bg-[#040457]/90 backdrop-blur-sm flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300 transition-all`}>
           <div className="w-24 h-24 border-8 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
           <div className="text-center">
             <h2 className="text-white text-3xl font-black tracking-tighter mb-2">Compiling Verifiable Proof</h2>
@@ -1143,7 +1195,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {showExamRules && (
-        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-[#040457]/90 backdrop-blur-xl p-6 animate-in fade-in duration-500">
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[400] flex items-center justify-center bg-[#040457]/90 backdrop-blur-xl p-6 animate-in fade-in duration-500 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 space-y-10 animate-in zoom-in-95 duration-500">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mx-auto shadow-sm">
@@ -1179,7 +1231,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {showConsentModal && (
-        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-[#040457]/95 backdrop-blur-2xl p-6 animate-in fade-in duration-500">
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex items-center justify-center bg-[#040457]/95 backdrop-blur-2xl p-6 animate-in fade-in duration-500 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 space-y-10 animate-in zoom-in-95 duration-500">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-[#c2f575]/20 rounded-[2rem] flex items-center justify-center text-indigo-900 mx-auto shadow-sm">
@@ -1226,7 +1278,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {showCheatWarningModal && (
-        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-[#040457]/95 backdrop-blur-2xl p-6">
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex items-center justify-center bg-[#040457]/95 backdrop-blur-2xl p-6 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 text-center space-y-8 animate-in zoom-in-95 duration-300">
             <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto animate-pulse">
               <AlertTriangle size={48} />
@@ -1246,7 +1298,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {terminatedByCheat && (
-         <div className="fixed inset-0 z-[600] flex flex-col items-center justify-center bg-red-900/95 backdrop-blur-3xl p-6 text-white text-center animate-in fade-in duration-500">
+         <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex flex-col items-center justify-center bg-red-900/95 backdrop-blur-3xl p-6 text-white text-center animate-in fade-in duration-500 transition-all`}>
             <AlertTriangle size={80} className="mb-8" />
             <h2 className="text-5xl font-black mb-4">Test Terminated</h2>
             <p className="text-xl opacity-80 max-w-lg mb-12">Your assessment was forcefully concluded due to repeated tab switching or window evasion. Your attempt has been logged and submitted.</p>
@@ -1259,7 +1311,7 @@ const StudentZoneView: React.FC = () => {
 
       {activeExam && !terminatedByCheat && (
         <div
-          className="fixed inset-0 z-[500] bg-white flex flex-col p-10 animate-in slide-in-from-bottom-10 duration-700"
+          className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[500] bg-white flex flex-col p-10 animate-in slide-in-from-bottom-10 duration-700 transition-all`}
           onContextMenu={(e) => e.preventDefault()}
           onCopy={(e) => e.preventDefault()}
           onPaste={(e) => e.preventDefault()}
@@ -1386,7 +1438,7 @@ const StudentZoneView: React.FC = () => {
 
       {/* Post Exam Timer Modal for Online Test */}
       {postExamTimer !== null && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-in zoom-in-95 duration-500">
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[200] flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-in zoom-in-95 duration-500 transition-all`}>
           <div className="bg-white rounded-[3rem] max-w-lg w-full p-12 text-center shadow-2xl border border-white/10 relative overflow-hidden">
             {postExamTimer === 0 && (
               <div className="absolute inset-0 bg-red-900/95 flex flex-col items-center justify-center z-50 p-8 backdrop-blur-md animate-in fade-in duration-500">

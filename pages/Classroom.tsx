@@ -33,9 +33,11 @@ import {
 } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
+import { useSidebar } from '../context/SidebarContext';
 
 const Classroom: React.FC = () => {
    const navigate = useNavigate();
+   const { isSidebarOpen } = useSidebar();
    const [error, setError] = useState<string | null>(null);
    const [enrolledZones, setEnrolledZones] = useState<any[]>([]);
    const [liveSessions, setLiveSessions] = useState<any[]>([]);
@@ -327,7 +329,7 @@ const Classroom: React.FC = () => {
 
          {/* Post-Session Survey Modal */}
          {surveyForRoom && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+            <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
                <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500 text-center">
                   <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] mx-auto flex items-center justify-center mb-6">
                      <Star size={32} className="text-[#c2f575]" />
@@ -450,7 +452,7 @@ const Classroom: React.FC = () => {
          )}
 
          {showLeaderboard && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+            <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300 transition-all`}>
                <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
                   <div className="p-10 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
                      <div>

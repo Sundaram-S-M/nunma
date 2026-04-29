@@ -19,6 +19,7 @@ import { httpsCallable } from 'firebase/functions';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
+import { useSidebar } from '../context/SidebarContext';
 import { 
   Mic, MicOff, Video, VideoOff, Monitor, LogOut, 
   Loader2, AlertCircle, Signal, SignalHigh, SignalMedium, SignalLow,
@@ -311,7 +312,7 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
           display: flex;
           flex-direction: column;
           height: 100vh;
-          width: 100vw;
+          width: 100%;
           background-color: #0a0a0a;
           color: #fcfcfc;
           overflow: hidden;
@@ -529,6 +530,7 @@ const ClassroomContent = ({ zoneTitle, zoneId }) => {
 const ClassroomPage = () => {
   const { zoneId } = useParams();
   const { user } = useAuth();
+  const { isSidebarOpen } = useSidebar();
   const [token, setToken] = useState(null);
   const [zoneTitle, setZoneTitle] = useState('');
   const [loading, setLoading] = useState(true);
@@ -731,13 +733,17 @@ const ClassroomPage = () => {
           <style>{`
             .reconnecting-overlay {
               position: fixed;
-              inset: 0;
+              top: 0;
+              right: 0;
+              bottom: 0;
+              left: ${isSidebarOpen ? '240px' : '64px'};
               background: rgba(0, 0, 0, 0.85);
               backdrop-filter: blur(10px);
               display: flex;
               align-items: center;
               justify-content: center;
               z-index: 9999;
+              transition: all 0.3s ease;
             }
             .overlay-content {
               text-align: center;

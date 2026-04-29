@@ -38,10 +38,12 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot 
 import { db, functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../context/AuthContext';
+import { useSidebar } from '../context/SidebarContext';
 import { UserRole } from '../types';
 
 const Workplace: React.FC = () => {
   const navigate = useNavigate();
+  const { isSidebarOpen } = useSidebar();
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'zones' | 'products' | 'students' | 'payments'>('zones');
   const [productSubTab, setProductSubTab] = useState<'material' | 'service' | 'mentorship'>('material');
@@ -741,7 +743,7 @@ const Workplace: React.FC = () => {
 
       {/* Schedule Live Modal remains exactly same as existing file */}
       {showScheduleModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300 transition-all`}>
           <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
             <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center bg-white">
               <h3 className="text-3xl font-black text-[#040457] tracking-tight">Schedule Live Class</h3>

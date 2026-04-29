@@ -2166,11 +2166,38 @@ export const joinZoneByInvite = onCall(
                 return { success: true, message: "Already enrolled" };
             }
 
-            await studentRef.set({
+            const userDoc = await db.collection("users").doc(uid).get();
+            const userData = userDoc.data() || {};
+
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            const zoneData = zoneDoc.data() || {};
+
+            const batch = db.batch();
+
+            batch.set(studentRef, {
+                uid: uid,
+                name: userData.name || "Student",
+                email: userData.email || "",
+                avatar: userData.avatar || "",
                 status: "active",
+                enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
                 joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-                source: "whitelist"
+                source: "invite"
             });
+
+            const enrollmentRef = db.collection("users").doc(uid).collection("enrollments").doc(zoneId);
+            batch.set(enrollmentRef, {
+                zoneId,
+                enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                tutorId: zoneData.tutorId || zoneData.createdBy || "",
+                zoneName: zoneData.title || zoneData.name || "Untitled Zone"
+            });
+
+            batch.update(db.collection("zones").doc(zoneId), {
+                studentCount: admin.firestore.FieldValue.increment(1)
+            });
+
+            await batch.commit();
 
             return { success: true };
         } catch (error: any) {
@@ -2259,13 +2286,49 @@ export const processWhitelist = onCall(
                     return { success: true, ...results };
                 }
 
-                await studentRef.set({
+                // Get user profile to populate name/email
+                const userDoc = await db.collection("users").doc(uid).get();
+                const userData = userDoc.data() || {};
+
+                // Atomic batch write for enrollment
+                const batch = db.batch();
+                
+                // 1. Enrollment in zone
+                batch.set(studentRef, {
+                    uid: uid,
+                    name: userData.name || "Student",
+                    email: userData.email || normalizedEmail,
+                    avatar: userData.avatar || "",
                     status: "active",
                     source: "whitelist",
-                    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                    joinedAt: admin.firestore.FieldValue.serverTimestamp(), // legacy support
                 });
 
+                // 2. Enrollment in user document
+                const enrollmentRef = db.collection("users").doc(uid).collection("enrollments").doc(zoneId);
+                batch.set(enrollmentRef, {
+                    zoneId,
+                    enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                    tutorId: zoneData.tutorId || zoneData.createdBy,
+                    zoneName: zoneTitle
+                });
+
+                // 3. Increment studentCount
+                batch.update(db.collection("zones").doc(zoneId), {
+                    studentCount: admin.firestore.FieldValue.increment(1)
+                });
+
+                await batch.commit();
+
                 results.enrolled = 1;
+                return { 
+                    success: true, 
+                    ...results, 
+                    studentUid: uid,
+                    zoneName: zoneTitle,
+                    tutorName: zoneData.tutorName || "Your Instructor"
+                };
             } else {
                 // User doesn't exist, proceed to add their email to the invites subcollection
                 const invitesRef = db.collection("zones").doc(zoneId).collection("invites").doc(normalizedEmail);

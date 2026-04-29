@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useSidebar } from '../context/SidebarContext';
 import {
   collection, query, where, onSnapshot, orderBy,
   getDocs, limit, doc, getDoc, addDoc, deleteDoc, updateDoc,
@@ -38,6 +38,7 @@ import { Link, useNavigate } from 'react-router-dom';
 const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isSidebarOpen } = useSidebar();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showEventModal, setShowEventModal] = useState(false);
   const [modalDate, setModalDate] = useState<number | null>(null);
@@ -325,7 +326,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
       {/* ... Event Modal ... */}
       {showEventModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
           <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-gray-50 flex justify-between items-start bg-gray-50/30">
               <div>

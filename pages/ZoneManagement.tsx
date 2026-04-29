@@ -65,6 +65,7 @@ import { toast } from 'react-hot-toast';
 import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
+import { sendEnrollmentEmail } from '../utils/notifications';
 import * as XLSX from 'xlsx';
 import PDFViewer from '../components/PDFViewer'; // Import added for grading
 import GradingHub from '../components/GradingHub';
@@ -74,6 +75,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import ZoneCapacityMeter from '../components/ZoneCapacityMeter';
 
 import { useAuth } from '../context/AuthContext';
+import { useSidebar } from '../context/SidebarContext';
 import { Student, AttendanceHistory, UserRole } from '../types';
 
 export interface MCQ {
@@ -201,6 +203,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   const { zoneId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isSidebarOpen } = useSidebar();
   const [activeTab, setActiveTab] = useState<'attendance' | 'curriculum' | 'exams' | 'schedule' | 'students' | 'landing' | 'post-session'>('exams');
   const [view, setView] = useState<'management' | 'review' | 'grading'>('management');
   const [zone, setZone] = useState<any>(null);
@@ -1365,7 +1368,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
         {/* EDIT ZONE SETTINGS MODAL */}
         {showZoneSettingsModal && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[3rem] w-full max-w-3xl shadow-2xl p-10 animate-in zoom-in-95 duration-500 max-h-[90vh] flex flex-col">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-3xl font-black text-[#040457]">Zone Settings</h3>
@@ -1433,7 +1436,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
         {/* START EXAM MODAL */}
         {showStartExamModal && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500">
               <h3 className="text-3xl font-black text-[#040457] mb-4">Launch Exam</h3>
               <p className="text-sm text-gray-400 mb-10 leading-relaxed font-medium">Verify the broadcasting schedule before going live.</p>
@@ -1509,7 +1512,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
         {/* SCHEDULE SESSION MODAL */}
         {showScheduleModal && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[150] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-visible p-12 animate-in zoom-in-95 duration-500">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-3xl font-black text-[#040457]">{editingSession ? 'Edit' : 'Schedule'} Session</h3>
@@ -1734,7 +1737,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
         {/* CREATE EXAM MODAL */}
         {showAddExamModal && (
-          <div className="fixed inset-0 z-[130] bg-white animate-in fade-in duration-300 overflow-y-auto font-inter">
+          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[130] bg-white animate-in fade-in duration-300 overflow-y-auto font-inter transition-all`}>
             <div className="w-full min-h-screen p-12 md:p-20 flex flex-col">
               <div className="flex justify-between items-center mb-16">
                 <div>
@@ -1842,7 +1845,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
         {/* MARK ENTRY MODAL (FOR OFFLINE) */}
         {showMarkEntryModal && selectedExamForMarks && (
-          <div className="fixed inset-0 z-[130] flex items-center justify-center p-6 bg-[#040457]/90 backdrop-blur-2xl animate-in fade-in duration-300">
+          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[130] flex items-center justify-center p-6 bg-[#040457]/90 backdrop-blur-2xl animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[4rem] w-full max-w-5xl shadow-3xl overflow-hidden p-12 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-500">
               <div className="flex justify-between items-center mb-10">
                 <div>
@@ -1960,7 +1963,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
         {/* WHITELIST MODAL */}
         {showAddStudentModal && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-2xl overflow-hidden p-12 animate-in zoom-in-95 duration-500 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-start mb-10">
                 <div>
@@ -2056,6 +2059,28 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                           const data = result.data;
 
                           if (data.enrolled > 0) {
+                            const { studentUid, zoneName, tutorName } = data;
+                            
+                            // 1. In-app Notification
+                            if (studentUid) {
+                              addDoc(collection(db, 'users', studentUid, 'notifications'), {
+                                type: 'ZONE_ENROLLED',
+                                message: `You've been added to "${zoneName || zone?.title || 'a new zone'}" by ${tutorName || zone?.tutorName || 'your instructor'}`,
+                                zoneId,
+                                read: false,
+                                createdAt: serverTimestamp()
+                              }).catch(err => console.error('Notification write failed:', err));
+
+                              // 2. Email Notification
+                              sendEnrollmentEmail({
+                                studentEmail: newStudentEmail,
+                                studentName: '', // We don't have it yet, the function will use 'Student'
+                                zoneName: zoneName || zone?.title || 'Learning Zone',
+                                tutorName: tutorName || zone?.tutorName || 'Instructor',
+                                zoneId
+                              }).catch(err => console.error('Enrollment email failed:', err));
+                            }
+
                             toast.success('Student successfully whitelisted and notified.', { icon: '✅' });
                           } else if (data.pending > 0) {
                             toast.success('Email whitelisted. Access will be granted when they register.', { icon: '📧' });
@@ -2171,7 +2196,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
         {/* TAKE ATTENDANCE MODAL */}
         {showTakeAttendanceModal && (
-          <div className="fixed inset-0 z-[140] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[140] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500 max-h-[90vh] flex flex-col">
               <h3 className="text-3xl font-black text-[#040457] mb-4">Take Attendance</h3>
               <p className="text-sm text-gray-400 mb-8 leading-relaxed font-medium">Record attendance for the current class session.</p>
