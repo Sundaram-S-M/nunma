@@ -151,8 +151,8 @@ const Inbox: React.FC = () => {
       if (!showCreateGroup || !user) return;
       setLoadingMutuals(true);
       try {
-        const followingSnap = await getDocs(query(collection(db, 'followers'), where('followerId', '==', user.uid)));
-        const followingIds = followingSnap.docs.map(d => d.data().followingId);
+        const followingSnap = await getDocs(collection(db, 'users', user.uid, 'following'));
+        const followingIds = followingSnap.docs.map(d => d.id);
 
         if (followingIds.length === 0) {
           setMutualFollowers([]);
@@ -160,8 +160,8 @@ const Inbox: React.FC = () => {
           return;
         }
 
-        const followersSnap = await getDocs(query(collection(db, 'followers'), where('followingId', '==', user.uid)));
-        const followerIds = followersSnap.docs.map(d => d.data().followerId);
+        const followersSnap = await getDocs(collection(db, 'users', user.uid, 'followers'));
+        const followerIds = followersSnap.docs.map(d => d.id);
 
         const mutualIds = followingIds.filter(id => followerIds.includes(id));
 

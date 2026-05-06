@@ -3,7 +3,7 @@ admin.initializeApp();
 
 import * as functions from "firebase-functions";
 import { onRequest, onCall, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 
@@ -2564,3 +2564,124 @@ export const processInvoicingQueue = onDocumentCreated(
         }
     }
 );
+
+// --- ZONE CONVERSATION MANAGEMENT TRIGGERS ---
+
+/**
+ * Automatically creates a community conversation when a new zone is launched.
+ */
+export const onZoneCreated = onDocumentCreated(
+    { document: "zones/{zoneId}" },
+    async (event) => {
+        const snapshot = event.data;
+        if (!snapshot) return;
+
+        const data = snapshot.data();
+        const zoneId = event.params.zoneId;
+        const tutorId = data.createdBy || data.tutorId;
+        const db = admin.firestore();
+
+        functions.logger.info(`Creating community conversation for zone: ${zoneId}`);
+
+        try {
+            await db.collection('conversations').add({
+                name: data.title || "Untitled Zone",
+                avatar: data.image || "",
+                type: 'community',
+                zoneId: zoneId,
+                participants: tutorId ? [tutorId] : [],
+                lastMessage: 'Welcome to the community!',
+                lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (error) {
+            functions.logger.error(`Failed to create conversation for zone ${zoneId}:`, error);
+        }
+    }
+);
+
+/**
+ * Automatically adds a student to the community conversation when they join a zone.
+ * This handles all join paths (Razorpay, Whitelist, Invite, Auto-enroll).
+ */
+export const onStudentJoinedZone = onDocumentCreated(
+    { document: "zones/{zoneId}/students/{studentId}" },
+    async (event) => {
+        const zoneId = event.params.zoneId;
+        const studentId = event.params.studentId;
+        const db = admin.firestore();
+
+        functions.logger.info(`Adding student ${studentId} to conversation for zone: ${zoneId}`);
+
+        try {
+            const convQuery = await db.collection('conversations')
+                .where('zoneId', '==', zoneId)
+                .where('type', '==', 'community')
+                .limit(1)
+                .get();
+
+            if (!convQuery.empty) {
+                const convRef = convQuery.docs[0].ref;
+                await convRef.update({
+                    participants: admin.firestore.FieldValue.arrayUnion(studentId),
+                    lastMessage: "A new member has joined the community!",
+                    lastMessageTime: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                // Fallback: If conversation missing, create it now
+                const zoneDoc = await db.collection('zones').doc(zoneId).get();
+                if (zoneDoc.exists) {
+                    const zoneData = zoneDoc.data()!;
+                    const tutorId = zoneData.createdBy || zoneData.tutorId;
+                    const participants = [studentId];
+                    if (tutorId) participants.push(tutorId);
+
+                    await db.collection('conversations').add({
+                        name: zoneData.title || "Untitled Zone",
+                        avatar: zoneData.image || "",
+                        type: 'community',
+                        zoneId: zoneId,
+                        participants: participants,
+                        lastMessage: 'Welcome to the community!',
+                        lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
+                        createdAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            }
+        } catch (error) {
+            functions.logger.error(`Error in onStudentJoinedZone for ${studentId} in ${zoneId}:`, error);
+        }
+    }
+);
+
+/**
+ * Automatically removes a student from the community conversation when they leave or are removed from a zone.
+ */
+export const onStudentLeftZone = onDocumentDeleted(
+    { document: "zones/{zoneId}/students/{studentId}" },
+    async (event) => {
+        const zoneId = event.params.zoneId;
+        const studentId = event.params.studentId;
+        const db = admin.firestore();
+
+        functions.logger.info(`Removing student ${studentId} from conversation for zone: ${zoneId}`);
+
+        try {
+            const convQuery = await db.collection('conversations')
+                .where('zoneId', '==', zoneId)
+                .where('type', '==', 'community')
+                .limit(1)
+                .get();
+
+            if (!convQuery.empty) {
+                const convRef = convQuery.docs[0].ref;
+                await convRef.update({
+                    participants: admin.firestore.FieldValue.arrayRemove(studentId)
+                });
+            }
+        } catch (error) {
+            functions.logger.error(`Error in onStudentLeftZone for ${studentId} in ${zoneId}:`, error);
+        }
+    }
+);
+

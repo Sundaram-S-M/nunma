@@ -215,8 +215,8 @@ const Classroom: React.FC = () => {
       const fetchLeaderboard = async () => {
          try {
             // 1. Fetch Followings
-            const followSnap = await getDocs(query(collection(db, 'followers'), where('followerId', '==', user.uid)));
-            const followingIds = followSnap.docs.map(d => d.data().followingId);
+            const followSnap = await getDocs(collection(db, 'users', user.uid, 'following'));
+            const followingIds = followSnap.docs.map(d => d.id);
 
             const students: any[] = [];
 

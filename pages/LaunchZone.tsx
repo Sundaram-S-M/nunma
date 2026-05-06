@@ -211,23 +211,6 @@ const LaunchZone: React.FC = () => {
       console.log("Firestore WRITE: adding document to 'zones' collection");
       const zoneRef = await addDoc(collection(db, 'zones'), zoneData);
 
-      console.log("Firestore WRITE: adding document to 'conversations' collection");
-      // Create community conversation for the zone
-      try {
-        await addDoc(collection(db, 'conversations'), {
-          name: zoneTitle,
-          avatar: zoneImage,
-          type: 'community',
-          zoneId: zoneRef.id,
-          participants: [user.uid],
-          lastMessage: 'Welcome to the community!',
-          lastMessageTime: serverTimestamp(),
-          createdAt: serverTimestamp()
-        });
-      } catch (convErr) {
-        console.warn("Non-fatal: Could not create conversation document (possible permission issue):", convErr);
-      }
-
       navigate('/workplace');
     } catch (err) {
       console.error("Error creating zone:", err);

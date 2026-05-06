@@ -112,11 +112,27 @@ service cloud.firestore {
       allow write: if isSignedIn() && isZoneCreator(zoneId);
     }
 
+    // ZONES/LEADERBOARD (Fix 2)
+    match /zones/{zoneId}/leaderboard/{entryId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
 
-    // --- CERTIFICATES Collection ---
-    // Rule: public read, no client writes
-    match /certificates/{certId} {
-      allow read: if true;  // Public verification portal - employers don't need to be logged in
+
+    // --- CERTIFICATES Collection (Fix 1) ---
+    // Rule: public read, no client writes. Using collection group match for platform-wide queries.
+    match /{path=**}/certificates/{certId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // --- ISSUED CERTIFICATES Collection (Fix 1 follow-up) ---
+    // Used in Classroom.tsx for student certificate queries
+    match /{path=**}/issued_certificates/{certId} {
+      allow read: if isSignedIn() && (
+        resource.data.studentId == request.auth.uid || 
+        resource.data.tutorId == request.auth.uid
+      );
       allow write: if false;
     }
 
@@ -152,6 +168,24 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+
+      // Rule for the user's followers list (Fix: New Follower Mechanics)
+      match /followers/{followerId} {
+        // Anyone logged in can see who is following this user (allows count aggregations)
+        allow read: if request.auth != null;
+        
+        // A user can ONLY add or remove themselves from another person's follower list
+        allow write: if request.auth != null && request.auth.uid == followerId;
+      }
+
+      // Rule for the user's following list (Fix: New Follower Mechanics)
+      match /following/{followingId} {
+        // Anyone logged in can see who this user is following
+        allow read: if request.auth != null;
+        
+        // A user can ONLY modify their own following list
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
 
       match /enrollments/{enrollmentId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;

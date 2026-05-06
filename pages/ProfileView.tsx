@@ -51,7 +51,8 @@ import {
   setDoc,
   deleteDoc,
   increment,
-  getCountFromServer
+  getCountFromServer,
+  writeBatch
 } from 'firebase/firestore';
 
 import PhotoAdjustModal from '../components/PhotoAdjustModal';
@@ -626,7 +627,7 @@ const ProfileView: React.FC = () => {
 
       // Check following status if not me
       if (currentUser && targetId !== currentUser.uid) {
-        getDoc(doc(db, 'followers', `${currentUser.uid}_${targetId}`)).then(d => setIsFollowing(d.exists()));
+        getDoc(doc(db, 'users', currentUser.uid, 'following', targetId)).then(d => setIsFollowing(d.exists()));
       }
     } else {
       // Fallback for mock mode if user is viewing self
@@ -680,9 +681,8 @@ const ProfileView: React.FC = () => {
 
     try {
       // Fetch accurate followers count
-      const followersColl = collection(db, 'followers');
-      const followersQuery = query(followersColl, where('followingId', '==', uid));
-      const followersSnap = await getCountFromServer(followersQuery);
+      const followersColl = collection(db, 'users', uid, 'followers');
+      const followersSnap = await getCountFromServer(followersColl);
       const actualFollowersCount = followersSnap.data().count;
       setProfileUser((prev: any) => prev ? { ...prev, followersCount: actualFollowersCount } : null);
     } catch (error) {
@@ -715,27 +715,47 @@ const ProfileView: React.FC = () => {
   const handleFollow = async () => {
     if (!currentUser || !profileUser || !db) return;
 
-    const followId = `${currentUser.uid}_${profileUser.uid}`;
-    const followRef = doc(db, 'followers', followId);
+    const batch = writeBatch(db);
+    const followerRef = doc(db, 'users', profileUser.uid, 'followers', currentUser.uid);
+    const followingRef = doc(db, 'users', currentUser.uid, 'following', profileUser.uid);
+    const targetUserRef = doc(db, 'users', profileUser.uid);
+    const currentUserRef = doc(db, 'users', currentUser.uid);
 
     try {
       if (isFollowing) {
-        await deleteDoc(followRef);
-        await updateDoc(doc(db, 'users', profileUser.uid), { followersCount: increment(-1) });
-        await updateDoc(doc(db, 'users', currentUser.uid), { followingCount: increment(-1) });
+        batch.delete(followerRef);
+        batch.delete(followingRef);
+        batch.update(targetUserRef, { followersCount: increment(-1) });
+        batch.update(currentUserRef, { followingCount: increment(-1) });
+        
+        await batch.commit();
         setIsFollowing(false);
+        toast.success(`Unfollowed ${profileUser.name}`);
       } else {
-        await setDoc(followRef, {
-          followerId: currentUser.uid,
-          followingId: profileUser.uid,
-          createdAt: new Date().toISOString()
+        const followData = {
+          uid: currentUser.uid,
+          name: currentUser.name,
+          avatar: currentUser.avatar,
+          createdAt: serverTimestamp()
+        };
+        
+        batch.set(followerRef, followData);
+        batch.set(followingRef, {
+          uid: profileUser.uid,
+          name: profileUser.name,
+          avatar: profileUser.avatar,
+          createdAt: serverTimestamp()
         });
-        await updateDoc(doc(db, 'users', profileUser.uid), { followersCount: increment(1) });
-        await updateDoc(doc(db, 'users', currentUser.uid), { followingCount: increment(1) });
+        batch.update(targetUserRef, { followersCount: increment(1) });
+        batch.update(currentUserRef, { followingCount: increment(1) });
+
+        await batch.commit();
         setIsFollowing(true);
+        toast.success(`Following ${profileUser.name}`);
       }
     } catch (err) {
       console.error("Error toggling follow:", err);
+      toast.error("Failed to update follow status");
     }
   };
 
@@ -749,7 +769,7 @@ const ProfileView: React.FC = () => {
       // If NOT me, verify mutual follow first
       if (!isMe) {
         const meFollowingThem = isFollowing;
-        const themFollowingMeSnap = await getDoc(doc(db, 'followers', `${profileUser.uid}_${currentUser.uid}`));
+        const themFollowingMeSnap = await getDoc(doc(db, 'users', profileUser.uid, 'following', currentUser.uid));
         const themFollowingMe = themFollowingMeSnap.exists();
 
         setProfileUserFollowsMe(themFollowingMe);
@@ -761,10 +781,9 @@ const ProfileView: React.FC = () => {
         }
       }
 
-      const q = query(collection(db, 'followers'), where('followingId', '==', profileUser.uid));
-      const snap = await getDocs(q);
+      const snap = await getDocs(collection(db, 'users', profileUser.uid, 'followers'));
 
-      const followersIds = snap.docs.map(doc => doc.data().followerId);
+      const followersIds = snap.docs.map(doc => doc.id);
       if (followersIds.length === 0) {
         setFollowersList([]);
         setLoadingFollowers(false);

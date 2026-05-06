@@ -820,16 +820,12 @@ async (req, res) => {
                 }
             }
         });
-        // Return success to Razorpay immediately after enrollment is confirmed
-        res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
-        // Step 4: Post-Fulfillment Mail Queueing (fire-and-forget)
-        // These writes trigger the async Zoho invoicing pipeline via onDocumentCreated.
-        // They are intentionally non-blocking so Razorpay always gets a fast 200 response.
+        // Step 4: Post-Fulfillment Mail Queueing
         const amountInInr = ((payment === null || payment === void 0 ? void 0 : payment.amount) || orderData.amount || 0) / 100;
         const gstAmount = amountInInr * 0.18;
         if (isPlatformOrder) {
             // Receipt for Tutor Platform Subscription
-            db.collection('mail_queue').add({
+            await db.collection('mail_queue').add({
                 uid: orderData.tutorUid,
                 amount: amountInInr,
                 gst: gstAmount,
@@ -838,11 +834,11 @@ async (req, res) => {
                 paymentId,
                 status: 'pending',
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
-            }).catch(err => console.error('[Zoho Invoice] Non-blocking mail_queue write failed:', err));
+            });
         }
         else {
             // 1. Invoice for Student Enrollment
-            db.collection('mail_queue').add({
+            await db.collection('mail_queue').add({
                 uid: orderData.studentUid,
                 amount: amountInInr,
                 gst: gstAmount,
@@ -850,12 +846,12 @@ async (req, res) => {
                 paymentId,
                 status: 'pending',
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
-            }).catch(err => console.error('[Zoho Invoice] Non-blocking mail_queue write failed:', err));
+            });
             // 2. Platform Fee Receipt for Tutor (Commission)
             if (orderData.commission && orderData.tutorUid) {
                 const commissionInInr = orderData.commission / 100;
                 const commissionGst = commissionInInr * 0.18;
-                db.collection('mail_queue').add({
+                await db.collection('mail_queue').add({
                     uid: orderData.tutorUid,
                     amount: commissionInInr,
                     gst: commissionGst,
@@ -863,9 +859,10 @@ async (req, res) => {
                     paymentId,
                     status: 'pending',
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
-                }).catch(err => console.error('[Zoho Invoice] Non-blocking mail_queue write failed:', err));
+                });
             }
         }
+        res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
     }
     catch (error) {
         functions.logger.error("CRITICAL: Webhook processing failed.", error);
@@ -1500,7 +1497,7 @@ exports.submitExam = (0, https_1.onCall)({ cors: true }, async (request) => {
         throw new functions.https.HttpsError("internal", error.message || "Failed to submit exam.");
     }
 });
-exports.registerIssuance = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], cors: true }, async (request) => {
+exports.registerIssuance = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a;
     try {
         const db = admin.firestore();
@@ -1579,30 +1576,6 @@ exports.registerIssuance = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], co
             certificateIssuedAt: admin.firestore.FieldValue.serverTimestamp()
         });
         await batch.commit();
-        // 8. Fire-and-forget certificate notification email via Resend
-        const resendApiKey = process.env.RESEND_API_KEY;
-        if (resendApiKey && studentEmail !== "no-email@nunma.in") {
-            const resend = new resend_1.Resend(resendApiKey);
-            const verificationLink = `https://nunma.in/verify/${urnUuid}`;
-            resend.emails.send({
-                from: 'Nunma <support@nunma.in>',
-                to: studentEmail,
-                subject: "Your Nunma Certificate is Ready 🎓",
-                html: `
-                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                        <h1 style="color: #040457;">Congratulations, ${studentName}! 🎉</h1>
-                        <p>Your certificate for <strong>${zoneTitle}</strong> has been successfully issued.</p>
-                        <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                            <p style="margin: 5px 0; font-size: 12px; color: #666;"><b>Certificate ID:</b></p>
-                            <p style="margin: 5px 0; font-size: 14px; color: #040457; word-break: break-all;">${urnUuid}</p>
-                        </div>
-                        <a href="${verificationLink}" style="display: inline-block; background: #040457; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Verify Certificate</a>
-                        <p style="margin-top: 20px; color: #666; font-size: 14px;">You can verify your certificate anytime at:<br/><a href="${verificationLink}" style="color: #040457;">${verificationLink}</a></p>
-                        <p style="margin-top: 20px;">Happy learning,<br/><b>Nunma Team</b></p>
-                    </div>
-                `
-            }).catch(err => console.error('[Certificate Email] Failed:', err));
-        }
         return { certificateId: urnUuid, payload };
     }
     catch (error) {
@@ -1836,32 +1809,11 @@ exports.joinZoneByInvite = (0, https_1.onCall)({ cors: true }, async (request) =
         if (studentDoc.exists) {
             return { success: true, message: "Already enrolled" };
         }
-        const userDoc = await db.collection("users").doc(uid).get();
-        const userData = userDoc.data() || {};
-        const zoneDoc = await db.collection("zones").doc(zoneId).get();
-        const zoneData = zoneDoc.data() || {};
-        const batch = db.batch();
-        batch.set(studentRef, {
-            uid: uid,
-            name: userData.name || "Student",
-            email: userData.email || "",
-            avatar: userData.avatar || "",
+        await studentRef.set({
             status: "active",
-            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
             joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-            source: "invite"
+            source: "whitelist"
         });
-        const enrollmentRef = db.collection("users").doc(uid).collection("enrollments").doc(zoneId);
-        batch.set(enrollmentRef, {
-            zoneId,
-            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
-            tutorId: zoneData.tutorId || zoneData.createdBy || "",
-            zoneName: zoneData.title || zoneData.name || "Untitled Zone"
-        });
-        batch.update(db.collection("zones").doc(zoneId), {
-            studentCount: admin.firestore.FieldValue.increment(1)
-        });
-        await batch.commit();
         return { success: true };
     }
     catch (error) {
@@ -1934,37 +1886,12 @@ exports.processWhitelist = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], co
                 results.alreadyEnrolled = 1;
                 return Object.assign({ success: true }, results);
             }
-            // Get user profile to populate name/email
-            const userDoc = await db.collection("users").doc(uid).get();
-            const userData = userDoc.data() || {};
-            // Atomic batch write for enrollment
-            const batch = db.batch();
-            // 1. Enrollment in zone
-            batch.set(studentRef, {
-                uid: uid,
-                name: userData.name || "Student",
-                email: userData.email || normalizedEmail,
-                avatar: userData.avatar || "",
+            await studentRef.set({
                 status: "active",
                 source: "whitelist",
-                enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
-                joinedAt: admin.firestore.FieldValue.serverTimestamp(), // legacy support
+                joinedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-            // 2. Enrollment in user document
-            const enrollmentRef = db.collection("users").doc(uid).collection("enrollments").doc(zoneId);
-            batch.set(enrollmentRef, {
-                zoneId,
-                enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
-                tutorId: zoneData.tutorId || zoneData.createdBy,
-                zoneName: zoneTitle
-            });
-            // 3. Increment studentCount
-            batch.update(db.collection("zones").doc(zoneId), {
-                studentCount: admin.firestore.FieldValue.increment(1)
-            });
-            await batch.commit();
             results.enrolled = 1;
-            return Object.assign(Object.assign({ success: true }, results), { studentUid: uid, zoneName: zoneTitle, tutorName: zoneData.tutorName || "Your Instructor" });
         }
         else {
             // User doesn't exist, proceed to add their email to the invites subcollection
