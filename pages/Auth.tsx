@@ -187,7 +187,7 @@ const Auth: React.FC = () => {
           <div className="relative z-10">
             <div className="flex items-center gap-4 mb-24">
               <div className="w-20 h-20 rounded-[1.5rem] flex items-center justify-center shadow-2xl rotate-3 overflow-hidden bg-[#040457]">
-                <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-full h-full object-cover" width="500" height="500" />
+                <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-full h-full object-cover" />
               </div>
               <span className="text-4xl font-black tracking-tighter">nunma</span>
             </div>
@@ -225,7 +225,7 @@ const Auth: React.FC = () => {
           <div className="max-w-md mx-auto w-full">
             <div className="lg:hidden flex items-center gap-3 mb-16">
               <div className="w-10 h-10 bg-[#040457] rounded-xl flex items-center justify-center overflow-hidden">
-                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" width="500" height="500" />
+                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" />
               </div>
               <span className="text-2xl font-black tracking-tighter text-[#040457]">nunma</span>
             </div>
@@ -245,7 +245,7 @@ const Auth: React.FC = () => {
                     disabled={isLoading}
                     className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
                   >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" width="500" height="500" />
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                     Continue with Google
                   </button>
 
@@ -319,7 +319,7 @@ const Auth: React.FC = () => {
                       disabled={isLoading}
                       className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
                     >
-                      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" width="500" height="500" />
+                      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                       Sign up with Google
                     </button>
 

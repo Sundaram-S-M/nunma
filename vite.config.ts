@@ -18,6 +18,21 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'vendor-livekit': ['@livekit/components-react', 'livekit-client'],
+              'vendor-pdf': ['react-pdf', 'pdfjs-dist'],
+              'vendor-charts': ['recharts'],
+              'vendor-firebase': [
+                'firebase/app', 'firebase/auth', 'firebase/firestore', 
+                'firebase/functions', 'firebase/storage'
+              ],
+            }
+          }
+        }
       }
     };
 });

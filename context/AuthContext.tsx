@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (userDoc.exists()) {
               const data = userDoc.data() as UserProfile;
               if (!data.subscription_entitlements) {
-                data.subscription_entitlements = { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 };
+                data.subscription_entitlements = { storageLimit: 3221225472, storageUsed: 0, studentLimit: 100 };
               }
               setUser({ ...data, uid: firebaseUser.uid });
               setIsAuthenticated(true);
@@ -112,7 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 name: firebaseUser.displayName || 'New User',
                 avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
                 role: UserRole.STUDENT,
-                subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+                subscription_entitlements: { storageLimit: 3221225472, storageUsed: 0, studentLimit: 100 },
                 storage_used_bytes: 0,
                 studentProfile: { isComplete: false },
                 tutorProfile: { isComplete: false }

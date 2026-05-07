@@ -39,10 +39,64 @@ const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, type = 'avat
     };
 
     const handleSave = () => {
-        // In a real production app, we would use a canvas to crop the image based on scale/position.
-        // For this demonstration, we'll return the original image as if it were cropped.
-        // The UI effectively simulates the adjustment flawlessly.
-        onSave(image);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx || !imageRef.current || !containerRef.current) {
+            onSave(image);
+            return;
+        }
+
+        const img = imageRef.current;
+        const container = containerRef.current;
+        const containerRect = container.getBoundingClientRect();
+
+        // Crop frame dimensions (must match the CSS)
+        const cropW = isBanner ? 480 : 320;
+        const cropH = isBanner ? 160 : 320;
+
+        // Output size (1x for now, increase multiplier for higher res)
+        const outputMultiplier = 2;
+        canvas.width = cropW * outputMultiplier;
+        canvas.height = cropH * outputMultiplier;
+
+        // Calculate the image's natural dimensions vs rendered
+        const renderedW = 500; // matches CSS w-[500px]
+        const renderedH = (img.naturalHeight / img.naturalWidth) * renderedW;
+        const scaleRatio = img.naturalWidth / renderedW;
+
+        // Center of the container
+        const cx = containerRect.width / 2;
+        const cy = containerRect.height / 2;
+
+        // The crop frame is centered in the container.
+        // Top-left of crop frame in container coords:
+        const cropLeft = cx - cropW / 2;
+        const cropTop = cy - cropH / 2;
+
+        // Image center after transform (image is centered + translated + scaled)
+        // In container coords, image center = (cx + position.x, cy + position.y)
+        // Image top-left after scale = center - (renderedW * scale / 2), center - (renderedH * scale / 2)
+        const imgLeft = cx + position.x - (renderedW * scale) / 2;
+        const imgTop = cy + position.y - (renderedH * scale) / 2;
+
+        // Source rectangle in natural image pixels
+        const sx = ((cropLeft - imgLeft) / scale) * scaleRatio;
+        const sy = ((cropTop - imgTop) / scale) * scaleRatio;
+        const sw = (cropW / scale) * scaleRatio;
+        const sh = (cropH / scale) * scaleRatio;
+
+        try {
+            ctx.drawImage(
+                img,
+                Math.max(0, sx), Math.max(0, sy), sw, sh,
+                0, 0, canvas.width, canvas.height
+            );
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            onSave(dataUrl);
+        } catch (e) {
+            console.error('Canvas crop failed:', e);
+            onSave(image);
+        }
     };
 
     const modalRef = useFocusTrap(true, onClose);

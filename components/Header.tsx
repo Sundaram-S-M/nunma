@@ -208,7 +208,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
           onMouseEnter={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = 'var(--text-muted)'; }}
           onMouseLeave={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
         >
-          <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} width="500" height="500" />
+          <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         </button>
 
         {/* ── Dropdown ───────────────────────────── */}
@@ -235,7 +235,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
             <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                 <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
-                  <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} width="500" height="500" />
+                  <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                 </div>
                 <div style={{ overflow: 'hidden', minWidth: 0 }}>
                   <p style={{ fontWeight: 700, fontSize: '0.8125rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>

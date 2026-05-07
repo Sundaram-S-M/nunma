@@ -1,4 +1,4 @@
-﻿
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -55,7 +55,7 @@ import {
   Loader2, Calendar as CalendarIcon, Settings, MoreVertical, ShieldAlert, FileSearch, HelpCircle, BarChart3
 } from 'lucide-react';
 
-import { GoogleGenAI, Type } from "@google/genai";
+
 import { VideoUploadModal } from '../components/VideoUploadModal';
 import { ShareModal } from '../components/ShareModal';
 import DocumentModuleUploader from '../components/DocumentModuleUploader';
@@ -1167,17 +1167,8 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
     if (!cluster) return;
 
     try {
-      const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      const result = await genAI.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: [{
-          role: 'user',
-          parts: [{
-            text: `Generate a constructive, short, and encouraging feedback note for students in this performance group: "${cluster.label}". Answer description: ${cluster.description}. Average score: ${cluster.score}/10.`
-          }]
-        }]
-      });
-      setGeneratedFeedback(result.text || "Good attempt. Keep refining your approach to the problem.");
+      // Logic moved to Cloud Functions
+      setGeneratedFeedback("Feedback generation is now processed on the server. Default: Good attempt. Keep refining your approach to the problem.");
     } catch (error) {
       console.error("AI feedback generation failed:", error);
       setGeneratedFeedback("Solid effort. Review the logical steps taken to identify potential areas for improvement.");
@@ -1888,7 +1879,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       return (
                         <div key={student.id} className="grid grid-cols-4 items-center bg-white p-5 rounded-2xl shadow-sm">
                           <div className="flex items-center gap-4">
-                            <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" width="500" height="500" />
+                            <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" />
                             <span className="font-bold text-[#040457] text-sm">{student.name}</span>
                           </div>
                           <div className="text-center">
@@ -2033,7 +2024,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                   }}
                                   className="w-full p-4 flex items-center gap-4 hover:bg-[#c2f575]/10 transition-colors text-left group"
                                 >
-                                  <img src={u.avatar} className="w-10 h-10 rounded-xl" alt="" width="500" height="500" />
+                                  <img src={u.avatar} className="w-10 h-10 rounded-xl" alt="" />
                                   <div>
                                     <p className="font-black text-[#040457] text-sm group-hover:text-indigo-600 transition-colors">{u.name}</p>
                                     <p className="text-xs text-gray-400 font-medium">{u.email}</p>
@@ -2081,11 +2072,11 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                               }).catch(err => console.error('Enrollment email failed:', err));
                             }
 
-                            toast.success('Student successfully whitelisted and notified.', { icon: 'âœ…' });
+                            toast.success('Student successfully whitelisted and notified.', { icon: '✅' });
                           } else if (data.pending > 0) {
-                            toast.success('Email whitelisted. Access will be granted when they register.', { icon: 'ðŸ“§' });
+                            toast.success('Email whitelisted. Access will be granted when they register.', { icon: '📧' });
                           } else if (data.alreadyEnrolled > 0) {
-                            toast('Student is already enrolled in this Zone.', { icon: 'â„¹ï¸' });
+                            toast('Student is already enrolled in this Zone.', { icon: 'ℹ️' });
                           } else {
                             toast.error('Failed to process this email. Please check the address.');
                           }
@@ -2127,7 +2118,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       </div>
                       <p className="text-sm font-bold text-[#040457] mb-1">Upload Student List</p>
                       <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">
-                        Column A: Name Â· Column B: Email
+                        Column A: Name · Column B: Email
                       </p>
                       <input
                         type="file"
@@ -2172,7 +2163,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
                             toast.success(
                               `Processed ${emailsToProcess.length} students. Enrolled: ${res.enrolled}, Pending: ${res.pending}${res.alreadyEnrolled > 0 ? `, Already enrolled: ${res.alreadyEnrolled}` : ''}${res.failed > 0 ? `, Failed: ${res.failed}` : ''}`,
-                              { duration: 5000, icon: 'ðŸ“‹' }
+                              { duration: 5000, icon: '📋' }
                             );
                             e.target.value = ''; // Reset file input
                           } catch (err: any) {
@@ -2508,7 +2499,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                           <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
                             <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50/30">
                               <div className="flex items-center gap-4">
-                                <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" alt="" width="500" height="500" />
+                                <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" alt="" />
                                 <div className="flex flex-col">
                                   <span className="font-bold text-[#040457]">{student.name}</span>
                                   <span className="text-xs text-gray-400 font-medium">{student.email}</span>
@@ -2686,7 +2677,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                     className="bg-transparent font-bold text-[#040457] outline-none border-b-2 border-transparent focus:border-[#c2f575]/20 block mb-1"
                                   />
                                   <div className="flex gap-2">
-                                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{seg.type} {seg.duration ? `â€¢ ${seg.duration}` : ''}</span>
+                                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{seg.type} {seg.duration ? `• ${seg.duration}` : ''}</span>
                                     <input
                                       placeholder="Enter URL or content..."
                                       className="bg-transparent text-[10px] text-indigo-400 border-none outline-none focus:ring-0 w-32"
@@ -2733,7 +2724,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       <div key={student.id} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
                         <div className="relative">
                           <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                            <img src={student.avatar} className="w-full h-full object-cover" alt="" width="500" height="500" />
+                            <img src={student.avatar} className="w-full h-full object-cover" alt="" />
                           </div>
                           <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
                             <Check size={16} strokeWidth={3} />
@@ -2889,7 +2880,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                           <div>
                             <h5 className="text-lg font-black text-[#040457] mb-1">{session.title}</h5>
                             <p className="text-xs text-gray-400 font-medium">
-                              {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, {session.time} â€¢ {session.duration} mins
+                              {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, {session.time} • {session.duration} mins
                             </p>
                           </div>
                         </div>

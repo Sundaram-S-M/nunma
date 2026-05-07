@@ -1,6 +1,6 @@
 {
   "projects": {
-    "Production": "nunma-by-cursor"
+    "default": "nunma-by-cursor"
   },
   "targets": {},
   "etags": {}

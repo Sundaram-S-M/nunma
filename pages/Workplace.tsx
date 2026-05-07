@@ -34,7 +34,7 @@ import {
 import { VideoUploadModal } from '../components/VideoUploadModal';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 
-import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { db, functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../context/AuthContext';
@@ -291,15 +291,15 @@ const Workplace: React.FC = () => {
 
   const handleCloseStream = async () => {
     setShowStreamRoom(false);
-    if (activeSession && activeSession.zoneId) {
-      // Update status to ended
+    if (activeSession && activeSession.zoneId && db) {
       try {
-        // Need to import updateDoc/doc if not imported
-        // But we can just close UI for now, status update logic:
-        // await updateDoc(doc(db, 'zones', activeSession.zoneId, 'sessions', activeSession.id), { status: 'ended' });
-        console.log("Stream closed");
+        await updateDoc(doc(db, 'zones', activeSession.zoneId, 'sessions', activeSession.id), {
+          status: 'ended',
+          endedAt: serverTimestamp()
+        });
+        console.log('Stream closed and status updated.');
       } catch (e) {
-        console.error("Error updating session status", e);
+        console.error('Error updating session status', e);
       }
     }
     setActiveSession(null);
@@ -603,7 +603,7 @@ const Workplace: React.FC = () => {
                 {zonesList.length > 0 ? zonesList.map(zone => (
                   <div key={zone.id} className="group p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:bg-white hover:shadow-2xl hover:border-[#c2f575] transition-all duration-500 relative overflow-hidden">
                     <div className="h-40 rounded-[1.5rem] overflow-hidden mb-6 relative shadow-lg">
-                      <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" width="500" height="500" />
+                      <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                     </div>
                     <h4 className="text-xl font-black text-[#040457] mb-4 line-clamp-1">{zone.title}</h4>
                     <button onClick={() => navigate(`/workplace/manage/${zone.id}`)} className="w-full py-4 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Manage Zone</button>
@@ -674,7 +674,7 @@ const Workplace: React.FC = () => {
                   <div key={`${student.id}-${student.zoneId}`} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
                     <div className="relative">
                       <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                        <img src={student.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} className="w-full h-full object-cover" alt="" width="500" height="500" />
+                        <img src={student.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} className="w-full h-full object-cover" alt="" />
                       </div>
                       <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
                         <Check size={16} strokeWidth={3} />

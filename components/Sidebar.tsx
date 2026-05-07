@@ -26,13 +26,13 @@ interface SidebarProps {
 
 const LogoIcon = () => (
   <Link to="/dashboard" aria-label="Dashboard">
-    <img src="/assets/logo-icon.png" alt="Nunma" style={{ width: 28, height: 28, objectFit: 'contain', display: 'block' }} width="500" height="500" />
+    <img src="/assets/logo-icon.png" alt="Nunma" style={{ width: 28, height: 28, objectFit: 'contain', display: 'block' }} />
   </Link>
 );
 
 const LogoFull = () => (
   <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
-    <img src="/assets/logo-full.png" alt="Nunma" style={{ height: 26, objectFit: 'contain', display: 'block' }} width="500" height="500" />
+    <img src="/assets/logo-full.png" alt="Nunma" style={{ height: 26, objectFit: 'contain', display: 'block' }} />
   </Link>
 );
 

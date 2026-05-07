@@ -7,13 +7,13 @@ import { ArrowLeft, Monitor } from 'lucide-react';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 
-const WhiteboardPage = () => {
-  const { zoneId } = useParams();
+const WhiteboardPage: React.FC = () => {
+  const { zoneId } = useParams<{ zoneId: string }>();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-  const [zone, setZone] = useState(null);
+  const [zone, setZone] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
@@ -30,6 +30,11 @@ const WhiteboardPage = () => {
 
     const fetchZone = async () => {
       try {
+        if (!db || !zoneId) {
+          setError('Database not initialized');
+          setLoading(false);
+          return;
+        }
         const zoneDoc = await getDoc(doc(db, 'zones', zoneId));
         if (zoneDoc.exists()) {
           setZone(zoneDoc.data());
@@ -91,7 +96,7 @@ const WhiteboardPage = () => {
 
   const isThala = user?.uid === zone?.createdBy;
 
-  const handleMount = (editor) => {
+  const handleMount = (editor: any) => {
     // Requirement Step 2: If !isThala && isMobile, force isReadonly
     if (!isThala && isMobile) {
       editor.updateInstanceState({ isReadonly: true });

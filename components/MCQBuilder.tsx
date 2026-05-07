@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Trash2, Plus, Clock, Brain, Loader2, Award, FileText, Sparkles } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../utils/firebase';
 
 export interface MCQ {
     id: string;
@@ -52,43 +54,60 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
         setQuestions(questions.filter(q => q.id !== id));
     };
 
-    const generateMockQuestions = (count: number, offset: number = 0): MCQ[] => {
-        return Array.from({ length: count }).map((_, i) => ({
-            id: `${Date.now()}_${offset + i}`,
-            question: i % 2 === 0 
-                ? `Based on the uploaded document, what is the core principle mentioned in section ${offset + i + 1}?`
-                : `Which of the following aligns with the framework analyzed in chapter ${offset + i + 1}?`,
-            options: ['To define core terminology', 'To establish practical applications', 'To evaluate historical context', 'To summarize theoretical models'],
-            correctAnswer: Math.floor(Math.random() * 4),
+    const callGenerateQuiz = async (topic: string, count: number): Promise<MCQ[]> => {
+        if (!functions) {
+            console.warn('Firebase Functions not initialized.');
+            return [];
+        }
+        const generateQuiz = httpsCallable(functions, 'generateQuizDraft');
+        const result = await generateQuiz({ topic, difficulty: 'medium', numberOfQuestions: count });
+        const data = result.data as any;
+        const quizDraft = data?.quizDraft;
+        if (!quizDraft?.questions) return [];
+        return quizDraft.questions.map((q: any, i: number) => ({
+            id: `${Date.now()}_${i}`,
+            question: q.questionText || q.question || '',
+            options: q.options || ['', '', '', ''],
+            correctAnswer: q.correctOptionIndex ?? q.correctAnswer ?? 0,
             timerSeconds: 60,
-            marks: 5
+            marks: q.allocatedMarks || 5
         }));
     };
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         setIsGenerating(true);
-
-        setTimeout(() => {
-            const generated = generateMockQuestions(targetCount);
+        try {
+            // Read file content as text for the AI prompt
+            const text = await file.text();
+            const topic = text.slice(0, 8000); // Limit to first 8000 chars for the AI
+            const generated = await callGenerateQuiz(topic, targetCount);
             setQuestions([...questions, ...generated]);
+        } catch (error) {
+            console.error('AI Quiz Generation Error:', error);
+            alert('Failed to generate questions. Please try again.');
+        } finally {
             setIsGenerating(false);
-
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
-        }, 3000);
+        }
     };
 
-    const handleGenerateMore = () => {
+    const handleGenerateMore = async () => {
         setIsGeneratingMore(true);
-        setTimeout(() => {
-            const moreQuestions = generateMockQuestions(5, questions.length);
+        try {
+            const existingText = questions.map(q => q.question).join('\n');
+            const topic = `Generate 5 more unique questions different from these existing ones:\n${existingText}`;
+            const moreQuestions = await callGenerateQuiz(topic, 5);
             setQuestions([...questions, ...moreQuestions]);
+        } catch (error) {
+            console.error('AI Quiz Generation Error:', error);
+        } finally {
             setIsGeneratingMore(false);
-        }, 2000);
+        }
     };
 
     return (

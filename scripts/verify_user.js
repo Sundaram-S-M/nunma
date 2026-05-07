@@ -9,7 +9,13 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const uid = 'MmyCfWZsE7MdXJmpkBEnJVFkbgE2';
+const uid = process.env.TARGET_UID;
+
+if (!uid) {
+    console.error('ERROR: TARGET_UID environment variable is not set.');
+    console.log('Usage: TARGET_UID=<firebase_uid> node scripts/verify_user.js');
+    process.exit(1);
+}
 
 async function verifyUser() {
     const userRef = db.collection('users').doc(uid);

@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Users, HardDrive, AlertCircle, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../utils/firebase';
 
 interface AddonManagerModalProps {
     isOpen: boolean;
@@ -67,10 +69,67 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
         setBlockCount(1); // Reset quantity when switching tabs
     };
 
-    const handleCheckout = () => {
-        const addonCode = activeTab === 'student' ? 'ADDON_STUDENT_50' : 'ADDON_STORAGE_50';
-        window.open(`https://billing.zoho.in/subscribe/${addonCode}?quantity=${blockCount}`, '_blank');
-        onClose();
+    const razorpayScriptReady = useRef(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => { razorpayScriptReady.current = true; };
+        document.body.appendChild(script);
+        return () => {
+            razorpayScriptReady.current = false;
+            document.body.removeChild(script);
+        };
+    }, []);
+
+    const handleCheckout = async () => {
+        if (!functions || !razorpayScriptReady.current || !(window as any).Razorpay) {
+            alert('Payment system not ready. Please wait a moment and try again.');
+            return;
+        }
+        setIsProcessing(true);
+        try {
+            const createOrder = httpsCallable(functions, 'createRazorpayOrder');
+            const result = await createOrder({
+                amount: (pricing.total * 100).toString(), // Convert to paise
+                type: 'addon',
+                addonType: activeTab,
+                quantity: blockCount
+            });
+            const orderData = result.data as any;
+            if (!orderData?.id) throw new Error('Invalid order response');
+
+            const options = {
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+                amount: orderData.amount,
+                currency: orderData.currency || 'INR',
+                name: 'Nunma Academy',
+                description: `Add-on: ${totalUnitsGained} ${unitLabel}`,
+                order_id: orderData.id,
+                handler: (response: any) => {
+                    alert(`Add-on purchased! Payment ID: ${response.razorpay_payment_id}`);
+                    onClose();
+                },
+                prefill: {
+                    name: user?.name || '',
+                    email: user?.email || '',
+                },
+                theme: { color: '#040457' }
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.on('payment.failed', (response: any) => {
+                alert(`Payment failed: ${response.error.description}`);
+            });
+            rzp.open();
+        } catch (err: any) {
+            console.error('Addon checkout error:', err);
+            alert(`Checkout failed: ${err.message || 'Unknown error'}`);
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const handleUpgrade = () => {

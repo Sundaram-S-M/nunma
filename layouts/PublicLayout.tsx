@@ -14,7 +14,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center overflow-hidden">
-                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" width="500" height="500" />
+                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" />
               </div>
               <span className="text-2xl font-black tracking-tight text-brand-blue">
                 Nunma

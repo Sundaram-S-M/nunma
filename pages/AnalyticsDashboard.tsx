@@ -15,18 +15,18 @@ import { doc, getDoc, collection, getDocs, query, where, orderBy } from 'firebas
 
 const COLORS = ['#1A1A4E', '#c2f575', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-const AnalyticsDashboard = () => {
-  const { zoneId } = useParams();
+const AnalyticsDashboard: React.FC = () => {
+  const { zoneId } = useParams<{ zoneId: string }>();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   
-  const [zone, setZone] = useState(null);
-  const [students, setStudents] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [exams, setExams] = useState([]);
-  const [allSubmissions, setAllSubmissions] = useState([]);
+  const [zone, setZone] = useState<any>(null);
+  const [students, setStudents] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [exams, setExams] = useState<any[]>([]);
+  const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -35,6 +35,11 @@ const AnalyticsDashboard = () => {
       try {
         setLoading(true);
         
+        if (!db || !zoneId) {
+          setError('Database not initialized');
+          setLoading(false);
+          return;
+        }
         // 1. Fetch Zone Details
         const zoneDoc = await getDoc(doc(db, 'zones', zoneId));
         if (!zoneDoc.exists()) {
@@ -43,7 +48,7 @@ const AnalyticsDashboard = () => {
           return;
         }
         
-        const zoneData = { id: zoneDoc.id, ...zoneDoc.data() };
+        const zoneData: any = { id: zoneDoc.id, ...zoneDoc.data() };
         
         // Auth check - user must be creator or tutor
         if (zoneData.createdBy !== user?.uid && zoneData.tutorId !== user?.uid) {
@@ -74,11 +79,11 @@ const AnalyticsDashboard = () => {
         );
         const submissionSnaps = await Promise.all(submissionPromises);
         
-        const subData = [];
+        const subData: any[] = [];
         submissionSnaps.forEach((snap, idx) => {
           const examId = examData[idx].id;
-          snap.forEach(doc => {
-            subData.push({ id: doc.id, examId, ...doc.data() });
+          snap.forEach(d => {
+            subData.push({ id: d.id, examId, ...d.data() });
           });
         });
         
@@ -182,7 +187,7 @@ const AnalyticsDashboard = () => {
 
   // 1. Enrollment Trends (Group by Week)
   const enrollmentTrends = () => {
-     const weeks = {};
+     const weeks: Record<string, number> = {};
      students.forEach(s => {
         let date;
         if (s.joinedAt?.seconds) date = new Date(s.joinedAt.seconds * 1000);
@@ -208,7 +213,7 @@ const AnalyticsDashboard = () => {
 
   // 3. Source Breakdown
   const sourceData = () => {
-     const sources = { 'Payment': 0, 'Whitelist': 0 };
+     const sources: Record<string, number> = { 'Payment': 0, 'Whitelist': 0 };
      students.forEach(s => {
         const source = (s.source === 'payment' || s.source === 'ORDER') ? 'Payment' : 'Whitelist';
         sources[source]++;
@@ -216,7 +221,7 @@ const AnalyticsDashboard = () => {
      return Object.keys(sources).map(key => ({ name: key, value: sources[key] }));
   };
 
-  const formatCurrency = (val) => val.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+  const formatCurrency = (val: number) => val.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 
   return (
     <div className="analytics-container">

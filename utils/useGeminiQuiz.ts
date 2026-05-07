@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { httpsCallable } from 'firebase/functions';
 import { collection, doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, functions } from './firebase';
 
 export const useGeminiQuiz = (zoneId: string, sessionId: string) => {
     const [isGenerating, setIsGenerating] = useState(false);
@@ -23,7 +23,7 @@ export const useGeminiQuiz = (zoneId: string, sessionId: string) => {
     }, []);
 
     const stopAndGenerate = useCallback(async () => {
-        if (!mediaRecorderRef.current) return;
+        if (!mediaRecorderRef.current || !functions) return;
 
         setIsGenerating(true);
         mediaRecorderRef.current.stop();
@@ -43,31 +43,24 @@ export const useGeminiQuiz = (zoneId: string, sessionId: string) => {
         });
 
         try {
-            const genAI = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-
-            const prompt = "Analyze this audio segment from a class. Generate 3 multiple-choice questions in JSON format to test student understanding. Return ONLY a JSON array of objects with 'question', 'options' (array of 4 strings), and 'correctIndex' (number 0-3).";
-
-            const result = await genAI.models.generateContent({
-                model: 'gemini-1.5-flash',
-                contents: [{
-                    role: 'user',
-                    parts: [
-                        { text: prompt },
-                        {
-                            inlineData: {
-                                mimeType: "audio/webm",
-                                data: base64Audio
-                            }
-                        }
-                    ]
-                }]
+            const generateQuiz = httpsCallable(functions, 'generateQuizDraft');
+            const result = await generateQuiz({
+                audioData: base64Audio,
+                mimeType: 'audio/webm',
+                topic: 'Audio segment from live class',
+                difficulty: 'medium',
+                numberOfQuestions: 3
             });
 
-            const responseText = result.text || "";
-            const jsonMatch = responseText.match(/\[.*\]/s);
+            const data = result.data as any;
+            const quizDraft = data?.quizDraft;
 
-            if (jsonMatch) {
-                const quizzes = JSON.parse(jsonMatch[0]);
+            if (quizDraft?.questions && db) {
+                const quizzes = quizDraft.questions.map((q: any) => ({
+                    question: q.questionText || q.question,
+                    options: q.options,
+                    correctIndex: q.correctOptionIndex ?? q.correctAnswer ?? 0,
+                }));
 
                 // Save to Firestore
                 const sessionRef = doc(db, `zones/${zoneId}/sessions/${sessionId}`);
@@ -76,11 +69,11 @@ export const useGeminiQuiz = (zoneId: string, sessionId: string) => {
                 });
             }
         } catch (error) {
-            console.error("Gemini Quiz Generation Error:", error);
+            console.error("Quiz Generation Error:", error);
         } finally {
             setIsGenerating(false);
             // Restart capture for the next segment if needed
-            if (mediaRecorderRef.current.stream) {
+            if (mediaRecorderRef.current?.stream) {
                 startCapture(mediaRecorderRef.current.stream);
             }
         }

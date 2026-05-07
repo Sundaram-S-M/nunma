@@ -4,6 +4,10 @@ admin.initializeApp();
 import * as functions from "firebase-functions";
 import { onRequest, onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+import { defineSecret } from "firebase-functions/params";
+
+const resendApiKey = defineSecret('RESEND_API_KEY');
+
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 
@@ -2685,3 +2689,61 @@ export const onStudentLeftZone = onDocumentDeleted(
     }
 );
 
+export const sendEnrollmentEmail = onCall(
+    { secrets: [resendApiKey] },
+    async (request) => {
+        if (!request.auth) {
+            throw new HttpsError('unauthenticated', 'Authentication required.');
+        }
+
+        const apiKey = resendApiKey.value();
+        if (!apiKey) {
+            throw new HttpsError('internal', 'Email service not configured.');
+        }
+
+        const { studentEmail, studentName, zoneName, tutorName, zoneId } = request.data;
+        if (!studentEmail || !zoneName || !zoneId) {
+            throw new HttpsError('invalid-argument', 'Missing required fields.');
+        }
+
+        const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                from: 'Nunma <support@nunma.in>',
+                to: studentEmail,
+                subject: "You've been added to a new Zone on Nunma 🎓",
+                html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #eee; border-radius: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #040457; font-size: 24px;">Welcome to ${zoneName}!</h1>
+            </div>
+            <p style="color: #333; font-size: 16px; line-height: 1.6;">Hi ${studentName || 'Student'},</p>
+            <p style="color: #333; font-size: 16px; line-height: 1.6;">You've been added to <strong>"${zoneName}"</strong> by <strong>${tutorName}</strong>.</p>
+            <p style="color: #333; font-size: 16px; line-height: 1.6;">Your instructor has granted you full access to this zone. You can start learning immediately.</p>
+            
+            <div style="text-align: center; margin: 40px 0;">
+              <a href="https://nunma.in/zone/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                Enter Zone →
+              </a>
+            </div>
+            
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
+            <p style="color: #999; font-size: 12px; text-align: center;">Nunma — The Trust Layer for Education</p>
+          </div>
+        `
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            console.error('Resend API error:', error);
+            throw new HttpsError('internal', 'Failed to send email.');
+        }
+
+        return { success: true };
+    }
+);

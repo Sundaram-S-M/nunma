@@ -1,11 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../utils/firebase';
+import { useAuth } from '../context/AuthContext';
 
-export default function SubscribeButton() {
+interface SubscribeButtonProps {
+    amount: number; // Amount in paise (e.g., 100000 = ₹1,000)
+    tutorId: string;
+    label?: string;
+    description?: string;
+    zoneId?: string;
+    className?: string;
+}
+
+export default function SubscribeButton({
+    amount,
+    tutorId,
+    label = 'Subscribe Now',
+    description = 'Subscription Payment',
+    zoneId,
+    className
+}: SubscribeButtonProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const razorpayScriptReady = useRef(false);
+    const { user } = useAuth();
 
     // Dynamically load Razorpay checkout script and track when it's ready
     useEffect(() => {
@@ -34,11 +52,17 @@ export default function SubscribeButton() {
                 throw new Error('Razorpay payment script has not loaded yet. Please wait a moment and try again.');
             }
 
+            if (!functions) {
+                throw new Error('Firebase Functions not initialized.');
+            }
+
             // 1. Call Backend to create Razorpay Order
             const createOrder = httpsCallable(functions, 'createRazorpayOrder');
             const result = await createOrder({
-                amount: '100000', // ₹1,000 in paise
-                tutorId: 'TEST_TUTOR_ID' // TODO: Replace with actual tutor ID from context/props
+                amount: amount.toString(),
+                tutorId,
+                zoneId: zoneId || undefined,
+                type: 'subscription'
             });
 
             const orderData = result.data as any;
@@ -49,11 +73,11 @@ export default function SubscribeButton() {
 
             // 2. Initialize Razorpay Options
             const options = {
-                key: import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY || 'TEST_KEY_ID',
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID,
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: 'Nunma Academy',
-                description: 'Tutor Subscription Payment',
+                description,
                 image: 'https://nunma.app/logo.png',
                 order_id: orderData.id,
                 handler: function (response: any) {
@@ -61,9 +85,9 @@ export default function SubscribeButton() {
                     console.log('Razorpay Success Response:', response);
                 },
                 prefill: {
-                    name: 'Test Student',
-                    email: 'student@example.com',
-                    contact: '9999999999'
+                    name: user?.name || '',
+                    email: user?.email || '',
+                    contact: ''
                 },
                 theme: {
                     color: '#040457'
@@ -94,9 +118,9 @@ export default function SubscribeButton() {
             <button
                 onClick={handleSubscribe}
                 disabled={isLoading}
-                className="bg-[#1a1a4e] hover:shadow-[0_0_15px_#c2f575] text-white font-semibold py-2 px-6 rounded-lg transition-all disabled:opacity-50"
+                className={className || "bg-[#1a1a4e] hover:shadow-[0_0_15px_#c2f575] text-white font-semibold py-2 px-6 rounded-lg transition-all disabled:opacity-50"}
             >
-                {isLoading ? 'Processing...' : 'Subscribe Now'}
+                {isLoading ? 'Processing...' : label}
             </button>
             {error && (
                 <p className="text-red-500 text-sm mt-2">{error}</p>

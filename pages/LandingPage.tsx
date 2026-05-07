@@ -42,7 +42,7 @@ const LandingPage: React.FC = () => {
             {/* Left Column */}
             <div className="flex flex-col">
               <div className="flex items-center gap-2 mb-6">
-                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain" width="500" height="500" />
+                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain" />
                 <span className="text-2xl font-black tracking-tight text-white">Nunma</span>
               </div>
               <p className="text-slate-300 font-medium mb-4">

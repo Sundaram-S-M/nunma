@@ -26,12 +26,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
+exports.sendEnrollmentEmail = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
+const params_1 = require("firebase-functions/params");
+const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 const crypto = __importStar(require("crypto"));
 const nodemailer = __importStar(require("nodemailer"));
 const livekit_server_sdk_1 = require("livekit-server-sdk");
@@ -820,12 +822,16 @@ async (req, res) => {
                 }
             }
         });
-        // Step 4: Post-Fulfillment Mail Queueing
+        // Return success to Razorpay immediately after enrollment is confirmed
+        res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
+        // Step 4: Post-Fulfillment Mail Queueing (fire-and-forget)
+        // These writes trigger the async Zoho invoicing pipeline via onDocumentCreated.
+        // They are intentionally non-blocking so Razorpay always gets a fast 200 response.
         const amountInInr = ((payment === null || payment === void 0 ? void 0 : payment.amount) || orderData.amount || 0) / 100;
         const gstAmount = amountInInr * 0.18;
         if (isPlatformOrder) {
             // Receipt for Tutor Platform Subscription
-            await db.collection('mail_queue').add({
+            db.collection('mail_queue').add({
                 uid: orderData.tutorUid,
                 amount: amountInInr,
                 gst: gstAmount,
@@ -834,11 +840,11 @@ async (req, res) => {
                 paymentId,
                 status: 'pending',
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
+            }).catch(err => console.error('[Zoho Invoice] Non-blocking mail_queue write failed:', err));
         }
         else {
             // 1. Invoice for Student Enrollment
-            await db.collection('mail_queue').add({
+            db.collection('mail_queue').add({
                 uid: orderData.studentUid,
                 amount: amountInInr,
                 gst: gstAmount,
@@ -846,12 +852,12 @@ async (req, res) => {
                 paymentId,
                 status: 'pending',
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
+            }).catch(err => console.error('[Zoho Invoice] Non-blocking mail_queue write failed:', err));
             // 2. Platform Fee Receipt for Tutor (Commission)
             if (orderData.commission && orderData.tutorUid) {
                 const commissionInInr = orderData.commission / 100;
                 const commissionGst = commissionInInr * 0.18;
-                await db.collection('mail_queue').add({
+                db.collection('mail_queue').add({
                     uid: orderData.tutorUid,
                     amount: commissionInInr,
                     gst: commissionGst,
@@ -859,10 +865,9 @@ async (req, res) => {
                     paymentId,
                     status: 'pending',
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
-                });
+                }).catch(err => console.error('[Zoho Invoice] Non-blocking mail_queue write failed:', err));
             }
         }
-        res.status(200).send({ status: 'ok', orderId: razorpayOrderId });
     }
     catch (error) {
         functions.logger.error("CRITICAL: Webhook processing failed.", error);
@@ -1497,7 +1502,7 @@ exports.submitExam = (0, https_1.onCall)({ cors: true }, async (request) => {
         throw new functions.https.HttpsError("internal", error.message || "Failed to submit exam.");
     }
 });
-exports.registerIssuance = (0, https_1.onCall)({ cors: true }, async (request) => {
+exports.registerIssuance = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], cors: true }, async (request) => {
     var _a;
     try {
         const db = admin.firestore();
@@ -1576,6 +1581,30 @@ exports.registerIssuance = (0, https_1.onCall)({ cors: true }, async (request) =
             certificateIssuedAt: admin.firestore.FieldValue.serverTimestamp()
         });
         await batch.commit();
+        // 8. Fire-and-forget certificate notification email via Resend
+        const resendApiKey = process.env.RESEND_API_KEY;
+        if (resendApiKey && studentEmail !== "no-email@nunma.in") {
+            const resend = new resend_1.Resend(resendApiKey);
+            const verificationLink = `https://nunma.in/verify/${urnUuid}`;
+            resend.emails.send({
+                from: 'Nunma <support@nunma.in>',
+                to: studentEmail,
+                subject: "Your Nunma Certificate is Ready 🎓",
+                html: `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                        <h1 style="color: #040457;">Congratulations, ${studentName}! 🎉</h1>
+                        <p>Your certificate for <strong>${zoneTitle}</strong> has been successfully issued.</p>
+                        <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                            <p style="margin: 5px 0; font-size: 12px; color: #666;"><b>Certificate ID:</b></p>
+                            <p style="margin: 5px 0; font-size: 14px; color: #040457; word-break: break-all;">${urnUuid}</p>
+                        </div>
+                        <a href="${verificationLink}" style="display: inline-block; background: #040457; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Verify Certificate</a>
+                        <p style="margin-top: 20px; color: #666; font-size: 14px;">You can verify your certificate anytime at:<br/><a href="${verificationLink}" style="color: #040457;">${verificationLink}</a></p>
+                        <p style="margin-top: 20px;">Happy learning,<br/><b>Nunma Team</b></p>
+                    </div>
+                `
+            }).catch(err => console.error('[Certificate Email] Failed:', err));
+        }
         return { certificateId: urnUuid, payload };
     }
     catch (error) {
@@ -1809,11 +1838,32 @@ exports.joinZoneByInvite = (0, https_1.onCall)({ cors: true }, async (request) =
         if (studentDoc.exists) {
             return { success: true, message: "Already enrolled" };
         }
-        await studentRef.set({
+        const userDoc = await db.collection("users").doc(uid).get();
+        const userData = userDoc.data() || {};
+        const zoneDoc = await db.collection("zones").doc(zoneId).get();
+        const zoneData = zoneDoc.data() || {};
+        const batch = db.batch();
+        batch.set(studentRef, {
+            uid: uid,
+            name: userData.name || "Student",
+            email: userData.email || "",
+            avatar: userData.avatar || "",
             status: "active",
+            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
             joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-            source: "whitelist"
+            source: "invite"
         });
+        const enrollmentRef = db.collection("users").doc(uid).collection("enrollments").doc(zoneId);
+        batch.set(enrollmentRef, {
+            zoneId,
+            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+            tutorId: zoneData.tutorId || zoneData.createdBy || "",
+            zoneName: zoneData.title || zoneData.name || "Untitled Zone"
+        });
+        batch.update(db.collection("zones").doc(zoneId), {
+            studentCount: admin.firestore.FieldValue.increment(1)
+        });
+        await batch.commit();
         return { success: true };
     }
     catch (error) {
@@ -1886,12 +1936,37 @@ exports.processWhitelist = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], co
                 results.alreadyEnrolled = 1;
                 return Object.assign({ success: true }, results);
             }
-            await studentRef.set({
+            // Get user profile to populate name/email
+            const userDoc = await db.collection("users").doc(uid).get();
+            const userData = userDoc.data() || {};
+            // Atomic batch write for enrollment
+            const batch = db.batch();
+            // 1. Enrollment in zone
+            batch.set(studentRef, {
+                uid: uid,
+                name: userData.name || "Student",
+                email: userData.email || normalizedEmail,
+                avatar: userData.avatar || "",
                 status: "active",
                 source: "whitelist",
-                joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                joinedAt: admin.firestore.FieldValue.serverTimestamp(), // legacy support
             });
+            // 2. Enrollment in user document
+            const enrollmentRef = db.collection("users").doc(uid).collection("enrollments").doc(zoneId);
+            batch.set(enrollmentRef, {
+                zoneId,
+                enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                tutorId: zoneData.tutorId || zoneData.createdBy,
+                zoneName: zoneTitle
+            });
+            // 3. Increment studentCount
+            batch.update(db.collection("zones").doc(zoneId), {
+                studentCount: admin.firestore.FieldValue.increment(1)
+            });
+            await batch.commit();
             results.enrolled = 1;
+            return Object.assign(Object.assign({ success: true }, results), { studentUid: uid, zoneName: zoneTitle, tutorName: zoneData.tutorName || "Your Instructor" });
         }
         else {
             // User doesn't exist, proceed to add their email to the invites subcollection
@@ -2082,5 +2157,158 @@ exports.processInvoicingQueue = (0, firestore_1.onDocumentCreated)({
         });
         throw error;
     }
+});
+// --- ZONE CONVERSATION MANAGEMENT TRIGGERS ---
+/**
+ * Automatically creates a community conversation when a new zone is launched.
+ */
+exports.onZoneCreated = (0, firestore_1.onDocumentCreated)({ document: "zones/{zoneId}" }, async (event) => {
+    const snapshot = event.data;
+    if (!snapshot)
+        return;
+    const data = snapshot.data();
+    const zoneId = event.params.zoneId;
+    const tutorId = data.createdBy || data.tutorId;
+    const db = admin.firestore();
+    functions.logger.info(`Creating community conversation for zone: ${zoneId}`);
+    try {
+        await db.collection('conversations').add({
+            name: data.title || "Untitled Zone",
+            avatar: data.image || "",
+            type: 'community',
+            zoneId: zoneId,
+            participants: tutorId ? [tutorId] : [],
+            lastMessage: 'Welcome to the community!',
+            lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+    }
+    catch (error) {
+        functions.logger.error(`Failed to create conversation for zone ${zoneId}:`, error);
+    }
+});
+/**
+ * Automatically adds a student to the community conversation when they join a zone.
+ * This handles all join paths (Razorpay, Whitelist, Invite, Auto-enroll).
+ */
+exports.onStudentJoinedZone = (0, firestore_1.onDocumentCreated)({ document: "zones/{zoneId}/students/{studentId}" }, async (event) => {
+    const zoneId = event.params.zoneId;
+    const studentId = event.params.studentId;
+    const db = admin.firestore();
+    functions.logger.info(`Adding student ${studentId} to conversation for zone: ${zoneId}`);
+    try {
+        const convQuery = await db.collection('conversations')
+            .where('zoneId', '==', zoneId)
+            .where('type', '==', 'community')
+            .limit(1)
+            .get();
+        if (!convQuery.empty) {
+            const convRef = convQuery.docs[0].ref;
+            await convRef.update({
+                participants: admin.firestore.FieldValue.arrayUnion(studentId),
+                lastMessage: "A new member has joined the community!",
+                lastMessageTime: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+        else {
+            // Fallback: If conversation missing, create it now
+            const zoneDoc = await db.collection('zones').doc(zoneId).get();
+            if (zoneDoc.exists) {
+                const zoneData = zoneDoc.data();
+                const tutorId = zoneData.createdBy || zoneData.tutorId;
+                const participants = [studentId];
+                if (tutorId)
+                    participants.push(tutorId);
+                await db.collection('conversations').add({
+                    name: zoneData.title || "Untitled Zone",
+                    avatar: zoneData.image || "",
+                    type: 'community',
+                    zoneId: zoneId,
+                    participants: participants,
+                    lastMessage: 'Welcome to the community!',
+                    lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        }
+    }
+    catch (error) {
+        functions.logger.error(`Error in onStudentJoinedZone for ${studentId} in ${zoneId}:`, error);
+    }
+});
+/**
+ * Automatically removes a student from the community conversation when they leave or are removed from a zone.
+ */
+exports.onStudentLeftZone = (0, firestore_1.onDocumentDeleted)({ document: "zones/{zoneId}/students/{studentId}" }, async (event) => {
+    const zoneId = event.params.zoneId;
+    const studentId = event.params.studentId;
+    const db = admin.firestore();
+    functions.logger.info(`Removing student ${studentId} from conversation for zone: ${zoneId}`);
+    try {
+        const convQuery = await db.collection('conversations')
+            .where('zoneId', '==', zoneId)
+            .where('type', '==', 'community')
+            .limit(1)
+            .get();
+        if (!convQuery.empty) {
+            const convRef = convQuery.docs[0].ref;
+            await convRef.update({
+                participants: admin.firestore.FieldValue.arrayRemove(studentId)
+            });
+        }
+    }
+    catch (error) {
+        functions.logger.error(`Error in onStudentLeftZone for ${studentId} in ${zoneId}:`, error);
+    }
+});
+exports.sendEnrollmentEmail = (0, https_1.onCall)({ secrets: [resendApiKey] }, async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const apiKey = resendApiKey.value();
+    if (!apiKey) {
+        throw new https_1.HttpsError('internal', 'Email service not configured.');
+    }
+    const { studentEmail, studentName, zoneName, tutorName, zoneId } = request.data;
+    if (!studentEmail || !zoneName || !zoneId) {
+        throw new https_1.HttpsError('invalid-argument', 'Missing required fields.');
+    }
+    const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            from: 'Nunma <support@nunma.in>',
+            to: studentEmail,
+            subject: "You've been added to a new Zone on Nunma 🎓",
+            html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #eee; border-radius: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #040457; font-size: 24px;">Welcome to ${zoneName}!</h1>
+            </div>
+            <p style="color: #333; font-size: 16px; line-height: 1.6;">Hi ${studentName || 'Student'},</p>
+            <p style="color: #333; font-size: 16px; line-height: 1.6;">You've been added to <strong>"${zoneName}"</strong> by <strong>${tutorName}</strong>.</p>
+            <p style="color: #333; font-size: 16px; line-height: 1.6;">Your instructor has granted you full access to this zone. You can start learning immediately.</p>
+            
+            <div style="text-align: center; margin: 40px 0;">
+              <a href="https://nunma.in/zone/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                Enter Zone →
+              </a>
+            </div>
+            
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
+            <p style="color: #999; font-size: 12px; text-align: center;">Nunma — The Trust Layer for Education</p>
+          </div>
+        `
+        })
+    });
+    if (!response.ok) {
+        const error = await response.json();
+        console.error('Resend API error:', error);
+        throw new https_1.HttpsError('internal', 'Failed to send email.');
+    }
+    return { success: true };
 });
 //# sourceMappingURL=index.js.map
