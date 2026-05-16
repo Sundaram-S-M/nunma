@@ -1167,8 +1167,8 @@ export const deleteUserAccount = onCall(
             }
 
             const uid = request.auth.uid;
-            const libraryId = process.env.BUNNY_LIBRARY_ID;
-            const apiKey = process.env.BUNNY_API_KEY;
+            const libraryId = process.env.BUNNY_LIBRARY_ID?.trim();
+            const apiKey = process.env.BUNNY_API_KEY?.trim();
 
             console.log(`Starting permanent deletion for user: ${uid}`);
 
@@ -1323,10 +1323,10 @@ export const uploadFileToBunny = onRequest(
                 }
 
                 // 4. Bunny Upload
-                const bunnyApiKey = process.env.BUNNY_API_KEY;
-                const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME;
-                const hostname = process.env.BUNNY_STORAGE_HOSTNAME;
-                const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
+                const bunnyApiKey = process.env.BUNNY_API_KEY?.trim();
+                const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME?.trim();
+                const hostname = process.env.BUNNY_STORAGE_HOSTNAME?.trim();
+                const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL?.trim();
 
                 if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
                     res.status(500).send('Bunny Storage configuration missing');
@@ -1436,10 +1436,10 @@ export const uploadExamScript = onCall(
             const fileSizeInBytes = watermarkedBuffer.length;
 
             // 7. Bunny Storage Upload
-            const bunnyApiKey = process.env.BUNNY_API_KEY;
-            const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME;
-            const hostname = process.env.BUNNY_STORAGE_HOSTNAME;
-            const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
+            const bunnyApiKey = process.env.BUNNY_API_KEY?.trim();
+            const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME?.trim();
+            const hostname = process.env.BUNNY_STORAGE_HOSTNAME?.trim();
+            const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL?.trim();
 
             if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
                 throw new functions.https.HttpsError("failed-precondition", "Bunny Storage configuration is missing on the server.");
@@ -1614,9 +1614,9 @@ export const submitGradedScript = onCall({ cors: true }, async (request) => {
             throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
         }
 
-        const bunnyApiKey = process.env.BUNNY_API_KEY;
-        const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
-        const pullZone = process.env.BUNNY_PULL_ZONE_URL;
+        const bunnyApiKey = process.env.BUNNY_API_KEY?.trim();
+        const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME?.trim();
+        const pullZone = process.env.BUNNY_PULL_ZONE_URL?.trim();
 
         if (!bunnyApiKey || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
             throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");

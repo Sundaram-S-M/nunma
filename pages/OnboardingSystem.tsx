@@ -83,7 +83,10 @@ const OnboardingSystem: React.FC = () => {
     useEffect(() => {
         // If we have a user and they've requested a specific role, ensure their profile matches
         if (requestedRole && user) {
-            const targetRole = requestedRole.toUpperCase() as UserRole;
+            let targetRole = requestedRole.toUpperCase() as UserRole;
+            if (requestedRole.toLowerCase() === 'tutor') targetRole = UserRole.THALA;
+            if (requestedRole.toLowerCase() === 'student') targetRole = UserRole.STUDENT;
+
             if (user.role !== targetRole) {
                 setSelectedRole(targetRole);
             }
@@ -588,16 +591,16 @@ const OnboardingSystem: React.FC = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Areas of Expertise (Max 3)</label>
                                 <div className={`flex flex-wrap items-center gap-2 w-full bg-gray-50 border-2 focus-within:bg-white rounded-[1.25rem] px-4 py-3 min-h-[60px] transition-all ${tutorForm.formState.errors.expertise ? 'border-red-400' : 'border-transparent focus-within:border-[#c2f575]'}`}>
-                                    {tutorForm.watch("expertise").map((tag, i) => (
+                                    {(tutorForm.watch("expertise") || []).map((tag, i) => (
                                         <div key={i} className="flex items-center gap-1 bg-[#040457] text-white px-3 py-1.5 rounded-full text-xs font-bold">
                                             {tag}
                                             <button type="button" onClick={() => {
-                                                const current = tutorForm.getValues("expertise");
+                                                const current = tutorForm.getValues("expertise") || [];
                                                 tutorForm.setValue("expertise", current.filter((_, idx) => idx !== i));
                                             }} className="hover:text-red-400"><X size={14}/></button>
                                         </div>
                                     ))}
-                                    {tutorForm.watch("expertise").length < 3 && (
+                                    {(tutorForm.watch("expertise") || []).length < 3 && (
                                         <input
                                             type="text"
                                             value={tagInput}
@@ -606,7 +609,7 @@ const OnboardingSystem: React.FC = () => {
                                                 if(e.key === 'Enter') {
                                                     e.preventDefault();
                                                     if (tagInput.trim()) {
-                                                        const current = tutorForm.getValues("expertise");
+                                                        const current = tutorForm.getValues("expertise") || [];
                                                         if (current.length < 3 && !current.includes(tagInput.trim())) {
                                                             tutorForm.setValue("expertise", [...current, tagInput.trim()]);
                                                             setTagInput('');
@@ -614,7 +617,7 @@ const OnboardingSystem: React.FC = () => {
                                                     }
                                                 }
                                             }}
-                                            placeholder={tutorForm.watch("expertise").length === 0 ? "Type and press Enter (e.g. Calculus)" : "Add another..."}
+                                            placeholder={(tutorForm.watch("expertise") || []).length === 0 ? "Type and press Enter (e.g. Calculus)" : "Add another..."}
                                             className="flex-1 bg-transparent min-w-[150px] outline-none text-[#040457] font-bold text-sm"
                                         />
                                     )}
