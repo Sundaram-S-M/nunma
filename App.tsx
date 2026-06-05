@@ -33,7 +33,8 @@ const AnalyticsDashboard = React.lazy(() => import('./pages/AnalyticsDashboard')
 const AnalyticsChat = React.lazy(() => import('./pages/AnalyticsChat.tsx'));
 const Payment = React.lazy(() => import('./pages/Payment'));
 const ZoneDetailView = React.lazy(() => import('./pages/ZoneDetailView'));
-import { Toaster } from 'react-hot-toast';
+import { Toaster, ToastBar, toast } from 'react-hot-toast';
+import { X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 import LiveNotification from './components/LiveNotification';
@@ -209,7 +210,27 @@ const App: React.FC = () => {
     <AuthProvider>
       <BrowserRouter>
         <SidebarProvider>
-          <Toaster position="top-center" reverseOrder={false} />
+          <Toaster position="top-center" reverseOrder={false}>
+            {(t) => (
+              <ToastBar toast={t}>
+                {({ icon, message }) => (
+                  <>
+                    {icon}
+                    {message}
+                    {t.type !== 'loading' && (
+                      <button
+                        onClick={() => toast.dismiss(t.id)}
+                        className="ml-2 p-1 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center shrink-0"
+                        aria-label="Close toast"
+                      >
+                        <X size={16} className="text-gray-400 hover:text-gray-600 transition-colors" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </ToastBar>
+            )}
+          </Toaster>
           <AppContent />
         </SidebarProvider>
       </BrowserRouter>

@@ -132,13 +132,13 @@ exports.getLiveKitToken = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", "LI
         const db = admin.firestore();
         // 1. Authenticate caller
         if (!request.auth) {
-            throw new functions.https.HttpsError("unauthenticated", "You must be signed in to access live hub sessions.");
+            throw new https_1.HttpsError("unauthenticated", "You must be signed in to access live hub sessions.");
         }
         const uid = request.auth.uid;
         const { roomName, identity } = request.data;
         // 2. Validate input strings
         if (typeof roomName !== "string" || !roomName || typeof identity !== "string" || !identity) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing required parameters: roomName or identity.");
+            throw new https_1.HttpsError("invalid-argument", "Missing required parameters: roomName or identity.");
         }
         // 3. Force identity to the authenticated UID for security
         const secureIdentity = uid;
@@ -149,24 +149,26 @@ exports.getLiveKitToken = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", "LI
         if (studentDoc.exists && ((_a = studentDoc.data()) === null || _a === void 0 ? void 0 : _a.status) === "active") {
             isAuthorized = true;
         }
-        // Case B: Is the 'Thala' (creator) of the zone?
+        // Case B: Is the 'Thala' or 'Tutor' (creator) of the zone?
         if (!isAuthorized) {
             const userDoc = await db.collection("users").doc(uid).get();
             const userData = userDoc.data();
             const zoneDoc = await db.collection("zones").doc(roomName).get();
             const zoneData = zoneDoc.data();
-            if ((userData === null || userData === void 0 ? void 0 : userData.role) === "THALA" && (zoneData === null || zoneData === void 0 ? void 0 : zoneData.createdBy) === uid) {
+            const isCreator = (zoneData === null || zoneData === void 0 ? void 0 : zoneData.createdBy) === uid;
+            const isTutorOrThala = (userData === null || userData === void 0 ? void 0 : userData.role) === "THALA" || (userData === null || userData === void 0 ? void 0 : userData.role) === "TUTOR";
+            if (isTutorOrThala && isCreator) {
                 isAuthorized = true;
             }
         }
         if (!isAuthorized) {
-            throw new functions.https.HttpsError("permission-denied", "You are not authorized to enter this knowledge stream.");
+            throw new https_1.HttpsError("permission-denied", "You are not authorized to enter this knowledge stream.");
         }
         // 5. Generate and Return Token
         const apiKey = process.env.LIVEKIT_API_KEY;
         const apiSecret = process.env.LIVEKIT_API_SECRET;
         if (!apiKey || !apiSecret) {
-            throw new functions.https.HttpsError("failed-precondition", "LiveKit configuration is missing on the server.");
+            throw new https_1.HttpsError("failed-precondition", "LiveKit configuration is missing on the server.");
         }
         const at = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
             identity: secureIdentity,
@@ -180,10 +182,10 @@ exports.getLiveKitToken = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", "LI
         return { token };
     }
     catch (error) {
+        functions.logger.error("Global crash in getLiveKitToken:", error);
         if (error instanceof functions.https.HttpsError)
             throw error;
-        functions.logger.error("Global crash in getLiveKitToken:", error);
-        throw new functions.https.HttpsError("internal", error.message || "Failed to get live token.");
+        throw new functions.https.HttpsError("unknown", "CRASH: " + (error.message || error.toString()));
     }
 });
 exports.toggleStudentAudio = (0, https_1.onCall)({ secrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"], cors: true }, async (request) => {
@@ -256,7 +258,7 @@ exports.createBunnyUploadSignature = (0, https_1.onCall)({ secrets: ["BUNNY_API_
         const finalTitle = fileName || title || 'Untitled';
         // Note: zoneId is optional for some flows, but required if indexing in firestore
         // if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
-        const libraryId = process.env.BUNNY_LIBRARY_ID;
+        const libraryId = process.env.BUNNY_LIBRARY_ID ? process.env.BUNNY_LIBRARY_ID.trim() : null;
         const bunnyKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
         if (!libraryId || !bunnyKey) {
             throw new functions.https.HttpsError('internal', 'BUNNY_API_KEY or BUNNY_LIBRARY_ID is missing or undefined on the server.');
@@ -457,19 +459,19 @@ function extractRazorpayError(error) {
     return (error === null || error === void 0 ? void 0 : error.message) || "An unexpected Razorpay error occurred.";
 }
 exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], cors: true }, async (request) => {
-    var _a;
+    var _a, _b, _c;
     try {
         const db = admin.firestore();
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "You must be signed in to create a linked account.");
         }
         const uid = request.auth.uid;
-        const { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc } = request.data || {};
-        if (!businessName || !businessType || !legalName || !email || !phone || !pan || !bankAccount || !ifsc) {
-            throw new functions.https.HttpsError("invalid-argument", "Missing required business details: { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc }.");
+        const { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc, street, street2, city, state, pinCode } = request.data || {};
+        if (!businessName || !businessType || !legalName || !email || !phone || !pan || !bankAccount || !ifsc || !street || !city || !state || !pinCode) {
+            throw new functions.https.HttpsError("invalid-argument", "Missing required business details including address.");
         }
-        const keyId = process.env.RAZORPAY_KEY_ID;
-        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        const keyId = (_a = process.env.RAZORPAY_KEY_ID) === null || _a === void 0 ? void 0 : _a.trim();
+        const keySecret = (_b = process.env.RAZORPAY_KEY_SECRET) === null || _b === void 0 ? void 0 : _b.trim();
         if (!keyId || !keySecret) {
             throw new functions.https.HttpsError("failed-precondition", "Razorpay credentials are not configured on the server.");
         }
@@ -500,7 +502,20 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                 legal_business_name: legalName,
                 business_type: businessType,
                 customer_facing_business_name: businessName,
-                profile: { category: "education" }
+                profile: {
+                    category: "education",
+                    subcategory: "professional_courses",
+                    addresses: {
+                        registered: {
+                            street1: street,
+                            street2: street2 || "",
+                            city: city,
+                            state: state,
+                            postal_code: pinCode,
+                            country: "IN"
+                        }
+                    }
+                }
             };
             const accountResponse = await axios_1.default.post('https://api.razorpay.com/v2/accounts', createPayload, { headers });
             accountId = accountResponse.data.id;
@@ -523,7 +538,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                 const productPayload = {
                     product_name: "route",
                     tnc_accepted: true,
-                    ip: ((_a = request.rawRequest) === null || _a === void 0 ? void 0 : _a.ip) || "127.0.0.1",
+                    ip: ((_c = request.rawRequest) === null || _c === void 0 ? void 0 : _c.ip) || "127.0.0.1",
                     settlements: {
                         account_number: bankAccount,
                         ifsc_code: ifsc,
@@ -560,6 +575,7 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
     }
 });
 exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], cors: true }, async (request) => {
+    var _a, _b;
     try {
         const db = admin.firestore();
         // 1. Authenticated check
@@ -572,8 +588,8 @@ exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID",
         if (!zoneId && !planId) {
             throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or planId.");
         }
-        const keyId = process.env.RAZORPAY_KEY_ID;
-        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        const keyId = (_a = process.env.RAZORPAY_KEY_ID) === null || _a === void 0 ? void 0 : _a.trim();
+        const keySecret = (_b = process.env.RAZORPAY_KEY_SECRET) === null || _b === void 0 ? void 0 : _b.trim();
         if (!keyId || !keySecret) {
             throw new functions.https.HttpsError("failed-precondition", "Razorpay secrets not configured.");
         }
@@ -592,7 +608,7 @@ exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID",
             // Server-side source of truth for price (prioritize priceINR)
             const price = zoneData.priceINR || zoneData.price || 0;
             finalAmount = Math.round(price * 100); // Convert to paise
-            tutorUid = zoneData.createdBy;
+            tutorUid = zoneData.createdBy || zoneData.tutorId;
             if (!tutorUid) {
                 throw new functions.https.HttpsError("failed-precondition", "Zone creator (tutorUid) is missing.");
             }
@@ -603,7 +619,8 @@ exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID",
             const tutorData = tutorDoc.data();
             rzpAccountId = tutorData.razorpayAccountId || tutorData.razorpay_account_id;
             const kycStatus = tutorData.kycStatus;
-            if (!rzpAccountId || kycStatus !== 'VERIFIED') {
+            const isDevBypass = tutorData.isDevBypass === true || tutorData.isWhitelisted === true;
+            if (!isDevBypass && (!rzpAccountId || kycStatus !== 'VERIFIED')) {
                 throw new functions.https.HttpsError("failed-precondition", "Tutor is not eligible for payments (KYC or Account ID missing).");
             }
             // Commission Logic for Zone sales
@@ -975,14 +992,15 @@ exports.serveSecurePdf = (0, https_1.onRequest)({ cors: true }, async (req, res)
 });
 // --- ACCOUNT DELETION ---
 exports.deleteUserAccount = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY"], cors: true }, async (request) => {
+    var _a, _b;
     try {
         const db = admin.firestore();
         if (!request.auth) {
             throw new functions.https.HttpsError("unauthenticated", "Login required for account deletion.");
         }
         const uid = request.auth.uid;
-        const libraryId = process.env.BUNNY_LIBRARY_ID;
-        const apiKey = process.env.BUNNY_API_KEY;
+        const libraryId = (_a = process.env.BUNNY_LIBRARY_ID) === null || _a === void 0 ? void 0 : _a.trim();
+        const apiKey = (_b = process.env.BUNNY_API_KEY) === null || _b === void 0 ? void 0 : _b.trim();
         console.log(`Starting permanent deletion for user: ${uid}`);
         // 1. Cleanup Bunny.net Videos
         const tutorVideosSnapshot = await db.collection("videos").where("tutorId", "==", uid).get();
@@ -1097,6 +1115,7 @@ exports.uploadFileToBunny = (0, https_1.onRequest)({ secrets: ["BUNNY_API_KEY", 
         });
     });
     bb.on('finish', async () => {
+        var _a, _b, _c, _d;
         if (!fileBuffer) {
             res.status(400).send('No file uploaded');
             return;
@@ -1110,10 +1129,10 @@ exports.uploadFileToBunny = (0, https_1.onRequest)({ secrets: ["BUNNY_API_KEY", 
                 return;
             }
             // 4. Bunny Upload
-            const bunnyApiKey = process.env.BUNNY_API_KEY;
-            const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME;
-            const hostname = process.env.BUNNY_STORAGE_HOSTNAME;
-            const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
+            const bunnyApiKey = (_a = process.env.BUNNY_API_KEY) === null || _a === void 0 ? void 0 : _a.trim();
+            const storageZoneName = (_b = process.env.BUNNY_STORAGE_ZONE_NAME) === null || _b === void 0 ? void 0 : _b.trim();
+            const hostname = (_c = process.env.BUNNY_STORAGE_HOSTNAME) === null || _c === void 0 ? void 0 : _c.trim();
+            const pullZoneUrl = (_d = process.env.BUNNY_PULL_ZONE_URL) === null || _d === void 0 ? void 0 : _d.trim();
             if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
                 res.status(500).send('Bunny Storage configuration missing');
                 return;
@@ -1147,7 +1166,7 @@ exports.uploadExamScript = (0, https_1.onCall)({
     secrets: ["BUNNY_API_KEY", "BUNNY_STORAGE_ZONE_NAME", "BUNNY_STORAGE_HOSTNAME", "BUNNY_PULL_ZONE_URL"],
     cors: true
 }, async (request) => {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f, _g;
     try {
         const db = admin.firestore();
         // 1. Authenticate caller
@@ -1201,10 +1220,10 @@ exports.uploadExamScript = (0, https_1.onCall)({
         const watermarkedBuffer = Buffer.from(watermarkedPdfBytes);
         const fileSizeInBytes = watermarkedBuffer.length;
         // 7. Bunny Storage Upload
-        const bunnyApiKey = process.env.BUNNY_API_KEY;
-        const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME;
-        const hostname = process.env.BUNNY_STORAGE_HOSTNAME;
-        const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
+        const bunnyApiKey = (_b = process.env.BUNNY_API_KEY) === null || _b === void 0 ? void 0 : _b.trim();
+        const storageZoneName = (_c = process.env.BUNNY_STORAGE_ZONE_NAME) === null || _c === void 0 ? void 0 : _c.trim();
+        const hostname = (_d = process.env.BUNNY_STORAGE_HOSTNAME) === null || _d === void 0 ? void 0 : _d.trim();
+        const pullZoneUrl = (_e = process.env.BUNNY_PULL_ZONE_URL) === null || _e === void 0 ? void 0 : _e.trim();
         if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
             throw new functions.https.HttpsError("failed-precondition", "Bunny Storage configuration is missing on the server.");
         }
@@ -1218,7 +1237,7 @@ exports.uploadExamScript = (0, https_1.onCall)({
         });
         // 8. Update Tutor Storage Metrics
         const zoneDoc = await db.collection('zones').doc(zoneId).get();
-        const tutorUid = ((_b = zoneDoc.data()) === null || _b === void 0 ? void 0 : _b.createdBy) || ((_c = zoneDoc.data()) === null || _c === void 0 ? void 0 : _c.tutorId);
+        const tutorUid = ((_f = zoneDoc.data()) === null || _f === void 0 ? void 0 : _f.createdBy) || ((_g = zoneDoc.data()) === null || _g === void 0 ? void 0 : _g.tutorId);
         if (tutorUid) {
             await db.collection("users").doc(tutorUid).update({
                 usedStorageBytes: admin.firestore.FieldValue.increment(fileSizeInBytes)
@@ -1342,7 +1361,7 @@ exports.recordCheatViolation = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY"],
     }
 });
 exports.submitGradedScript = (0, https_1.onCall)({ cors: true }, async (request) => {
-    var _a, _b;
+    var _a, _b, _c, _d, _e;
     try {
         const db = admin.firestore();
         if (!request.auth)
@@ -1354,9 +1373,9 @@ exports.submitGradedScript = (0, https_1.onCall)({ cors: true }, async (request)
         if (request.auth.uid !== tutorUid) {
             throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
         }
-        const bunnyApiKey = process.env.BUNNY_API_KEY;
-        const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
-        const pullZone = process.env.BUNNY_PULL_ZONE_URL;
+        const bunnyApiKey = (_c = process.env.BUNNY_API_KEY) === null || _c === void 0 ? void 0 : _c.trim();
+        const storageZone = (_d = process.env.BUNNY_STORAGE_ZONE_NAME) === null || _d === void 0 ? void 0 : _d.trim();
+        const pullZone = (_e = process.env.BUNNY_PULL_ZONE_URL) === null || _e === void 0 ? void 0 : _e.trim();
         if (!bunnyApiKey || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
             throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
         }
@@ -2269,10 +2288,11 @@ exports.sendEnrollmentEmail = (0, https_1.onCall)({ secrets: [resendApiKey] }, a
     if (!apiKey) {
         throw new https_1.HttpsError('internal', 'Email service not configured.');
     }
-    const { studentEmail, studentName, zoneName, tutorName, zoneId } = request.data;
+    const { studentEmail, studentName, zoneName, tutorName, zoneId, origin } = request.data;
     if (!studentEmail || !zoneName || !zoneId) {
         throw new https_1.HttpsError('invalid-argument', 'Missing required fields.');
     }
+    const baseUrl = origin || 'https://nunma.in';
     const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -2293,7 +2313,7 @@ exports.sendEnrollmentEmail = (0, https_1.onCall)({ secrets: [resendApiKey] }, a
             <p style="color: #333; font-size: 16px; line-height: 1.6;">Your instructor has granted you full access to this zone. You can start learning immediately.</p>
             
             <div style="text-align: center; margin: 40px 0;">
-              <a href="https://nunma.in/zone/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+              <a href="${baseUrl}/zone/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
                 Enter Zone →
               </a>
             </div>

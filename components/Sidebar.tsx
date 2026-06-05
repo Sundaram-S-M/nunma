@@ -14,6 +14,8 @@ import {
   HardDrive,
   AlertTriangle,
   Zap,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -49,7 +51,7 @@ const sidebarBase: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   zIndex: 40,
-  overflow: 'hidden',
+  overflow: 'visible',
   flexShrink: 0,
   transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
 };
@@ -143,29 +145,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
           padding: isOpen ? '0 1rem 0 1.25rem' : '0',
           borderBottom: 'none',
           flexShrink: 0,
+          position: 'relative'
         }}>
-          {isOpen ? (
-            <>
-              <LogoFull />
-              <button
-                onClick={onToggle}
-                aria-label="Collapse sidebar"
-                style={toggleBtnStyle}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F3F4F6'; (e.currentTarget as HTMLElement).style.color = '#374151'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#F9FAFB'; (e.currentTarget as HTMLElement).style.color = '#9CA3AF'; }}
-              >
-                <PanelLeftClose size={13} />
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={onToggle}
-              aria-label="Expand sidebar"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-            >
-              <LogoIcon />
-            </button>
-          )}
+          {isOpen ? <LogoFull /> : <LogoIcon />}
+          
+          <button
+            onClick={onToggle}
+            aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+            style={{
+              ...toggleBtnStyle,
+              position: isOpen ? 'static' : 'absolute',
+              right: isOpen ? 'auto' : '-14px',
+              background: '#ffffff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              zIndex: 50
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F3F4F6'; (e.currentTarget as HTMLElement).style.color = '#374151'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#ffffff'; (e.currentTarget as HTMLElement).style.color = '#9CA3AF'; }}
+          >
+            {isOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </button>
         </div>
 
         {/* ── Nav ──────────────────────────────────────── */}

@@ -110,6 +110,11 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+::selection {
+  background-color: var(--nunma-lime);
+  color: var(--nunma-navy);
+}
+
 body p {
   max-width: 70ch;
 }

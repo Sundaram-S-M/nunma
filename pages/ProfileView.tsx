@@ -110,11 +110,11 @@ const ProfileHeader = ({
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="Your Name"
-                    className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-md bg-transparent border-none outline-none w-full"
+                    className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-md bg-transparent text-white border-none outline-none w-full"
                   />
                 ) : (
                   <div className="flex items-center gap-4 group/name">
-                    <h1 className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-md">{profileUser.name}</h1>
+                    <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter drop-shadow-md">{profileUser.name}</h1>
                     {isMe && (
                       <button 
                         onClick={() => setIsEditing(true)}
@@ -134,7 +134,7 @@ const ProfileHeader = ({
                   className="text-indigo-100/90 text-[16px] italic max-w-xl bg-transparent border-b border-white/20 outline-none w-full"
                 />
               ) : (
-                <p className="text-indigo-100/90 text-[16px] italic line-clamp-1">{profileUser.headline || (role === UserRole.THALA ? 'Expert Educator' : 'Aspiring Learner')}</p>
+                profileUser.headline && <p className="text-indigo-100/90 text-[16px] italic line-clamp-1">{profileUser.headline}</p>
               )}
             </div>
 
@@ -734,16 +734,16 @@ const ProfileView: React.FC = () => {
       } else {
         const followData = {
           uid: currentUser.uid,
-          name: currentUser.name,
-          avatar: currentUser.avatar,
+          name: currentUser.name || "User",
+          avatar: currentUser.avatar || null,
           createdAt: serverTimestamp()
         };
         
         batch.set(followerRef, followData);
         batch.set(followingRef, {
           uid: profileUser.uid,
-          name: profileUser.name,
-          avatar: profileUser.avatar,
+          name: profileUser.name || "User",
+          avatar: profileUser.avatar || null,
           createdAt: serverTimestamp()
         });
         batch.update(targetUserRef, { followersCount: increment(1) });

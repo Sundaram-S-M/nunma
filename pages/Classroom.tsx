@@ -172,13 +172,8 @@ const Classroom: React.FC = () => {
             });
          },
          (error) => {
-            console.error('Firestore error:', error.code, error.message);
+            console.error('Firestore error on live sessions:', error.code, error.message);
             setLiveSessions([]);
-            if (error.code === 'permission-denied') {
-               setError('You do not have permission to view this content.');
-            } else {
-               setError('Failed to connect to the server.');
-            }
          });
          unsubs.push(unLive);
 
@@ -192,13 +187,8 @@ const Classroom: React.FC = () => {
             });
          },
          (error) => {
-            console.error('Firestore error:', error.code, error.message);
+            console.error('Firestore error on scheduled sessions:', error.code, error.message);
             setUpcomingSessions([]);
-            if (error.code === 'permission-denied') {
-               setError('You do not have permission to view this content.');
-            } else {
-               setError('Failed to connect to the server.');
-            }
          });
          unsubs.push(unSched);
       });

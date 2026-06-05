@@ -88,6 +88,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
             setIsPaused(false);
             setErrorMessage('');
 
+            if (!functions) throw new Error("Firebase functions not initialized.");
             // Call the secure createBunnyUploadSignature Cloud Function to generate a new VideoId and Signature.
             const getSignatureNode = httpsCallable(functions, 'createBunnyUploadSignature');
             const result = await getSignatureNode({ fileName: file.name, title, zoneId });
@@ -112,11 +113,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     filetype: file.type,
                     title: file.name,
                     collection: zoneId || 'default',
-                    // Redundancy: Bunny sometimes parses these from metadata in certain TUS versions
                     VideoId: videoId,
-                    LibraryId: libraryId.toString(),
-                    AuthorizationSignature: signature,
-                    AuthorizationExpire: expireTime.toString(),
                 },
                 onError: (error) => {
                     console.error('TUS Upload Failed:', error);
@@ -179,9 +176,10 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
 
             // Task 4: The "Resume" Path
             // Extract the old VideoId from the cached upload metadata
-            const oldVideoId = foundUploads[0].metadata.videoId;
+            const oldVideoId = foundUploads[0].metadata.VideoId;
             if (!oldVideoId) throw new Error("Could not find VideoId in previous upload metadata.");
 
+            if (!functions) throw new Error("Firebase functions not initialized.");
             // Call Cloud Function to generate a fresh signature for that existing old VideoId.
             const getSignatureNode = httpsCallable(functions, 'createBunnyUploadSignature');
             const result = await getSignatureNode({ fileName: file.name, title, zoneId, videoId: oldVideoId });
@@ -206,9 +204,6 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     title: file.name,
                     collection: zoneId || 'default',
                     VideoId: videoId,
-                    LibraryId: libraryId.toString(),
-                    AuthorizationSignature: signature,
-                    AuthorizationExpire: expireTime.toString(),
                 },
                 onError: (error) => {
                     console.error('TUS Resume Failed:', error);
@@ -259,7 +254,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                 retryDelays: [0, 1000, 3000, 5000, 10000],
                 chunkSize: 50 * 1024 * 1024,
                 headers: {
-                    LibraryId: '608015' // Pass Library ID for pre-flight check if possible
+                    LibraryId: '628013' // Pass Library ID for pre-flight check if possible
                 },
                 removeFingerprintOnSuccess: true,
             } as any);
@@ -297,7 +292,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
 
     const cancelUpload = () => {
         if (uploadRef.current && isUploading) {
-            uploadRef.current.abort();
+            uploadRef.current.abort(true);
         }
         setFile(null);
         setUploadStatus('idle');

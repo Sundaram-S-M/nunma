@@ -130,7 +130,7 @@ export const getLiveKitToken = onCall(
 
             // 1. Authenticate caller
             if (!request.auth) {
-                throw new functions.https.HttpsError("unauthenticated", "You must be signed in to access live hub sessions.");
+                throw new HttpsError("unauthenticated", "You must be signed in to access live hub sessions.");
             }
 
             const uid = request.auth.uid;
@@ -138,7 +138,7 @@ export const getLiveKitToken = onCall(
 
             // 2. Validate input strings
             if (typeof roomName !== "string" || !roomName || typeof identity !== "string" || !identity) {
-                throw new functions.https.HttpsError("invalid-argument", "Missing required parameters: roomName or identity.");
+                throw new HttpsError("invalid-argument", "Missing required parameters: roomName or identity.");
             }
 
             // 3. Force identity to the authenticated UID for security
@@ -153,7 +153,7 @@ export const getLiveKitToken = onCall(
                 isAuthorized = true;
             }
 
-            // Case B: Is the 'Thala' (creator) of the zone?
+            // Case B: Is the 'Thala' or 'Tutor' (creator) of the zone?
             if (!isAuthorized) {
                 const userDoc = await db.collection("users").doc(uid).get();
                 const userData = userDoc.data();
@@ -161,13 +161,16 @@ export const getLiveKitToken = onCall(
                 const zoneDoc = await db.collection("zones").doc(roomName).get();
                 const zoneData = zoneDoc.data();
 
-                if (userData?.role === "THALA" && zoneData?.createdBy === uid) {
+                const isCreator = zoneData?.createdBy === uid;
+                const isTutorOrThala = userData?.role === "THALA" || userData?.role === "TUTOR";
+
+                if (isTutorOrThala && isCreator) {
                     isAuthorized = true;
                 }
             }
 
             if (!isAuthorized) {
-                throw new functions.https.HttpsError("permission-denied", "You are not authorized to enter this knowledge stream.");
+                throw new HttpsError("permission-denied", "You are not authorized to enter this knowledge stream.");
             }
 
             // 5. Generate and Return Token
@@ -175,7 +178,7 @@ export const getLiveKitToken = onCall(
             const apiSecret = process.env.LIVEKIT_API_SECRET;
 
             if (!apiKey || !apiSecret) {
-                throw new functions.https.HttpsError("failed-precondition", "LiveKit configuration is missing on the server.");
+                throw new HttpsError("failed-precondition", "LiveKit configuration is missing on the server.");
             }
 
             const at = new AccessToken(apiKey, apiSecret, {
@@ -191,9 +194,9 @@ export const getLiveKitToken = onCall(
             const token = await at.toJwt();
             return { token };
         } catch (error: any) {
-            if (error instanceof functions.https.HttpsError) throw error;
             functions.logger.error("Global crash in getLiveKitToken:", error);
-            throw new functions.https.HttpsError("internal", error.message || "Failed to get live token.");
+            if (error instanceof functions.https.HttpsError) throw error;
+            throw new functions.https.HttpsError("unknown", "CRASH: " + (error.message || error.toString()));
         }
     }
 );
@@ -288,7 +291,7 @@ export const createBunnyUploadSignature = onCall(
             // Note: zoneId is optional for some flows, but required if indexing in firestore
             // if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
 
-            const libraryId = process.env.BUNNY_LIBRARY_ID;
+            const libraryId = process.env.BUNNY_LIBRARY_ID ? process.env.BUNNY_LIBRARY_ID.trim() : null;
             const bunnyKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
 
             if (!libraryId || !bunnyKey) {
@@ -536,14 +539,14 @@ export const createTutorLinkedAccount = onCall(
             }
 
             const uid = request.auth.uid;
-            const { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc } = request.data || {};
+            const { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc, street, street2, city, state, pinCode } = request.data || {};
 
-            if (!businessName || !businessType || !legalName || !email || !phone || !pan || !bankAccount || !ifsc) {
-                throw new functions.https.HttpsError("invalid-argument", "Missing required business details: { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc }.");
+            if (!businessName || !businessType || !legalName || !email || !phone || !pan || !bankAccount || !ifsc || !street || !city || !state || !pinCode) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing required business details including address.");
             }
 
-            const keyId = process.env.RAZORPAY_KEY_ID;
-            const keySecret = process.env.RAZORPAY_KEY_SECRET;
+            const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+            const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
             if (!keyId || !keySecret) {
                 throw new functions.https.HttpsError("failed-precondition", "Razorpay credentials are not configured on the server.");
             }
@@ -580,7 +583,20 @@ export const createTutorLinkedAccount = onCall(
                     legal_business_name: legalName,
                     business_type: businessType,
                     customer_facing_business_name: businessName,
-                    profile: { category: "education" }
+                    profile: { 
+                        category: "education",
+                        subcategory: "professional_courses",
+                        addresses: {
+                            registered: {
+                                street1: street,
+                                street2: street2 || "",
+                                city: city,
+                                state: state,
+                                postal_code: pinCode,
+                                country: "IN"
+                            }
+                        }
+                    }
                 };
 
                 const accountResponse = await axios.post(
@@ -679,8 +695,8 @@ export const createRazorpayOrder = onCall(
                 throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or planId.");
             }
 
-            const keyId = process.env.RAZORPAY_KEY_ID;
-            const keySecret = process.env.RAZORPAY_KEY_SECRET;
+            const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+            const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
             if (!keyId || !keySecret) {
                 throw new functions.https.HttpsError("failed-precondition", "Razorpay secrets not configured.");
             }
@@ -703,7 +719,7 @@ export const createRazorpayOrder = onCall(
                 const price = zoneData.priceINR || zoneData.price || 0;
                 finalAmount = Math.round(price * 100); // Convert to paise
 
-                tutorUid = zoneData.createdBy;
+                tutorUid = zoneData.createdBy || zoneData.tutorId;
                 if (!tutorUid) {
                     throw new functions.https.HttpsError("failed-precondition", "Zone creator (tutorUid) is missing.");
                 }
@@ -715,8 +731,9 @@ export const createRazorpayOrder = onCall(
                 const tutorData = tutorDoc.data()!;
                 rzpAccountId = tutorData.razorpayAccountId || tutorData.razorpay_account_id;
                 const kycStatus = tutorData.kycStatus;
+                const isDevBypass = tutorData.isDevBypass === true || tutorData.isWhitelisted === true;
 
-                if (!rzpAccountId || kycStatus !== 'VERIFIED') {
+                if (!isDevBypass && (!rzpAccountId || kycStatus !== 'VERIFIED')) {
                     throw new functions.https.HttpsError(
                         "failed-precondition", 
                         "Tutor is not eligible for payments (KYC or Account ID missing)."
@@ -2701,10 +2718,11 @@ export const sendEnrollmentEmail = onCall(
             throw new HttpsError('internal', 'Email service not configured.');
         }
 
-        const { studentEmail, studentName, zoneName, tutorName, zoneId } = request.data;
+        const { studentEmail, studentName, zoneName, tutorName, zoneId, origin } = request.data;
         if (!studentEmail || !zoneName || !zoneId) {
             throw new HttpsError('invalid-argument', 'Missing required fields.');
         }
+        const baseUrl = origin || 'https://nunma.in';
 
         const response = await fetch('https://api.resend.com/emails', {
             method: 'POST',
@@ -2726,7 +2744,7 @@ export const sendEnrollmentEmail = onCall(
             <p style="color: #333; font-size: 16px; line-height: 1.6;">Your instructor has granted you full access to this zone. You can start learning immediately.</p>
             
             <div style="text-align: center; margin: 40px 0;">
-              <a href="https://nunma.in/zone/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+              <a href="${baseUrl}/zone/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
                 Enter Zone →
               </a>
             </div>

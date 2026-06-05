@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/tus-js-client@3.0.0/dist/tus.min.js"></script>
+</head>
+<body>
+    <input type="file" id="file" />
+    <button id="upload">Upload</button>
+    <script>
+        document.getElementById('upload').addEventListener('click', async () => {
+            const file = document.getElementById('file').files[0];
+            if (!file) return;
+
+            // Generate signature via backend (mocked here by calling a local node script endpoint, or hardcoding)
+            // Wait, we need a valid videoId and signature. 
+            // I'll fetch them from a local script I'll run.
+            const res = await fetch('http://localhost:9999/get-sig');
+            const { signature, expirationTime, videoId, libId } = await res.json();
+
+            const upload = new tus.Upload(file, {
+                endpoint: 'https://video.bunnycdn.com/tusupload',
+                retryDelays: [0, 1000, 3000, 5000],
+                chunkSize: 50 * 1024 * 1024,
+                headers: {
+                    AuthorizationSignature: signature,
+                    AuthorizationExpire: String(expirationTime),
+                    VideoId: videoId,
+                    LibraryId: String(libId),
+                },
+                onError: (err) => console.error(err),
+                onSuccess: () => console.log('success!')
+            });
+            upload.start();
+        });
+    </script>
+</body>
+</html>

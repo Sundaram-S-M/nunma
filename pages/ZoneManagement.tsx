@@ -199,6 +199,45 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   );
 };
 
+const nunmaAlert = (msg: string, type: 'success' | 'error' = 'success') => {
+  if (type === 'error') {
+    toast.error(msg);
+  } else {
+    toast.success(msg);
+  }
+};
+
+const asyncConfirm = async (msg: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    toast((t) => (
+      <div className="flex flex-col gap-4 p-2 min-w-[280px]">
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nunma Admin</span>
+          <span className="font-bold text-[#040457] text-sm leading-tight">{msg}</span>
+        </div>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => { toast.dismiss(t.id); resolve(false); }}
+            className="flex-1 bg-gray-100 text-gray-500 hover:bg-gray-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={() => { toast.dismiss(t.id); resolve(true); }}
+            className="flex-1 bg-red-500 text-white hover:bg-red-600 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-red-500/20"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    ), { 
+      duration: Infinity, 
+      position: 'top-center',
+      style: { borderRadius: '24px', padding: '16px', border: '1px solid #f3f4f6' }
+    });
+  });
+};
+
   const ZoneManagement: React.FC = () => {
   const { zoneId } = useParams();
   const navigate = useNavigate();
@@ -234,7 +273,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   const handleUpdateZoneSettings = async () => {
     if (!zoneId) return;
     if (editSubjects.length > 5) {
-      alert("You can strictly only add up to 5 subjects.");
+      nunmaAlert("You can strictly only add up to 5 subjects.", "success");
       return;
     }
     try {
@@ -251,7 +290,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       toast.success("Zone settings updated successfully!");
     } catch (e) {
       console.error(e);
-      alert("Failed to update zone settings");
+      nunmaAlert("Failed to update zone settings", "error");
     }
   };
 
@@ -511,10 +550,10 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       setNewExamMinMark('40');
       setNewExamQuestions([]);
       setNewExamFile(null);
-      alert(`Exam "${newExamTitle}" created! Notifications sent.`);
+      nunmaAlert(`Exam "${newExamTitle}" created! Notifications sent.`);
     } catch (e) {
       console.error("Error creating exam:", e);
-      alert("Failed to create exam.");
+      nunmaAlert("Failed to create exam.", "error");
     }
   };
 
@@ -531,7 +570,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
 
       if (json.length < 2) {
-        alert("Excel sheet appears empty or missing headers.");
+        nunmaAlert("Excel sheet appears empty or missing headers.", "success");
         return;
       }
 
@@ -542,7 +581,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       const nameIndex = headers.findIndex(h => typeof h === 'string' && ['name', 'student'].includes(h.toLowerCase() || ""));
 
       if (markIndex === -1) {
-        alert("Could not find a 'Mark' or 'Score' column in the Excel sheet.");
+        nunmaAlert("Could not find a 'Mark' or 'Score' column in the Excel sheet.");
         return;
       }
 
@@ -576,7 +615,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       }
 
       if (parsedResults.length === 0) {
-        alert("Failed to parse any valid marks from the sheet.");
+        nunmaAlert("Failed to parse any valid marks from the sheet.", "error");
         return;
       }
 
@@ -594,17 +633,17 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
             const filtered = prev.filter(r => r.examId !== examId);
             return [...filtered, ...parsedResults];
           });
-          alert(`Successfully imported marks for ${parsedResults.length} students!`);
+          nunmaAlert(`Successfully imported marks for ${parsedResults.length} students!`, "success");
         } catch (err) {
           console.error("Error saving exam results:", err);
-          alert("Failed to save results to database.");
+          nunmaAlert("Failed to save results to database.", "error");
         }
       } else {
         console.warn("ZoneManagement: Mock Mode disabled. Database required for results.");
       }
     } catch (error) {
       console.error("Error parsing Excel:", error);
-      alert("Failed to parse Excel file. Please ensure it's a valid format.");
+      nunmaAlert("Failed to parse Excel file. Please ensure it's a valid format.");
     }
   };
 
@@ -971,7 +1010,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
     setActiveTypeForUpload(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    alert(`Item "${file.name}" uploaded and added to chapter!`);
+    nunmaAlert(`Item "${file.name}" uploaded and added to chapter!`);
   };
 
   const handleTextModuleSuccess = async (lessonData: { id: string; title: string; content: string }) => {
@@ -1074,7 +1113,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       setActiveChapterForUpload(null);
     } catch (error) {
       console.error("Failed to append video segment to chapter:", error);
-      alert("Video was uploaded, but failed to link to chapter. Please refresh and try again.");
+      nunmaAlert("Video was uploaded, but failed to link to chapter. Please refresh and try again.", "error");
     }
   }, [activeChapterForUpload, zoneId, chapters]);
 
@@ -1177,7 +1216,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
   const handleSaveGrading = async () => {
     if (isSmartMarking && activeClusterId) {
-      alert(`Batch Grade Applied to ${clusters.find(c => c.id === activeClusterId)?.studentIds.length} students.`);
+      nunmaAlert(`Batch Grade Applied to ${clusters.find(c => c.id === activeClusterId)?.studentIds.length} students.`, "success");
     } else if (valuationContext && zoneId) {
       try {
         const { examId, studentId } = valuationContext;
@@ -1191,14 +1230,14 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
           updatedAt: serverTimestamp(),
         }, { merge: true });
 
-        alert("Mark saved successfully!");
+        nunmaAlert("Mark saved successfully!", "success");
         setView('management');
         setValuationContext(null);
         setScriptScore('');
         setStrokes([]);
       } catch (e) {
         console.error("Error saving manual grade:", e);
-        alert("Failed to save mark.");
+        nunmaAlert("Failed to save mark.", "error");
       }
     }
   };
@@ -1224,7 +1263,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       setActiveSession({ id: docRef.id, ...newSession });
     } catch (e) {
       console.error("Failed to launch session", e);
-      alert("Failed to go live. Check connection.");
+      nunmaAlert("Failed to go live. Check connection.", "error");
     }
   };
 
@@ -1252,13 +1291,13 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   const handleDeleteZone = async () => {
     if (!zoneId) return;
 
-    if (confirm('Are you sure you want to delete this zone? This action cannot be undone.')) {
+    if (await asyncConfirm('Are you sure you want to delete this zone? This action cannot be undone.')) {
       if (db) {
         try {
           await deleteDoc(doc(db, 'zones', zoneId));
         } catch (error) {
           console.error("Error deleting zone from Firebase:", error);
-          alert("Failed to delete zone from cloud.");
+          nunmaAlert("Failed to delete zone from cloud.", "error");
         }
       }
 
@@ -1269,7 +1308,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   };
 
   const handleDismissStudent = async (student: Student) => {
-    if (!zoneId || !db || !confirm(`Are you sure you want to remove ${student.name} from this zone?`)) return;
+    if (!zoneId || !db || !(await asyncConfirm(`Are you sure you want to remove ${student.name || student.email || "this student"} from this zone?`))) return;
 
     try {
       // 1. Remove from students subcollection
@@ -1285,10 +1324,10 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
         await updateDoc(zoneRef, { whitelistedEmails: updatedWhitelist });
       }
 
-      alert('Student access removed.');
+      nunmaAlert('Student access removed.', "success");
     } catch (err) {
       console.error("Error dismissing student:", err);
-      alert("Failed to remove student.");
+      nunmaAlert("Failed to remove student.", "error");
     }
   };
 
@@ -1324,10 +1363,10 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       setShowTakeAttendanceModal(false);
       setNewAttendanceClassName('');
       setManualAttendanceState({});
-      alert(`Attendance for "${newAttendanceClassName || attendanceDate}" recorded!`);
+      nunmaAlert(`Attendance for "${newAttendanceClassName || attendanceDate}" recorded!`);
     } catch (e) {
       console.error("Error saving attendance:", e);
-      alert("Failed to save attendance.");
+      nunmaAlert("Failed to save attendance.", "error");
     }
   };
 
@@ -1453,7 +1492,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       setShowStartExamModal(false);
                     } catch (e) {
                       console.error("Failed to launch exam:", e);
-                      alert("Database update failed.");
+                      nunmaAlert("Database update failed.", "error");
                     }
                   }}
                   className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95"
@@ -1504,7 +1543,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
         {/* SCHEDULE SESSION MODAL */}
         {showScheduleModal && (
           <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[150] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
-            <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-visible p-12 animate-in zoom-in-95 duration-500">
+            <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-y-auto max-h-[90vh] p-12 animate-in zoom-in-95 duration-500">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-3xl font-black text-[#040457]">{editingSession ? 'Edit' : 'Schedule'} Session</h3>
                 <button
@@ -1523,7 +1562,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                     value={scheduleTitle}
                     onChange={e => setScheduleTitle(e.target.value)}
                     placeholder="e.g. Masterclass on Logic"
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -1533,32 +1572,39 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       type="date"
                       value={scheduleDate}
                       onChange={e => setScheduleDate(e.target.value)}
-                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all"
                     />
                   </div>
                   {/* Interactive Clock Picker */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowClockPicker(!showClockPicker)}
-                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] text-left flex items-center justify-between hover:bg-gray-100 transition-all"
-                    >
-                      <span className={scheduleTime || (selectedHour !== 12 || selectedMinute !== 0) ? 'text-[#040457]' : 'text-gray-400'}>
-                        {scheduleTime || `${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`}
-                      </span>
-                      <Clock size={20} className="text-[#c2f575]" />
-                    </button>
+                  <div className="space-y-2 relative">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Time</label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        placeholder={`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`}
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl pl-6 pr-14 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowClockPicker(!showClockPicker)}
+                        className="absolute right-3 p-2 hover:bg-gray-200 rounded-xl transition-all text-[#c2f575]"
+                      >
+                        <Clock size={20} />
+                      </button>
+                    </div>
 
                     {showClockPicker && (
-                      <div className="absolute top-full left-0 mt-4 bg-white rounded-[3rem] shadow-[0_32px_80px_-8px_rgba(4,4,87,0.25)] border border-gray-100 p-8 z-[9999] animate-in slide-in-from-top-4 duration-300 min-w-[340px]" style={{width:'max-content'}}>
+                      <div className="absolute top-full right-0 mt-4 bg-white rounded-[2rem] shadow-[0_32px_80px_-8px_rgba(4,4,87,0.25)] border border-gray-100 p-5 z-[9999] animate-in slide-in-from-top-4 duration-300 min-w-[220px]" style={{width:'max-content'}}>
                         {/* Clock Display */}
-                        <div className="flex flex-col items-center mb-10 mt-2 relative">
-                          <div className="relative w-64 h-64 bg-gradient-to-br from-[#040457] to-indigo-900 rounded-full shadow-2xl p-4">
+                        <div className="flex flex-col items-center mb-5 mt-1 relative">
+                          <div className="relative w-40 h-40 bg-gradient-to-br from-[#040457] to-indigo-900 rounded-full shadow-2xl p-3">
                             <div className="absolute inset-4 bg-white rounded-full flex items-center justify-center">
                               {/* Hour Markers */}
                               {Array.from({ length: 12 }, (_, i) => {
                                 const angle = (i * 30 - 90) * (Math.PI / 180);
-                                const radius = 80;
+                                const radius = 38;
                                 const x = 50 + radius * Math.cos(angle);
                                 const y = 50 + radius * Math.sin(angle);
                                 const number = clockMode === 'hour' ? (i === 0 ? 12 : i) : i * 5;
@@ -1581,7 +1627,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                         setScheduleTime(`${selectedHour}:${newMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
                                       }
                                     }}
-                                    className={`absolute w-10 h-10 rounded-full font-black text-sm transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
+                                    className={`absolute w-7 h-7 rounded-full font-black text-[10px] transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
                                       ? 'bg-[#c2f575] text-[#040457] scale-110 shadow-lg'
                                       : 'bg-gray-50 text-gray-600 hover:bg-[#c2f575]/20 hover:scale-105'
                                       }`}
@@ -1594,7 +1640,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
                               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <div className="text-center">
-                                  <div className="text-2xl font-black text-[#040457] tracking-tight">
+                                  <div className="text-lg font-black text-[#040457] tracking-tight">
                                     {selectedHour}:{selectedMinute.toString().padStart(2, '0')}
                                   </div>
                                   <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">
@@ -1645,7 +1691,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                     type="number" min="0"
                     value={scheduleDuration}
                     onChange={e => setScheduleDuration(e.target.value)}
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-4">
@@ -1657,7 +1703,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       }
                       e.target.value = '';
                     }}
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all cursor-pointer"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all cursor-pointer"
                   >
                     <option value="">Select a student to co-host...</option>
                     {students.map(s => (
@@ -1711,10 +1757,10 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       setScheduleDate('');
                       setScheduleTime('');
                       setScheduleCoHosts([]);
-                      alert(`Session ${editingSession ? 'updated' : 'scheduled'} successfully!`);
+                      nunmaAlert(`Session ${editingSession ? 'updated' : 'scheduled'} successfully!`);
                     } catch (e) {
                       console.error("Error scheduling session:", e);
-                      alert("Failed to schedule session.");
+                      nunmaAlert("Failed to schedule session.", "error");
                     }
                   }}
                   className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all"
@@ -1928,7 +1974,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
               <div className="mt-10 flex gap-4">
                 <button onClick={() => setShowMarkEntryModal(false)} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
-                <button onClick={() => { setShowMarkEntryModal(false); alert('Gradebook synchronized successfully.'); }} className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Complete Synchronization</button>
+                <button onClick={() => { setShowMarkEntryModal(false); nunmaAlert('Gradebook synchronized successfully.', "success"); }} className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Complete Synchronization</button>
               </div>
             </div>
           </div>
@@ -1976,7 +2022,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       <div className="space-y-4 flex-1 w-full">
                         <p className="text-xs text-gray-500 font-bold">Share your unique event link or QR code to gather registrations.</p>
                         <div className="flex gap-2">
-                          <button onClick={() => navigator?.clipboard?.writeText(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`).then(() => alert('Link copied!'))} className="flex-1 py-3 bg-white border border-gray-200 text-[#040457] rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2">
+                          <button onClick={() => navigator?.clipboard?.writeText(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`).then(() => nunmaAlert('Link copied!', "success"))} className="flex-1 py-3 bg-white border border-gray-200 text-[#040457] rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2">
                             <Copy size={14} /> Copy Link
                           </button>
                           <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join my workshop: ${zone?.title || ""}`)}&url=${encodeURIComponent(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-sm">
@@ -2040,7 +2086,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       disabled={isWhitelisting}
                       onClick={async () => {
                         if (!zoneId || !newStudentEmail) {
-                          return alert("Missing zoneId or email");
+                          return nunmaAlert("Missing zoneId or email", "success");
                         }
 
                         setIsWhitelisting(true);
@@ -2584,7 +2630,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             setChapters([...chapters, newChapter]);
                           } catch (error: any) {
                             console.error("Error creating chapter:", error);
-                            alert("Failed to create chapter. Please try again.");
+                            nunmaAlert("Failed to create chapter. Please try again.", "error");
                           }
                         }}
                         className="px-8 py-5 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
@@ -2866,8 +2912,8 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                 EDIT
                               </button>
                               <button
-                                onClick={() => {
-                                  if (confirm('Delete this scheduled session?')) {
+                                onClick={async () => {
+                                  if (await asyncConfirm('Delete this scheduled session?')) {
                                     setScheduledSessions(scheduledSessions.filter(s => s.id !== session.id));
                                   }
                                 }}
@@ -2925,7 +2971,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             setSelectedExamForMarks(conducts[conducts.length - 1]);
                             setShowMarkEntryModal(true);
                           } else {
-                            alert("No conducted exams found to upload marks for.");
+                            nunmaAlert("No conducted exams found to upload marks for.", "success");
                           }
                         }}
                         className="px-6 py-5 bg-emerald-100 text-emerald-700 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:shadow-xl transition-all"
@@ -2939,7 +2985,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             setSelectedExamForGrading(conducts[conducts.length - 1]);
                             setShowGradingHubModal(true);
                           } else {
-                            alert("No conducted exams found for evaluation.");
+                            nunmaAlert("No conducted exams found for evaluation.", "success");
                           }
                         }}
                         className="px-6 py-5 bg-indigo-100 text-indigo-700 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:shadow-xl transition-all"
@@ -3027,7 +3073,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                       const examDateObj = new Date(`${exam.date} ${exam.time}`);
                                       const timeDiff = examDateObj.getTime() - Date.now();
                                       if (timeDiff <= 60 * 60 * 1000 && timeDiff > 0) {
-                                        alert("Exams cannot be edited within 1 hour of commencement to ensure a stable testing environment for students.");
+                                        nunmaAlert("Exams cannot be edited within 1 hour of commencement to ensure a stable testing environment for students.", "success");
                                         e.preventDefault();
                                         return;
                                       }
@@ -3042,7 +3088,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                   </button>
                                   <button
                                     onClick={async () => {
-                                      if (window.confirm("Are you sure you want to permanently delete this exam?")) {
+                                      if (await asyncConfirm("Are you sure you want to permanently delete this exam?")) {
                                         try {
                                           if (zoneId) {
                                             await deleteDoc(doc(db, 'zones', zoneId, 'exams', exam.id));
@@ -3050,7 +3096,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                           setExams(exams.filter(e => e.id !== exam.id));
                                         } catch (error) {
                                           console.error("Error deleting exam:", error);
-                                          alert("Failed to delete exam from database.");
+                                          nunmaAlert("Failed to delete exam from database.", "error");
                                         }
                                       }
                                     }}
@@ -3094,8 +3140,8 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             emailSubject: lpEmailSubject, emailBody: lpEmailBody, customFields: lpCustomFields
                           }
                         });
-                        alert('Landing Page configuration saved!');
-                      } catch (e) { alert('Failed to save config.'); }
+                        nunmaAlert('Landing Page configuration saved!', "success");
+                      } catch (e) { nunmaAlert('Failed to save config.', "error"); }
                     }} className="px-8 py-4 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
                       <Save size={18} className="inline mr-2" /> Save Settings
                     </button>
@@ -3177,8 +3223,8 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             enabled: psEnabled, ratingSystem: psRating, npsTracking: psNps, feedbackText: psFeedback
                           }
                         });
-                        alert('Survey configuration saved!');
-                      } catch (e) { alert('Failed to save survey.'); }
+                        nunmaAlert('Survey configuration saved!', "success");
+                      } catch (e) { nunmaAlert('Failed to save survey.', "error"); }
                     }} className="px-8 py-4 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
                       <Save size={18} className="inline mr-2" /> Save Survey
                     </button>
@@ -3220,7 +3266,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                   </div>
                 </div>
               )}
-              {activeTab !== 'exams' && activeTab !== 'schedule' && activeTab !== 'landing' && activeTab !== 'post-session' && <div className="py-20 text-center text-gray-300 italic">Configuration module loading...</div>}
+              {!['attendance', 'curriculum', 'exams', 'schedule', 'students', 'landing', 'post-session'].includes(activeTab) && <div className="py-20 text-center text-gray-300 italic">Configuration module loading...</div>}
             </div>
           </div >
         ) : view === 'grading' ? (

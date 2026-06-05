@@ -14,6 +14,7 @@ import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../utils/firebase';
 import { UserRole, StudentProfileData, TutorProfileData } from '../types';
+import { toast } from 'react-hot-toast';
 
 export interface UserProfile {
   uid: string;
@@ -255,7 +256,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           errorMsg += " Firestore is currently offline.";
         }
 
-        alert(`${errorMsg} Local changes will persist for this session.`);
+        toast.error(`${errorMsg} Local changes will persist for this session.`);
       }
     } else {
       console.warn("AuthContext: Firebase not initialized (db is null). Updating local state only.");
@@ -269,10 +270,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const newRole = user.role === UserRole.STUDENT ? UserRole.THALA : UserRole.STUDENT;
       await updateProfile({ role: newRole });
-      alert(`Switched to ${newRole === UserRole.THALA ? 'Thala' : 'Student'} mode`);
+      toast.success(`Switched to ${newRole === UserRole.THALA ? 'Thala' : 'Student'} mode`, {
+        icon: newRole === UserRole.THALA ? '🎓' : '📚',
+        style: {
+          borderRadius: '12px',
+          background: '#040457',
+          color: '#c2f575',
+          fontWeight: 'bold'
+        }
+      });
     } catch (error) {
       console.error("AuthContext: Toggle role failed:", error);
-      alert("Failed to switch roles. Please try again.");
+      toast.error("Failed to switch roles. Please try again.");
     }
   };
 

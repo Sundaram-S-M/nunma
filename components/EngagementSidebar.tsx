@@ -120,6 +120,7 @@ const EngagementSidebar: React.FC = () => {
         const allow = currentStatus === 'waiting';
         
         try {
+            if (!functions) throw new Error("Firebase functions not initialized.");
             const toggleAudioFunc = httpsCallable(functions, 'toggleStudentAudio');
             await toggleAudioFunc({
                 zoneId,

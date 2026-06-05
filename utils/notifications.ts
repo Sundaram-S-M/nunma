@@ -16,7 +16,7 @@ export const sendEnrollmentEmail = async ({ studentEmail, studentName, zoneName,
 
   try {
     const sendEmail = httpsCallable(functions, 'sendEnrollmentEmail');
-    await sendEmail({ studentEmail, studentName, zoneName, tutorName, zoneId });
+    await sendEmail({ studentEmail, studentName, zoneName, tutorName, zoneId, origin: window.location.origin });
   } catch (err) {
     console.error('Enrollment email failed:', err);
   }
