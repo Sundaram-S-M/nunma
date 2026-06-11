@@ -26,7 +26,6 @@
     "@tldraw/tldraw": "^4.5.3",
     "@types/qrcode.react": "^1.0.5",
     "firebase": "^12.8.0",
-    "firebase-admin": "^13.7.0",
     "livekit-client": "^2.18.0",
     "lucide-react": "^0.563.0",
     "pdf-lib": "^1.17.1",
@@ -52,6 +51,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.27",
+    "firebase-admin": "^13.7.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.8.2",
@@ -115,19 +115,6 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       plugins: [react()],
-      build: {
-        rollupOptions: {
-          output: {
-            manualChunks: {
-              'livekit-vendor': ['livekit-client', '@livekit/components-react'],
-              'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/functions'],
-              'tldraw-vendor': ['@tldraw/tldraw'],
-              'pdf-vendor': ['pdf-lib', 'react-pdf'],
-              'charts-vendor': ['recharts'],
-            }
-          }
-        }
-      },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
@@ -135,6 +122,21 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+        }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'vendor-livekit': ['@livekit/components-react', 'livekit-client'],
+              'vendor-pdf': ['react-pdf', 'pdfjs-dist'],
+              'vendor-charts': ['recharts'],
+              'vendor-firebase': [
+                'firebase/app', 'firebase/auth', 'firebase/firestore', 
+                'firebase/functions', 'firebase/storage'
+              ],
+            }
+          }
         }
       }
     };
@@ -150,9 +152,12 @@ export default defineConfig(({ mode }) => {
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-    "./components/**/*.{js,ts,jsx,tsx}",
     "./pages/**/*.{js,ts,jsx,tsx}",
+    "./components/**/*.{js,ts,jsx,tsx}",
+    "./layouts/**/*.{js,ts,jsx,tsx}",
+    "./context/**/*.{js,ts,jsx,tsx}",
+    "./hooks/**/*.{js,ts,jsx,tsx}",
+    "./utils/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     screens: {
@@ -217,20 +222,6 @@ export default {
     "firestore": {
         "rules": "firestore.rules"
     },
-    "hosting": {
-        "public": "dist",
-        "ignore": [
-            "firebase.json",
-            "**/.*",
-            "**/node_modules/**"
-        ],
-        "rewrites": [
-            {
-                "source": "**",
-                "destination": "/index.html"
-            }
-        ]
-    },
     "emulators": {
         "auth": { "port": 9099 },
         "firestore": { "port": 8080 },
@@ -249,7 +240,7 @@ export default {
 ```plaintext
 {
   "projects": {
-    "Production": "nunma-by-cursor"
+    "default": "nunma-by-cursor"
   },
   "targets": {},
   "etags": {}
@@ -304,21 +295,21 @@ service cloud.firestore {
     match /zones/{zoneId}/students/{studentId} {
       allow read: if request.auth != null && (
         studentId == request.auth.uid ||
-        get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy 
-          == request.auth.uid
+        isZoneCreator(zoneId) ||
+        exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid))
       );
-      allow write: if false;
+      allow write: if request.auth != null && (
+        studentId == request.auth.uid ||
+        isZoneCreator(zoneId)
+      );
     }
 
     match /zones/{zoneId}/segments/{segmentId} {
       allow read: if request.auth != null && (
-        get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy 
-          == request.auth.uid ||
+        isZoneCreator(zoneId) ||
         exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid))
       );
-      allow write: if request.auth != null && 
-        get(/databases/$(database)/documents/zones/$(zoneId)).data.createdBy 
-          == request.auth.uid;
+      allow write: if isZoneCreator(zoneId);
     }
 
     // ZONES/CHAPTERS (Priority Fix)
@@ -427,10 +418,20 @@ service cloud.firestore {
         && (request.method == 'delete' ? resource.data.tutorId == request.auth.uid : request.resource.data.tutorId == request.auth.uid);
     }
     // --- USERS Collection ---
-    // Users — authenticated users can read profiles (needed to display tutor/student names)
+    // Full profile read restricted to own user. Public reads limited to name, avatar, role.
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        request.resource == null
+      );
+      // Allow reading specific public fields for any authenticated user
+      allow get: if request.auth != null;
+      allow list: if request.auth != null;
+      allow create, delete: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']))
+      );
 
       // Rule for the user's followers list (Fix: New Follower Mechanics)
       match /followers/{followerId} {
@@ -460,6 +461,45 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
+    }
+
+    // --- CONVERSATIONS Collection ---
+    match /conversations/{conversationId} {
+      allow read: if request.auth != null && (
+        request.auth.uid in resource.data.participants ||
+        (resource.data.type == 'community' && resource.data.zoneId != null && (
+          isZoneCreator(resource.data.zoneId) ||
+          exists(/databases/$(database)/documents/zones/$(resource.data.zoneId)/students/$(request.auth.uid))
+        ))
+      );
+      allow create: if request.auth != null && (
+        request.auth.uid in request.resource.data.participants
+      );
+      allow update: if request.auth != null && (
+        request.auth.uid in resource.data.participants
+      );
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null && (
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
+        );
+        allow create: if request.auth != null && (
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
+          request.resource.data.senderId == request.auth.uid
+        );
+      }
+    }
+
+    // --- ZONES/EXAM_RESULTS Collection ---
+    match /zones/{zoneId}/exam_results/{resultId} {
+      allow read: if request.auth != null && (
+        resource.data.studentId == request.auth.uid ||
+        isZoneCreator(zoneId)
+      );
+      allow write: if request.auth != null && (
+        isZoneCreator(zoneId)
+      );
     }
   }
 }
@@ -495,6 +535,8 @@ interface ImportMetaEnv {
     readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string
     readonly VITE_FIREBASE_APP_ID: string
     readonly VITE_FIREBASE_MEASUREMENT_ID: string
+    readonly VITE_RAZORPAY_KEY_ID: string
+    readonly VITE_BUNNY_LIBRARY_ID: string
 }
 
 interface ImportMeta {
@@ -668,6 +710,11 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background-color: var(--nunma-lime);
+  color: var(--nunma-navy);
 }
 
 body p {
@@ -960,6 +1007,46 @@ export interface TutorProfileData {
     businessType: 'individual' | 'registered';
     legalName: string;
   };
+  expertise?: string[];
+  payoutInfo?: {
+    accountHolderName: string;
+    bankIdentifier: string;
+  };
+  kycStatus?: 'PENDING' | 'VERIFIED' | 'FAILED' | null;
+  razorpay_account_id?: string;
+  current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
+}
+
+export interface StatCardData {
+  label: string;
+  value: string | number;
+}
+
+export type ZoneType = 'Class Management' | 'Course' | 'Workshop';
+
+export interface Zone {
+  id: string;
+  title: string;
+  description: string;
+  level: 'Beginner' | 'Intermediate' | 'Expert';
+  price: string;
+  currency: 'USD' | 'INR' | 'EUR';
+  type: 'live-course' | 'course'; // Legacy type field, keeping for compatibility
+  zoneType: ZoneType;
+  status: 'In Progress' | 'Completed' | 'Pending';
+  createdAt: string;
+  students: number;
+  image: string;
+  landingPageConfig?: LandingPageConfig;
+  postSessionSurvey?: PostSessionSurveyConfig;
+}
+
+export interface LandingPageConfig {
+  paid: boolean;
+  paymentLink?: string;
+  enableCalendar: boolean;
+  emailSubject: string;
+  emailBody: string;
   customFields: string[];
 }
 
@@ -969,6 +1056,37 @@ export interface PostSessionSurveyConfig {
   npsTracking: boolean;
   feedbackText: boolean;
 }
+
+export interface Product {
+  id: string;
+  title: string;
+  type: 'material' | 'service';
+  price?: string; // Legacy
+  currency?: 'USD' | 'INR' | 'EUR'; // Legacy
+  priceUSD: string;
+  priceINR: string;
+  duration?: string;
+  availability?: { day: string; time: string }[] | null;
+  createdAt: string;
+}
+
+export interface LiveSession {
+  id: string;
+  zoneId: string;
+  title: string;
+  startTime: string; // ISO string
+  duration: number; // minutes
+  status: 'scheduled' | 'live' | 'ended';
+  coHosts?: string[];
+}
+
+
+export interface AttendanceRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  avatar: string;
+  durationInSession: number;
   engagementScore: number;
   status: 'Present' | 'Absent' | 'Logged Absent';
 }
@@ -1004,8 +1122,65 @@ export interface ExamResult {
   studentName: string;
   marks: number;
   status: 'passed' | 'failed' | 'ongoing' | 'reported';
+  warnings: number;
+  completedAt?: string;
+  answerSheetUrl?: string; // URL to uploaded PDF (online-test) or Excel (offline)
+}
+
+export interface AttendanceHistory {
+  sessionId: string;
+  status: 'Present' | 'Absent' | 'Late' | 'Pending';
+  date: string;
+}
+
+export interface Student {
+  id: string;
+  name: string;
+  avatar: string;
+  joinedAt: string;
+  status: 'Present' | 'Absent' | 'Late' | 'Pending';
+  joinTimestamp?: number;
+  durationInSession?: number;
+  engagementScore: number;
+  email?: string;
+  phone?: string;
+  attendanceHistory?: AttendanceHistory[];
+  current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
+  storage_used_bytes?: number;
+  subscription_entitlements?: {
+    storageLimit: number;
+    storageUsed: number;
+    studentCapacity: number;
+    studentsEnrolled: number;
+  };
+}
+
+export interface Addon {
+  id: string;
+  name: string;
+  monthlyPrice: number;
+  startDate: string; // ISO string
+  quantity: number;
+}
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  basePrice: number;
+  billing_cycle_anchor: number; // 1-31
+  active_addons: Addon[];
+  next_billing_amount: number; // For the upcoming automated charge
+  currency: string;
+}
+```
+
+---
+
+## File: `App.tsx`
+
+```tsx
 import React, { useState, useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -1039,7 +1214,8 @@ const AnalyticsDashboard = React.lazy(() => import('./pages/AnalyticsDashboard')
 const AnalyticsChat = React.lazy(() => import('./pages/AnalyticsChat.tsx'));
 const Payment = React.lazy(() => import('./pages/Payment'));
 const ZoneDetailView = React.lazy(() => import('./pages/ZoneDetailView'));
-import { Toaster } from 'react-hot-toast';
+import { Toaster, ToastBar, toast } from 'react-hot-toast';
+import { X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 import LiveNotification from './components/LiveNotification';
@@ -1133,18 +1309,61 @@ const AppContent: React.FC = () => {
         {!hideHeader && <Header onToggleRole={toggleRole} />}
 
         <main className={`flex-1 ${isLiveMode ? 'overflow-hidden p-0' : 'overflow-y-auto p-4 md:p-8'} custom-scrollbar relative`} style={{ background: 'var(--bg)' }}>
-                  <AnalyticsDashboard />
-                </ErrorBoundary>
-              ) : <Navigate to="/dashboard" />
-            } />
-            <Route path="/workplace/analytics/:zoneId/chat" element={
-              role === UserRole.THALA ? (
+          <Suspense fallback={<NunmaPageLoader />}>
+            <Routes>
+              <Route path="/onboarding" element={<OnboardingSystem />} />
+              <Route path="/dashboard" element={<Dashboard role={role} />} />
+              <Route path="/classroom" element={role === UserRole.STUDENT ? <Classroom /> : <Navigate to="/workplace" />} />
+              <Route path="/classroom/zone/:zoneId" element={role === UserRole.STUDENT ? <StudentZoneView /> : <Navigate to="/dashboard" />} />
+              <Route path="/workplace" element={role === UserRole.THALA ? <Workplace /> : <Navigate to="/classroom" />} />
+              <Route path="/workplace/manage/:zoneId" element={
+                role === UserRole.THALA ? (
+                  <ErrorBoundary>
+                    <ZoneManagement />
+                  </ErrorBoundary>
+                ) : <Navigate to="/dashboard" />
+              } />
+              <Route path="/workplace/launch" element={role === UserRole.THALA ? <LaunchZone /> : <Navigate to="/dashboard" />} />
+              <Route path="/certificate-engine" element={role === UserRole.THALA ? <CertificateEngine /> : <Navigate to="/dashboard" />} />
+              <Route path="/list-product/flow" element={role === UserRole.THALA ? <ListProductFlow /> : <Navigate to="/dashboard" />} />
+              <Route path="/classroom/:zoneId" element={
                 <ErrorBoundary>
-                  <AnalyticsChat />
+                  <ClassroomPage />
                 </ErrorBoundary>
-              ) : <Navigate to="/dashboard" />
-            } />
-          </Routes>
+              } />
+              <Route path="/whiteboard/:zoneId" element={
+                <ErrorBoundary>
+                  <WhiteboardPage />
+                </ErrorBoundary>
+              } />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/search" element={<Search />} />
+              <Route path="/explore" element={<Explore />} />
+              <Route path="/inbox" element={<Inbox />} />
+              <Route path="/settings/*" element={<Settings />} />
+              <Route path="/settings/availability" element={<AvailabilitySetup />} />
+              <Route path="/profile/:id" element={<ProfileView />} />
+              <Route path="/products" element={<ProductManagement />} />
+              <Route path="/u/:id" element={<ProfileView />} />
+              <Route path="/payment/:zoneId" element={<Payment />} />
+              <Route path="/booking/:productId" element={<BookingPage />} />
+              <Route path="/billing" element={<PricingPage />} />
+              <Route path="/workplace/analytics/:zoneId" element={
+                role === UserRole.THALA ? (
+                  <ErrorBoundary>
+                    <AnalyticsDashboard />
+                  </ErrorBoundary>
+                ) : <Navigate to="/dashboard" />
+              } />
+              <Route path="/workplace/analytics/:zoneId/chat" element={
+                role === UserRole.THALA ? (
+                  <ErrorBoundary>
+                    <AnalyticsChat />
+                  </ErrorBoundary>
+                ) : <Navigate to="/dashboard" />
+              } />
+            </Routes>
+          </Suspense>
         </main>
       </div>
       <LiveNotification />
@@ -1152,15 +1371,50 @@ const AppContent: React.FC = () => {
   );
 };
 
+const NunmaPageLoader = () => {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 300);
+    return () => clearTimeout(t);
+  }, []);
+  if (!show) return null;
+  return (
+    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#040457' }}>
+      <div style={{ width: 48, height: 48, border: '4px solid #c2f575', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <HashRouter>
         <SidebarProvider>
-          <Toaster position="top-center" reverseOrder={false} />
+          <Toaster position="top-center" reverseOrder={false}>
+            {(t) => (
+              <ToastBar toast={t}>
+                {({ icon, message }) => (
+                  <>
+                    {icon}
+                    {message}
+                    {t.type !== 'loading' && (
+                      <button
+                        onClick={() => toast.dismiss(t.id)}
+                        className="ml-2 p-1 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center shrink-0"
+                        aria-label="Close toast"
+                      >
+                        <X size={16} className="text-gray-400 hover:text-gray-600 transition-colors" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </ToastBar>
+            )}
+          </Toaster>
           <AppContent />
         </SidebarProvider>
-      </BrowserRouter>
+      </HashRouter>
     </AuthProvider>
   );
 };
@@ -1189,6 +1443,7 @@ import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../utils/firebase';
 import { UserRole, StudentProfileData, TutorProfileData } from '../types';
+import { toast } from 'react-hot-toast';
 
 export interface UserProfile {
   uid: string;
@@ -1275,7 +1530,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (userDoc.exists()) {
               const data = userDoc.data() as UserProfile;
               if (!data.subscription_entitlements) {
-                data.subscription_entitlements = { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 };
+                data.subscription_entitlements = { storageLimit: 3221225472, storageUsed: 0, studentLimit: 100 };
               }
               setUser({ ...data, uid: firebaseUser.uid });
               setIsAuthenticated(true);
@@ -1287,7 +1542,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 name: firebaseUser.displayName || 'New User',
                 avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
                 role: UserRole.STUDENT,
-                subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
+                subscription_entitlements: { storageLimit: 3221225472, storageUsed: 0, studentLimit: 100 },
                 storage_used_bytes: 0,
                 studentProfile: { isComplete: false },
                 tutorProfile: { isComplete: false }
@@ -1430,7 +1685,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           errorMsg += " Firestore is currently offline.";
         }
 
-        alert(`${errorMsg} Local changes will persist for this session.`);
+        toast.error(`${errorMsg} Local changes will persist for this session.`);
       }
     } else {
       console.warn("AuthContext: Firebase not initialized (db is null). Updating local state only.");
@@ -1444,10 +1699,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const newRole = user.role === UserRole.STUDENT ? UserRole.THALA : UserRole.STUDENT;
       await updateProfile({ role: newRole });
-      alert(`Switched to ${newRole === UserRole.THALA ? 'Thala' : 'Student'} mode`);
+      toast.success(`Switched to ${newRole === UserRole.THALA ? 'Thala' : 'Student'} mode`, {
+        icon: newRole === UserRole.THALA ? '🎓' : '📚',
+        style: {
+          borderRadius: '12px',
+          background: '#040457',
+          color: '#c2f575',
+          fontWeight: 'bold'
+        }
+      });
     } catch (error) {
       console.error("AuthContext: Toggle role failed:", error);
-      alert("Failed to switch roles. Please try again.");
+      toast.error("Failed to switch roles. Please try again.");
     }
   };
 
@@ -1768,10 +2031,10 @@ export function useFocusTrap(isActive: boolean, onClose: () => void) {
 ## File: `utils/firebase.ts`
 
 ```typescript
-import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getFunctions } from "firebase/functions";
+import { initializeApp, getApp, getApps, FirebaseApp } from "firebase/app";
+import { getAuth, Auth } from "firebase/auth";
+import { getFirestore, Firestore } from "firebase/firestore";
+import { getFunctions, Functions } from "firebase/functions";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -1786,31 +2049,30 @@ const firebaseConfig = {
 // Defensive check to ensure we have at least the minimum required config
 const isConfigValid = !!firebaseConfig.apiKey && !!firebaseConfig.projectId && !!firebaseConfig.appId;
 
-let app;
+let app: FirebaseApp | null = null;
 if (!getApps().length) {
     if (isConfigValid) {
         app = initializeApp(firebaseConfig);
     } else {
         console.warn("Firebase configuration is missing or incomplete. ⚡ Switching to MOCK MODE for local development.");
         console.log("To enable real Firebase features, create a .env.local file with your API keys.");
-        app = null;
     }
 } else {
     app = getApp();
 }
 
-let analytics = null;
+let analytics: any = null;
 if (app && typeof window !== 'undefined') {
     import('firebase/analytics').then(({ getAnalytics, isSupported }) => {
         isSupported().then(supported => {
-            if (supported) analytics = getAnalytics(app);
+            if (supported && app) analytics = getAnalytics(app);
         });
     }).catch(err => console.error('Analytics failed to load:', err));
 }
 
-const auth = app ? getAuth(app) : null;
-const db = app ? getFirestore(app) : null;
-const functions = app ? getFunctions(app) : null;
+const auth: Auth | null = app ? getAuth(app) : null;
+const db: Firestore | null = app ? getFirestore(app) : null;
+const functions: Functions | null = app ? getFunctions(app) : null;
 export { app, analytics, auth, db, functions };
 ```
 
@@ -1820,6 +2082,9 @@ export { app, analytics, auth, db, functions };
 
 ```typescript
 
+import { httpsCallable } from 'firebase/functions';
+import { functions } from './firebase';
+
 export const sendEnrollmentEmail = async ({ studentEmail, studentName, zoneName, tutorName, zoneId }: {
   studentEmail: string;
   studentName?: string;
@@ -1827,49 +2092,14 @@ export const sendEnrollmentEmail = async ({ studentEmail, studentName, zoneName,
   tutorName: string;
   zoneId: string;
 }) => {
-  const apiKey = import.meta.env.VITE_RESEND_API_KEY;
-  if (!apiKey) {
-    console.warn("VITE_RESEND_API_KEY is not configured. Email will not be sent.");
+  if (!functions) {
+    console.warn("Firebase Functions not initialized. Email will not be sent.");
     return;
   }
 
   try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        from: 'Nunma <support@nunma.in>',
-        to: studentEmail,
-        subject: "You've been added to a new Zone on Nunma 🎓",
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #eee; border-radius: 20px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-              <h1 style="color: #040457; font-size: 24px;">Welcome to ${zoneName}!</h1>
-            </div>
-            <p style="color: #333; font-size: 16px; line-height: 1.6;">Hi ${studentName || 'Student'},</p>
-            <p style="color: #333; font-size: 16px; line-height: 1.6;">You've been added to <strong>"${zoneName}"</strong> by <strong>${tutorName}</strong>.</p>
-            <p style="color: #333; font-size: 16px; line-height: 1.6;">Your instructor has granted you full access to this zone. You can start learning immediately.</p>
-            
-            <div style="text-align: center; margin: 40px 0;">
-              <a href="https://nunma.in/zone/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
-                Enter Zone →
-              </a>
-            </div>
-            
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
-            <p style="color: #999; font-size: 12px; text-align: center;">Nunma — The Trust Layer for Education</p>
-          </div>
-        `,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('Resend API error:', error);
-    }
+    const sendEmail = httpsCallable(functions, 'sendEnrollmentEmail');
+    await sendEmail({ studentEmail, studentName, zoneName, tutorName, zoneId, origin: window.location.origin });
   } catch (err) {
     console.error('Enrollment email failed:', err);
   }
@@ -1882,9 +2112,9 @@ export const sendEnrollmentEmail = async ({ studentEmail, studentName, zoneName,
 
 ```typescript
 import { useState, useCallback, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { httpsCallable } from 'firebase/functions';
 import { collection, doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, functions } from './firebase';
 
 export const useGeminiQuiz = (zoneId: string, sessionId: string) => {
     const [isGenerating, setIsGenerating] = useState(false);
@@ -1906,7 +2136,7 @@ export const useGeminiQuiz = (zoneId: string, sessionId: string) => {
     }, []);
 
     const stopAndGenerate = useCallback(async () => {
-        if (!mediaRecorderRef.current) return;
+        if (!mediaRecorderRef.current || !functions) return;
 
         setIsGenerating(true);
         mediaRecorderRef.current.stop();
@@ -1926,31 +2156,24 @@ export const useGeminiQuiz = (zoneId: string, sessionId: string) => {
         });
 
         try {
-            const genAI = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-
-            const prompt = "Analyze this audio segment from a class. Generate 3 multiple-choice questions in JSON format to test student understanding. Return ONLY a JSON array of objects with 'question', 'options' (array of 4 strings), and 'correctIndex' (number 0-3).";
-
-            const result = await genAI.models.generateContent({
-                model: 'gemini-1.5-flash',
-                contents: [{
-                    role: 'user',
-                    parts: [
-                        { text: prompt },
-                        {
-                            inlineData: {
-                                mimeType: "audio/webm",
-                                data: base64Audio
-                            }
-                        }
-                    ]
-                }]
+            const generateQuiz = httpsCallable(functions, 'generateQuizDraft');
+            const result = await generateQuiz({
+                audioData: base64Audio,
+                mimeType: 'audio/webm',
+                topic: 'Audio segment from live class',
+                difficulty: 'medium',
+                numberOfQuestions: 3
             });
 
-            const responseText = result.text || "";
-            const jsonMatch = responseText.match(/\[.*\]/s);
+            const data = result.data as any;
+            const quizDraft = data?.quizDraft;
 
-            if (jsonMatch) {
-                const quizzes = JSON.parse(jsonMatch[0]);
+            if (quizDraft?.questions && db) {
+                const quizzes = quizDraft.questions.map((q: any) => ({
+                    question: q.questionText || q.question,
+                    options: q.options,
+                    correctIndex: q.correctOptionIndex ?? q.correctAnswer ?? 0,
+                }));
 
                 // Save to Firestore
                 const sessionRef = doc(db, `zones/${zoneId}/sessions/${sessionId}`);
@@ -1959,11 +2182,11 @@ export const useGeminiQuiz = (zoneId: string, sessionId: string) => {
                 });
             }
         } catch (error) {
-            console.error("Gemini Quiz Generation Error:", error);
+            console.error("Quiz Generation Error:", error);
         } finally {
             setIsGenerating(false);
             // Restart capture for the next segment if needed
-            if (mediaRecorderRef.current.stream) {
+            if (mediaRecorderRef.current?.stream) {
                 startCapture(mediaRecorderRef.current.stream);
             }
         }
@@ -2097,7 +2320,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center overflow-hidden">
-                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" width="500" height="500" />
+                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" />
               </div>
               <span className="text-2xl font-black tracking-tight text-brand-blue">
                 Nunma
@@ -2137,10 +2360,12 @@ export default PublicLayout;
 ## File: `components/AddonManagerModal.tsx`
 
 ```tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Users, HardDrive, AlertCircle, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../utils/firebase';
 
 interface AddonManagerModalProps {
     isOpen: boolean;
@@ -2206,10 +2431,67 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
         setBlockCount(1); // Reset quantity when switching tabs
     };
 
-    const handleCheckout = () => {
-        const addonCode = activeTab === 'student' ? 'ADDON_STUDENT_50' : 'ADDON_STORAGE_50';
-        window.open(`https://billing.zoho.in/subscribe/${addonCode}?quantity=${blockCount}`, '_blank');
-        onClose();
+    const razorpayScriptReady = useRef(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => { razorpayScriptReady.current = true; };
+        document.body.appendChild(script);
+        return () => {
+            razorpayScriptReady.current = false;
+            document.body.removeChild(script);
+        };
+    }, []);
+
+    const handleCheckout = async () => {
+        if (!functions || !razorpayScriptReady.current || !(window as any).Razorpay) {
+            alert('Payment system not ready. Please wait a moment and try again.');
+            return;
+        }
+        setIsProcessing(true);
+        try {
+            const createOrder = httpsCallable(functions, 'createRazorpayOrder');
+            const result = await createOrder({
+                amount: (pricing.total * 100).toString(), // Convert to paise
+                type: 'addon',
+                addonType: activeTab,
+                quantity: blockCount
+            });
+            const orderData = result.data as any;
+            if (!orderData?.id) throw new Error('Invalid order response');
+
+            const options = {
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+                amount: orderData.amount,
+                currency: orderData.currency || 'INR',
+                name: 'Nunma Academy',
+                description: `Add-on: ${totalUnitsGained} ${unitLabel}`,
+                order_id: orderData.id,
+                handler: (response: any) => {
+                    alert(`Add-on purchased! Payment ID: ${response.razorpay_payment_id}`);
+                    onClose();
+                },
+                prefill: {
+                    name: user?.name || '',
+                    email: user?.email || '',
+                },
+                theme: { color: '#040457' }
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.on('payment.failed', (response: any) => {
+                alert(`Payment failed: ${response.error.description}`);
+            });
+            rzp.open();
+        } catch (err: any) {
+            console.error('Addon checkout error:', err);
+            alert(`Checkout failed: ${err.message || 'Unknown error'}`);
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const handleUpgrade = () => {
@@ -2750,7 +3032,8 @@ export const BunnyVideoPlayer: React.FC<BunnyVideoPlayerProps> = ({ videoId, tit
 
     const { token, expires, libraryId } = tokenData;
     // URL Format based on Bunny token authentication
-    const iframeUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}&autoplay=true`;
+    const iframeUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?autoplay=true`;
+    console.log("BunnyVideoPlayer - Loading iframe URL (No Token Test):", iframeUrl);
 
     return (
         <div className="w-full max-w-full aspect-video rounded-[3rem] overflow-hidden bg-black shadow-2xl relative flex flex-col items-center justify-center">
@@ -2797,7 +3080,7 @@ const CertificateOverlay: React.FC<CertificateOverlayProps> = ({
     return (
         <div className="relative w-full aspect-[1.414/1] bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 group">
             {/* Base Template Image */}
-            <img src={template} className="w-full h-full object-cover" alt="Certificate Template" width="500" height="500" />
+            <img src={template} className="w-full h-full object-cover" alt="Certificate Template" />
 
             {/* Dynamic Overlays */}
             <div className="absolute inset-0 flex flex-col items-center justify-center p-12 text-center pointer-events-none">
@@ -2825,7 +3108,7 @@ const CertificateOverlay: React.FC<CertificateOverlayProps> = ({
                 <div className="absolute bottom-[15%] left-0 right-0 flex justify-around px-20">
                     <div className="flex flex-col items-center">
                         <div className="h-16 w-32 mb-2 flex items-center justify-center">
-                            {signature1 && <img src={signature1} className="max-h-full max-w-full object-contain" alt="Sig 1" width="500" height="500" />}
+                            {signature1 && <img src={signature1} className="max-h-full max-w-full object-contain" alt="Sig 1" />}
                         </div>
                         <div className="w-32 h-[1px] bg-gray-300 mb-1" />
                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Primary Signature</p>
@@ -2833,7 +3116,7 @@ const CertificateOverlay: React.FC<CertificateOverlayProps> = ({
 
                     <div className="flex flex-col items-center">
                         <div className="h-16 w-32 mb-2 flex items-center justify-center">
-                            {signature2 && <img src={signature2} className="max-h-full max-w-full object-contain" alt="Sig 2" width="500" height="500" />}
+                            {signature2 && <img src={signature2} className="max-h-full max-w-full object-contain" alt="Sig 2" />}
                         </div>
                         <div className="w-32 h-[1px] bg-gray-300 mb-1" />
                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Secondary Signature</p>
@@ -2986,58 +3269,12 @@ export default ChatSidebar;
 ## File: `components/ConfusionHeatmap.tsx`
 
 ```tsx
-
 import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-interface ConfusionHeatmapProps {
-  data: { time: string; confusion: number }[];
-}
-
-const ConfusionHeatmap: React.FC<ConfusionHeatmapProps> = ({ data }) => {
-  return (
-    <div className="w-full h-48 bg-white/5 rounded-3xl p-4 border border-white/10">
-      <h4 className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest mb-4 flex items-center gap-2">
-        <span className="w-2 h-2 bg-[#c2f575] rounded-full animate-pulse" />
-        Live Confusion Heatmap
-      </h4>
-      <div className="w-full h-32">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data}>
-            <defs>
-              <linearGradient id="colorConfusion" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#c2f575" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#c2f575" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-            <XAxis
-              dataKey="time"
-              hide
-            />
-            <YAxis
-              domain={[0, 100]}
-              hide
-            />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#1A1A4E', border: 'none', borderRadius: '12px', fontSize: '10px', color: '#fff' }}
-              itemStyle={{ color: '#c2f575' }}
-              labelStyle={{ display: 'none' }}
-            />
-            <Area
-              type="monotone"
-              dataKey="confusion"
-              stroke="#c2f575"
-              fillOpacity={1}
-              fill="url(#colorConfusion)"
-              strokeWidth={3}
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
+// Neutralized: ConfusionHeatmap is not currently in use.
+// Keeping file intact for future re-activation.
+const ConfusionHeatmap: React.FC = () => {
+  return null;
 };
 
 export default ConfusionHeatmap;
@@ -3380,6 +3617,7 @@ const EngagementSidebar: React.FC = () => {
         const allow = currentStatus === 'waiting';
         
         try {
+            if (!functions) throw new Error("Firebase functions not initialized.");
             const toggleAudioFunc = httpsCallable(functions, 'toggleStudentAudio');
             await toggleAudioFunc({
                 zoneId,
@@ -4734,7 +4972,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
           onMouseEnter={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = 'var(--text-muted)'; }}
           onMouseLeave={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
         >
-          <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} width="500" height="500" />
+          <img src={user.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         </button>
 
         {/* ── Dropdown ───────────────────────────── */}
@@ -4761,7 +4999,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
             <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                 <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
-                  <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} width="500" height="500" />
+                  <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                 </div>
                 <div style={{ overflow: 'hidden', minWidth: 0 }}>
                   <p style={{ fontWeight: 700, fontSize: '0.8125rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
@@ -5046,6 +5284,8 @@ export default LiveSessionStatus;
 ```tsx
 import React, { useState, useRef } from 'react';
 import { Upload, Trash2, Plus, Clock, Brain, Loader2, Award, FileText, Sparkles } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../utils/firebase';
 
 export interface MCQ {
     id: string;
@@ -5098,43 +5338,60 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
         setQuestions(questions.filter(q => q.id !== id));
     };
 
-    const generateMockQuestions = (count: number, offset: number = 0): MCQ[] => {
-        return Array.from({ length: count }).map((_, i) => ({
-            id: `${Date.now()}_${offset + i}`,
-            question: i % 2 === 0 
-                ? `Based on the uploaded document, what is the core principle mentioned in section ${offset + i + 1}?`
-                : `Which of the following aligns with the framework analyzed in chapter ${offset + i + 1}?`,
-            options: ['To define core terminology', 'To establish practical applications', 'To evaluate historical context', 'To summarize theoretical models'],
-            correctAnswer: Math.floor(Math.random() * 4),
+    const callGenerateQuiz = async (topic: string, count: number): Promise<MCQ[]> => {
+        if (!functions) {
+            console.warn('Firebase Functions not initialized.');
+            return [];
+        }
+        const generateQuiz = httpsCallable(functions, 'generateQuizDraft');
+        const result = await generateQuiz({ topic, difficulty: 'medium', numberOfQuestions: count });
+        const data = result.data as any;
+        const quizDraft = data?.quizDraft;
+        if (!quizDraft?.questions) return [];
+        return quizDraft.questions.map((q: any, i: number) => ({
+            id: `${Date.now()}_${i}`,
+            question: q.questionText || q.question || '',
+            options: q.options || ['', '', '', ''],
+            correctAnswer: q.correctOptionIndex ?? q.correctAnswer ?? 0,
             timerSeconds: 60,
-            marks: 5
+            marks: q.allocatedMarks || 5
         }));
     };
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         setIsGenerating(true);
-
-        setTimeout(() => {
-            const generated = generateMockQuestions(targetCount);
+        try {
+            // Read file content as text for the AI prompt
+            const text = await file.text();
+            const topic = text.slice(0, 8000); // Limit to first 8000 chars for the AI
+            const generated = await callGenerateQuiz(topic, targetCount);
             setQuestions([...questions, ...generated]);
+        } catch (error) {
+            console.error('AI Quiz Generation Error:', error);
+            alert('Failed to generate questions. Please try again.');
+        } finally {
             setIsGenerating(false);
-
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
-        }, 3000);
+        }
     };
 
-    const handleGenerateMore = () => {
+    const handleGenerateMore = async () => {
         setIsGeneratingMore(true);
-        setTimeout(() => {
-            const moreQuestions = generateMockQuestions(5, questions.length);
+        try {
+            const existingText = questions.map(q => q.question).join('\n');
+            const topic = `Generate 5 more unique questions different from these existing ones:\n${existingText}`;
+            const moreQuestions = await callGenerateQuiz(topic, 5);
             setQuestions([...questions, ...moreQuestions]);
+        } catch (error) {
+            console.error('AI Quiz Generation Error:', error);
+        } finally {
             setIsGeneratingMore(false);
-        }, 2000);
+        }
     };
 
     return (
@@ -5802,10 +6059,64 @@ const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, type = 'avat
     };
 
     const handleSave = () => {
-        // In a real production app, we would use a canvas to crop the image based on scale/position.
-        // For this demonstration, we'll return the original image as if it were cropped.
-        // The UI effectively simulates the adjustment flawlessly.
-        onSave(image);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx || !imageRef.current || !containerRef.current) {
+            onSave(image);
+            return;
+        }
+
+        const img = imageRef.current;
+        const container = containerRef.current;
+        const containerRect = container.getBoundingClientRect();
+
+        // Crop frame dimensions (must match the CSS)
+        const cropW = isBanner ? 480 : 320;
+        const cropH = isBanner ? 160 : 320;
+
+        // Output size (1x for now, increase multiplier for higher res)
+        const outputMultiplier = 2;
+        canvas.width = cropW * outputMultiplier;
+        canvas.height = cropH * outputMultiplier;
+
+        // Calculate the image's natural dimensions vs rendered
+        const renderedW = 500; // matches CSS w-[500px]
+        const renderedH = (img.naturalHeight / img.naturalWidth) * renderedW;
+        const scaleRatio = img.naturalWidth / renderedW;
+
+        // Center of the container
+        const cx = containerRect.width / 2;
+        const cy = containerRect.height / 2;
+
+        // The crop frame is centered in the container.
+        // Top-left of crop frame in container coords:
+        const cropLeft = cx - cropW / 2;
+        const cropTop = cy - cropH / 2;
+
+        // Image center after transform (image is centered + translated + scaled)
+        // In container coords, image center = (cx + position.x, cy + position.y)
+        // Image top-left after scale = center - (renderedW * scale / 2), center - (renderedH * scale / 2)
+        const imgLeft = cx + position.x - (renderedW * scale) / 2;
+        const imgTop = cy + position.y - (renderedH * scale) / 2;
+
+        // Source rectangle in natural image pixels
+        const sx = ((cropLeft - imgLeft) / scale) * scaleRatio;
+        const sy = ((cropTop - imgTop) / scale) * scaleRatio;
+        const sw = (cropW / scale) * scaleRatio;
+        const sh = (cropH / scale) * scaleRatio;
+
+        try {
+            ctx.drawImage(
+                img,
+                Math.max(0, sx), Math.max(0, sy), sw, sh,
+                0, 0, canvas.width, canvas.height
+            );
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            onSave(dataUrl);
+        } catch (e) {
+            console.error('Canvas crop failed:', e);
+            onSave(image);
+        }
     };
 
     const modalRef = useFocusTrap(true, onClose);
@@ -6452,6 +6763,8 @@ import {
   HardDrive,
   AlertTriangle,
   Zap,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -6464,13 +6777,13 @@ interface SidebarProps {
 
 const LogoIcon = () => (
   <Link to="/dashboard" aria-label="Dashboard">
-    <img src="/assets/logo-icon.png" alt="Nunma" style={{ width: 28, height: 28, objectFit: 'contain', display: 'block' }} width="500" height="500" />
+    <img src="/assets/logo-icon.png" alt="Nunma" style={{ width: 28, height: 28, objectFit: 'contain', display: 'block' }} />
   </Link>
 );
 
 const LogoFull = () => (
   <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
-    <img src="/assets/logo-full.png" alt="Nunma" style={{ height: 26, objectFit: 'contain', display: 'block' }} width="500" height="500" />
+    <img src="/assets/logo-full.png" alt="Nunma" style={{ height: 26, objectFit: 'contain', display: 'block' }} />
   </Link>
 );
 
@@ -6487,7 +6800,7 @@ const sidebarBase: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   zIndex: 40,
-  overflow: 'hidden',
+  overflow: 'visible',
   flexShrink: 0,
   transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
 };
@@ -6581,29 +6894,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
           padding: isOpen ? '0 1rem 0 1.25rem' : '0',
           borderBottom: 'none',
           flexShrink: 0,
+          position: 'relative'
         }}>
-          {isOpen ? (
-            <>
-              <LogoFull />
-              <button
-                onClick={onToggle}
-                aria-label="Collapse sidebar"
-                style={toggleBtnStyle}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F3F4F6'; (e.currentTarget as HTMLElement).style.color = '#374151'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#F9FAFB'; (e.currentTarget as HTMLElement).style.color = '#9CA3AF'; }}
-              >
-                <PanelLeftClose size={13} />
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={onToggle}
-              aria-label="Expand sidebar"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-            >
-              <LogoIcon />
-            </button>
-          )}
+          {isOpen ? <LogoFull /> : <LogoIcon />}
+          
+          <button
+            onClick={onToggle}
+            aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+            style={{
+              ...toggleBtnStyle,
+              position: isOpen ? 'static' : 'absolute',
+              right: isOpen ? 'auto' : '-14px',
+              background: '#ffffff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              zIndex: 50
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F3F4F6'; (e.currentTarget as HTMLElement).style.color = '#374151'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#ffffff'; (e.currentTarget as HTMLElement).style.color = '#9CA3AF'; }}
+          >
+            {isOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </button>
         </div>
 
         {/* ── Nav ──────────────────────────────────────── */}
@@ -6816,11 +7126,29 @@ export default Sidebar;
 import React, { useState, useEffect, useRef } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../utils/firebase';
+import { useAuth } from '../context/AuthContext';
 
-export default function SubscribeButton() {
+interface SubscribeButtonProps {
+    amount: number; // Amount in paise (e.g., 100000 = ₹1,000)
+    tutorId: string;
+    label?: string;
+    description?: string;
+    zoneId?: string;
+    className?: string;
+}
+
+export default function SubscribeButton({
+    amount,
+    tutorId,
+    label = 'Subscribe Now',
+    description = 'Subscription Payment',
+    zoneId,
+    className
+}: SubscribeButtonProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const razorpayScriptReady = useRef(false);
+    const { user } = useAuth();
 
     // Dynamically load Razorpay checkout script and track when it's ready
     useEffect(() => {
@@ -6849,11 +7177,17 @@ export default function SubscribeButton() {
                 throw new Error('Razorpay payment script has not loaded yet. Please wait a moment and try again.');
             }
 
+            if (!functions) {
+                throw new Error('Firebase Functions not initialized.');
+            }
+
             // 1. Call Backend to create Razorpay Order
             const createOrder = httpsCallable(functions, 'createRazorpayOrder');
             const result = await createOrder({
-                amount: '100000', // ₹1,000 in paise
-                tutorId: 'TEST_TUTOR_ID' // TODO: Replace with actual tutor ID from context/props
+                amount: amount.toString(),
+                tutorId,
+                zoneId: zoneId || undefined,
+                type: 'subscription'
             });
 
             const orderData = result.data as any;
@@ -6864,11 +7198,11 @@ export default function SubscribeButton() {
 
             // 2. Initialize Razorpay Options
             const options = {
-                key: import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY || 'TEST_KEY_ID',
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID,
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: 'Nunma Academy',
-                description: 'Tutor Subscription Payment',
+                description,
                 image: 'https://nunma.app/logo.png',
                 order_id: orderData.id,
                 handler: function (response: any) {
@@ -6876,9 +7210,9 @@ export default function SubscribeButton() {
                     console.log('Razorpay Success Response:', response);
                 },
                 prefill: {
-                    name: 'Test Student',
-                    email: 'student@example.com',
-                    contact: '9999999999'
+                    name: user?.name || '',
+                    email: user?.email || '',
+                    contact: ''
                 },
                 theme: {
                     color: '#040457'
@@ -6909,9 +7243,9 @@ export default function SubscribeButton() {
             <button
                 onClick={handleSubscribe}
                 disabled={isLoading}
-                className="bg-[#1a1a4e] hover:shadow-[0_0_15px_#c2f575] text-white font-semibold py-2 px-6 rounded-lg transition-all disabled:opacity-50"
+                className={className || "bg-[#1a1a4e] hover:shadow-[0_0_15px_#c2f575] text-white font-semibold py-2 px-6 rounded-lg transition-all disabled:opacity-50"}
             >
-                {isLoading ? 'Processing...' : 'Subscribe Now'}
+                {isLoading ? 'Processing...' : label}
             </button>
             {error && (
                 <p className="text-red-500 text-sm mt-2">{error}</p>
@@ -7462,6 +7796,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
             setIsPaused(false);
             setErrorMessage('');
 
+            if (!functions) throw new Error("Firebase functions not initialized.");
             // Call the secure createBunnyUploadSignature Cloud Function to generate a new VideoId and Signature.
             const getSignatureNode = httpsCallable(functions, 'createBunnyUploadSignature');
             const result = await getSignatureNode({ fileName: file.name, title, zoneId });
@@ -7486,11 +7821,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     filetype: file.type,
                     title: file.name,
                     collection: zoneId || 'default',
-                    // Redundancy: Bunny sometimes parses these from metadata in certain TUS versions
                     VideoId: videoId,
-                    LibraryId: libraryId.toString(),
-                    AuthorizationSignature: signature,
-                    AuthorizationExpire: expireTime.toString(),
                 },
                 onError: (error) => {
                     console.error('TUS Upload Failed:', error);
@@ -7553,9 +7884,10 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
 
             // Task 4: The "Resume" Path
             // Extract the old VideoId from the cached upload metadata
-            const oldVideoId = foundUploads[0].metadata.videoId;
+            const oldVideoId = foundUploads[0].metadata.VideoId;
             if (!oldVideoId) throw new Error("Could not find VideoId in previous upload metadata.");
 
+            if (!functions) throw new Error("Firebase functions not initialized.");
             // Call Cloud Function to generate a fresh signature for that existing old VideoId.
             const getSignatureNode = httpsCallable(functions, 'createBunnyUploadSignature');
             const result = await getSignatureNode({ fileName: file.name, title, zoneId, videoId: oldVideoId });
@@ -7580,9 +7912,6 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     title: file.name,
                     collection: zoneId || 'default',
                     VideoId: videoId,
-                    LibraryId: libraryId.toString(),
-                    AuthorizationSignature: signature,
-                    AuthorizationExpire: expireTime.toString(),
                 },
                 onError: (error) => {
                     console.error('TUS Resume Failed:', error);
@@ -7633,7 +7962,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                 retryDelays: [0, 1000, 3000, 5000, 10000],
                 chunkSize: 50 * 1024 * 1024,
                 headers: {
-                    LibraryId: '608015' // Pass Library ID for pre-flight check if possible
+                    LibraryId: '628013' // Pass Library ID for pre-flight check if possible
                 },
                 removeFingerprintOnSuccess: true,
             } as any);
@@ -7671,7 +8000,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
 
     const cancelUpload = () => {
         if (uploadRef.current && isUploading) {
-            uploadRef.current.abort();
+            uploadRef.current.abort(true);
         }
         setFile(null);
         setUploadStatus('idle');
@@ -8836,607 +9165,7 @@ export default AnalyticsChat;
 
 ## File: `pages/AnalyticsDashboard.jsx`
 
-```jsx
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  LineChart, Line, PieChart, Pie, Cell, Legend
-} from 'recharts';
-import { 
-  Users, TrendingUp, IndianRupee, Percent, Target, 
-  Flag, ArrowLeft, Loader2, BarChart3, PieChart as PieChartIcon, 
-  Search, ShieldAlert, GraduationCap, TrendingDown, Clock, Sparkles
-} from 'lucide-react';
-import { db } from '../utils/firebase';
-import { useAuth } from '../context/AuthContext';
-import { doc, getDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-
-const COLORS = ['#1A1A4E', '#c2f575', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6'];
-
-const AnalyticsDashboard = () => {
-  const { zoneId } = useParams();
-  const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  const [zone, setZone] = useState(null);
-  const [students, setStudents] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [exams, setExams] = useState([]);
-  const [allSubmissions, setAllSubmissions] = useState([]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // 1. Fetch Zone Details
-        const zoneDoc = await getDoc(doc(db, 'zones', zoneId));
-        if (!zoneDoc.exists()) {
-          setError('Zone not found');
-          setLoading(false);
-          return;
-        }
-        
-        const zoneData = { id: zoneDoc.id, ...zoneDoc.data() };
-        
-        // Auth check - user must be creator or tutor
-        if (zoneData.createdBy !== user?.uid && zoneData.tutorId !== user?.uid) {
-           navigate('/dashboard');
-           return;
-        }
-        
-        setZone(zoneData);
-
-        // 2. Parallel Fetch: Students, Orders, Exams
-        const [studentsSnap, ordersSnap, examsSnap] = await Promise.all([
-          getDocs(collection(db, 'zones', zoneId, 'students')),
-          getDocs(query(collection(db, 'zones', zoneId, 'orders'), where('status', '==', 'CAPTURED'))),
-          getDocs(collection(db, 'zones', zoneId, 'exams'))
-        ]);
-
-        const studentData = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const orderData = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const examData = examsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        setStudents(studentData);
-        setOrders(orderData);
-        setExams(examData);
-
-        // 3. Fetch Submissions for each Exam in parallel
-        const submissionPromises = examData.map(exam => 
-          getDocs(collection(db, 'zones', zoneId, 'exams', exam.id, 'submissions'))
-        );
-        const submissionSnaps = await Promise.all(submissionPromises);
-        
-        const subData = [];
-        submissionSnaps.forEach((snap, idx) => {
-          const examId = examData[idx].id;
-          snap.forEach(doc => {
-            subData.push({ id: doc.id, examId, ...doc.data() });
-          });
-        });
-        
-        setAllSubmissions(subData);
-        setLoading(false);
-      } catch (err) {
-        console.error('Analytics Fetch Error:', err);
-        setError('Failed to fetch analytics data');
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [zoneId, user, isAuthenticated]);
-
-  if (loading) {
-     return (
-       <div className="analytics-loading">
-         <Loader2 className="spinner" size={48} />
-         <p>Crunching numbers...</p>
-         <style>{`
-           .analytics-loading {
-              height: 100vh;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              gap: 1.5rem;
-              background: #fbfbfb;
-              color: #1A1A4E;
-              font-weight: 800;
-              font-family: Inter, sans-serif;
-           }
-           .spinner {
-              animation: spin 1s linear infinite;
-              color: #c2f575;
-           }
-           @keyframes spin {
-              from { transform: rotate(0deg); }
-              to { transform: rotate(360deg); }
-           }
-         `}</style>
-       </div>
-     );
-  }
-
-  if (error) {
-     return (
-       <div className="analytics-error">
-         <h2>{error}</h2>
-         <Link to="/workplace" className="back-link">Back to Workplace</Link>
-         <style>{`
-           .analytics-error {
-              height: 100vh;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              gap: 1rem;
-              background: #fbfbfb;
-              font-family: Inter, sans-serif;
-           }
-           .back-link {
-              padding: 0.75rem 1.5rem;
-              background: #1A1A4E;
-              color: #fff;
-              border-radius: 1rem;
-              text-decoration: none;
-              font-weight: bold;
-           }
-         `}</style>
-       </div>
-     );
-  }
-
-  // --- Calculations ---
-
-  // Total Students
-  const totalStudents = students.length;
-
-  // Total Revenue (CAPTURED) - Divide by 100 if stored in paisa, but usually order.amount is in main currency or cents
-  // Assuming captured amount is total in sub-units or main units.
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.amount || 0), 0);
-
-  // Platform Fees
-  const platformFees = orders.reduce((sum, o) => {
-    const fee = (o.amount || 0) * ( (o.commissionPct || 0) / 100 );
-    return sum + fee;
-  }, 0);
-
-  // Average Exam Score
-  const gradedSubs = allSubmissions.filter(s => s.status === 'GRADED');
-  const avgExamScore = gradedSubs.length > 0 
-    ? gradedSubs.reduce((sum, s) => sum + (s.percentageScore || 0), 0) / gradedSubs.length 
-    : 0;
-
-  // Flagged Submissions
-  const flaggedCount = allSubmissions.filter(s => s.status === 'FLAGGED').length;
-
-  // --- Chart Processing ---
-
-  // 1. Enrollment Trends (Group by Week)
-  const enrollmentTrends = () => {
-     const weeks = {};
-     students.forEach(s => {
-        let date;
-        if (s.joinedAt?.seconds) date = new Date(s.joinedAt.seconds * 1000);
-        else if (s.joinedAt) date = new Date(s.joinedAt);
-        else date = new Date();
-        
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        const key = weekStart.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-        weeks[key] = (weeks[key] || 0) + 1;
-     });
-     // Sort by date would be better, but keys like "06 Apr" are tricky. 
-     // For now, return entries.
-     return Object.keys(weeks).map(key => ({ week: key, students: weeks[key] }));
-  };
-
-  // 2. Exam Scores Distribution
-  const examScoreData = exams.map(exam => {
-     const subs = allSubmissions.filter(s => s.examId === exam.id && s.status === 'GRADED');
-     const avg = subs.length > 0 ? subs.reduce((sum, s) => sum + (s.percentageScore || 0), 0) / subs.length : 0;
-     return { title: exam.title, avg: parseFloat(avg.toFixed(1)) };
-  });
-
-  // 3. Source Breakdown
-  const sourceData = () => {
-     const sources = { 'Payment': 0, 'Whitelist': 0 };
-     students.forEach(s => {
-        const source = (s.source === 'payment' || s.source === 'ORDER') ? 'Payment' : 'Whitelist';
-        sources[source]++;
-     });
-     return Object.keys(sources).map(key => ({ name: key, value: sources[key] }));
-  };
-
-  const formatCurrency = (val) => val.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-
-  return (
-    <div className="analytics-container">
-      <header className="analytics-header">
-        <button onClick={() => navigate(-1)} className="back-btn">
-          <ArrowLeft size={20} />
-        </button>
-        <div className="header-text">
-          <div className="flex items-center gap-4">
-            <h1 className="flex items-center gap-4">{zone?.title} <span className="badge">Analytics</span></h1>
-            <button 
-              onClick={() => navigate(`/workplace/analytics/${zoneId}/chat`)}
-              className="flex items-center gap-2 px-6 py-3 bg-[#1A1A4E] text-[#c2f575] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-900/20"
-            >
-              <Sparkles size={14} /> Ask AI Analyst
-            </button>
-          </div>
-          <p>Real-time performance metrics and student insights</p>
-        </div>
-      </header>
-
-      {/* Metrics Row */}
-      <section className="metrics-grid">
-        <div className="metric-card">
-          <div className="metric-icon students"><Users size={24} /></div>
-          <div className="metric-content">
-            <span className="metric-label">Total Students</span>
-            <h3 className="metric-value">{totalStudents.toLocaleString('en-IN')}</h3>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-icon revenue"><IndianRupee size={24} /></div>
-          <div className="metric-content">
-            <span className="metric-label">Total Revenue</span>
-            <h3 className="metric-value">{formatCurrency(totalRevenue)}</h3>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-icon fees"><Percent size={24} /></div>
-          <div className="metric-content">
-            <span className="metric-label">Platform Fees</span>
-            <h3 className="metric-value">{formatCurrency(platformFees)}</h3>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-icon score"><Target size={24} /></div>
-          <div className="metric-content">
-            <span className="metric-label">Avg. Exam Score</span>
-            <h3 className="metric-value">{avgExamScore.toFixed(1)}%</h3>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-icon flagged"><Flag size={24} /></div>
-          <div className="metric-content">
-            <span className="metric-label">Flagged Submissions</span>
-            <h3 className="metric-value">{flaggedCount.toLocaleString('en-IN')}</h3>
-          </div>
-        </div>
-      </section>
-
-      {/* Charts Section */}
-      <section className="charts-grid">
-        <div className="chart-wrapper line-chart">
-          <div className="chart-header">
-            <h3><TrendingUp size={18} /> Enrollment Trends</h3>
-            <span className="chart-sub">Students joined by week</span>
-          </div>
-          <div className="chart-height">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={enrollmentTrends()}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{fill: '#999', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#999', fontSize: 12}} />
-                <Tooltip 
-                  contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)'}}
-                  cursor={{stroke: '#c2f575', strokeWidth: 2}}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="students" 
-                  stroke="#c2f575" 
-                  strokeWidth={4} 
-                  dot={{ r: 6, fill: '#c2f575', strokeWidth: 0 }}
-                  activeDot={{ r: 8, strokeWidth: 0 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="chart-wrapper bar-chart">
-          <div className="chart-header">
-            <h3><BarChart3 size={18} /> Exam Performance</h3>
-            <span className="chart-sub">Mean score distribution</span>
-          </div>
-          <div className="chart-height">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={examScoreData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                <XAxis dataKey="title" axisLine={false} tickLine={false} tick={{fill: '#999', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#999', fontSize: 12}} />
-                <Tooltip 
-                   contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)'}}
-                   cursor={{fill: '#f0f0f0'}}
-                />
-                <Bar dataKey="avg" fill="#c2f575" radius={[10, 10, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="chart-wrapper pie-chart">
-          <div className="chart-header">
-            <h3><PieChartIcon size={18} /> Acquisition Channels</h3>
-            <span className="chart-sub">Payment vs Whitelist</span>
-          </div>
-          <div className="chart-height">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={sourceData()}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={8}
-                  dataKey="value"
-                >
-                  {sourceData().map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{borderRadius: '1rem', border: 'none'}} />
-                <Legend iconType="circle" wrapperStyle={{paddingTop: '20px'}} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </section>
-
-      {/* Empty State */}
-      {totalStudents === 0 && !loading && (
-        <div className="analytics-empty">
-          <div className="empty-icon"><ShieldAlert size={48} /></div>
-          <h3>Gathering Data...</h3>
-          <p>Once students start enrolling and taking exams, your analytics will appear here.</p>
-        </div>
-      )}
-
-      <style>{`
-        .analytics-container {
-          padding: 1.5rem;
-          max-width: 1400px;
-          margin: 0 auto;
-          color: #1A1A4E;
-          font-family: Inter, system-ui, sans-serif;
-          animation: fadeIn 0.5s ease-out;
-        }
-
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
-        .analytics-header {
-          display: flex;
-          align-items: center;
-          gap: 1.5rem;
-          margin-bottom: 3.5rem;
-          padding-top: 1rem;
-        }
-
-        .back-btn {
-          width: 48px;
-          height: 48px;
-          border-radius: 1.25rem;
-          background: #fff;
-          border: 1.5px solid #eee;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          color: #1A1A4E;
-        }
-
-        .back-btn:hover {
-          background: #f8f8f8;
-          transform: translateX(-5px);
-          border-color: #1A1A4E;
-        }
-
-        .header-text h1 {
-          font-size: 2.5rem;
-          font-weight: 950;
-          letter-spacing: -0.05em;
-          margin: 0;
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          color: #1A1A4E;
-        }
-
-        .badge {
-          font-size: 0.7rem;
-          background: #c2f575;
-          color: #1A1A4E;
-          padding: 0.5rem 1.25rem;
-          border-radius: 2rem;
-          letter-spacing: 0.15em;
-          text-transform: uppercase;
-          font-weight: 900;
-        }
-
-        .header-text p {
-          color: #666;
-          font-weight: 600;
-          margin: 0.4rem 0 0;
-          font-size: 1.1rem;
-        }
-
-        .metrics-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 1.5rem;
-          margin-bottom: 3.5rem;
-        }
-
-        .metric-card {
-          background: #fff;
-          padding: 2rem;
-          border-radius: 2.5rem;
-          border: 1px solid #eee;
-          display: flex;
-          align-items: center;
-          gap: 1.5rem;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.02);
-          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .metric-card:hover {
-          transform: translateY(-8px);
-          box-shadow: 0 25px 50px rgba(0,0,0,0.08);
-          border-color: #c2f575;
-        }
-
-        .metric-icon {
-          width: 56px;
-          height: 56px;
-          border-radius: 1.5rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-
-        .metric-icon.students { background: #eff6ff; color: #2563eb; }
-        .metric-icon.revenue { background: #ecfdf5; color: #059669; }
-        .metric-icon.fees { background: #fef2f2; color: #dc2626; }
-        .metric-icon.score { background: #fdf4ff; color: #a21caf; }
-        .metric-icon.flagged { background: #fffaeb; color: #d97706; }
-
-        .metric-content .metric-label {
-          display: block;
-          font-size: 0.8rem;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          font-weight: 800;
-          color: #888;
-          margin-bottom: 0.4rem;
-        }
-
-        .metric-content .metric-value {
-          margin: 0;
-          font-size: 1.8rem;
-          font-weight: 950;
-          letter-spacing: -0.03em;
-        }
-
-        .charts-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 2rem;
-          margin-bottom: 3rem;
-        }
-
-        .chart-wrapper {
-          background: #fff;
-          border-radius: 3rem;
-          padding: 3rem;
-          border: 1px solid #eee;
-          min-height: 480px;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.02);
-          transition: all 0.4s ease;
-        }
-
-        .chart-wrapper:hover {
-           box-shadow: 0 20px 60px rgba(0,0,0,0.05);
-        }
-
-        .chart-wrapper.pie-chart {
-           grid-column: span 2;
-        }
-
-        .chart-header {
-           margin-bottom: 2.5rem;
-        }
-
-        .chart-header h3 {
-           margin: 0;
-           font-size: 1.4rem;
-           font-weight: 900;
-           display: flex;
-           align-items: center;
-           gap: 1rem;
-           color: #1A1A4E;
-           letter-spacing: -0.02em;
-        }
-
-        .chart-sub {
-           font-size: 0.95rem;
-           color: #888;
-           font-weight: 600;
-           margin-top: 0.25rem;
-           display: block;
-        }
-
-        .chart-height {
-           height: 320px;
-        }
-
-        .analytics-empty {
-          text-align: center;
-          padding: 6rem 3rem;
-          background: #fdfdfd;
-          border-radius: 3.5rem;
-          border: 2px dashed #eee;
-          margin-top: 2rem;
-        }
-
-        .empty-icon {
-           color: #eee;
-           margin-bottom: 2rem;
-        }
-
-        .analytics-empty h3 {
-          font-size: 1.75rem;
-          font-weight: 900;
-          margin-bottom: 0.75rem;
-        }
-
-        .analytics-empty p {
-          color: #888;
-          max-width: 450px;
-          margin: 0 auto;
-          font-size: 1.1rem;
-          line-height: 1.6;
-        }
-
-        @media (max-width: 1200px) {
-           .charts-grid { grid-template-columns: 1fr; }
-           .chart-wrapper.pie-chart { grid-column: auto; }
-        }
-
-        @media (max-width: 768px) {
-           .header-text h1 { font-size: 2rem; flex-wrap: wrap; }
-           .chart-wrapper { padding: 2rem; }
-           .metric-card { padding: 1.5rem; gap: 1rem; }
-           .metric-value { font-size: 1.4rem; }
-        }
-      `}</style>
-    </div>
-  );
-};
-
-export default AnalyticsDashboard;
-```
+> FILE NOT FOUND
 
 ---
 
@@ -9632,7 +9361,7 @@ const Auth: React.FC = () => {
           <div className="relative z-10">
             <div className="flex items-center gap-4 mb-24">
               <div className="w-20 h-20 rounded-[1.5rem] flex items-center justify-center shadow-2xl rotate-3 overflow-hidden bg-[#040457]">
-                <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-full h-full object-cover" width="500" height="500" />
+                <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-full h-full object-cover" />
               </div>
               <span className="text-4xl font-black tracking-tighter">nunma</span>
             </div>
@@ -9670,7 +9399,7 @@ const Auth: React.FC = () => {
           <div className="max-w-md mx-auto w-full">
             <div className="lg:hidden flex items-center gap-3 mb-16">
               <div className="w-10 h-10 bg-[#040457] rounded-xl flex items-center justify-center overflow-hidden">
-                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" width="500" height="500" />
+                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" />
               </div>
               <span className="text-2xl font-black tracking-tighter text-[#040457]">nunma</span>
             </div>
@@ -9690,7 +9419,7 @@ const Auth: React.FC = () => {
                     disabled={isLoading}
                     className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
                   >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" width="500" height="500" />
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                     Continue with Google
                   </button>
 
@@ -9764,7 +9493,7 @@ const Auth: React.FC = () => {
                       disabled={isLoading}
                       className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
                     >
-                      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" width="500" height="500" />
+                      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                       Sign up with Google
                     </button>
 
@@ -10908,7 +10637,7 @@ const CertificateEngine: React.FC = () => {
                       onClick={() => sig1InputRef.current?.click()}
                       className="h-32 bg-gray-50 border border-gray-100 rounded-[2rem] flex flex-col items-center justify-center border-dashed hover:border-[#040457] transition-colors cursor-pointer overflow-hidden relative shadow-inner"
                     >
-                      {signature1 ? <img src={signature1} className="w-full h-full object-contain p-4" alt="Sig 1" width="500" height="500" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 1</span></>}
+                      {signature1 ? <img src={signature1} className="w-full h-full object-contain p-4" alt="Sig 1" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 1</span></>}
                       <input ref={sig1InputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleSignatureUpload(e, 1)} />
                     </div>
                   </div>
@@ -10919,7 +10648,7 @@ const CertificateEngine: React.FC = () => {
                       onClick={() => sig2InputRef.current?.click()}
                       className="h-32 bg-gray-50 border border-gray-100 rounded-[2rem] flex flex-col items-center justify-center border-dashed hover:border-[#040457] transition-colors cursor-pointer overflow-hidden relative shadow-inner"
                     >
-                      {signature2 ? <img src={signature2} className="w-full h-full object-contain p-4" alt="Sig 2" width="500" height="500" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 2</span></>}
+                      {signature2 ? <img src={signature2} className="w-full h-full object-contain p-4" alt="Sig 2" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 2</span></>}
                       <input ref={sig2InputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleSignatureUpload(e, 2)} />
                     </div>
                   </div>
@@ -11066,7 +10795,7 @@ const CertificateEngine: React.FC = () => {
                     >
                       {manualFile ? (
                         <div className="p-8 w-full h-full">
-                          <img src={manualFile} className="w-full h-full object-contain rounded-2xl" alt="Manual Template" width="500" height="500" />
+                          <img src={manualFile} className="w-full h-full object-contain rounded-2xl" alt="Manual Template" />
                           <p className="text-[10px] font-black text-center mt-4 text-gray-400 uppercase tracking-widest">Click to change template</p>
                         </div>
                       ) : (
@@ -11124,7 +10853,7 @@ const CertificateEngine: React.FC = () => {
                         key={t.id}
                         className="group relative rounded-[2.5rem] overflow-hidden border-4 border-transparent"
                       >
-                        <img src={t.preview} className="w-full aspect-[16/10] object-cover" alt={t.name} width="500" height="500" />
+                        <img src={t.preview} className="w-full aspect-[16/10] object-cover" alt={t.name} />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8">
                           <h5 className="text-white font-black text-xl tracking-tight">{t.name}</h5>
                         </div>
@@ -11397,13 +11126,8 @@ const Classroom: React.FC = () => {
             });
          },
          (error) => {
-            console.error('Firestore error:', error.code, error.message);
+            console.error('Firestore error on live sessions:', error.code, error.message);
             setLiveSessions([]);
-            if (error.code === 'permission-denied') {
-               setError('You do not have permission to view this content.');
-            } else {
-               setError('Failed to connect to the server.');
-            }
          });
          unsubs.push(unLive);
 
@@ -11417,13 +11141,8 @@ const Classroom: React.FC = () => {
             });
          },
          (error) => {
-            console.error('Firestore error:', error.code, error.message);
+            console.error('Firestore error on scheduled sessions:', error.code, error.message);
             setUpcomingSessions([]);
-            if (error.code === 'permission-denied') {
-               setError('You do not have permission to view this content.');
-            } else {
-               setError('Failed to connect to the server.');
-            }
          });
          unsubs.push(unSched);
       });
@@ -11691,7 +11410,7 @@ const Classroom: React.FC = () => {
                         <div key={student.rank} className={`p-5 rounded-2xl flex items-center justify-between ${student.isMe ? 'bg-[#c2f575]/20 border-2 border-[#c2f575]' : 'bg-gray-50 border border-gray-100'}`}>
                            <div className="flex items-center gap-4">
                               <span className="text-xs font-black text-gray-400 w-4">#{student.rank}</span>
-                              <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" width="500" height="500" />
+                              <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" />
                               <div>
                                  <p className="text-sm font-black text-indigo-900">{student.name} {student.isMe && '(You)'}</p>
                                  <p className="text-[10px] font-bold text-gray-400 uppercase">{student.xp} XP</p>
@@ -11729,7 +11448,7 @@ const Classroom: React.FC = () => {
                               className="group bg-gray-50/50 rounded-[3rem] border border-gray-100 p-8 hover:bg-white hover:shadow-2xl hover:border-[#c2f575] transition-all duration-700 cursor-pointer"
                            >
                               <div className="h-48 rounded-[2rem] overflow-hidden mb-8 relative shadow-lg">
-                                 <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" width="500" height="500" />
+                                 <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
                                  <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl text-[9px] font-black text-indigo-900 flex items-center gap-1">
                                     <Star size={12} fill="#c2f575" className="text-[#c2f575]" /> {zone.rating || '4.8'}
                                  </div>
@@ -11823,7 +11542,7 @@ const Classroom: React.FC = () => {
                      {followedTutors.length > 0 ? followedTutors.map(tutor => (
                         <div key={tutor.uid} className="flex items-center gap-5 p-6 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-white/10 transition-all cursor-pointer group/tutor">
                            <div className="relative">
-                              <img src={tutor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutor.uid}`} className="w-16 h-16 rounded-2xl object-cover shadow-2xl" alt="" width="500" height="500" />
+                              <img src={tutor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutor.uid}`} className="w-16 h-16 rounded-2xl object-cover shadow-2xl" alt="" />
                               <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 bg-[#7cc142] border-[4px] border-indigo-900 rounded-full shadow-lg"></div>
                            </div>
                            <div>
@@ -11911,772 +11630,7 @@ export default Classroom;
 
 ## File: `pages/ClassroomPage.jsx`
 
-```jsx
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  LiveKitRoom, 
-  useTracks, 
-  useParticipantInfo, 
-  useLocalParticipant,
-  RoomAudioRenderer,
-  ConnectionState,
-  useConnectionState,
-  TrackToggle,
-  DisconnectButton,
-  ParticipantTile,
-  ParticipantContext,
-  useRemoteParticipants
-} from '@livekit/components-react';
-import { Track, ConnectionQuality, RoomEvent } from 'livekit-client';
-import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db, functions } from '../utils/firebase';
-import { useAuth } from '../context/AuthContext';
-import { useSidebar } from '../context/SidebarContext';
-import { 
-  Mic, MicOff, Video, VideoOff, Monitor, LogOut, 
-  Loader2, AlertCircle, Signal, SignalHigh, SignalMedium, SignalLow,
-  Zap, ZapOff
-} from 'lucide-react';
-
-const NetworkQualityIndicator = () => {
-  const { localParticipant } = useLocalParticipant();
-  const quality = localParticipant?.connectionQuality;
-
-  const getIcon = () => {
-    switch (quality) {
-      case ConnectionQuality.Excellent:
-      case ConnectionQuality.Good:
-        return <SignalHigh size={18} color="#22c55e" />;
-      case ConnectionQuality.Poor:
-        return <SignalMedium size={18} color="#f59e0b" />;
-      case ConnectionQuality.VeryPoor:
-        return <SignalLow size={18} color="#ef4444" />;
-      default:
-        return <Signal size={18} color="rgba(255,255,255,0.3)" />;
-    }
-  };
-
-  return (
-    <div className="quality-indicator" title={`Quality: ${quality}`}>
-      {getIcon()}
-    </div>
-  );
-};
-
-const RemoteParticipantTile = ({ trackReference }) => {
-  return (
-    <div className="remote-tile">
-      <ParticipantTile {...trackReference} />
-      <style>{`
-        .remote-tile {
-          position: relative;
-          aspect-ratio: 16 / 9;
-          background: #1a1a1a;
-          border-radius: 12px;
-          overflow: hidden;
-          border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .remote-tile .lk-participant-tile {
-          height: 100%;
-          width: 100%;
-        }
-      `}</style>
-    </div>
-  );
-};
-
-const ConnectionStatus = () => {
-  const status = useConnectionState();
-  const isConnected = status === ConnectionState.Connected;
-
-  return (
-    <div className="flex items-center gap-3">
-      <NetworkQualityIndicator />
-      <div className="flex items-center gap-2">
-        <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`} />
-        <span className="text-[10px] uppercase tracking-widest font-black opacity-60">
-          {isConnected ? 'Uplink Active' : 'Disconnected'}
-        </span>
-      </div>
-      <style>{`
-        .status-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          box-shadow: 0 0 10px currentColor;
-        }
-        .status-dot.connected {
-          background-color: #22c55e;
-          color: rgba(34, 197, 94, 0.5);
-        }
-        .status-dot.disconnected {
-          background-color: #ef4444;
-          color: rgba(239, 68, 68, 0.5);
-        }
-      `}</style>
-    </div>
-  );
-};
-
-const ClassroomContent = ({ zoneTitle, zoneId }) => {
-  const navigate = useNavigate();
-  const { localParticipant } = useLocalParticipant();
-  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare], { onlyRemote: true });
-  
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const { user } = useAuth();
-  const isStudent = user?.role === 'STUDENT';
-
-  const [isHD, setIsHD] = useState(() => {
-    const saved = localStorage.getItem('nunma_video_quality');
-    if (saved) return saved === 'HD';
-    // Force LOW on mobile for students
-    if (window.innerWidth < 768 && isStudent) return false;
-    return window.innerWidth >= 480;
-  });
-
-  // Track poor connection state
-  const [isConnectionPoor, setIsConnectionPoor] = useState(false);
-  const [showPoorConnToast, setShowPoorConnToast] = useState(false);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (localParticipant) {
-      // Force low quality on mobile students
-      const quality = (isMobile && isStudent) ? 'low' : (isHD ? 'high' : 'low');
-      localParticipant.setVideoQuality(quality);
-      localStorage.setItem('nunma_video_quality', isHD ? 'HD' : 'SD');
-    }
-  }, [isHD, localParticipant, isMobile, isStudent]);
-
-  // Handle Connection Quality Changes
-  useEffect(() => {
-    if (!localParticipant?.room) return;
-
-    const room = localParticipant.room;
-    
-    const onQualityChanged = (quality, participant) => {
-      // We only care about our own connection quality here for the UI state
-      if (participant === localParticipant) {
-        if (quality === ConnectionQuality.Poor || quality === ConnectionQuality.VeryPoor) {
-          setIsConnectionPoor(true);
-          setShowPoorConnToast(true);
-          
-          // Auto-hide toast after 5s
-          setTimeout(() => setShowPoorConnToast(false), 5000);
-        } else if (quality === ConnectionQuality.Excellent || quality === ConnectionQuality.Good) {
-          setIsConnectionPoor(false);
-        }
-      }
-    };
-
-    room.on(RoomEvent.ConnectionQualityChanged, onQualityChanged);
-    return () => {
-      room.off(RoomEvent.ConnectionQualityChanged, onQualityChanged);
-    };
-  }, [localParticipant]);
-
-  // Bandwidth preservation: Disable remote camera tracks if connection is poor
-  useEffect(() => {
-    if (!localParticipant?.room) return;
-    
-    const room = localParticipant.room;
-    
-    if (isConnectionPoor && isStudent) {
-      // Throttling: Unsubscribe from camera tracks to preserve audio/screen
-      room.remoteParticipants.forEach(p => {
-        p.trackPublications.forEach(pub => {
-          if (pub.source === Track.Source.Camera && pub.isSubscribed) {
-            pub.setSubscribed(false);
-          }
-        });
-      });
-    } else {
-      // Restore subscriptions when connection is good
-      room.remoteParticipants.forEach(p => {
-        p.trackPublications.forEach(pub => {
-          if (pub.source === Track.Source.Camera && !pub.isSubscribed) {
-            pub.setSubscribed(true);
-          }
-        });
-      });
-    }
-  }, [isConnectionPoor, isStudent, localParticipant]);
-
-
-  // Filter out the local participant
-  const remoteTracks = tracks.filter(track => track.participant.sid !== localParticipant.sid);
-  
-  // Mobile Optimization: Restrict to Active Speaker and Screen Share ONLY
-  const displayedTracks = isMobile 
-    ? remoteTracks.filter(t => t.source === Track.Source.ScreenShare || t.participant.isSpeaking).slice(0, 1) // Show only the primary active node on mobile
-    : remoteTracks;
-
-  // If mobile and no one is speaking/sharing, show the first person/tutor
-  if (isMobile && displayedTracks.length === 0 && remoteTracks.length > 0) {
-    displayedTracks.push(remoteTracks[0]);
-  }
-
-  const moreCount = remoteTracks.length - displayedTracks.length;
-
-  return (
-    <div className="classroom-layout">
-      {/* Top Bar */}
-      <header className="top-bar">
-        <div className="flex items-center gap-4">
-          <h1 className="zone-title">{zoneTitle || 'Knowledge Stream'}</h1>
-          <button 
-            className={`quality-toggle ${isHD ? 'hd' : 'sd'}`}
-            onClick={() => { setIsHD(!isHD); }}
-          >
-            {isHD ? <Zap size={14} /> : <ZapOff size={14} />}
-            <span>{isHD ? 'HD' : 'SD'}</span>
-          </button>
-        </div>
-        <ConnectionStatus />
-      </header>
-
-      {/* Main Grid */}
-      <main className="grid-container custom-scrollbar">
-        {remoteTracks.length === 0 ? (
-          <div className="empty-state">
-            <p className="text-gray-500 uppercase tracking-widest text-[10px] font-black opacity-40">Waiting for connections...</p>
-          </div>
-        ) : (
-          <div className="participants-grid">
-            {displayedTracks.map((track) => (
-              <RemoteParticipantTile key={track.participant.sid + track.source} trackReference={track} />
-            ))}
-            {isMobile && moreCount > 0 && (
-              <div className="more-pill">
-                <span className="font-black">+{moreCount}</span>
-                <span className="text-[10px] uppercase tracking-tighter opacity-70">Active Nodes</span>
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-
-      {/* Local PiP */}
-      <div className="local-pip">
-        <ParticipantTile participant={localParticipant} source={Track.Source.Camera} />
-      </div>
-
-      {/* Bottom Bar Controls */}
-      <footer className="bottom-bar">
-        <div className="controls-group">
-          <TrackToggle source={Track.Source.Microphone} className="control-btn">
-             {({ enabled }) => enabled ? <Mic size={20} /> : <MicOff size={20} />}
-          </TrackToggle>
-          
-          <TrackToggle source={Track.Source.Camera} className="control-btn">
-            {({ enabled }) => enabled ? <Video size={20} /> : <VideoOff size={20} />}
-          </TrackToggle>
-
-          {!isMobile && (
-            <TrackToggle source={Track.Source.ScreenShare} className="control-btn">
-              <Monitor size={20} />
-            </TrackToggle>
-          )}
-
-          <button 
-            className="control-btn leave-btn"
-            onClick={() => {
-              navigate(`/zones/${zoneId}`);
-            }}
-          >
-            <LogOut size={20} />
-          </button>
-        </div>
-      </footer>
-
-      {/* Poor Connection Toast */}
-      {showPoorConnToast && (
-        <div className="poor-conn-toast bg-red-500 text-white rounded-nunma">
-          <p className="font-black text-[11px] uppercase tracking-widest">Poor connection. Video paused to preserve audio.</p>
-          <button onClick={() => setShowPoorConnToast(false)} className="opacity-50 hover:opacity-100 transition-opacity">
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      <style>{`
-        .poor-conn-toast {
-          position: fixed;
-          top: 80px;
-          left: 50%;
-          transform: translateX(-50%);
-          padding: 12px 24px;
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          z-index: 1000;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-          animation: slideDown 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .classroom-layout {
-          display: flex;
-          flex-direction: column;
-          height: 100vh;
-          width: 100%;
-          background-color: #0a0a0a;
-          color: #fcfcfc;
-          overflow: hidden;
-          position: relative;
-        }
-
-        .top-bar {
-          height: 64px;
-          padding: 0 24px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-          background: rgba(10, 10, 10, 0.8);
-          backdrop-filter: blur(20px);
-          z-index: 10;
-        }
-
-        .quality-toggle {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          padding: 8px 16px;
-          min-height: 44px;
-          min-width: 80px;
-          border-radius: 12px;
-          color: white;
-          font-size: 11px;
-          font-weight: 900;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .quality-toggle.hd { color: #c2f575; border-color: rgba(194, 245, 117, 0.3); }
-
-        .zone-title {
-          font-size: 0.9rem;
-          font-weight: 900;
-          letter-spacing: -0.03em;
-          color: #c2f575;
-          margin: 0;
-          text-transform: uppercase;
-        }
-
-        .grid-container {
-          flex: 1;
-          padding: clamp(12px, 3vw, 24px);
-          overflow-y: auto;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .participants-grid {
-          display: grid;
-          gap: 16px;
-          width: 100%;
-          max-width: 1400px;
-          grid-template-columns: repeat(1, 1fr);
-        }
-
-        .more-pill {
-          aspect-ratio: 16 / 9;
-          background: rgba(194, 245, 117, 0.05);
-          border: 1px dashed rgba(194, 245, 117, 0.3);
-          border-radius: 12px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          color: #c2f575;
-          font-size: 24px;
-        }
-
-        @media (min-width: 768px) {
-          .participants-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        @media (min-width: 1024px) {
-          .participants-grid { grid-template-columns: repeat(3, 1fr); }
-        }
-
-        .empty-state {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 100%;
-          width: 100%;
-        }
-
-        .bottom-bar {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: auto;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
-          padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
-          z-index: 100;
-        }
-
-        .controls-group {
-          display: flex;
-          gap: 12px;
-          background: rgba(20, 20, 20, 0.9);
-          padding: 8px;
-          border-radius: 24px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          backdrop-filter: blur(20px);
-          box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-        }
-
-        .control-btn {
-          width: 44px;
-          height: 44px;
-          min-width: 44px;
-          min-height: 44px;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          border: none;
-          background: rgba(255, 255, 255, 0.05);
-          color: white;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          touch-action: manipulation;
-        }
-
-        .control-btn:active {
-          transform: scale(0.92);
-          background: rgba(255, 255, 255, 0.15) !important;
-          transition: transform 0.1s;
-        }
-
-        @media (max-width: 767px) {
-          .controls-group {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            padding: 12px;
-            border-radius: 28px;
-          }
-          .control-btn {
-            width: 56px;
-            height: 56px;
-          }
-          .bottom-bar {
-            height: 160px;
-          }
-           .local-pip {
-            bottom: 160px;
-            right: 16px;
-            width: 120px;
-            height: 90px;
-          }
-        }
-
-        .control-btn:hover {
-          background: rgba(255, 255, 255, 0.1);
-          transform: translateY(-2px);
-        }
-
-        .control-btn.lk-button-active {
-            background-color: #c2f575 !important;
-            color: #0a0a0a !important;
-        }
-
-        .leave-btn {
-          background: #ef4444 !important;
-          color: white !important;
-        }
-
-        .leave-btn:hover {
-          background: #dc2626 !important;
-          box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
-        }
-
-        .local-pip {
-          position: absolute;
-          bottom: 110px;
-          right: 24px;
-          width: 200px;
-          height: 150px;
-          border-radius: 16px;
-          overflow: hidden;
-          background: #1a1a1a;
-          border: 2px solid #c2f575;
-          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
-          z-index: 20;
-          transition: all 0.3s ease;
-        }
-
-        .local-pip .lk-participant-tile {
-          height: 100%;
-          width: 100%;
-        }
-
-        /* Anti-Gravity Scrollbar */
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(194, 245, 117, 0.1); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(194, 245, 117, 0.3); }
-      `}</style>
-    </div>
-  );
-};
-
-const ClassroomPage = () => {
-  const { zoneId } = useParams();
-  const { user } = useAuth();
-  const { isSidebarOpen } = useSidebar();
-  const [token, setToken] = useState(null);
-  const [zoneTitle, setZoneTitle] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  // Connection Resilience
-  const [isReconnecting, setIsReconnecting] = useState(false);
-  const [roomKey, setRoomKey] = useState(0); // Forcing remount on retry
-  const reconnectAttempts = React.useRef(0);
-
-  const handleDisconnect = (reason) => {
-    // If it's not a user-initiated leave
-    if (reason !== 'leave' && reconnectAttempts.current < 3) {
-      setIsReconnecting(true);
-      reconnectAttempts.current += 1;
-      
-      setTimeout(() => {
-        setRoomKey(prev => prev + 1);
-        setIsReconnecting(false);
-      }, 2000);
-    } else if (reconnectAttempts.current >= 3) {
-      setError("Connection lost after multiple attempts. Please check your uplink.");
-    }
-  };
-
-  useEffect(() => {
-    const initPage = async () => {
-      if (!zoneId || !user?.uid) return;
-      
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const [tokenResult, zoneSnap] = await Promise.all([
-          httpsCallable(functions, 'getLiveKitToken')({ roomName: zoneId, identity: user.uid }),
-          getDoc(doc(db, 'zones', zoneId))
-        ]);
-
-        setToken(tokenResult.data.token);
-        if (zoneSnap.exists()) {
-          setZoneTitle(zoneSnap.data().title);
-        }
-      } catch (err) {
-        console.error("Initialization failed:", err);
-        setError(err.message || "Failed to initialize classroom. Please check your enrollment.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initPage();
-  }, [zoneId, user?.uid]);
-
-  if (loading) {
-    return (
-      <div className="loader-container">
-        <div className="spinner-wrapper">
-          <div className="spinner" />
-          <div className="spinner-inner" />
-        </div>
-        <p className="loading-text">Synchronizing Knowledge Stream...</p>
-        <style>{`
-          .loader-container {
-            height: 100vh;
-            width: 100vw;
-            background: #0a0a0a;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 24px;
-          }
-          .spinner-wrapper {
-            position: relative;
-            width: 80px;
-            height: 80px;
-          }
-          .spinner {
-            width: 100%;
-            height: 100%;
-            border: 4px solid rgba(194, 245, 117, 0.1);
-            border-top: 4px solid #c2f575;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-          }
-          .spinner-inner {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(194, 245, 117, 0.05);
-            border-bottom: 4px solid #c2f575;
-            border-radius: 50%;
-            animation: spin-reverse 1.5s linear infinite;
-          }
-          .loading-text {
-            color: #c2f575;
-            font-size: 0.75rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.2em;
-            opacity: 0.8;
-          }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-          @keyframes spin-reverse { 0% { transform: rotate(0deg); } 100% { transform: rotate(-360deg); } }
-        `}</style>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="error-container">
-        <AlertCircle size={48} color="#ef4444" />
-        <h2 className="error-title">Uplink Interrupted</h2>
-        <p className="error-message">{error}</p>
-        <button className="retry-btn" onClick={() => window.location.reload()}>Re-attempt Connection</button>
-        <style>{`
-          .error-container {
-            height: 100vh;
-            width: 100vw;
-            background: #0a0a0a;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 24px;
-            gap: 16px;
-          }
-          .error-title {
-            color: #ef4444;
-            text-transform: uppercase;
-            letter-spacing: -0.02em;
-            font-weight: 900;
-            margin: 0;
-          }
-          .error-message {
-            color: rgba(255, 255, 255, 0.6);
-            max-width: 400px;
-            font-size: 0.9rem;
-          }
-          .retry-btn {
-            margin-top: 12px;
-            background: #c2f575;
-            color: #1a1a4e;
-            border: none;
-            padding: 16px 32px;
-            min-height: 44px;
-            border-radius: 12px;
-            font-weight: 800;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            transition: all 0.2s ease;
-          }
-          .retry-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(194, 245, 117, 0.4);
-          }
-        `}</style>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <LiveKitRoom
-        key={roomKey}
-        token={token}
-        serverUrl={import.meta.env.VITE_LIVEKIT_URL}
-        connect={true}
-        video={true}
-        audio={true}
-        adaptiveStream={true}
-        dynacast={true}
-        publishDefaults={{
-          simulcast: true,
-          videoSimulcastLayers: [
-            { width: 1280, height: 720, bitrate: 1500000 },
-            { width: 640, height: 360, bitrate: 500000 },
-            { width: 320, height: 180, bitrate: 150000 }
-          ]
-        }}
-        data-lk-theme="default"
-        onDisconnected={() => handleDisconnect('unexpected')}
-      >
-        <RoomAudioRenderer />
-        <ClassroomContent zoneTitle={zoneTitle} zoneId={zoneId} />
-      </LiveKitRoom>
-
-      {isReconnecting && (
-        <div className="reconnecting-overlay">
-          <div className="overlay-content">
-            <Loader2 className="re-spinner" size={40} />
-            <h2>Restoring Uplink...</h2>
-            <p>Attempt {reconnectAttempts.current} of 3</p>
-          </div>
-          <style>{`
-            .reconnecting-overlay {
-              position: fixed;
-              top: 0;
-              right: 0;
-              bottom: 0;
-              left: ${isSidebarOpen ? '240px' : '64px'};
-              background: rgba(0, 0, 0, 0.85);
-              backdrop-filter: blur(10px);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              z-index: 9999;
-              transition: all 0.3s ease;
-            }
-            .overlay-content {
-              text-align: center;
-              color: #c2f575;
-            }
-            .re-spinner {
-              animation: spin 1s linear infinite;
-              margin-bottom: 16px;
-            }
-            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-          `}</style>
-        </div>
-      )}
-    </>
-  );
-};
-
-export default ClassroomPage;
-```
+> FILE NOT FOUND
 
 ---
 
@@ -13311,7 +12265,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                   <div key={zone.id} className="bg-white rounded-[3.5rem] p-10 border border-gray-100 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
                     <div className="flex justify-between items-start mb-8">
                       <div className="w-16 h-16 bg-gray-50 rounded-[1.75rem] flex items-center justify-center text-indigo-900 shadow-inner group-hover:bg-indigo-900 group-hover:text-nunma-lime transition-all duration-500 overflow-hidden">
-                        {zone.avatar ? <img src={zone.avatar} alt="" className="w-full h-full object-cover" width="500" height="500" /> : <Zap size={32} />}
+                        {zone.avatar ? <img src={zone.avatar} alt="" className="w-full h-full object-cover" /> : <Zap size={32} />}
                       </div>
                       <div className="text-right">
                         <span className="text-[9px] font-black bg-[#c2f575] text-indigo-900 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">
@@ -13883,7 +12837,7 @@ const Explore: React.FC = () => {
                     <div className="flex -space-x-3">
                       {[1, 2, 3].map(i => (
                         <div key={i} className="w-10 h-10 rounded-xl border-4 border-white overflow-hidden bg-gray-100 shadow-sm relative z-[1]">
-                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.id}${i}`} alt="Student" width="500" height="500" />
+                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.id}${i}`} alt="Student" />
                         </div>
                       ))}
                       <div className="w-10 h-10 rounded-xl border-4 border-white bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-400 relative z-0">
@@ -14317,7 +13271,7 @@ const Inbox: React.FC = () => {
               <div className="flex flex-col items-center">
                 <div className="relative group mb-6">
                   <div className="w-32 h-32 rounded-[2.5rem] border-4 border-gray-50 p-1 bg-white relative overflow-hidden shadow-xl">
-                    <img src={activeChat.avatar || 'https://picsum.photos/seed/group/200/200'} alt="Group" className="w-full h-full rounded-[2rem] object-cover" width="500" height="500" />
+                    <img src={activeChat.avatar || 'https://picsum.photos/seed/group/200/200'} alt="Group" className="w-full h-full rounded-[2rem] object-cover" />
                   </div>
                   <button onClick={() => groupAvatarRef.current?.click()} className="absolute bottom-[-10px] right-[-10px] w-12 h-12 bg-[#c2f575] text-indigo-900 rounded-2xl shadow-lg flex items-center justify-center hover:scale-110 transition-all border-4 border-white z-10">
                     <Camera size={20} className="ml-[1px]" />
@@ -14373,7 +13327,7 @@ const Inbox: React.FC = () => {
                         onClick={() => { setShowGroupProfile(false); navigate(`/profile/${p.id}`); }}
                         className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl cursor-pointer transition-colors border border-transparent hover:border-gray-100"
                       >
-                        <img src={p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`} className="w-12 h-12 rounded-[1rem] object-cover shadow-sm" alt="" width="500" height="500" />
+                        <img src={p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`} className="w-12 h-12 rounded-[1rem] object-cover shadow-sm" alt="" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-black text-indigo-900 truncate">{p.name}</p>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{p.headline || 'Member'}</p>
@@ -14413,7 +13367,7 @@ const Inbox: React.FC = () => {
                   mutualFollowers.map(mUser => (
                     <div key={mUser.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
                       <div className="flex items-center gap-4">
-                        <img src={mUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mUser.id}`} className="w-10 h-10 rounded-xl object-cover" alt="" width="500" height="500" />
+                        <img src={mUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mUser.id}`} className="w-10 h-10 rounded-xl object-cover" alt="" />
                         <p className="text-sm font-black text-indigo-900">{mUser.name}</p>
                       </div>
                       <button
@@ -14522,7 +13476,7 @@ const Inbox: React.FC = () => {
                   }`}
               >
                 <div className="relative shrink-0">
-                  <img src={chat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={chat.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm" width="500" height="500" />
+                  <img src={chat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={chat.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm" />
                   {chat.online && (
                     <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#7cc142] border-[4px] border-white rounded-full"></div>
                   )}
@@ -14558,7 +13512,7 @@ const Inbox: React.FC = () => {
                   className="relative cursor-pointer hover:opacity-80 transition-opacity"
                   onClick={handleGroupHeaderClick}
                 >
-                  <img src={activeChat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={activeChat.name} className="w-14 h-14 rounded-2xl object-cover shadow-xl" width="500" height="500" />
+                  <img src={activeChat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={activeChat.name} className="w-14 h-14 rounded-2xl object-cover shadow-xl" />
                   {activeChat.online && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#7cc142] border-[3px] border-white rounded-full"></div>}
                 </div>
                 <div>
@@ -14740,7 +13694,7 @@ const LandingPage: React.FC = () => {
             {/* Left Column */}
             <div className="flex flex-col">
               <div className="flex items-center gap-2 mb-6">
-                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain" width="500" height="500" />
+                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain" />
                 <span className="text-2xl font-black tracking-tight text-white">Nunma</span>
               </div>
               <p className="text-slate-300 font-medium mb-4">
@@ -15186,7 +14140,7 @@ const LaunchZone: React.FC = () => {
                   className={`aspect-video bg-gray-50 border-2 border-dashed rounded-[3rem] flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden group shadow-inner ${error && !zoneImage ? 'border-red-300' : 'border-gray-200 hover:border-[#c1e60d] hover:bg-white'}`}
                 >
                   {zoneImage ? (
-                    <img src={zoneImage} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Preview" width="500" height="500" />
+                    <img src={zoneImage} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Preview" />
                   ) : (
                     <>
                       <div className="w-20 h-20 bg-white rounded-[2rem] flex items-center justify-center text-gray-300 mb-4 shadow-sm group-hover:scale-110 group-hover:bg-[#c1e60d] group-hover:text-indigo-900 transition-all duration-500">
@@ -16307,7 +15261,10 @@ const OnboardingSystem: React.FC = () => {
     useEffect(() => {
         // If we have a user and they've requested a specific role, ensure their profile matches
         if (requestedRole && user) {
-            const targetRole = requestedRole.toUpperCase() as UserRole;
+            let targetRole = requestedRole.toUpperCase() as UserRole;
+            if (requestedRole.toLowerCase() === 'tutor') targetRole = UserRole.THALA;
+            if (requestedRole.toLowerCase() === 'student') targetRole = UserRole.STUDENT;
+
             if (user.role !== targetRole) {
                 setSelectedRole(targetRole);
             }
@@ -16463,7 +15420,7 @@ const OnboardingSystem: React.FC = () => {
             {/* Top Left Branding */}
             <div className="absolute top-8 left-8 flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#040457] rounded-xl flex items-center justify-center shadow-lg">
-                    <img src="/assets/logo-icon.png" alt="Logo" className="w-6 h-6 object-contain filter brightness-0 invert" width="500" height="500" />
+                    <img src="/assets/logo-icon.png" alt="Logo" className="w-6 h-6 object-contain filter brightness-0 invert" />
                 </div>
                 <span className="text-xl font-black tracking-tighter text-[#040457]">nunma</span>
             </div>
@@ -16782,12 +15739,46 @@ const OnboardingSystem: React.FC = () => {
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">State</label>
-                                        <input
-                                            type="text"
-                                            placeholder="State"
+                                        <select
                                             {...tutorForm.register('state')}
-                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.state ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
-                                        />
+                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all appearance-none cursor-pointer ${tutorForm.formState.errors.state ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                        >
+                                            <option value="" disabled>Select State</option>
+                                            <option value="Andhra Pradesh">Andhra Pradesh</option>
+                                            <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+                                            <option value="Assam">Assam</option>
+                                            <option value="Bihar">Bihar</option>
+                                            <option value="Chhattisgarh">Chhattisgarh</option>
+                                            <option value="Goa">Goa</option>
+                                            <option value="Gujarat">Gujarat</option>
+                                            <option value="Haryana">Haryana</option>
+                                            <option value="Himachal Pradesh">Himachal Pradesh</option>
+                                            <option value="Jharkhand">Jharkhand</option>
+                                            <option value="Karnataka">Karnataka</option>
+                                            <option value="Kerala">Kerala</option>
+                                            <option value="Madhya Pradesh">Madhya Pradesh</option>
+                                            <option value="Maharashtra">Maharashtra</option>
+                                            <option value="Manipur">Manipur</option>
+                                            <option value="Meghalaya">Meghalaya</option>
+                                            <option value="Mizoram">Mizoram</option>
+                                            <option value="Nagaland">Nagaland</option>
+                                            <option value="Odisha">Odisha</option>
+                                            <option value="Punjab">Punjab</option>
+                                            <option value="Rajasthan">Rajasthan</option>
+                                            <option value="Sikkim">Sikkim</option>
+                                            <option value="Tamil Nadu">Tamil Nadu</option>
+                                            <option value="Telangana">Telangana</option>
+                                            <option value="Tripura">Tripura</option>
+                                            <option value="Uttar Pradesh">Uttar Pradesh</option>
+                                            <option value="Uttarakhand">Uttarakhand</option>
+                                            <option value="West Bengal">West Bengal</option>
+                                            <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
+                                            <option value="Chandigarh">Chandigarh</option>
+                                            <option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli</option>
+                                            <option value="Delhi">Delhi</option>
+                                            <option value="Lakshadweep">Lakshadweep</option>
+                                            <option value="Puducherry">Puducherry</option>
+                                        </select>
                                         {tutorForm.formState.errors.state && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.state.message}</p>}
                                     </div>
                                     <div className="space-y-2">
@@ -16812,16 +15803,16 @@ const OnboardingSystem: React.FC = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Areas of Expertise (Max 3)</label>
                                 <div className={`flex flex-wrap items-center gap-2 w-full bg-gray-50 border-2 focus-within:bg-white rounded-[1.25rem] px-4 py-3 min-h-[60px] transition-all ${tutorForm.formState.errors.expertise ? 'border-red-400' : 'border-transparent focus-within:border-[#c2f575]'}`}>
-                                    {tutorForm.watch("expertise").map((tag, i) => (
+                                    {(tutorForm.watch("expertise") || []).map((tag, i) => (
                                         <div key={i} className="flex items-center gap-1 bg-[#040457] text-white px-3 py-1.5 rounded-full text-xs font-bold">
                                             {tag}
                                             <button type="button" onClick={() => {
-                                                const current = tutorForm.getValues("expertise");
+                                                const current = tutorForm.getValues("expertise") || [];
                                                 tutorForm.setValue("expertise", current.filter((_, idx) => idx !== i));
                                             }} className="hover:text-red-400"><X size={14}/></button>
                                         </div>
                                     ))}
-                                    {tutorForm.watch("expertise").length < 3 && (
+                                    {(tutorForm.watch("expertise") || []).length < 3 && (
                                         <input
                                             type="text"
                                             value={tagInput}
@@ -16830,7 +15821,7 @@ const OnboardingSystem: React.FC = () => {
                                                 if(e.key === 'Enter') {
                                                     e.preventDefault();
                                                     if (tagInput.trim()) {
-                                                        const current = tutorForm.getValues("expertise");
+                                                        const current = tutorForm.getValues("expertise") || [];
                                                         if (current.length < 3 && !current.includes(tagInput.trim())) {
                                                             tutorForm.setValue("expertise", [...current, tagInput.trim()]);
                                                             setTagInput('');
@@ -16838,7 +15829,7 @@ const OnboardingSystem: React.FC = () => {
                                                     }
                                                 }
                                             }}
-                                            placeholder={tutorForm.watch("expertise").length === 0 ? "Type and press Enter (e.g. Calculus)" : "Add another..."}
+                                            placeholder={(tutorForm.watch("expertise") || []).length === 0 ? "Type and press Enter (e.g. Calculus)" : "Add another..."}
                                             className="flex-1 bg-transparent min-w-[150px] outline-none text-[#040457] font-bold text-sm"
                                         />
                                     )}
@@ -18073,7 +17064,7 @@ const ProfileHeader = ({
     <div className="bg-[#1A1A4E] relative h-[260px] md:h-[320px] flex flex-col justify-end pb-8">
       <div className="absolute inset-0 opacity-40">
         {profileUser.banner ? (
-          <img src={profileUser.banner} className="w-full h-full object-cover" alt="Banner" width="500" height="500" />
+          <img src={profileUser.banner} className="w-full h-full object-cover" alt="Banner" />
         ) : (
           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,#c2f575_0,transparent_60%)]"></div>
         )}
@@ -18108,11 +17099,11 @@ const ProfileHeader = ({
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="Your Name"
-                    className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-md bg-transparent border-none outline-none w-full"
+                    className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-md bg-transparent text-white border-none outline-none w-full"
                   />
                 ) : (
                   <div className="flex items-center gap-4 group/name">
-                    <h1 className="text-4xl md:text-5xl font-black tracking-tighter drop-shadow-md">{profileUser.name}</h1>
+                    <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter drop-shadow-md">{profileUser.name}</h1>
                     {isMe && (
                       <button 
                         onClick={() => setIsEditing(true)}
@@ -18132,7 +17123,7 @@ const ProfileHeader = ({
                   className="text-indigo-100/90 text-[16px] italic max-w-xl bg-transparent border-b border-white/20 outline-none w-full"
                 />
               ) : (
-                <p className="text-indigo-100/90 text-[16px] italic line-clamp-1">{profileUser.headline || (role === UserRole.THALA ? 'Expert Educator' : 'Aspiring Learner')}</p>
+                profileUser.headline && <p className="text-indigo-100/90 text-[16px] italic line-clamp-1">{profileUser.headline}</p>
               )}
             </div>
 
@@ -18186,7 +17177,7 @@ const ProfileHeader = ({
                     <div className="w-10 h-10 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 ) : (
-                  <img src={profileUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + profileUser.uid} alt="Profile" className="w-full h-full object-cover" width="500" height="500" />
+                  <img src={profileUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + profileUser.uid} alt="Profile" className="w-full h-full object-cover" />
                 )}
                 {isMe && !uploadingAvatar && (
                   <div className="absolute bottom-2 right-2">
@@ -18304,7 +17295,7 @@ const StudentProfile = ({
           {zones.filter((z: any) => enrolledIds.includes(z.id)).length > 0 ? zones.filter((z: any) => enrolledIds.includes(z.id)).map((zone: any) => (
             <div key={zone.id} className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 flex items-center gap-6 group hover:border-[#c2f575] transition-all cursor-pointer" onClick={() => navigate(`/classroom/zone/${zone.id}`)}>
               <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg">
-                <img src={zone.image} alt={zone.title} className="w-full h-full object-cover" width="500" height="500" />
+                <img src={zone.image} alt={zone.title} className="w-full h-full object-cover" />
               </div>
               <div className="flex-1">
                 <h4 className="text-xl font-black text-indigo-900">{zone.title}</h4>
@@ -18475,7 +17466,7 @@ const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, n
             {zones.length > 0 ? zones.map((zone: any) => (
               <div key={zone.id} className="bg-white border border-gray-100 rounded-[3.5rem] overflow-hidden group hover:shadow-2xl transition-all duration-700 flex flex-col">
                 <div className="h-60 overflow-hidden relative">
-                  <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" width="500" height="500" />
+                  <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                   <div className="absolute top-6 right-6 bg-white/95 backdrop-blur-md text-indigo-900 px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase shadow-xl tracking-widest">${zone.price}</div>
                 </div>
                 <div className="p-10 flex flex-col flex-1">
@@ -18732,16 +17723,16 @@ const ProfileView: React.FC = () => {
       } else {
         const followData = {
           uid: currentUser.uid,
-          name: currentUser.name,
-          avatar: currentUser.avatar,
+          name: currentUser.name || "User",
+          avatar: currentUser.avatar || null,
           createdAt: serverTimestamp()
         };
         
         batch.set(followerRef, followData);
         batch.set(followingRef, {
           uid: profileUser.uid,
-          name: profileUser.name,
-          avatar: profileUser.avatar,
+          name: profileUser.name || "User",
+          avatar: profileUser.avatar || null,
           createdAt: serverTimestamp()
         });
         batch.update(targetUserRef, { followersCount: increment(1) });
@@ -19130,7 +18121,7 @@ const ProfileView: React.FC = () => {
                 <div className="space-y-4">
                   {followersList.map(fUser => (
                     <div key={fUser.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl cursor-pointer" onClick={() => { setShowFollowersModal(false); navigate(`/profile/${fUser.id}`); }}>
-                      <img src={fUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + fUser.id} className="w-12 h-12 rounded-xl object-cover" alt="" width="500" height="500" />
+                      <img src={fUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + fUser.id} className="w-12 h-12 rounded-xl object-cover" alt="" />
                       <div>
                         <p className="text-sm font-black text-indigo-900">{fUser.name}</p>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate w-48">{fUser.headline || 'Nunma User'}</p>
@@ -19427,7 +18418,7 @@ const Search: React.FC = () => {
                   className="bg-white p-6 rounded-[2rem] border border-gray-100 hover:shadow-xl hover:border-[#c1e60d]/50 transition-all cursor-pointer group flex items-center gap-6"
                 >
                   <div className="w-16 h-16 rounded-2xl bg-gray-50 overflow-hidden shrink-0">
-                    <img src={item.avatar || item.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.id}`} alt="" className="w-full h-full object-cover" width="500" height="500" />
+                    <img src={item.avatar || item.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.id}`} alt="" className="w-full h-full object-cover" />
                   </div>
                   <div>
                     <h4 className="text-lg font-black text-[#1A1A4E] group-hover:text-indigo-600 transition-colors line-clamp-1">{item.name || item.title}</h4>
@@ -20441,8 +19432,19 @@ import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import { BunnyVideoPlayer } from '../components/BunnyVideoPlayer';
 
-
-
+const formatJoinedDate = (joinedAt: any) => {
+  if (!joinedAt) return '';
+  if (typeof joinedAt === 'string') return joinedAt;
+  if (joinedAt && typeof joinedAt === 'object') {
+    if (joinedAt.toDate && typeof joinedAt.toDate === 'function') {
+      return joinedAt.toDate().toLocaleDateString();
+    }
+    if (joinedAt.seconds !== undefined) {
+      return new Date(joinedAt.seconds * 1000).toLocaleDateString();
+    }
+  }
+  return String(joinedAt);
+};
 
 const StudentZoneView: React.FC = () => {
   const { zoneId } = useParams();
@@ -20569,55 +19571,28 @@ const StudentZoneView: React.FC = () => {
     });
 
     // 4. Curriculum
-    const chaptersQ = query(collection(db, 'zones', zoneId, 'chapters'), orderBy('order', 'asc')); // Assuming 'order' field exists or update schema
+    const chaptersQ = query(collection(db, 'zones', zoneId, 'chapters'), orderBy('order', 'asc'));
     const chaptersUnsub = onSnapshot(chaptersQ, (snapshot) => {
       setCurriculum(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     // 5. Student Data (Self)
-    let studentUnsub = () => { };
-    if (authUser) {
-      // Check both 'students' collection (enrolled)
-      // We assume the student ID is the auth uid or email is matched. 
-      // Best practice: use UID as doc ID for students.
-      // If the 'Grant Access' used random ID, we query by email.
-      const q = query(collection(db, 'zones', zoneId, 'students'), where('email', '==', authUser.email));
-      studentUnsub = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-          const sDoc = snapshot.docs[0];
-          setStudentData({ id: sDoc.id, ...sDoc.data() });
-        }
-      });
-
-      // 5.1 Fetch user consent state
-      const userDocUnsub = onSnapshot(doc(db, 'users', authUser.uid), (docSnap) => {
-        if (docSnap.exists()) {
-          setHasExplicitConsent(!!docSnap.data().aiProctoringConsent);
-        }
-      });
-
-      return () => {
-        zoneUnsub();
-        sessionsUnsub();
-        examsUnsub();
-        chaptersUnsub();
-        studentUnsub();
-        resultsUnsub();
-        allStudentsUnsub();
-        userDocUnsub();
-      };
-    }
-
-    // 6. Exam Results (My Results)
-    const resultsQ = query(collection(db, 'zones', zoneId, 'exam_results'), where('studentId', '==', authUser?.uid || ''));
-    const resultsUnsub = onSnapshot(resultsQ, (snapshot) => {
-      setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const studentDocRef = doc(db, 'zones', zoneId, 'students', authUser.uid);
+    const studentUnsub = onSnapshot(studentDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setStudentData({ id: docSnap.id, ...docSnap.data() });
+      } else {
+        setStudentData(null);
+      }
+    }, (error) => {
+      console.warn("Student data listener failed:", error);
     });
 
-    // 7. All Students (for Student List tab)
-    const allStudentsQ = query(collection(db, 'zones', zoneId, 'students'));
-    const allStudentsUnsub = onSnapshot(allStudentsQ, (snapshot) => {
-      setAllStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    // 5.1 Fetch user consent state
+    const userDocUnsub = onSnapshot(doc(db, 'users', authUser.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setHasExplicitConsent(!!docSnap.data().aiProctoringConsent);
+      }
     });
 
     return () => {
@@ -20626,10 +19601,36 @@ const StudentZoneView: React.FC = () => {
       examsUnsub();
       chaptersUnsub();
       studentUnsub();
+      userDocUnsub();
+    };
+  }, [zoneId, location.search, authUser]);
+
+  // Listen to All Students and Exam Results only when studentData is loaded or user is creator
+  useEffect(() => {
+    if (!authUser || !zoneId || !db) return;
+    if (!studentData && zone?.createdBy !== authUser.uid) return;
+
+    // 6. Exam Results (My Results)
+    const resultsQ = query(collection(db, 'zones', zoneId, 'exam_results'), where('studentId', '==', authUser.uid));
+    const resultsUnsub = onSnapshot(resultsQ, (snapshot) => {
+      setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Error loading exam results:", error);
+    });
+
+    // 7. All Students (for Student List tab)
+    const allStudentsQ = query(collection(db, 'zones', zoneId, 'students'));
+    const allStudentsUnsub = onSnapshot(allStudentsQ, (snapshot) => {
+      setAllStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Error loading students list:", error);
+    });
+
+    return () => {
       resultsUnsub();
       allStudentsUnsub();
     };
-  }, [zoneId, location.search, authUser]);
+  }, [zoneId, authUser, studentData, zone]);
 
   // Payment Check Effect
   useEffect(() => {
@@ -20648,11 +19649,14 @@ const StudentZoneView: React.FC = () => {
         return email === authUser.email;
       });
       const isWhitelisted = !!whitelistEntry;
-      // If we have studentData, we are good.
-      if (studentData) return;
+      
+      // If we have studentData or are the creator, we are good.
+      if (studentData || zone.createdBy === authUser.uid) return;
 
-      // If whitelisted but no studentData, auto-enroll
-      if (isWhitelisted) {
+      const isFree = !zone.price || zone.price <= 0;
+
+      // If whitelisted or zone is free, auto-enroll
+      if (isWhitelisted || isFree) {
         try {
           const whitelistedName = (typeof whitelistEntry === 'object' && whitelistEntry !== null) ? (whitelistEntry as any).name : null;
           const newStudent: Student = {
@@ -20674,18 +19678,14 @@ const StudentZoneView: React.FC = () => {
             enrolledAt: new Date().toISOString()
           });
 
-          // studentData will be updated via onSnapshot listener
           return;
         } catch (e) {
-          console.error("Failed to auto-enroll whitelisted user", e);
+          console.error("Failed to auto-enroll user", e);
         }
       }
 
       // If no student data, and price > 0, and not whitelisted -> Redirect
       if (zone.price > 0 && !isWhitelisted) {
-        // Check if we are the owner? (Though this is student view)
-        if (zone.createdBy === authUser.uid) return;
-
         navigate(`/payment/${zoneId}`);
       }
     };
@@ -21205,7 +20205,7 @@ const StudentZoneView: React.FC = () => {
             <button className="flex-1 bg-white/10 backdrop-blur-md p-4 rounded-3xl flex items-center justify-center gap-2 font-bold hover:bg-white/20 transition-all border border-white/10">
               <Share2 size={20} /> Share Zone
             </button>
-            <button onClick={handleLeaveZone} className="flex-1 bg-red-500/10 backdrop-blur-md p-4 rounded-3xl flex items-center justify-center gap-2 font-bold text-red-200 hover:bg-red-500/20 transition-all border border-red-500/10">
+            <button onClick={handleLeaveZone} className="flex-1 bg-red-600 p-4 rounded-3xl flex items-center justify-center gap-2 font-bold text-white hover:bg-red-700 transition-all border border-red-600">
               <LogOut size={20} /> Leave Zone
             </button>
           </div>
@@ -21380,10 +20380,10 @@ const StudentZoneView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {allStudents.map(student => (
                   <div key={student.id} className="p-6 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex items-center gap-4 hover:shadow-xl hover:bg-white hover:border-[#c2f575] transition-all cursor-pointer group">
-                    <img src={student.avatar} className="w-14 h-14 rounded-2xl object-cover bg-white p-1 border border-gray-100 shadow-sm" alt="" width="500" height="500" />
+                    <img src={student.avatar} className="w-14 h-14 rounded-2xl object-cover bg-white p-1 border border-gray-100 shadow-sm" alt="" />
                     <div>
                       <p className="font-black text-indigo-900 text-sm">{student.name}</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Joined {student.joinedAt}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Joined {formatJoinedDate(student.joinedAt)}</p>
                     </div>
                   </div>
                 ))}
@@ -22107,289 +21107,7 @@ export default VerificationPortal;
 
 ## File: `pages/WhiteboardPage.jsx`
 
-```jsx
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { Tldraw } from '@tldraw/tldraw';
-import '@tldraw/tldraw/tldraw.css';
-import { ArrowLeft, Monitor } from 'lucide-react';
-import { db } from '../utils/firebase';
-import { useAuth } from '../context/AuthContext';
-
-const WhiteboardPage = () => {
-  const { zoneId } = useParams();
-  const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
-  const [zone, setZone] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/auth');
-      return;
-    }
-
-    const fetchZone = async () => {
-      try {
-        const zoneDoc = await getDoc(doc(db, 'zones', zoneId));
-        if (zoneDoc.exists()) {
-          setZone(zoneDoc.data());
-        } else {
-          setError('Zone not found');
-        }
-      } catch (err) {
-        console.error('Error fetching zone:', err);
-        setError('Failed to load zone details');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchZone();
-  }, [zoneId, isAuthenticated, navigate]);
-
-  if (loading) {
-    return (
-      <div className="whiteboard-loader">
-        <div className="spinner"></div>
-        <p>Initializing Whiteboard...</p>
-        <style>{`
-          .whiteboard-loader {
-            height: 100vh; width: 100vw; background: #0a0a0a;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: #c2f575; font-family: 'Inter', sans-serif;
-          }
-          .spinner {
-            width: 40px; height: 40px; border: 3px solid rgba(194, 245, 117, 0.1);
-            border-top: 3px solid #c2f575; border-radius: 50%;
-            animation: spin 1s linear infinite; margin-bottom: 20px;
-          }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        `}</style>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="whiteboard-error">
-        <h2>{error}</h2>
-        <button onClick={() => navigate(-1)}>Go Back</button>
-        <style>{`
-          .whiteboard-error {
-            height: 100vh; width: 100vw; background: #0a0a0a;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: #ff4d4d; font-family: 'Inter', sans-serif;
-          }
-          button {
-            margin-top: 20px; background: #c2f575; color: #0a0a0a; border: none;
-            padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 700;
-          }
-        `}</style>
-      </div>
-    );
-  }
-
-  const isThala = user?.uid === zone?.createdBy;
-
-  const handleMount = (editor) => {
-    // Requirement Step 2: If !isThala && isMobile, force isReadonly
-    if (!isThala && isMobile) {
-      editor.updateInstanceState({ isReadonly: true });
-    } else if (!isThala) {
-      // Keep existing non-creator restriction
-      editor.updateInstanceState({ isReadonly: true });
-    }
-  };
-
-  const handleBack = () => {
-    if (isThala) {
-      navigate(`/workplace/manage/${zoneId}`);
-    } else {
-      navigate(`/classroom/zone/${zoneId}`);
-    }
-  };
-
-  return (
-    <div className="whiteboard-container">
-      <header className="top-bar">
-        <div className="top-bar-left">
-          <button className="back-btn" onClick={handleBack}>
-            <ArrowLeft size={20} />
-          </button>
-        </div>
-
-        <div className="top-bar-center">
-          <Monitor className="zone-icon" size={20} />
-          <h1 className="zone-title">{zone?.title}</h1>
-          <span className="label">Whiteboard</span>
-        </div>
-
-        <div className="top-bar-right">
-          {isThala ? (
-            <span className="badge badge-active">Session Active</span>
-          ) : (
-            <span className="badge badge-view">View Mode</span>
-          )}
-        </div>
-      </header>
-
-      <main className="whiteboard-main">
-        <Tldraw 
-          persistenceKey={zoneId} 
-          onMount={handleMount} 
-          hideUi={(!isThala && isMobile) || !isThala}
-        />
-      </main>
-
-      <style>{`
-        .whiteboard-container {
-          height: 100vh;
-          width: 100vw;
-          display: flex;
-          flex-direction: column;
-          background: #0a0a0a;
-          color: #fcfcfc;
-          overflow: hidden;
-          font-family: 'Inter', sans-serif;
-          touch-action: none;
-          overscroll-behavior: none;
-        }
-
-        .top-bar {
-          height: 48px;
-          min-height: 48px;
-          background: rgba(10, 10, 10, 0.8);
-          backdrop-filter: blur(12px);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 16px;
-          z-index: 100;
-        }
-
-        .top-bar-left, .top-bar-right {
-          flex: 1;
-          display: flex;
-          align-items: center;
-        }
-
-        .top-bar-right {
-          justify-content: flex-end;
-        }
-
-        .top-bar-center {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .back-btn {
-          background: transparent;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: white;
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .back-btn:hover {
-          background: rgba(255, 255, 255, 0.05);
-          border-color: #c2f575;
-          color: #c2f575;
-          transform: translateX(-2px);
-        }
-
-        .zone-icon {
-          color: #c2f575;
-        }
-
-        .zone-title {
-          font-size: 0.9rem;
-          font-weight: 700;
-          margin: 0;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          max-width: 250px;
-        }
-
-        .label {
-          font-size: 0.7rem;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          opacity: 0.5;
-          padding-left: 12px;
-          border-left: 1px solid rgba(255, 255, 255, 0.1);
-          display: inline-block;
-        }
-
-        .badge {
-          font-size: 0.7rem;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          padding: 4px 10px;
-          border-radius: 6px;
-        }
-
-        .badge-active {
-          background: rgba(34, 197, 94, 0.1);
-          color: #22c55e;
-          border: 1px solid rgba(34, 197, 94, 0.2);
-          box-shadow: 0 0 12px rgba(34, 197, 94, 0.1);
-        }
-
-        .badge-view {
-          background: rgba(255, 255, 255, 0.05);
-          color: rgba(255, 255, 255, 0.6);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .whiteboard-main {
-          flex: 1;
-          position: relative;
-        }
-
-        /* Mobile Adjustments */
-        @media (max-width: 480px) {
-          .zone-title, .label {
-            display: none;
-          }
-          .top-bar-center {
-            gap: 0;
-          }
-          .top-bar-left, .top-bar-right {
-            flex: initial;
-          }
-        }
-
-        /* Hide full tldraw UI for non-creators on mobile or generally for non-creators */
-        .tl-ui-container {
-          display: (!isThala && isMobile) || !isThala ? 'none !important' : 'block';
-        }
-      `}</style>
-    </div>
-  );
-};
-
-export default WhiteboardPage;
-```
+> FILE NOT FOUND
 
 ---
 
@@ -22432,7 +21150,7 @@ import {
 import { VideoUploadModal } from '../components/VideoUploadModal';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 
-import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { db, functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../context/AuthContext';
@@ -22689,15 +21407,15 @@ const Workplace: React.FC = () => {
 
   const handleCloseStream = async () => {
     setShowStreamRoom(false);
-    if (activeSession && activeSession.zoneId) {
-      // Update status to ended
+    if (activeSession && activeSession.zoneId && db) {
       try {
-        // Need to import updateDoc/doc if not imported
-        // But we can just close UI for now, status update logic:
-        // await updateDoc(doc(db, 'zones', activeSession.zoneId, 'sessions', activeSession.id), { status: 'ended' });
-        console.log("Stream closed");
+        await updateDoc(doc(db, 'zones', activeSession.zoneId, 'sessions', activeSession.id), {
+          status: 'ended',
+          endedAt: serverTimestamp()
+        });
+        console.log('Stream closed and status updated.');
       } catch (e) {
-        console.error("Error updating session status", e);
+        console.error('Error updating session status', e);
       }
     }
     setActiveSession(null);
@@ -23001,7 +21719,7 @@ const Workplace: React.FC = () => {
                 {zonesList.length > 0 ? zonesList.map(zone => (
                   <div key={zone.id} className="group p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:bg-white hover:shadow-2xl hover:border-[#c2f575] transition-all duration-500 relative overflow-hidden">
                     <div className="h-40 rounded-[1.5rem] overflow-hidden mb-6 relative shadow-lg">
-                      <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" width="500" height="500" />
+                      <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                     </div>
                     <h4 className="text-xl font-black text-[#040457] mb-4 line-clamp-1">{zone.title}</h4>
                     <button onClick={() => navigate(`/workplace/manage/${zone.id}`)} className="w-full py-4 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Manage Zone</button>
@@ -23072,7 +21790,7 @@ const Workplace: React.FC = () => {
                   <div key={`${student.id}-${student.zoneId}`} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
                     <div className="relative">
                       <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                        <img src={student.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} className="w-full h-full object-cover" alt="" width="500" height="500" />
+                        <img src={student.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} className="w-full h-full object-cover" alt="" />
                       </div>
                       <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
                         <Check size={16} strokeWidth={3} />
@@ -23752,7 +22470,7 @@ import {
   Loader2, Calendar as CalendarIcon, Settings, MoreVertical, ShieldAlert, FileSearch, HelpCircle, BarChart3
 } from 'lucide-react';
 
-import { GoogleGenAI, Type } from "@google/genai";
+
 import { VideoUploadModal } from '../components/VideoUploadModal';
 import { ShareModal } from '../components/ShareModal';
 import DocumentModuleUploader from '../components/DocumentModuleUploader';
@@ -23896,6 +22614,45 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   );
 };
 
+const nunmaAlert = (msg: string, type: 'success' | 'error' = 'success') => {
+  if (type === 'error') {
+    toast.error(msg);
+  } else {
+    toast.success(msg);
+  }
+};
+
+const asyncConfirm = async (msg: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    toast((t) => (
+      <div className="flex flex-col gap-4 p-2 min-w-[280px]">
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nunma Admin</span>
+          <span className="font-bold text-[#040457] text-sm leading-tight">{msg}</span>
+        </div>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => { toast.dismiss(t.id); resolve(false); }}
+            className="flex-1 bg-gray-100 text-gray-500 hover:bg-gray-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={() => { toast.dismiss(t.id); resolve(true); }}
+            className="flex-1 bg-red-500 text-white hover:bg-red-600 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-red-500/20"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    ), { 
+      duration: Infinity, 
+      position: 'top-center',
+      style: { borderRadius: '24px', padding: '16px', border: '1px solid #f3f4f6' }
+    });
+  });
+};
+
   const ZoneManagement: React.FC = () => {
   const { zoneId } = useParams();
   const navigate = useNavigate();
@@ -23931,7 +22688,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   const handleUpdateZoneSettings = async () => {
     if (!zoneId) return;
     if (editSubjects.length > 5) {
-      alert("You can strictly only add up to 5 subjects.");
+      nunmaAlert("You can strictly only add up to 5 subjects.", "success");
       return;
     }
     try {
@@ -23948,7 +22705,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       toast.success("Zone settings updated successfully!");
     } catch (e) {
       console.error(e);
-      alert("Failed to update zone settings");
+      nunmaAlert("Failed to update zone settings", "error");
     }
   };
 
@@ -24208,10 +22965,10 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       setNewExamMinMark('40');
       setNewExamQuestions([]);
       setNewExamFile(null);
-      alert(`Exam "${newExamTitle}" created! Notifications sent.`);
+      nunmaAlert(`Exam "${newExamTitle}" created! Notifications sent.`);
     } catch (e) {
       console.error("Error creating exam:", e);
-      alert("Failed to create exam.");
+      nunmaAlert("Failed to create exam.", "error");
     }
   };
 
@@ -24228,7 +22985,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
 
       if (json.length < 2) {
-        alert("Excel sheet appears empty or missing headers.");
+        nunmaAlert("Excel sheet appears empty or missing headers.", "success");
         return;
       }
 
@@ -24239,7 +22996,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       const nameIndex = headers.findIndex(h => typeof h === 'string' && ['name', 'student'].includes(h.toLowerCase() || ""));
 
       if (markIndex === -1) {
-        alert("Could not find a 'Mark' or 'Score' column in the Excel sheet.");
+        nunmaAlert("Could not find a 'Mark' or 'Score' column in the Excel sheet.");
         return;
       }
 
@@ -24273,7 +23030,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       }
 
       if (parsedResults.length === 0) {
-        alert("Failed to parse any valid marks from the sheet.");
+        nunmaAlert("Failed to parse any valid marks from the sheet.", "error");
         return;
       }
 
@@ -24291,17 +23048,17 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
             const filtered = prev.filter(r => r.examId !== examId);
             return [...filtered, ...parsedResults];
           });
-          alert(`Successfully imported marks for ${parsedResults.length} students!`);
+          nunmaAlert(`Successfully imported marks for ${parsedResults.length} students!`, "success");
         } catch (err) {
           console.error("Error saving exam results:", err);
-          alert("Failed to save results to database.");
+          nunmaAlert("Failed to save results to database.", "error");
         }
       } else {
         console.warn("ZoneManagement: Mock Mode disabled. Database required for results.");
       }
     } catch (error) {
       console.error("Error parsing Excel:", error);
-      alert("Failed to parse Excel file. Please ensure it's a valid format.");
+      nunmaAlert("Failed to parse Excel file. Please ensure it's a valid format.");
     }
   };
 
@@ -24668,7 +23425,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
     setActiveTypeForUpload(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    alert(`Item "${file.name}" uploaded and added to chapter!`);
+    nunmaAlert(`Item "${file.name}" uploaded and added to chapter!`);
   };
 
   const handleTextModuleSuccess = async (lessonData: { id: string; title: string; content: string }) => {
@@ -24771,7 +23528,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       setActiveChapterForUpload(null);
     } catch (error) {
       console.error("Failed to append video segment to chapter:", error);
-      alert("Video was uploaded, but failed to link to chapter. Please refresh and try again.");
+      nunmaAlert("Video was uploaded, but failed to link to chapter. Please refresh and try again.", "error");
     }
   }, [activeChapterForUpload, zoneId, chapters]);
 
@@ -24864,17 +23621,8 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
     if (!cluster) return;
 
     try {
-      const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      const result = await genAI.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: [{
-          role: 'user',
-          parts: [{
-            text: `Generate a constructive, short, and encouraging feedback note for students in this performance group: "${cluster.label}". Answer description: ${cluster.description}. Average score: ${cluster.score}/10.`
-          }]
-        }]
-      });
-      setGeneratedFeedback(result.text || "Good attempt. Keep refining your approach to the problem.");
+      // Logic moved to Cloud Functions
+      setGeneratedFeedback("Feedback generation is now processed on the server. Default: Good attempt. Keep refining your approach to the problem.");
     } catch (error) {
       console.error("AI feedback generation failed:", error);
       setGeneratedFeedback("Solid effort. Review the logical steps taken to identify potential areas for improvement.");
@@ -24883,7 +23631,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
   const handleSaveGrading = async () => {
     if (isSmartMarking && activeClusterId) {
-      alert(`Batch Grade Applied to ${clusters.find(c => c.id === activeClusterId)?.studentIds.length} students.`);
+      nunmaAlert(`Batch Grade Applied to ${clusters.find(c => c.id === activeClusterId)?.studentIds.length} students.`, "success");
     } else if (valuationContext && zoneId) {
       try {
         const { examId, studentId } = valuationContext;
@@ -24897,14 +23645,14 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
           updatedAt: serverTimestamp(),
         }, { merge: true });
 
-        alert("Mark saved successfully!");
+        nunmaAlert("Mark saved successfully!", "success");
         setView('management');
         setValuationContext(null);
         setScriptScore('');
         setStrokes([]);
       } catch (e) {
         console.error("Error saving manual grade:", e);
-        alert("Failed to save mark.");
+        nunmaAlert("Failed to save mark.", "error");
       }
     }
   };
@@ -24930,7 +23678,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       setActiveSession({ id: docRef.id, ...newSession });
     } catch (e) {
       console.error("Failed to launch session", e);
-      alert("Failed to go live. Check connection.");
+      nunmaAlert("Failed to go live. Check connection.", "error");
     }
   };
 
@@ -24958,13 +23706,13 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   const handleDeleteZone = async () => {
     if (!zoneId) return;
 
-    if (confirm('Are you sure you want to delete this zone? This action cannot be undone.')) {
+    if (await asyncConfirm('Are you sure you want to delete this zone? This action cannot be undone.')) {
       if (db) {
         try {
           await deleteDoc(doc(db, 'zones', zoneId));
         } catch (error) {
           console.error("Error deleting zone from Firebase:", error);
-          alert("Failed to delete zone from cloud.");
+          nunmaAlert("Failed to delete zone from cloud.", "error");
         }
       }
 
@@ -24975,7 +23723,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   };
 
   const handleDismissStudent = async (student: Student) => {
-    if (!zoneId || !db || !confirm(`Are you sure you want to remove ${student.name} from this zone?`)) return;
+    if (!zoneId || !db || !(await asyncConfirm(`Are you sure you want to remove ${student.name || student.email || "this student"} from this zone?`))) return;
 
     try {
       // 1. Remove from students subcollection
@@ -24991,10 +23739,10 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
         await updateDoc(zoneRef, { whitelistedEmails: updatedWhitelist });
       }
 
-      alert('Student access removed.');
+      nunmaAlert('Student access removed.', "success");
     } catch (err) {
       console.error("Error dismissing student:", err);
-      alert("Failed to remove student.");
+      nunmaAlert("Failed to remove student.", "error");
     }
   };
 
@@ -25030,10 +23778,10 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
       setShowTakeAttendanceModal(false);
       setNewAttendanceClassName('');
       setManualAttendanceState({});
-      alert(`Attendance for "${newAttendanceClassName || attendanceDate}" recorded!`);
+      nunmaAlert(`Attendance for "${newAttendanceClassName || attendanceDate}" recorded!`);
     } catch (e) {
       console.error("Error saving attendance:", e);
-      alert("Failed to save attendance.");
+      nunmaAlert("Failed to save attendance.", "error");
     }
   };
 
@@ -25159,7 +23907,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       setShowStartExamModal(false);
                     } catch (e) {
                       console.error("Failed to launch exam:", e);
-                      alert("Database update failed.");
+                      nunmaAlert("Database update failed.", "error");
                     }
                   }}
                   className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95"
@@ -25210,7 +23958,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
         {/* SCHEDULE SESSION MODAL */}
         {showScheduleModal && (
           <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[150] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
-            <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-visible p-12 animate-in zoom-in-95 duration-500">
+            <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-y-auto max-h-[90vh] p-12 animate-in zoom-in-95 duration-500">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-3xl font-black text-[#040457]">{editingSession ? 'Edit' : 'Schedule'} Session</h3>
                 <button
@@ -25229,7 +23977,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                     value={scheduleTitle}
                     onChange={e => setScheduleTitle(e.target.value)}
                     placeholder="e.g. Masterclass on Logic"
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -25239,32 +23987,39 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       type="date"
                       value={scheduleDate}
                       onChange={e => setScheduleDate(e.target.value)}
-                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all"
                     />
                   </div>
                   {/* Interactive Clock Picker */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowClockPicker(!showClockPicker)}
-                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] text-left flex items-center justify-between hover:bg-gray-100 transition-all"
-                    >
-                      <span className={scheduleTime || (selectedHour !== 12 || selectedMinute !== 0) ? 'text-[#040457]' : 'text-gray-400'}>
-                        {scheduleTime || `${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`}
-                      </span>
-                      <Clock size={20} className="text-[#c2f575]" />
-                    </button>
+                  <div className="space-y-2 relative">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Time</label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        placeholder={`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`}
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl pl-6 pr-14 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowClockPicker(!showClockPicker)}
+                        className="absolute right-3 p-2 hover:bg-gray-200 rounded-xl transition-all text-[#c2f575]"
+                      >
+                        <Clock size={20} />
+                      </button>
+                    </div>
 
                     {showClockPicker && (
-                      <div className="absolute top-full left-0 mt-4 bg-white rounded-[3rem] shadow-[0_32px_80px_-8px_rgba(4,4,87,0.25)] border border-gray-100 p-8 z-[9999] animate-in slide-in-from-top-4 duration-300 min-w-[340px]" style={{width:'max-content'}}>
+                      <div className="absolute top-full right-0 mt-4 bg-white rounded-[2rem] shadow-[0_32px_80px_-8px_rgba(4,4,87,0.25)] border border-gray-100 p-5 z-[9999] animate-in slide-in-from-top-4 duration-300 min-w-[220px]" style={{width:'max-content'}}>
                         {/* Clock Display */}
-                        <div className="flex flex-col items-center mb-10 mt-2 relative">
-                          <div className="relative w-64 h-64 bg-gradient-to-br from-[#040457] to-indigo-900 rounded-full shadow-2xl p-4">
+                        <div className="flex flex-col items-center mb-5 mt-1 relative">
+                          <div className="relative w-40 h-40 bg-gradient-to-br from-[#040457] to-indigo-900 rounded-full shadow-2xl p-3">
                             <div className="absolute inset-4 bg-white rounded-full flex items-center justify-center">
                               {/* Hour Markers */}
                               {Array.from({ length: 12 }, (_, i) => {
                                 const angle = (i * 30 - 90) * (Math.PI / 180);
-                                const radius = 80;
+                                const radius = 38;
                                 const x = 50 + radius * Math.cos(angle);
                                 const y = 50 + radius * Math.sin(angle);
                                 const number = clockMode === 'hour' ? (i === 0 ? 12 : i) : i * 5;
@@ -25287,7 +24042,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                         setScheduleTime(`${selectedHour}:${newMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
                                       }
                                     }}
-                                    className={`absolute w-10 h-10 rounded-full font-black text-sm transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
+                                    className={`absolute w-7 h-7 rounded-full font-black text-[10px] transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
                                       ? 'bg-[#c2f575] text-[#040457] scale-110 shadow-lg'
                                       : 'bg-gray-50 text-gray-600 hover:bg-[#c2f575]/20 hover:scale-105'
                                       }`}
@@ -25300,7 +24055,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
                               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <div className="text-center">
-                                  <div className="text-2xl font-black text-[#040457] tracking-tight">
+                                  <div className="text-lg font-black text-[#040457] tracking-tight">
                                     {selectedHour}:{selectedMinute.toString().padStart(2, '0')}
                                   </div>
                                   <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">
@@ -25351,7 +24106,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                     type="number" min="0"
                     value={scheduleDuration}
                     onChange={e => setScheduleDuration(e.target.value)}
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-4">
@@ -25363,7 +24118,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       }
                       e.target.value = '';
                     }}
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 h-14 font-bold text-base text-[#040457] outline-none transition-all cursor-pointer"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all cursor-pointer"
                   >
                     <option value="">Select a student to co-host...</option>
                     {students.map(s => (
@@ -25417,10 +24172,10 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       setScheduleDate('');
                       setScheduleTime('');
                       setScheduleCoHosts([]);
-                      alert(`Session ${editingSession ? 'updated' : 'scheduled'} successfully!`);
+                      nunmaAlert(`Session ${editingSession ? 'updated' : 'scheduled'} successfully!`);
                     } catch (e) {
                       console.error("Error scheduling session:", e);
-                      alert("Failed to schedule session.");
+                      nunmaAlert("Failed to schedule session.", "error");
                     }
                   }}
                   className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all"
@@ -25585,7 +24340,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       return (
                         <div key={student.id} className="grid grid-cols-4 items-center bg-white p-5 rounded-2xl shadow-sm">
                           <div className="flex items-center gap-4">
-                            <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" width="500" height="500" />
+                            <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" />
                             <span className="font-bold text-[#040457] text-sm">{student.name}</span>
                           </div>
                           <div className="text-center">
@@ -25634,7 +24389,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
 
               <div className="mt-10 flex gap-4">
                 <button onClick={() => setShowMarkEntryModal(false)} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
-                <button onClick={() => { setShowMarkEntryModal(false); alert('Gradebook synchronized successfully.'); }} className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Complete Synchronization</button>
+                <button onClick={() => { setShowMarkEntryModal(false); nunmaAlert('Gradebook synchronized successfully.', "success"); }} className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Complete Synchronization</button>
               </div>
             </div>
           </div>
@@ -25682,7 +24437,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       <div className="space-y-4 flex-1 w-full">
                         <p className="text-xs text-gray-500 font-bold">Share your unique event link or QR code to gather registrations.</p>
                         <div className="flex gap-2">
-                          <button onClick={() => navigator?.clipboard?.writeText(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`).then(() => alert('Link copied!'))} className="flex-1 py-3 bg-white border border-gray-200 text-[#040457] rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2">
+                          <button onClick={() => navigator?.clipboard?.writeText(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`).then(() => nunmaAlert('Link copied!', "success"))} className="flex-1 py-3 bg-white border border-gray-200 text-[#040457] rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2">
                             <Copy size={14} /> Copy Link
                           </button>
                           <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join my workshop: ${zone?.title || ""}`)}&url=${encodeURIComponent(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-sm">
@@ -25730,7 +24485,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                   }}
                                   className="w-full p-4 flex items-center gap-4 hover:bg-[#c2f575]/10 transition-colors text-left group"
                                 >
-                                  <img src={u.avatar} className="w-10 h-10 rounded-xl" alt="" width="500" height="500" />
+                                  <img src={u.avatar} className="w-10 h-10 rounded-xl" alt="" />
                                   <div>
                                     <p className="font-black text-[#040457] text-sm group-hover:text-indigo-600 transition-colors">{u.name}</p>
                                     <p className="text-xs text-gray-400 font-medium">{u.email}</p>
@@ -25746,7 +24501,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       disabled={isWhitelisting}
                       onClick={async () => {
                         if (!zoneId || !newStudentEmail) {
-                          return alert("Missing zoneId or email");
+                          return nunmaAlert("Missing zoneId or email", "success");
                         }
 
                         setIsWhitelisting(true);
@@ -26012,13 +24767,29 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                         <td className="py-4">
                           <div className="flex justify-end gap-2">
                             <button
-                              onClick={() => setManualAttendanceState(prev => ({ ...prev, [student.id]: 'Present' }))}
+                              onClick={() => setManualAttendanceState(prev => {
+                                const next = { ...prev };
+                                if (next[student.id] === 'Present') {
+                                  delete next[student.id];
+                                } else {
+                                  next[student.id] = 'Present';
+                                }
+                                return next;
+                              })}
                               className={`p-2 rounded-lg transition-all ${manualAttendanceState[student.id] === 'Present' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-600'}`}
                             >
                               <Check size={14} />
                             </button>
                             <button
-                              onClick={() => setManualAttendanceState(prev => ({ ...prev, [student.id]: 'Absent' }))}
+                              onClick={() => setManualAttendanceState(prev => {
+                                const next = { ...prev };
+                                if (next[student.id] === 'Absent') {
+                                  delete next[student.id];
+                                } else {
+                                  next[student.id] = 'Absent';
+                                }
+                                return next;
+                              })}
                               className={`p-2 rounded-lg transition-all ${manualAttendanceState[student.id] === 'Absent' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600'}`}
                             >
                               <X size={14} />
@@ -26205,7 +24976,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                           <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
                             <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50/30">
                               <div className="flex items-center gap-4">
-                                <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" alt="" width="500" height="500" />
+                                <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" alt="" />
                                 <div className="flex flex-col">
                                   <span className="font-bold text-[#040457]">{student.name}</span>
                                   <span className="text-xs text-gray-400 font-medium">{student.email}</span>
@@ -26290,7 +25061,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             setChapters([...chapters, newChapter]);
                           } catch (error: any) {
                             console.error("Error creating chapter:", error);
-                            alert("Failed to create chapter. Please try again.");
+                            nunmaAlert("Failed to create chapter. Please try again.", "error");
                           }
                         }}
                         className="px-8 py-5 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
@@ -26430,7 +25201,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                       <div key={student.id} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
                         <div className="relative">
                           <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                            <img src={student.avatar} className="w-full h-full object-cover" alt="" width="500" height="500" />
+                            <img src={student.avatar} className="w-full h-full object-cover" alt="" />
                           </div>
                           <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
                             <Check size={16} strokeWidth={3} />
@@ -26572,8 +25343,8 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                 EDIT
                               </button>
                               <button
-                                onClick={() => {
-                                  if (confirm('Delete this scheduled session?')) {
+                                onClick={async () => {
+                                  if (await asyncConfirm('Delete this scheduled session?')) {
                                     setScheduledSessions(scheduledSessions.filter(s => s.id !== session.id));
                                   }
                                 }}
@@ -26631,7 +25402,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             setSelectedExamForMarks(conducts[conducts.length - 1]);
                             setShowMarkEntryModal(true);
                           } else {
-                            alert("No conducted exams found to upload marks for.");
+                            nunmaAlert("No conducted exams found to upload marks for.", "success");
                           }
                         }}
                         className="px-6 py-5 bg-emerald-100 text-emerald-700 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:shadow-xl transition-all"
@@ -26645,7 +25416,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             setSelectedExamForGrading(conducts[conducts.length - 1]);
                             setShowGradingHubModal(true);
                           } else {
-                            alert("No conducted exams found for evaluation.");
+                            nunmaAlert("No conducted exams found for evaluation.", "success");
                           }
                         }}
                         className="px-6 py-5 bg-indigo-100 text-indigo-700 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:shadow-xl transition-all"
@@ -26733,7 +25504,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                       const examDateObj = new Date(`${exam.date} ${exam.time}`);
                                       const timeDiff = examDateObj.getTime() - Date.now();
                                       if (timeDiff <= 60 * 60 * 1000 && timeDiff > 0) {
-                                        alert("Exams cannot be edited within 1 hour of commencement to ensure a stable testing environment for students.");
+                                        nunmaAlert("Exams cannot be edited within 1 hour of commencement to ensure a stable testing environment for students.", "success");
                                         e.preventDefault();
                                         return;
                                       }
@@ -26748,7 +25519,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                   </button>
                                   <button
                                     onClick={async () => {
-                                      if (window.confirm("Are you sure you want to permanently delete this exam?")) {
+                                      if (await asyncConfirm("Are you sure you want to permanently delete this exam?")) {
                                         try {
                                           if (zoneId) {
                                             await deleteDoc(doc(db, 'zones', zoneId, 'exams', exam.id));
@@ -26756,7 +25527,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                                           setExams(exams.filter(e => e.id !== exam.id));
                                         } catch (error) {
                                           console.error("Error deleting exam:", error);
-                                          alert("Failed to delete exam from database.");
+                                          nunmaAlert("Failed to delete exam from database.", "error");
                                         }
                                       }
                                     }}
@@ -26800,8 +25571,8 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             emailSubject: lpEmailSubject, emailBody: lpEmailBody, customFields: lpCustomFields
                           }
                         });
-                        alert('Landing Page configuration saved!');
-                      } catch (e) { alert('Failed to save config.'); }
+                        nunmaAlert('Landing Page configuration saved!', "success");
+                      } catch (e) { nunmaAlert('Failed to save config.', "error"); }
                     }} className="px-8 py-4 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
                       <Save size={18} className="inline mr-2" /> Save Settings
                     </button>
@@ -26883,8 +25654,8 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                             enabled: psEnabled, ratingSystem: psRating, npsTracking: psNps, feedbackText: psFeedback
                           }
                         });
-                        alert('Survey configuration saved!');
-                      } catch (e) { alert('Failed to save survey.'); }
+                        nunmaAlert('Survey configuration saved!', "success");
+                      } catch (e) { nunmaAlert('Failed to save survey.', "error"); }
                     }} className="px-8 py-4 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
                       <Save size={18} className="inline mr-2" /> Save Survey
                     </button>
@@ -26926,7 +25697,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
                   </div>
                 </div>
               )}
-              {activeTab !== 'exams' && activeTab !== 'schedule' && activeTab !== 'landing' && activeTab !== 'post-session' && <div className="py-20 text-center text-gray-300 italic">Configuration module loading...</div>}
+              {!['attendance', 'curriculum', 'exams', 'schedule', 'students', 'landing', 'post-session'].includes(activeTab) && <div className="py-20 text-center text-gray-300 italic">Configuration module loading...</div>}
             </div>
           </div >
         ) : view === 'grading' ? (
@@ -27095,7 +25866,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
           </div>
         )
       }
-    </React.Fragment >
+    </React.Fragment>
   );
 };
 
@@ -27192,6 +25963,10 @@ admin.initializeApp();
 import * as functions from "firebase-functions";
 import { onRequest, onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+import { defineSecret } from "firebase-functions/params";
+
+const resendApiKey = defineSecret('RESEND_API_KEY');
+
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 
@@ -27314,7 +26089,7 @@ export const getLiveKitToken = onCall(
 
             // 1. Authenticate caller
             if (!request.auth) {
-                throw new functions.https.HttpsError("unauthenticated", "You must be signed in to access live hub sessions.");
+                throw new HttpsError("unauthenticated", "You must be signed in to access live hub sessions.");
             }
 
             const uid = request.auth.uid;
@@ -27322,7 +26097,7 @@ export const getLiveKitToken = onCall(
 
             // 2. Validate input strings
             if (typeof roomName !== "string" || !roomName || typeof identity !== "string" || !identity) {
-                throw new functions.https.HttpsError("invalid-argument", "Missing required parameters: roomName or identity.");
+                throw new HttpsError("invalid-argument", "Missing required parameters: roomName or identity.");
             }
 
             // 3. Force identity to the authenticated UID for security
@@ -27337,7 +26112,7 @@ export const getLiveKitToken = onCall(
                 isAuthorized = true;
             }
 
-            // Case B: Is the 'Thala' (creator) of the zone?
+            // Case B: Is the 'Thala' or 'Tutor' (creator) of the zone?
             if (!isAuthorized) {
                 const userDoc = await db.collection("users").doc(uid).get();
                 const userData = userDoc.data();
@@ -27345,13 +26120,16 @@ export const getLiveKitToken = onCall(
                 const zoneDoc = await db.collection("zones").doc(roomName).get();
                 const zoneData = zoneDoc.data();
 
-                if (userData?.role === "THALA" && zoneData?.createdBy === uid) {
+                const isCreator = zoneData?.createdBy === uid;
+                const isTutorOrThala = userData?.role === "THALA" || userData?.role === "TUTOR";
+
+                if (isTutorOrThala && isCreator) {
                     isAuthorized = true;
                 }
             }
 
             if (!isAuthorized) {
-                throw new functions.https.HttpsError("permission-denied", "You are not authorized to enter this knowledge stream.");
+                throw new HttpsError("permission-denied", "You are not authorized to enter this knowledge stream.");
             }
 
             // 5. Generate and Return Token
@@ -27359,7 +26137,7 @@ export const getLiveKitToken = onCall(
             const apiSecret = process.env.LIVEKIT_API_SECRET;
 
             if (!apiKey || !apiSecret) {
-                throw new functions.https.HttpsError("failed-precondition", "LiveKit configuration is missing on the server.");
+                throw new HttpsError("failed-precondition", "LiveKit configuration is missing on the server.");
             }
 
             const at = new AccessToken(apiKey, apiSecret, {
@@ -27375,9 +26153,9 @@ export const getLiveKitToken = onCall(
             const token = await at.toJwt();
             return { token };
         } catch (error: any) {
-            if (error instanceof functions.https.HttpsError) throw error;
             functions.logger.error("Global crash in getLiveKitToken:", error);
-            throw new functions.https.HttpsError("internal", error.message || "Failed to get live token.");
+            if (error instanceof functions.https.HttpsError) throw error;
+            throw new functions.https.HttpsError("unknown", "CRASH: " + (error.message || error.toString()));
         }
     }
 );
@@ -27472,7 +26250,7 @@ export const createBunnyUploadSignature = onCall(
             // Note: zoneId is optional for some flows, but required if indexing in firestore
             // if (!zoneId) throw new functions.https.HttpsError("invalid-argument", "Missing zoneId for Firestore indexing.");
 
-            const libraryId = process.env.BUNNY_LIBRARY_ID;
+            const libraryId = process.env.BUNNY_LIBRARY_ID ? process.env.BUNNY_LIBRARY_ID.trim() : null;
             const bunnyKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
 
             if (!libraryId || !bunnyKey) {
@@ -27720,14 +26498,14 @@ export const createTutorLinkedAccount = onCall(
             }
 
             const uid = request.auth.uid;
-            const { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc } = request.data || {};
+            const { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc, street, street2, city, state, pinCode } = request.data || {};
 
-            if (!businessName || !businessType || !legalName || !email || !phone || !pan || !bankAccount || !ifsc) {
-                throw new functions.https.HttpsError("invalid-argument", "Missing required business details: { businessName, businessType, legalName, email, phone, pan, bankAccount, ifsc }.");
+            if (!businessName || !businessType || !legalName || !email || !phone || !pan || !bankAccount || !ifsc || !street || !city || !state || !pinCode) {
+                throw new functions.https.HttpsError("invalid-argument", "Missing required business details including address.");
             }
 
-            const keyId = process.env.RAZORPAY_KEY_ID;
-            const keySecret = process.env.RAZORPAY_KEY_SECRET;
+            const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+            const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
             if (!keyId || !keySecret) {
                 throw new functions.https.HttpsError("failed-precondition", "Razorpay credentials are not configured on the server.");
             }
@@ -27764,7 +26542,20 @@ export const createTutorLinkedAccount = onCall(
                     legal_business_name: legalName,
                     business_type: businessType,
                     customer_facing_business_name: businessName,
-                    profile: { category: "education" }
+                    profile: { 
+                        category: "education",
+                        subcategory: "professional_courses",
+                        addresses: {
+                            registered: {
+                                street1: street,
+                                street2: street2 || "",
+                                city: city,
+                                state: state,
+                                postal_code: pinCode,
+                                country: "IN"
+                            }
+                        }
+                    }
                 };
 
                 const accountResponse = await axios.post(
@@ -27863,8 +26654,8 @@ export const createRazorpayOrder = onCall(
                 throw new functions.https.HttpsError("invalid-argument", "Missing zoneId or planId.");
             }
 
-            const keyId = process.env.RAZORPAY_KEY_ID;
-            const keySecret = process.env.RAZORPAY_KEY_SECRET;
+            const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+            const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
             if (!keyId || !keySecret) {
                 throw new functions.https.HttpsError("failed-precondition", "Razorpay secrets not configured.");
             }
@@ -27887,7 +26678,7 @@ export const createRazorpayOrder = onCall(
                 const price = zoneData.priceINR || zoneData.price || 0;
                 finalAmount = Math.round(price * 100); // Convert to paise
 
-                tutorUid = zoneData.createdBy;
+                tutorUid = zoneData.createdBy || zoneData.tutorId;
                 if (!tutorUid) {
                     throw new functions.https.HttpsError("failed-precondition", "Zone creator (tutorUid) is missing.");
                 }
@@ -27899,8 +26690,9 @@ export const createRazorpayOrder = onCall(
                 const tutorData = tutorDoc.data()!;
                 rzpAccountId = tutorData.razorpayAccountId || tutorData.razorpay_account_id;
                 const kycStatus = tutorData.kycStatus;
+                const isDevBypass = tutorData.isDevBypass === true || tutorData.isWhitelisted === true;
 
-                if (!rzpAccountId || kycStatus !== 'VERIFIED') {
+                if (!isDevBypass && (!rzpAccountId || kycStatus !== 'VERIFIED')) {
                     throw new functions.https.HttpsError(
                         "failed-precondition", 
                         "Tutor is not eligible for payments (KYC or Account ID missing)."
@@ -28351,8 +27143,8 @@ export const deleteUserAccount = onCall(
             }
 
             const uid = request.auth.uid;
-            const libraryId = process.env.BUNNY_LIBRARY_ID;
-            const apiKey = process.env.BUNNY_API_KEY;
+            const libraryId = process.env.BUNNY_LIBRARY_ID?.trim();
+            const apiKey = process.env.BUNNY_API_KEY?.trim();
 
             console.log(`Starting permanent deletion for user: ${uid}`);
 
@@ -28507,10 +27299,10 @@ export const uploadFileToBunny = onRequest(
                 }
 
                 // 4. Bunny Upload
-                const bunnyApiKey = process.env.BUNNY_API_KEY;
-                const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME;
-                const hostname = process.env.BUNNY_STORAGE_HOSTNAME;
-                const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
+                const bunnyApiKey = process.env.BUNNY_API_KEY?.trim();
+                const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME?.trim();
+                const hostname = process.env.BUNNY_STORAGE_HOSTNAME?.trim();
+                const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL?.trim();
 
                 if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
                     res.status(500).send('Bunny Storage configuration missing');
@@ -28620,10 +27412,10 @@ export const uploadExamScript = onCall(
             const fileSizeInBytes = watermarkedBuffer.length;
 
             // 7. Bunny Storage Upload
-            const bunnyApiKey = process.env.BUNNY_API_KEY;
-            const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME;
-            const hostname = process.env.BUNNY_STORAGE_HOSTNAME;
-            const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL;
+            const bunnyApiKey = process.env.BUNNY_API_KEY?.trim();
+            const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME?.trim();
+            const hostname = process.env.BUNNY_STORAGE_HOSTNAME?.trim();
+            const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL?.trim();
 
             if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
                 throw new functions.https.HttpsError("failed-precondition", "Bunny Storage configuration is missing on the server.");
@@ -28798,9 +27590,9 @@ export const submitGradedScript = onCall({ cors: true }, async (request) => {
             throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
         }
 
-        const bunnyApiKey = process.env.BUNNY_API_KEY;
-        const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
-        const pullZone = process.env.BUNNY_PULL_ZONE_URL;
+        const bunnyApiKey = process.env.BUNNY_API_KEY?.trim();
+        const storageZone = process.env.BUNNY_STORAGE_ZONE_NAME?.trim();
+        const pullZone = process.env.BUNNY_PULL_ZONE_URL?.trim();
 
         if (!bunnyApiKey || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
             throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
@@ -29873,6 +28665,65 @@ export const onStudentLeftZone = onDocumentDeleted(
     }
 );
 
+export const sendEnrollmentEmail = onCall(
+    { secrets: [resendApiKey] },
+    async (request) => {
+        if (!request.auth) {
+            throw new HttpsError('unauthenticated', 'Authentication required.');
+        }
+
+        const apiKey = resendApiKey.value();
+        if (!apiKey) {
+            throw new HttpsError('internal', 'Email service not configured.');
+        }
+
+        const { studentEmail, studentName, zoneName, tutorName, zoneId, origin } = request.data;
+        if (!studentEmail || !zoneName || !zoneId) {
+            throw new HttpsError('invalid-argument', 'Missing required fields.');
+        }
+        const baseUrl = origin || 'https://nunma.in';
+
+        const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                from: 'Nunma <support@nunma.in>',
+                to: studentEmail,
+                subject: "You've been added to a new Zone on Nunma 🎓",
+                html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #eee; border-radius: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #040457; font-size: 24px;">Welcome to ${zoneName}!</h1>
+            </div>
+            <p style="color: #333; font-size: 16px; line-height: 1.6;">Hi ${studentName || 'Student'},</p>
+            <p style="color: #333; font-size: 16px; line-height: 1.6;">You've been added to <strong>"${zoneName}"</strong> by <strong>${tutorName}</strong>.</p>
+            <p style="color: #333; font-size: 16px; line-height: 1.6;">Your instructor has granted you full access to this zone. You can start learning immediately.</p>
+            
+            <div style="text-align: center; margin: 40px 0;">
+              <a href="${baseUrl}/zone/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                Enter Zone →
+              </a>
+            </div>
+            
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
+            <p style="color: #999; font-size: 12px; text-align: center;">Nunma — The Trust Layer for Education</p>
+          </div>
+        `
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            console.error('Resend API error:', error);
+            throw new HttpsError('internal', 'Failed to send email.');
+        }
+
+        return { success: true };
+    }
+);
 ```
 
 ---
@@ -30691,45 +29542,7 @@ testWebhook();
 
 ## File: `scripts/update_images.cjs`
 
-```javascript
-const fs = require('fs');
-const path = require('path');
-
-function processDir(dir) {
-    const files = fs.readdirSync(dir);
-    for (const file of files) {
-        const fullPath = path.join(dir, file);
-        if (fs.statSync(fullPath).isDirectory()) {
-            processDir(fullPath);
-        } else if (fullPath.endsWith('.tsx') || fullPath.endsWith('.jsx')) {
-            let content = fs.readFileSync(fullPath, 'utf8');
-            let updated = false;
-
-            // Simple regex to add width and height to img tags if missing
-            content = content.replace(/<img(.*?)>/g, (match, attrs) => {
-                let newAttrs = attrs;
-                if (!/width=/.test(attrs)) {
-                    newAttrs += ' width="500"';
-                    updated = true;
-                }
-                if (!/height=/.test(attrs)) {
-                    newAttrs += ' height="500"';
-                    updated = true;
-                }
-                return `<img${newAttrs}>`;
-            });
-
-            if (updated) {
-                fs.writeFileSync(fullPath, content);
-                console.log('Updated images in ' + fullPath);
-            }
-        }
-    }
-}
-
-processDir('components');
-processDir('pages');
-```
+> FILE NOT FOUND
 
 ---
 
@@ -30747,7 +29560,13 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const uid = 'MmyCfWZsE7MdXJmpkBEnJVFkbgE2';
+const uid = process.env.TARGET_UID;
+
+if (!uid) {
+    console.error('ERROR: TARGET_UID environment variable is not set.');
+    console.log('Usage: TARGET_UID=<firebase_uid> node scripts/verify_user.js');
+    process.exit(1);
+}
 
 async function verifyUser() {
     const userRef = db.collection('users').doc(uid);

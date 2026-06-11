@@ -103,7 +103,7 @@ exports.askZoneAnalytics = (0, https_1.onCall)({
         const systemPrompt = `You are an expert data analyst for the NUNMA platform. You are analyzing a specific educational 'Zone'. I will provide you with the raw JSON data of the enrolled students, their statuses, and their exam results (including marks and cheat violations). Answer the user's question accurately based strictly on this provided JSON data. Do not hallucinate. If the data does not contain the answer, say so. Note: The provided data represents a sample of the most recent 500 students and the latest 5 exams to optimize performance. Frame your answers with this context.`;
         // Prompt Gemini
         const response = await genAI.models.generateContent({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-2.5-flash',
             contents: [
                 { role: 'user', parts: [{ text: `${systemPrompt}\n\nContext:\n${jsonContextStr}\n\nUser Prompt: ${userMessage}` }] }
             ]

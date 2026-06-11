@@ -89,7 +89,7 @@ const AnalyticsChat: React.FC = () => {
             <h1 className="text-xl font-black text-[#1A1A4E] tracking-tight flex items-center gap-3">
               AI Data Analyst <Sparkles className="text-[#c2f575]" size={20} />
             </h1>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Zone Insights Engine • Gemini 1.5 Pro</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Zone Insights Engine • Gemini 2.5 Flash</p>
           </div>
         </div>
         
@@ -200,7 +200,7 @@ const AnalyticsChat: React.FC = () => {
           </form>
           <div className="mt-4 flex items-center justify-center gap-2">
             <Info size={12} className="text-gray-400" />
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Powered by Gemini 1.5 Pro • Analyzes up to 500 records per query</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Powered by Gemini 2.5 Flash • Analyzes up to 500 records per query</p>
           </div>
         </div>
       </footer>

@@ -62,7 +62,7 @@ import DocumentModuleUploader from '../components/DocumentModuleUploader';
 import TextModuleEditor from '../components/TextModuleEditor';
 import QuizModuleEditor from '../components/QuizModuleEditor';
 import { toast } from 'react-hot-toast';
-import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion, serverTimestamp, increment } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
 import { sendEnrollmentEmail } from '../utils/notifications';
@@ -101,6 +101,8 @@ interface Exam {
   minMark: number;
   pdfUrl?: string;
   excelTemplateUrl?: string;
+  duration?: number;
+  subject?: string;
 }
 
 interface ExamResult {
@@ -502,6 +504,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const [newExamTitle, setNewExamTitle] = useState('');
   const [newExamDate, setNewExamDate] = useState('');
   const [newExamTime, setNewExamTime] = useState('');
+  const [newExamDuration, setNewExamDuration] = useState('60');
+  const [newExamSubject, setNewExamSubject] = useState('');
   const [newExamType, setNewExamType] = useState<'online-test' | 'online-mcq' | 'offline'>('online-test');
   const [newExamMaxMark, setNewExamMaxMark] = useState('100');
   const [newExamMinMark, setNewExamMinMark] = useState('40');
@@ -530,7 +534,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       maxMark: parseInt(newExamMaxMark),
       minMark: parseInt(newExamMinMark),
       questions: newExamType === 'online-mcq' ? newExamQuestions : [],
+      subject: newExamSubject,
     };
+
+    if (newExamType !== 'online-mcq') {
+      examData.duration = parseInt(newExamDuration);
+    }
 
     if (newExamType === 'online-test' && newExamFile) {
       examData.pdfUrl = URL.createObjectURL(newExamFile);
@@ -546,6 +555,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       setNewExamTitle('');
       setNewExamDate('');
       setNewExamTime('');
+      setNewExamDuration('60');
+      setNewExamSubject('');
       setNewExamMaxMark('100');
       setNewExamMinMark('40');
       setNewExamQuestions([]);
@@ -555,6 +566,33 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       console.error("Error creating exam:", e);
       nunmaAlert("Failed to create exam.", "error");
     }
+  };
+
+  const handleDownloadTemplate = () => {
+    if (!selectedExamForMarks) return;
+
+    const templateData = students.map((student, index) => ({
+      'S.no': index + 1,
+      'Student Name': student.name,
+      'Exam Name': selectedExamForMarks.title,
+      'Subject': selectedExamForMarks.subject || '',
+      'Mark': '' // Blank column for grading
+    }));
+
+    if (templateData.length === 0) {
+      templateData.push({
+        'S.no': 1,
+        'Student Name': 'Example Student',
+        'Exam Name': selectedExamForMarks.title,
+        'Subject': selectedExamForMarks.subject || '',
+        'Mark': ''
+      });
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Marks Template');
+    XLSX.writeFile(workbook, `${selectedExamForMarks.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_template.xlsx`);
   };
 
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>, examId: string) => {
@@ -656,8 +694,21 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     // 1. Zone Details
     const zoneUnsub = onSnapshot(doc(db, 'zones', zoneId), (docSnap) => {
       if (docSnap.exists()) {
-        const zoneData = { id: docSnap.id, ...docSnap.data() };
+        const zoneData: any = { id: docSnap.id, ...docSnap.data() };
         setZone(zoneData);
+        
+        // Auto-set download start date to zone creation date if available
+        if (zoneData.createdAt) {
+          let dateStr = '';
+          if (typeof zoneData.createdAt.toDate === 'function') {
+            dateStr = zoneData.createdAt.toDate().toISOString().split('T')[0];
+          } else if (typeof zoneData.createdAt === 'string') {
+            dateStr = zoneData.createdAt.split('T')[0];
+          }
+          if (dateStr) {
+            setDownloadStartDate(dateStr);
+          }
+        }
 
         // Adjust activeTab if current one is not allowed
         const zType = (zoneData as any).zoneType;
@@ -736,7 +787,15 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     // 6. Attendance Sessions
     const attSessionsq = query(collection(db, 'zones', zoneId, 'attendance_sessions'));
     const attSessionsUnsub = onSnapshot(attSessionsq, (snapshot) => {
-      setAttendanceSessions((snapshot.docs || []).map(doc => ({ ...doc.data(), id: doc.id } as AttendanceSession)));
+      setAttendanceSessions((snapshot.docs || []).map(doc => {
+        const data = doc.data();
+        return { 
+          ...data, 
+          id: doc.id, 
+          // Keep the original timestamp ID for matching older records
+          originalId: data.id 
+        } as AttendanceSession & { originalId?: string };
+      }));
     });
 
     // 7. Active Invite Listener (Hotfix) - Only run if zoneId is truthy
@@ -825,10 +884,11 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
       if (db) {
         try {
+          const searchTerm = newStudentEmail.toLowerCase();
           const q = query(
             collection(db, 'users'),
-            where('email', '>=', newStudentEmail),
-            where('email', '<=', newStudentEmail + '\uf8ff'),
+            where('email', '>=', searchTerm),
+            where('email', '<=', searchTerm + '\uf8ff'),
             limit(5)
           );
           const querySnapshot = await getDocs(q);
@@ -1080,6 +1140,13 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         await updateDoc(doc(db, 'zones', zoneId, 'chapters', activeChapterForUpload), {
           segments: updatedSegments
         });
+        if (user && docData.fileSize) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            usedStorageBytes: increment(docData.fileSize),
+            'subscription_entitlements.storageUsed': increment(docData.fileSize)
+          });
+        }
+        toast.success("Document uploaded successfully!");
       }
     } catch (error) {
       console.error('Failed to link document module to chapter:', error);
@@ -1087,9 +1154,9 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       setActiveChapterForUpload(null);
       setShowDocumentUploader(false);
     }
-  }, [activeChapterForUpload, zoneId, chapters]);
+  }, [activeChapterForUpload, zoneId, chapters, user]);
 
-  const handleVideoUploadSuccess = useCallback(async (videoData: { videoId: string, title: string }) => {
+  const handleVideoUploadSuccess = useCallback(async (videoData: { videoId: string, title: string, fileSize: number }) => {
     if (!activeChapterForUpload || !zoneId) return;
 
     try {
@@ -1109,13 +1176,19 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         await updateDoc(doc(db, 'zones', zoneId, 'chapters', activeChapterForUpload), {
           segments: updatedSegments
         });
+        if (user && videoData.fileSize) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            usedStorageBytes: increment(videoData.fileSize),
+            'subscription_entitlements.storageUsed': increment(videoData.fileSize)
+          });
+        }
       }
       setActiveChapterForUpload(null);
     } catch (error) {
       console.error("Failed to append video segment to chapter:", error);
       nunmaAlert("Video was uploaded, but failed to link to chapter. Please refresh and try again.", "error");
     }
-  }, [activeChapterForUpload, zoneId, chapters]);
+  }, [activeChapterForUpload, zoneId, chapters, user]);
 
   const updateChapterTitle = async (chapterId: string, newTitle: string) => {
     if (!zoneId) return;
@@ -1291,18 +1364,28 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const handleDeleteZone = async () => {
     if (!zoneId) return;
 
-    if (await asyncConfirm('Are you sure you want to delete this zone? This action cannot be undone.')) {
+    if (await asyncConfirm('Are you sure you want to permanently delete this zone and all its contents? This action cannot be undone.')) {
       if (db) {
         try {
+          // Permanently delete subcollections to prevent orphaned data
+          const chaptersSnap = await getDocs(collection(db, 'zones', zoneId, 'chapters'));
+          const sessionsSnap = await getDocs(collection(db, 'zones', zoneId, 'sessions'));
+          const studentsSnap = await getDocs(collection(db, 'zones', zoneId, 'students'));
+          const examsSnap = await getDocs(collection(db, 'zones', zoneId, 'exams'));
+          
+          for (const d of chaptersSnap.docs) await deleteDoc(d.ref);
+          for (const d of sessionsSnap.docs) await deleteDoc(d.ref);
+          for (const d of studentsSnap.docs) await deleteDoc(d.ref);
+          for (const d of examsSnap.docs) await deleteDoc(d.ref);
+
+          // Finally delete the parent zone document
           await deleteDoc(doc(db, 'zones', zoneId));
         } catch (error) {
-          console.error("Error deleting zone from Firebase:", error);
-          nunmaAlert("Failed to delete zone from cloud.", "error");
+          console.error("Error deleting zone and subcollections:", error);
+          nunmaAlert("Failed to permanently delete zone from cloud.", "error");
         }
       }
 
-      // Local Storage Cleanup - Removed
-      // We rely on cloud deletion.
       navigate('/workplace');
     }
   };
@@ -1332,24 +1415,30 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   };
 
   const handleTakeAttendance = async () => {
+    if (students.length === 0) {
+      nunmaAlert("No students enrolled to take attendance.");
+      return;
+    }
     if (!zoneId) return;
 
     const newSession: AttendanceSession = {
-      id: Date.now().toString(), // Or let Firestore generate
+      // Don't set id here, let Firestore generate it
       date: attendanceDate,
       time: attendanceTime,
       className: newAttendanceClassName
     };
 
     try {
-      // Save Session
-      await addDoc(collection(db, 'zones', zoneId, 'attendance_sessions'), newSession);
+      // Save Session and get docRef
+      const docRef = await addDoc(collection(db, 'zones', zoneId, 'attendance_sessions'), newSession);
+      const sessionId = docRef.id;
 
       // Update Students history
       const updatePromises = students.map(student => {
-        const status = manualAttendanceState[student.id] || 'Absent';
+        // Change default to Present
+        const status = manualAttendanceState[student.id] || 'Present';
         const history = student.attendanceHistory || [];
-        const newHistory = [...history, { sessionId: newSession.id, status, date: attendanceDate }];
+        const newHistory = [...history, { sessionId: sessionId, status, date: attendanceDate }];
 
         // Only update if changed or new record (simplified: just update all)
         return updateDoc(doc(db, 'zones', zoneId, 'students', student.id), {
@@ -1364,7 +1453,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       setNewAttendanceClassName('');
       setManualAttendanceState({});
       nunmaAlert(`Attendance for "${newAttendanceClassName || attendanceDate}" recorded!`);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error saving attendance:", e);
       nunmaAlert("Failed to save attendance.", "error");
     }
@@ -1790,16 +1879,31 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Exam Name</label>
                     <input value={newExamTitle} onChange={e => setNewExamTitle(e.target.value)} placeholder="e.g. Final Certification Phase 1" className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all text-lg shadow-sm" />
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Date</label>
-                      <input type="date" value={newExamDate} onChange={e => setNewExamDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
-                    </div>
-                    <div className="space-y-3">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Time</label>
-                      <input type="time" value={newExamTime} onChange={e => setNewExamTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
-                    </div>
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Date</label>
+                    <input type="date" value={newExamDate} onChange={e => setNewExamDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
                   </div>
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Time</label>
+                    <input type="time" value={newExamTime} onChange={e => setNewExamTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
+                  </div>
+                  {newExamType !== 'online-mcq' && (
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Duration (Minutes)</label>
+                      <input type="number" min="1" value={newExamDuration} onChange={e => setNewExamDuration(e.target.value)} placeholder="e.g. 60" className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
+                    </div>
+                  )}
+                  {zone?.subjects && zone.subjects.length > 0 && (
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Subject</label>
+                      <select value={newExamSubject} onChange={e => setNewExamSubject(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm cursor-pointer">
+                        <option value="">Select Subject...</option>
+                        {zone.subjects.map((sub: string) => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="space-y-3">
                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Assessment Mode</label>
                     <div className="flex gap-4 p-2 bg-gray-50 rounded-3xl border border-gray-100">
@@ -1907,7 +2011,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     <h4 className="font-bold text-[#040457]">Download Template</h4>
                     <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Get blank sheet with student list</p>
                   </div>
-                  <button className="text-[10px] font-black text-[#040457] bg-[#c2f575] px-6 py-3 rounded-xl uppercase tracking-widest">Download</button>
+                  <button onClick={handleDownloadTemplate} className="text-[10px] font-black text-[#040457] bg-[#c2f575] px-6 py-3 rounded-xl uppercase tracking-widest">Download</button>
                 </div>
               </div>
 
@@ -2352,13 +2456,29 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         <td className="py-4">
                           <div className="flex justify-end gap-2">
                             <button
-                              onClick={() => setManualAttendanceState(prev => ({ ...prev, [student.id]: 'Present' }))}
+                              onClick={() => setManualAttendanceState(prev => {
+                                const next = { ...prev };
+                                if (next[student.id] === 'Present') {
+                                  delete next[student.id];
+                                } else {
+                                  next[student.id] = 'Present';
+                                }
+                                return next;
+                              })}
                               className={`p-2 rounded-lg transition-all ${manualAttendanceState[student.id] === 'Present' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-600'}`}
                             >
                               <Check size={14} />
                             </button>
                             <button
-                              onClick={() => setManualAttendanceState(prev => ({ ...prev, [student.id]: 'Absent' }))}
+                              onClick={() => setManualAttendanceState(prev => {
+                                const next = { ...prev };
+                                if (next[student.id] === 'Absent') {
+                                  delete next[student.id];
+                                } else {
+                                  next[student.id] = 'Absent';
+                                }
+                                return next;
+                              })}
                               className={`p-2 rounded-lg transition-all ${manualAttendanceState[student.id] === 'Absent' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600'}`}
                             >
                               <X size={14} />
@@ -2385,12 +2505,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
             <button onClick={() => navigate('/workplace')} className="p-5 bg-white border border-gray-100 rounded-[1.5rem] text-[#040457] hover:shadow-2xl transition-all shadow-sm active:scale-90"><ArrowLeft size={28} /></button>
             <div>
               <div className="flex items-center gap-4 mb-3">
-                <h1 className="text-6xl font-black text-[#040457] tracking-tighter leading-none">{zone.title}</h1>
+                <h1 className="text-6xl font-black text-[#040457] tracking-tighter leading-tight pb-2">{zone.title}</h1>
                 <button onClick={handleOpenZoneSettings} className="p-3 bg-white border border-gray-100 text-[#040457] rounded-2xl hover:bg-gray-50 hover:shadow-lg transition-all active:scale-95 shadow-sm" title="Zone Settings">
                   <Settings size={28} />
                 </button>
               </div>
-              <p className="text-[11px] font-bold text-gray-300 uppercase tracking-[0.4em]">{zone.level} LEVEL FACILITY</p>
+              <p className="text-[11px] font-bold text-[#040457]/70 uppercase tracking-[0.4em]">{zone.level} LEVEL FACILITY</p>
             </div>
           </div>
           <div className="flex gap-4">
@@ -2495,8 +2615,13 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               students.forEach(student => {
                                 const row = [student.name, student.email, `${calculateAttendancePercentage(student)}%`];
                                 filteredSessions.forEach(session => {
-                                  const record = student.attendanceHistory?.find(h => h.sessionId === session.id);
-                                  row.push(record ? record.status : 'N/A');
+                                  const record = student.attendanceHistory?.find(h => h.sessionId === session.id || h.sessionId === (session as any).originalId);
+                                  if (record) {
+                                    row.push(record.status === 'Present' ? 'P' : record.status === 'Absent' ? 'A' : record.status === 'Late' ? 'L' : record.status);
+                                  } else {
+                                    // Default to A if there is no record for this session
+                                    row.push('A');
+                                  }
                                 });
                                 csvContent += row.join(",") + "\n";
                               });
@@ -2564,7 +2689,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               )
                               .slice(-5)
                               .map(session => {
-                                const status = (student?.attendanceHistory || []).find(h => h?.sessionId === session?.id)?.status || 'Pending';
+                                const status = (student?.attendanceHistory || []).find(h => h?.sessionId === session?.id || h?.sessionId === (session as any)?.originalId)?.status || 'Pending';
                                 return (
                                   <td key={session.id} className="px-6 py-6 text-center">
                                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${status === 'Present' ? 'bg-green-50 text-green-600' :
@@ -2694,7 +2819,15 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               </button>
                             </div>
                             <button
-                              onClick={() => setChapters(chapters.filter(c => c.id !== chapter.id))}
+                              onClick={async () => {
+                                if (!zoneId) return;
+                                try {
+                                  await deleteDoc(doc(db, 'zones', zoneId, 'chapters', chapter.id));
+                                } catch (e) {
+                                  console.error("Failed to delete chapter:", e);
+                                  nunmaAlert("Failed to delete chapter", "error");
+                                }
+                              }}
                               className="p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
                             >
                               <Trash2 size={20} />
@@ -2736,11 +2869,17 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                   <Edit3 size={14} />
                                 </button>
                                 <button
-                                  onClick={() => {
-                                    setChapters(chapters.map(c => c.id === chapter.id ? {
-                                      ...c,
-                                      segments: (c.segments || []).filter(s => s.id !== seg.id)
-                                    } : c));
+                                  onClick={async () => {
+                                    if (!zoneId) return;
+                                    try {
+                                      const updatedSegments = (chapter.segments || []).filter(s => s.id !== seg.id);
+                                      await updateDoc(doc(db, 'zones', zoneId, 'chapters', chapter.id), {
+                                        segments: updatedSegments
+                                      });
+                                    } catch (e) {
+                                      console.error("Failed to delete segment:", e);
+                                      nunmaAlert("Failed to delete segment", "error");
+                                    }
                                   }}
                                   className="p-3 bg-white text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
                                 >
@@ -3053,18 +3192,22 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               </div>
                               {getExamStatus(exam) === 'CONDUCTED' ? (
                                 <div className="flex gap-2">
-                                  <button
-                                    onClick={() => { setSelectedExamForGrading(exam); setShowGradingHubModal(true); }}
-                                    className="bg-[#c2f575] text-[#040457] px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
-                                  >
-                                    Grade Submissions
-                                  </button>
-                                  <button
-                                    onClick={() => { setSelectedExamForMarks(exam); setShowMarkEntryModal(true); }}
-                                    className="bg-[#040457] text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all"
-                                  >
-                                    Open Gradebook
-                                  </button>
+                                  {exam.type === 'online-test' && (
+                                    <button
+                                      onClick={() => { setSelectedExamForGrading(exam); setShowGradingHubModal(true); }}
+                                      className="bg-[#c2f575] text-[#040457] px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
+                                    >
+                                      Grade Submissions
+                                    </button>
+                                  )}
+                                  {(exam.type === 'offline' || exam.type === 'online-mcq') && (
+                                    <button
+                                      onClick={() => { setSelectedExamForMarks(exam); setShowMarkEntryModal(true); }}
+                                      className="bg-[#040457] text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all"
+                                    >
+                                      Open Gradebook
+                                    </button>
+                                  )}
                                 </div>
                               ) : (
                                 <div className="flex gap-2">

@@ -98,6 +98,17 @@ const OnboardingSystem: React.FC = () => {
         if (user?.role !== role) {
             await updateProfile({ role });
         }
+        
+        // If the profile for the selected role is already complete, skip onboarding
+        if (role === UserRole.STUDENT && user?.studentProfile?.isComplete) {
+            navigate('/dashboard');
+            return;
+        }
+        if (role === UserRole.THALA && user?.tutorProfile?.isComplete) {
+            navigate('/dashboard');
+            return;
+        }
+        
         setStep(2);
     };
 
@@ -368,15 +379,13 @@ const OnboardingSystem: React.FC = () => {
                             </div>
 
                             <div className="pt-6 mt-6 flex gap-4 border-t border-gray-100">
-                                {!requestedRole && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setStep(1)}
-                                        className="flex-shrink-0 px-6 py-4 rounded-2xl bg-gray-100 text-gray-500 font-bold hover:bg-gray-200 transition-colors"
-                                    >
-                                        Back
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setStep(1)}
+                                    className="flex-shrink-0 px-6 py-4 rounded-2xl bg-gray-100 text-gray-500 font-bold hover:bg-gray-200 transition-colors"
+                                >
+                                    Back
+                                </button>
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
@@ -395,7 +404,10 @@ const OnboardingSystem: React.FC = () => {
                         <div className="mb-8 flex items-start justify-between">
                             <div>
                                 <h2 className="text-3xl font-black text-[#040457] tracking-tight mb-2">Thala Profile</h2>
-                                <p className="text-gray-500">Set up your profile and payout details to get started.</p>
+                                <p className="text-gray-500 mb-3">Set up your profile and payout details to get started.</p>
+                                <button type="button" onClick={() => onSelectRole(UserRole.STUDENT)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-[#040457] rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-2">
+                                    <BookOpen size={14} /> Switch to Student Mode
+                                </button>
                             </div>
                             <div className="w-12 h-12 bg-[#040457] rounded-xl flex items-center justify-center text-[#c2f575]">
                                 <GraduationCap size={24} />
@@ -662,15 +674,13 @@ const OnboardingSystem: React.FC = () => {
 
 
                             <div className="pt-4 mt-6 flex gap-4">
-                                {!requestedRole && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setStep(1)}
-                                        className="flex-shrink-0 px-6 py-4 rounded-2xl bg-gray-100 text-gray-500 font-bold hover:bg-gray-200 transition-colors"
-                                    >
-                                        Back
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setStep(1)}
+                                    className="flex-shrink-0 px-6 py-4 rounded-2xl bg-gray-100 text-gray-500 font-bold hover:bg-gray-200 transition-colors"
+                                >
+                                    Back
+                                </button>
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}

@@ -206,6 +206,10 @@ img { display: block; max-width: 100%; object-fit: cover; }
   0%, 100% { transform: translateY(0); }
   50%       { transform: translateY(-6px); }
 }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 
 /* ─── ANIMATION UTILITY CLASSES ──────────────────────────────────────── */
 .animate-in              { animation-fill-mode: both; }

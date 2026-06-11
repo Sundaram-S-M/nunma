@@ -63,7 +63,8 @@ export const BunnyVideoPlayer: React.FC<BunnyVideoPlayerProps> = ({ videoId, tit
 
     const { token, expires, libraryId } = tokenData;
     // URL Format based on Bunny token authentication
-    const iframeUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}&autoplay=true`;
+    const iframeUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?autoplay=true`;
+    console.log("BunnyVideoPlayer - Loading iframe URL (No Token Test):", iframeUrl);
 
     return (
         <div className="w-full max-w-full aspect-video rounded-[3rem] overflow-hidden bg-black shadow-2xl relative flex flex-col items-center justify-center">

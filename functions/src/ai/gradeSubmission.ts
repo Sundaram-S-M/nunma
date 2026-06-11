@@ -135,7 +135,7 @@ export const gradePdfSubmission = onCall(
 
         try {
             const result = await ai.models.generateContent({
-                model: "gemini-1.5-pro",
+                model: "gemini-2.5-flash",
                 config: {
                     systemInstruction: "You are an exam grader. Grade strictly against the rubric. Provide constructive feedback for the student.",
                     responseMimeType: "application/json",

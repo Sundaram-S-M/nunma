@@ -602,6 +602,66 @@ const Billings = () => {
     { id: 'P-990', date: 'Sep 20, 2025', amount: '-$121.00', status: 'Completed', service: 'Payout to Bank (Domestic)', type: 'payout' },
   ];
 
+  const handleExportStatement = () => {
+    const headers = ['Transaction ID', 'Date', 'Time', 'Service', 'Amount', 'Status', 'Type'];
+    const rows = transactions.map(t => {
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      return `<tr>
+        <td>${t.id}</td>
+        <td>${t.date}</td>
+        <td>${timeStr}</td>
+        <td>${t.service}</td>
+        <td>${t.amount}</td>
+        <td>${t.status}</td>
+        <td>${t.type}</td>
+      </tr>`;
+    });
+    
+    const htmlContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Statement</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          .header { background-color: #22c55e; color: #ffffff; font-weight: bold; text-align: left; padding: 5px; }
+          td { padding: 5px; white-space: nowrap; }
+        </style>
+      </head>
+      <body>
+        <table border="1">
+          <tr>
+            ${headers.map(h => `<th class="header">${h}</th>`).join('')}
+          </tr>
+          ${rows.join('\n')}
+        </table>
+      </body>
+      </html>
+    `;
+    
+    const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `billing_statement_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleDownloadInvoice = async (transaction: any) => {
     setDownloadingTx(transaction.id);
     try {
@@ -812,7 +872,10 @@ const Billings = () => {
             <h3 className="text-2xl font-black text-indigo-900 tracking-tighter">Transaction Registry</h3>
             <p className="text-sm text-gray-400 mt-1 font-medium">Inclusive ledger of earnings, payouts, and platform subscriptions.</p>
           </div>
-          <button className="text-[10px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-2 px-6 py-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white transition-all shadow-sm active:scale-95">
+          <button 
+            onClick={handleExportStatement}
+            className="text-[10px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-2 px-6 py-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white transition-all shadow-sm active:scale-95"
+          >
             <Download size={14} className="text-[#c1e60d]" /> EXPORT STATEMENT
           </button>
         </div>

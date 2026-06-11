@@ -37,6 +37,7 @@ interface Chat {
   type: 'chat' | 'community' | 'collaboration';
   participants: string[];
   description?: string;
+  createdBy?: string;
   otherUser?: {
     uid: string;
     name: string;
@@ -62,6 +63,10 @@ const Inbox: React.FC = () => {
   const [mutualFollowers, setMutualFollowers] = useState<any[]>([]);
   const [loadingMutuals, setLoadingMutuals] = useState(false);
   const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
+  const [createGroupStep, setCreateGroupStep] = useState(1);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDetails, setNewGroupDetails] = useState('');
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
 
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -286,6 +291,7 @@ const Inbox: React.FC = () => {
 
   const filteredChats = chats.filter(c => (c.type || 'chat') === activeCategory);
   const activeChat = chats.find(c => c.id === selectedChatId);
+  const canEditGroup = activeChat?.type !== 'collaboration' || activeChat?.createdBy === user?.uid || !activeChat?.createdBy;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -395,13 +401,15 @@ const Inbox: React.FC = () => {
                   <div className="w-32 h-32 rounded-[2.5rem] border-4 border-gray-50 p-1 bg-white relative overflow-hidden shadow-xl">
                     <img src={activeChat.avatar || 'https://picsum.photos/seed/group/200/200'} alt="Group" className="w-full h-full rounded-[2rem] object-cover" />
                   </div>
-                  <button onClick={() => groupAvatarRef.current?.click()} className="absolute bottom-[-10px] right-[-10px] w-12 h-12 bg-[#c2f575] text-indigo-900 rounded-2xl shadow-lg flex items-center justify-center hover:scale-110 transition-all border-4 border-white z-10">
-                    <Camera size={20} className="ml-[1px]" />
-                  </button>
+                  {canEditGroup && (
+                    <button onClick={() => groupAvatarRef.current?.click()} className="absolute bottom-[-10px] right-[-10px] w-12 h-12 bg-[#c2f575] text-indigo-900 rounded-2xl shadow-lg flex items-center justify-center hover:scale-110 transition-all border-4 border-white z-10">
+                      <Camera size={20} className="ml-[1px]" />
+                    </button>
+                  )}
                   <input ref={groupAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleGroupFileChange} />
                 </div>
 
-                {isEditingGroup ? (
+                {isEditingGroup && canEditGroup ? (
                   <div className="w-full space-y-4">
                     <input
                       value={groupEditName}
@@ -424,9 +432,11 @@ const Inbox: React.FC = () => {
                   <div className="text-center w-full">
                     <h2 className="text-3xl font-black text-indigo-900 tracking-tight leading-tight mb-2">{activeChat.name}</h2>
                     <p className="text-sm font-medium text-gray-500 italic mb-6 max-w-[250px] mx-auto">{activeChat.description || 'No description provided.'}</p>
-                    <button onClick={() => setIsEditingGroup(true)} className="px-8 py-3 bg-gray-50 text-indigo-900 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] hover:bg-gray-100 transition-colors">
-                      Edit Group Info
-                    </button>
+                    {canEditGroup && (
+                      <button onClick={() => setIsEditingGroup(true)} className="px-8 py-3 bg-gray-50 text-indigo-900 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] hover:bg-gray-100 transition-colors">
+                        Edit Group Info
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -471,67 +481,134 @@ const Inbox: React.FC = () => {
             <div className="p-10 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
               <div>
                 <h3 className="text-2xl font-black text-indigo-900">New Collab Group</h3>
-                <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Mutual Followers Only</p>
-              </div>
-              <button onClick={() => setShowCreateGroup(false)} className="p-3 text-gray-400 hover:text-red-500"><X size={24} /></button>
-            </div>
-            <div className="p-10 space-y-8">
-              <div className="relative group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
-                <input type="text" placeholder="Search mutual followers..." className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 font-bold text-indigo-900 focus:outline-none" />
-              </div>
-              <div className="space-y-4 max-h-60 overflow-y-auto custom-scrollbar">
-                {loadingMutuals ? (
-                  <div className="flex justify-center py-6">
-                    <div className="w-6 h-6 border-2 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                ) : mutualFollowers.length > 0 ? (
-                  mutualFollowers.map(mUser => (
-                    <div key={mUser.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-                      <div className="flex items-center gap-4">
-                        <img src={mUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mUser.id}`} className="w-10 h-10 rounded-xl object-cover" alt="" />
-                        <p className="text-sm font-black text-indigo-900">{mUser.name}</p>
-                      </div>
-                      <button
-                        onClick={() => setSelectedForGroup(prev => prev.includes(mUser.id) ? prev.filter(id => id !== mUser.id) : [...prev, mUser.id])}
-                        className={`p-2 rounded-xl transition-colors ${selectedForGroup.includes(mUser.id) ? 'bg-indigo-900 text-white' : 'bg-[#c2f575] text-indigo-900'}`}
-                      >
-                        {selectedForGroup.includes(mUser.id) ? <CheckCheck size={16} /> : <Plus size={16} />}
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-6">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No Mutual Followers</p>
-                  </div>
-                )}
+                <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
+                  {createGroupStep === 1 ? 'Step 1 of 2: Group Info' : 'Step 2 of 2: Select Members'}
+                </p>
               </div>
               <button
-                disabled={selectedForGroup.length === 0}
-                onClick={async () => {
-                  try {
-                    await addDoc(collection(db, 'conversations'), {
-                      type: 'collaboration',
-                      participants: [user?.uid, ...selectedForGroup],
-                      createdAt: serverTimestamp(),
-                      lastMessage: 'Group created',
-                      lastMessageTime: serverTimestamp(),
-                      lastMessageSenderId: user?.uid,
-                      unreadCounts: {},
-                      name: 'New Collab Group', // Users can edit this later
-                      avatar: 'https://picsum.photos/seed/collab/80/80',
-                    });
-                    setShowCreateGroup(false);
-                    setSelectedForGroup([]);
-                  } catch (e) {
-                    console.error("Error creating group", e);
-                  }
+                onClick={() => {
+                  setShowCreateGroup(false);
+                  setCreateGroupStep(1);
+                  setNewGroupName('');
+                  setNewGroupDetails('');
+                  setSelectedForGroup([]);
+                  setMemberSearchQuery('');
                 }}
-                className="w-full py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl disabled:opacity-50"
+                className="p-3 text-gray-400 hover:text-red-500 transition-colors"
               >
-                Create Group {selectedForGroup.length > 0 && `(${selectedForGroup.length})`}
+                <X size={24} />
               </button>
             </div>
+
+            {createGroupStep === 1 ? (
+              <div className="p-10 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Group Name *</label>
+                  <input
+                    type="text"
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    placeholder="e.g. Design Sync, Exam Prep..."
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-bold text-indigo-900 focus:outline-none focus:border-[#c2f575] transition-colors"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Group Details / Description</label>
+                  <textarea
+                    value={newGroupDetails}
+                    onChange={(e) => setNewGroupDetails(e.target.value)}
+                    placeholder="What is this collaboration group about?"
+                    maxLength={150}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-bold text-indigo-900 focus:outline-none focus:border-[#c2f575] transition-colors resize-none h-28"
+                  />
+                </div>
+                <button
+                  disabled={!newGroupName.trim()}
+                  onClick={() => setCreateGroupStep(2)}
+                  className="w-full py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl disabled:opacity-50 hover:scale-[1.02] active:scale-95 transition-all"
+                >
+                  Next: Select Members
+                </button>
+              </div>
+            ) : (
+              <div className="p-10 space-y-8">
+                <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search mutual followers..."
+                    value={memberSearchQuery}
+                    onChange={(e) => setMemberSearchQuery(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 font-bold text-indigo-900 focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-4 max-h-60 overflow-y-auto custom-scrollbar">
+                  {loadingMutuals ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-6 h-6 border-2 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  ) : (mutualFollowers.filter(m => m.name?.toLowerCase().includes(memberSearchQuery.toLowerCase()))).length > 0 ? (
+                    (mutualFollowers.filter(m => m.name?.toLowerCase().includes(memberSearchQuery.toLowerCase()))).map(mUser => (
+                      <div key={mUser.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+                        <div className="flex items-center gap-4">
+                          <img src={mUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mUser.id}`} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                          <p className="text-sm font-black text-indigo-900">{mUser.name}</p>
+                        </div>
+                        <button
+                          onClick={() => setSelectedForGroup(prev => prev.includes(mUser.id) ? prev.filter(id => id !== mUser.id) : [...prev, mUser.id])}
+                          className={`p-2 rounded-xl transition-colors ${selectedForGroup.includes(mUser.id) ? 'bg-indigo-900 text-white' : 'bg-[#c2f575] text-indigo-900'}`}
+                        >
+                          {selectedForGroup.includes(mUser.id) ? <CheckCheck size={16} /> : <Plus size={16} />}
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-6">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No Mutual Followers Found</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setCreateGroupStep(1)}
+                    className="flex-1 py-5 bg-gray-50 text-indigo-900 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-100 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    disabled={selectedForGroup.length === 0}
+                    onClick={async () => {
+                      try {
+                        await addDoc(collection(db, 'conversations'), {
+                          type: 'collaboration',
+                          participants: [user?.uid, ...selectedForGroup],
+                          createdAt: serverTimestamp(),
+                          lastMessage: 'Group created',
+                          lastMessageTime: serverTimestamp(),
+                          lastMessageSenderId: user?.uid,
+                          unreadCounts: {},
+                          name: newGroupName.trim(),
+                          description: newGroupDetails.trim(),
+                          createdBy: user?.uid,
+                          avatar: 'https://picsum.photos/seed/collab/80/80',
+                        });
+                        setShowCreateGroup(false);
+                        setSelectedForGroup([]);
+                        setNewGroupName('');
+                        setNewGroupDetails('');
+                        setMemberSearchQuery('');
+                        setCreateGroupStep(1);
+                      } catch (e) {
+                        console.error("Error creating group", e);
+                      }
+                    }}
+                    className="flex-[2] py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl disabled:opacity-50 hover:scale-[1.02] active:scale-95 transition-all"
+                  >
+                    Create Group {selectedForGroup.length > 0 && `(${selectedForGroup.length})`}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -577,7 +654,14 @@ const Inbox: React.FC = () => {
             </div>
             {activeCategory === 'collaboration' && (
               <button
-                onClick={() => setShowCreateGroup(true)}
+                onClick={() => {
+                  setNewGroupName('');
+                  setNewGroupDetails('');
+                  setSelectedForGroup([]);
+                  setMemberSearchQuery('');
+                  setCreateGroupStep(1);
+                  setShowCreateGroup(true);
+                }}
                 className="w-12 h-12 bg-indigo-900 text-white rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-900/10 hover:scale-110 active:scale-95 transition-all"
               >
                 <Plus size={24} />
@@ -607,7 +691,9 @@ const Inbox: React.FC = () => {
                   <div className="flex justify-between items-center mb-1">
                     <h4 className="font-black text-indigo-900 text-sm truncate">{chat.name}</h4>
                     <span className="text-[9px] font-black text-gray-300 uppercase">
-                      {chat.lastMessageTime?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {chat.lastMessageTime && typeof chat.lastMessageTime.toDate === 'function'
+                        ? chat.lastMessageTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : ''}
                     </span>
                   </div>
                   <p className={`text-xs truncate ${chat.unreadCount ? 'text-indigo-900 font-black' : 'text-gray-400 font-medium'}`}>
@@ -676,7 +762,9 @@ const Inbox: React.FC = () => {
                     </div>
                     <div className={`flex items-center gap-2 mt-3 px-4 ${msg.senderId === user?.uid ? 'justify-end' : 'justify-start'}`}>
                       <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">
-                        {msg.createdAt?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {msg.createdAt && typeof msg.createdAt.toDate === 'function'
+                          ? msg.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : ''}
                       </span>
                       {msg.senderId === user?.uid && <CheckCheck size={14} className={msg.status === 'read' ? 'text-[#c2f575]' : 'text-gray-200'} />}
                     </div>

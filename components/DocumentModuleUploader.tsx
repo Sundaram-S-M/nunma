@@ -188,10 +188,10 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
                     </div>
                 )}
                 <div className="flex gap-4 mt-8">
-                    <button onClick={handleCancel} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-[2rem] font-black uppercase text-xs tracking-widest hover:bg-gray-100 transition-all">
+                    <button onClick={handleCancel} className="flex-1 px-4 py-5 bg-gray-50 text-gray-400 rounded-[2rem] font-black uppercase text-[10px] sm:text-xs tracking-widest hover:bg-gray-100 transition-all whitespace-nowrap">
                         {isUploading ? 'Cancel Upload' : 'Cancel'}
                     </button>
-                    <button onClick={processUpload} disabled={!file || isUploading} className="flex-1 py-5 bg-[#040457] text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70">
+                    <button onClick={processUpload} disabled={!file || isUploading} className="flex-1 px-4 py-5 bg-[#040457] text-white rounded-[2rem] font-black uppercase text-[10px] sm:text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 whitespace-nowrap">
                         {isUploading ? 'Uploading...' : 'Save Document'}
                     </button>
                 </div>

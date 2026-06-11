@@ -346,8 +346,8 @@ const StudentProfile = ({
                   </div>
                   <input value={exp.company} onChange={(e) => updateExp(idx, 'company', e.target.value)} placeholder="Company" className="text-sm font-bold text-gray-600 bg-transparent outline-none w-full border-b border-gray-200 focus:border-indigo-900" />
                   <div className="flex gap-4">
-                    <input value={exp.startDate} onChange={(e) => updateExp(idx, 'startDate', e.target.value)} placeholder="Start Date" className="text-xs font-bold text-gray-400 bg-transparent outline-none w-1/2 border-b border-gray-200" />
-                    <input value={exp.endDate} onChange={(e) => updateExp(idx, 'endDate', e.target.value)} placeholder="End Date" className="text-xs font-bold text-gray-400 bg-transparent outline-none w-1/2 border-b border-gray-200" />
+                    <input type="text" onFocus={(e) => e.target.type = 'date'} onBlur={(e) => e.target.type = e.target.value ? 'date' : 'text'} value={exp.startDate} onChange={(e) => updateExp(idx, 'startDate', e.target.value)} placeholder="Start Date" className="text-xs font-bold text-black placeholder-gray-400 bg-transparent outline-none w-1/2 border-b border-gray-200" />
+                    <input type="text" onFocus={(e) => e.target.type = 'date'} onBlur={(e) => e.target.type = e.target.value ? 'date' : 'text'} value={exp.endDate} onChange={(e) => updateExp(idx, 'endDate', e.target.value)} placeholder="End Date" className="text-xs font-bold text-black placeholder-gray-400 bg-transparent outline-none w-1/2 border-b border-gray-200" />
                   </div>
                   <textarea value={exp.description} onChange={(e) => updateExp(idx, 'description', e.target.value)} placeholder="Description" className="text-sm text-gray-500 bg-transparent outline-none w-full resize-none border-b border-gray-200 h-24" />
                 </div>
@@ -390,8 +390,8 @@ const StudentProfile = ({
                     </div>
                     <input value={edu.degree} onChange={(e) => updateEdu(idx, 'degree', e.target.value)} placeholder="Degree/Course" className="text-sm font-bold text-gray-600 bg-transparent outline-none w-full border-b border-gray-200" />
                     <div className="flex gap-4">
-                      <input value={edu.startDate} onChange={(e) => updateEdu(idx, 'startDate', e.target.value)} placeholder="Year Started" className="text-xs font-black text-indigo-300 bg-transparent outline-none w-1/2 border-b border-gray-200" />
-                      <input value={edu.endDate} onChange={(e) => updateEdu(idx, 'endDate', e.target.value)} placeholder="Year Ended" className="text-xs font-black text-indigo-300 bg-transparent outline-none w-1/2 border-b border-gray-200" />
+                      <input type="text" onFocus={(e) => e.target.type = 'date'} onBlur={(e) => e.target.type = e.target.value ? 'date' : 'text'} value={edu.startDate} onChange={(e) => updateEdu(idx, 'startDate', e.target.value)} placeholder="Year Started" className="text-xs font-black text-black placeholder-indigo-300 bg-transparent outline-none w-1/2 border-b border-gray-200" />
+                      <input type="text" onFocus={(e) => e.target.type = 'date'} onBlur={(e) => e.target.type = e.target.value ? 'date' : 'text'} value={edu.endDate} onChange={(e) => updateEdu(idx, 'endDate', e.target.value)} placeholder="Year Ended" className="text-xs font-black text-black placeholder-indigo-300 bg-transparent outline-none w-1/2 border-b border-gray-200" />
                     </div>
                   </div>
                 ) : (

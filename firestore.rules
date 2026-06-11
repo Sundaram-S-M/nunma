@@ -39,12 +39,11 @@ service cloud.firestore {
 
     // ZONES/STUDENTS
     match /zones/{zoneId}/students/{studentId} {
-      allow read: if request.auth != null && (
+      allow read: if isSignedIn();
+      allow write: if request.auth != null && (
         studentId == request.auth.uid ||
         isZoneCreator(zoneId)
       );
-      allow delete: if isZoneCreator(zoneId);
-      allow write: if false;
     }
 
     match /zones/{zoneId}/segments/{segmentId} {
@@ -204,6 +203,50 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
+    }
+
+    // --- CONVERSATIONS Collection ---
+    match /conversations/{conversationId} {
+      allow read: if request.auth != null && (
+        request.auth.uid in resource.data.participants ||
+        (resource.data.type == 'community' && resource.data.zoneId != null && (
+          isZoneCreator(resource.data.zoneId) ||
+          exists(/databases/$(database)/documents/zones/$(resource.data.zoneId)/students/$(request.auth.uid))
+        ))
+      );
+      allow create: if request.auth != null && (
+        request.auth.uid in request.resource.data.participants
+      );
+      allow update: if request.auth != null && (
+        request.auth.uid in resource.data.participants && (
+          !(resource.data.type == 'collaboration' && 
+            request.resource.data.diff(resource.data).affectedKeys().hasAny(['name', 'description', 'avatar'])) ||
+          resource.data.createdBy == request.auth.uid ||
+          !('createdBy' in resource.data)
+        )
+      );
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null && (
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
+        );
+        allow create: if request.auth != null && (
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
+          request.resource.data.senderId == request.auth.uid
+        );
+      }
+    }
+
+    // --- ZONES/EXAM_RESULTS Collection ---
+    match /zones/{zoneId}/exam_results/{resultId} {
+      allow read: if request.auth != null && (
+        resource.data.studentId == request.auth.uid ||
+        isZoneCreator(zoneId)
+      );
+      allow write: if request.auth != null && (
+        isZoneCreator(zoneId)
+      );
     }
   }
 }

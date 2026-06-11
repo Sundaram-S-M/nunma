@@ -97,7 +97,7 @@ export const askZoneAnalytics = onCall(
 
             // Prompt Gemini
             const response = await genAI.models.generateContent({
-                model: 'gemini-1.5-pro', // use 1.5-pro for complex analytics
+                model: 'gemini-2.5-flash', // use 2.5-flash for complex analytics
                 contents: [
                     { role: 'user', parts: [{ text: `${systemPrompt}\n\nContext:\n${jsonContextStr}\n\nUser Prompt: ${userMessage}` }] }
                 ]

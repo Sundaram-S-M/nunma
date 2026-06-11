@@ -42,8 +42,19 @@ import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import { BunnyVideoPlayer } from '../components/BunnyVideoPlayer';
 
-
-
+const formatJoinedDate = (joinedAt: any) => {
+  if (!joinedAt) return '';
+  if (typeof joinedAt === 'string') return joinedAt;
+  if (joinedAt && typeof joinedAt === 'object') {
+    if (joinedAt.toDate && typeof joinedAt.toDate === 'function') {
+      return joinedAt.toDate().toLocaleDateString();
+    }
+    if (joinedAt.seconds !== undefined) {
+      return new Date(joinedAt.seconds * 1000).toLocaleDateString();
+    }
+  }
+  return String(joinedAt);
+};
 
 const StudentZoneView: React.FC = () => {
   const { zoneId } = useParams();
@@ -55,7 +66,7 @@ const StudentZoneView: React.FC = () => {
   const [expandedChapters, setExpandedChapters] = useState<string[]>(['c1']);
   const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'content' | 'exams' | 'students'>('content');
+  const [activeTab, setActiveTab] = useState<'content' | 'exams' | 'students' | 'attendance' | 'marks'>('content');
   const [exams, setExams] = useState<any[]>([]);
   const [notifiedExams, setNotifiedExams] = useState<string[]>([]);
   const [allStudents, setAllStudents] = useState<any[]>([]);
@@ -170,55 +181,28 @@ const StudentZoneView: React.FC = () => {
     });
 
     // 4. Curriculum
-    const chaptersQ = query(collection(db, 'zones', zoneId, 'chapters'), orderBy('order', 'asc')); // Assuming 'order' field exists or update schema
+    const chaptersQ = query(collection(db, 'zones', zoneId, 'chapters'), orderBy('order', 'asc'));
     const chaptersUnsub = onSnapshot(chaptersQ, (snapshot) => {
       setCurriculum(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     // 5. Student Data (Self)
-    let studentUnsub = () => { };
-    if (authUser) {
-      // Check both 'students' collection (enrolled)
-      // We assume the student ID is the auth uid or email is matched. 
-      // Best practice: use UID as doc ID for students.
-      // If the 'Grant Access' used random ID, we query by email.
-      const q = query(collection(db, 'zones', zoneId, 'students'), where('email', '==', authUser.email));
-      studentUnsub = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-          const sDoc = snapshot.docs[0];
-          setStudentData({ id: sDoc.id, ...sDoc.data() });
-        }
-      });
-
-      // 5.1 Fetch user consent state
-      const userDocUnsub = onSnapshot(doc(db, 'users', authUser.uid), (docSnap) => {
-        if (docSnap.exists()) {
-          setHasExplicitConsent(!!docSnap.data().aiProctoringConsent);
-        }
-      });
-
-      return () => {
-        zoneUnsub();
-        sessionsUnsub();
-        examsUnsub();
-        chaptersUnsub();
-        studentUnsub();
-        resultsUnsub();
-        allStudentsUnsub();
-        userDocUnsub();
-      };
-    }
-
-    // 6. Exam Results (My Results)
-    const resultsQ = query(collection(db, 'zones', zoneId, 'exam_results'), where('studentId', '==', authUser?.uid || ''));
-    const resultsUnsub = onSnapshot(resultsQ, (snapshot) => {
-      setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const studentDocRef = doc(db, 'zones', zoneId, 'students', authUser.uid);
+    const studentUnsub = onSnapshot(studentDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setStudentData({ id: docSnap.id, ...docSnap.data() });
+      } else {
+        setStudentData(null);
+      }
+    }, (error) => {
+      console.warn("Student data listener failed:", error);
     });
 
-    // 7. All Students (for Student List tab)
-    const allStudentsQ = query(collection(db, 'zones', zoneId, 'students'));
-    const allStudentsUnsub = onSnapshot(allStudentsQ, (snapshot) => {
-      setAllStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    // 5.1 Fetch user consent state
+    const userDocUnsub = onSnapshot(doc(db, 'users', authUser.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setHasExplicitConsent(!!docSnap.data().aiProctoringConsent);
+      }
     });
 
     return () => {
@@ -227,10 +211,36 @@ const StudentZoneView: React.FC = () => {
       examsUnsub();
       chaptersUnsub();
       studentUnsub();
+      userDocUnsub();
+    };
+  }, [zoneId, location.search, authUser]);
+
+  // Listen to All Students and Exam Results only when studentData is loaded or user is creator
+  useEffect(() => {
+    if (!authUser || !zoneId || !db) return;
+    if (!studentData && zone?.createdBy !== authUser.uid) return;
+
+    // 6. Exam Results (My Results)
+    const resultsQ = query(collection(db, 'zones', zoneId, 'exam_results'), where('studentId', '==', authUser.uid));
+    const resultsUnsub = onSnapshot(resultsQ, (snapshot) => {
+      setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Error loading exam results:", error);
+    });
+
+    // 7. All Students (for Student List tab)
+    const allStudentsQ = query(collection(db, 'zones', zoneId, 'students'));
+    const allStudentsUnsub = onSnapshot(allStudentsQ, (snapshot) => {
+      setAllStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Error loading students list:", error);
+    });
+
+    return () => {
       resultsUnsub();
       allStudentsUnsub();
     };
-  }, [zoneId, location.search, authUser]);
+  }, [zoneId, authUser, studentData, zone]);
 
   // Payment Check Effect
   useEffect(() => {
@@ -249,11 +259,14 @@ const StudentZoneView: React.FC = () => {
         return email === authUser.email;
       });
       const isWhitelisted = !!whitelistEntry;
-      // If we have studentData, we are good.
-      if (studentData) return;
+      
+      // If we have studentData or are the creator, we are good.
+      if (studentData || zone.createdBy === authUser.uid) return;
 
-      // If whitelisted but no studentData, auto-enroll
-      if (isWhitelisted) {
+      const isFree = !zone.price || zone.price <= 0;
+
+      // If whitelisted or zone is free, auto-enroll
+      if (isWhitelisted || isFree) {
         try {
           const whitelistedName = (typeof whitelistEntry === 'object' && whitelistEntry !== null) ? (whitelistEntry as any).name : null;
           const newStudent: Student = {
@@ -275,18 +288,14 @@ const StudentZoneView: React.FC = () => {
             enrolledAt: new Date().toISOString()
           });
 
-          // studentData will be updated via onSnapshot listener
           return;
         } catch (e) {
-          console.error("Failed to auto-enroll whitelisted user", e);
+          console.error("Failed to auto-enroll user", e);
         }
       }
 
       // If no student data, and price > 0, and not whitelisted -> Redirect
       if (zone.price > 0 && !isWhitelisted) {
-        // Check if we are the owner? (Though this is student view)
-        if (zone.createdBy === authUser.uid) return;
-
         navigate(`/payment/${zoneId}`);
       }
     };
@@ -378,6 +387,10 @@ const StudentZoneView: React.FC = () => {
     setActiveExam(exam);
     setExamCurrentQuestion(0);
 
+    if (exam.type === 'online-test') {
+      setCameraStatus('on');
+    }
+
     const now = new Date();
     // Use exam duration or default to 30 mins
     const durationMins = exam.duration || 30;
@@ -432,7 +445,7 @@ const StudentZoneView: React.FC = () => {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const UPLOAD_BUFFER_MS = 20 * 60 * 1000;
+  const UPLOAD_BUFFER_MS = 10 * 60 * 1000;
 
   const handleTerminateExam = async (status: 'passed' | 'failed' | 'ongoing', logsOverride?: string[]) => {
     if (!zoneId || !activeExam || !studentData) return;
@@ -443,9 +456,9 @@ const StudentZoneView: React.FC = () => {
         const remainingMs = (endTime + UPLOAD_BUFFER_MS) - Date.now();
         setPostExamTimer(Math.max(0, Math.ceil(remainingMs / 1000)));
       } else {
-        setPostExamTimer(20 * 60);
+        setPostExamTimer(10 * 60);
       }
-      alert("Time is up! You have 20 minutes to scan and upload your answer sheet as a PDF.");
+      alert("Time is up! You have 10 minutes to scan and upload your answer sheet as a PDF.");
       return;
     }
 
@@ -806,7 +819,7 @@ const StudentZoneView: React.FC = () => {
             <button className="flex-1 bg-white/10 backdrop-blur-md p-4 rounded-3xl flex items-center justify-center gap-2 font-bold hover:bg-white/20 transition-all border border-white/10">
               <Share2 size={20} /> Share Zone
             </button>
-            <button onClick={handleLeaveZone} className="flex-1 bg-red-500/10 backdrop-blur-md p-4 rounded-3xl flex items-center justify-center gap-2 font-bold text-red-200 hover:bg-red-500/20 transition-all border border-red-500/10">
+            <button onClick={handleLeaveZone} className="flex-1 bg-red-600 p-4 rounded-3xl flex items-center justify-center gap-2 font-bold text-white hover:bg-red-700 transition-all border border-red-600">
               <LogOut size={20} /> Leave Zone
             </button>
           </div>
@@ -823,6 +836,8 @@ const StudentZoneView: React.FC = () => {
               <button onClick={() => setActiveTab('exams')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'exams' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Exam Portal</button>
             )}
             <button onClick={() => setActiveTab('students')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'students' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Student List</button>
+            <button onClick={() => setActiveTab('attendance')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'attendance' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Attendance</button>
+            <button onClick={() => setActiveTab('marks')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'marks' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Marks</button>
           </div>
 
           {activeTab === 'content' ? (
@@ -947,7 +962,7 @@ const StudentZoneView: React.FC = () => {
                             updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), { activeExamId: exam.id });
                             setShowExamRules(true);
                           }} className="w-full py-5 bg-[#1A1A4E] text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
-                        ) : (exam.type === 'online-test' || exam.type === 'online-mcq') && computedStatus === 'UPCOMING' ? (
+                        ) : computedStatus === 'UPCOMING' ? (
                           <button disabled className="w-full py-5 bg-gray-100 text-gray-400 rounded-2xl font-black uppercase text-[11px] tracking-widest cursor-not-allowed">Starts Soon</button>
                         ) : exam.type === 'offline' && computedStatus === 'LIVE' ? (
                           <div className="space-y-4">
@@ -967,7 +982,7 @@ const StudentZoneView: React.FC = () => {
                 })}
               </div>
             </div>
-          ) : (
+          ) : activeTab === 'students' ? (
             <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
               <div className="flex items-center justify-between mb-12">
                 <h3 className="text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
@@ -984,13 +999,98 @@ const StudentZoneView: React.FC = () => {
                     <img src={student.avatar} className="w-14 h-14 rounded-2xl object-cover bg-white p-1 border border-gray-100 shadow-sm" alt="" />
                     <div>
                       <p className="font-black text-indigo-900 text-sm">{student.name}</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Joined {student.joinedAt}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Joined {formatJoinedDate(student.joinedAt)}</p>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          )}
+          ) : activeTab === 'attendance' ? (
+            <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
+              <div className="flex items-center justify-between mb-12">
+                <h3 className="text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
+                  <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-900">
+                    <CheckCircle size={24} />
+                  </div>
+                  Your Attendance
+                </h3>
+              </div>
+              <div className="flex flex-col md:flex-row gap-12 items-center">
+                <div className="w-64 h-64 rounded-full border-[16px] border-[#c2f575] flex flex-col items-center justify-center shadow-xl relative">
+                  <span className="text-6xl font-black text-[#1A1A4E]">85%</span>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">Overall</span>
+                </div>
+                <div className="flex-1 w-full space-y-4">
+                  {[...Array(5)].map((_, i) => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - i);
+                    const isPresent = i !== 2; // mock one absence
+                    return (
+                      <div key={i} className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:shadow-md transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className={`p-3 rounded-2xl ${isPresent ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                            {isPresent ? <CheckCircle size={20} /> : <X size={20} />}
+                          </div>
+                          <div>
+                            <p className="font-black text-indigo-900 text-sm">{d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Regular Class</p>
+                          </div>
+                        </div>
+                        <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${isPresent ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                          {isPresent ? 'Present' : 'Absent'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : activeTab === 'marks' ? (
+            <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
+              <div className="flex items-center justify-between mb-12">
+                <h3 className="text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
+                  <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-900">
+                    <Award size={24} />
+                  </div>
+                  My Marks
+                </h3>
+              </div>
+              <div className="space-y-6">
+                {examResults.filter(r => r.studentId === (authUser?.uid || 'anon')).length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <FileSpreadsheet size={48} className="mx-auto mb-4 opacity-50" />
+                    <p className="font-bold text-lg">No exam results available yet.</p>
+                  </div>
+                ) : (
+                  examResults.filter(r => r.studentId === (authUser?.uid || 'anon')).map((result, idx) => {
+                    const exam = exams.find(e => e.id === result.examId);
+                    return (
+                      <div key={idx} className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-xl hover:bg-white hover:border-[#c2f575] transition-all">
+                        <div className="flex items-center gap-6 w-full md:w-auto">
+                          <div className={`p-4 rounded-3xl ${result.status === 'passed' ? 'bg-green-100 text-green-600' : result.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                            <Target size={28} />
+                          </div>
+                          <div>
+                            <p className="font-black text-indigo-900 text-xl">{exam?.title || 'Assessment'}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Completed: {new Date(result.completedAt).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-200 pt-4 md:pt-0 md:pl-8">
+                          <div className="text-center">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Score</p>
+                            <p className="font-black text-3xl text-[#1A1A4E]">{result.marks !== undefined ? result.marks : '--'}<span className="text-lg text-gray-400">/{exam?.maxMark || 100}</span></p>
+                          </div>
+                          <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${result.status === 'passed' ? 'bg-green-100 text-green-600' : result.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-500'}`}>
+                            {result.status || 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          ) : null}
           {/* Removed Zone Description and Progress tracking sections as per minimalist UI requirement */}
         </div>
 
@@ -1309,7 +1409,7 @@ const StudentZoneView: React.FC = () => {
          </div>
       )}
 
-      {activeExam && !terminatedByCheat && (
+      {activeExam && !terminatedByCheat && postExamTimer === null && (
         <div
           className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[500] bg-white flex flex-col p-10 animate-in slide-in-from-bottom-10 duration-700 transition-all`}
           onContextMenu={(e) => e.preventDefault()}
@@ -1444,7 +1544,7 @@ const StudentZoneView: React.FC = () => {
               <div className="absolute inset-0 bg-red-900/95 flex flex-col items-center justify-center z-50 p-8 backdrop-blur-md animate-in fade-in duration-500">
                 <AlertTriangle size={64} className="text-white mb-6" />
                 <h2 className="text-4xl font-black text-white mb-4">Submission Window Closed</h2>
-                <p className="text-red-200 text-center font-bold">You failed to submit your answer sheet within the 20-minute buffer.</p>
+                <p className="text-red-200 text-center font-bold">You failed to submit your answer sheet within the 10-minute buffer.</p>
                 <button 
                   onClick={() => { 
                     setPostExamTimer(null); 
@@ -1465,7 +1565,7 @@ const StudentZoneView: React.FC = () => {
               <Clock size={48} />
             </div>
             <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tight mb-4">Exam Concluded</h3>
-            <p className="text-gray-500 font-medium mb-8">Scan your answer sheets and upload them as a single PDF. You have strictly 20 minutes before submissions are locked.</p>
+            <p className="text-gray-500 font-medium mb-8">Scan your answer sheets and upload them as a single PDF. You have strictly 10 minutes before submissions are locked.</p>
             
             <div className={`p-6 rounded-3xl mb-10 transition-colors duration-1000 flex flex-col items-center ${postExamTimer > 0 && postExamTimer < 300 ? 'bg-red-500 animate-pulse text-white shadow-xl shadow-red-500/30' : 'bg-gray-100/50 text-indigo-900'}`}>
               <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${postExamTimer > 0 && postExamTimer < 300 ? 'text-red-100' : 'text-gray-400'}`}>Submission Window Closes In:</p>

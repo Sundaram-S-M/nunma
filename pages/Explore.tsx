@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc, getDocs, limit } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useNavigate } from 'react-router-dom';
 import { Layers, Search, Filter, Globe, ArrowRight, MonitorPlay, Video } from 'lucide-react';
@@ -25,6 +25,7 @@ const Explore: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const [tutorData, setTutorData] = useState<Record<string, { name: string, photoURL?: string }>>({});
+  const [studentAvatars, setStudentAvatars] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     let unsubscribe = () => { };
@@ -116,6 +117,37 @@ const Explore: React.FC = () => {
     };
 
     fetchTutors();
+  }, [zones]);
+
+  useEffect(() => {
+    if (!db || zones.length === 0) return;
+
+    const fetchStudentAvatars = async () => {
+      try {
+        const newAvatars: Record<string, string[]> = {};
+        
+        await Promise.all(zones.map(async (zone) => {
+          if (studentAvatars[zone.id]) return; // already fetched
+          
+          try {
+            const q = query(collection(db, 'zones', zone.id, 'students'), limit(3));
+            const snap = await getDocs(q);
+            newAvatars[zone.id] = snap.docs.map(d => d.data().avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`);
+          } catch (err) {
+            console.error("Failed to fetch students for zone", zone.id, err);
+            newAvatars[zone.id] = [];
+          }
+        }));
+
+        if (Object.keys(newAvatars).length > 0) {
+          setStudentAvatars(prev => ({ ...prev, ...newAvatars }));
+        }
+      } catch (error) {
+        console.error("Error in fetchStudentAvatars:", error);
+      }
+    };
+
+    fetchStudentAvatars();
   }, [zones]);
 
   const filteredZones = zones.filter(zone =>
@@ -249,13 +281,21 @@ const Explore: React.FC = () => {
 
                   <div className="pt-6 border-t border-gray-50 flex items-center justify-between mt-auto">
                     <div className="flex -space-x-3">
-                      {[1, 2, 3].map(i => (
-                        <div key={i} className="w-10 h-10 rounded-xl border-4 border-white overflow-hidden bg-gray-100 shadow-sm relative z-[1]">
-                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.id}${i}`} alt="Student" />
-                        </div>
-                      ))}
+                      {(studentAvatars[zone.id] || []).length > 0 ? (
+                        studentAvatars[zone.id].map((avatarUrl, i) => (
+                          <div key={i} className="w-10 h-10 rounded-xl border-4 border-white overflow-hidden bg-gray-100 shadow-sm relative z-[1]">
+                            <img src={avatarUrl} alt="Student" className="w-full h-full object-cover" />
+                          </div>
+                        ))
+                      ) : (
+                        [1, 2, 3].map(i => (
+                          <div key={i} className="w-10 h-10 rounded-xl border-4 border-white overflow-hidden bg-gray-100 shadow-sm relative z-[1]">
+                            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.id}${i}`} alt="Student" className="w-full h-full object-cover" />
+                          </div>
+                        ))
+                      )}
                       <div className="w-10 h-10 rounded-xl border-4 border-white bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-400 relative z-0">
-                        +{zone.students || 0}
+                        +{zone.students > 0 ? zone.students : (studentAvatars[zone.id] || []).length}
                       </div>
                     </div>
                     <div className="flex items-center gap-4 group/btn">

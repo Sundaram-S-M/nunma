@@ -629,10 +629,23 @@ export const createTutorLinkedAccount = onCall(
 
                 // 5. Add Product Configuration for Route (Bank Details)
                 try {
+                    // Step 5a: Request product configuration (POST)
                     const productPayload = {
                         product_name: "route",
-                        tnc_accepted: true,
-                        ip: request.rawRequest?.ip || "127.0.0.1",
+                        tnc_accepted: true
+                    };
+
+                    const productResponse = await axios.post(
+                        `https://api.razorpay.com/v2/accounts/${accountId}/products`,
+                        productPayload,
+                        { headers }
+                    );
+                    
+                    const productId = productResponse.data.id;
+                    functions.logger.info(`Razorpay Route Product Requested for ${accountId}, Product ID: ${productId}`);
+
+                    // Step 5b: Update bank details (PATCH)
+                    const updatePayload = {
                         settlements: {
                             account_number: bankAccount,
                             ifsc_code: ifsc,
@@ -640,12 +653,13 @@ export const createTutorLinkedAccount = onCall(
                         }
                     };
 
-                    await axios.post(
-                        `https://api.razorpay.com/v2/accounts/${accountId}/products`,
-                        productPayload,
+                    await axios.patch(
+                        `https://api.razorpay.com/v2/accounts/${accountId}/products/${productId}`,
+                        updatePayload,
                         { headers }
                     );
-                    functions.logger.info(`Razorpay Route Product Configured for ${accountId}`);
+
+                    functions.logger.info(`Razorpay Route Product Bank Details Updated for ${accountId}`);
                 } catch (productError: any) {
                     const msg = extractRazorpayError(productError);
                     functions.logger.error("Razorpay Product Configuration failed:", msg);
@@ -1048,6 +1062,100 @@ export const razorpayWebhook = onRequest(
 );
 
 
+/**
+ * Callable function to sync video storage from Bunny CDN to Firestore.
+ * Calculates per-user storage by cross-referencing the user's Firestore
+ * zone/chapter segments with actual video sizes from the Bunny Stream API.
+ */
+export const syncVideoStorage = onCall(
+    { secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true },
+    async (request) => {
+        if (!request.auth) {
+            throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+        }
+        const uid = request.auth.uid;
+        const db = admin.firestore();
+
+        try {
+            const apiKey = process.env.BUNNY_API_KEY?.trim();
+            const libraryId = process.env.BUNNY_LIBRARY_ID?.trim();
+            if (!apiKey || !libraryId) {
+                throw new functions.https.HttpsError("internal", "Bunny API config missing.");
+            }
+
+            // Step 1: Find all zones belonging to this user
+            const zonesSnap = await db.collection("zones")
+                .where("tutorId", "==", uid)
+                .get();
+            
+            // Also check createdBy field in case zones use that
+            const zonesByCreator = await db.collection("zones")
+                .where("createdBy", "==", uid)
+                .get();
+
+            // Collect all unique zone IDs
+            const zoneIds = new Set<string>();
+            zonesSnap.docs.forEach(d => zoneIds.add(d.id));
+            zonesByCreator.docs.forEach(d => zoneIds.add(d.id));
+
+            functions.logger.info(`Found ${zoneIds.size} zones for user ${uid}`);
+
+            // Step 2: Collect all video IDs from chapters in those zones
+            const videoIds = new Set<string>();
+            for (const zoneId of zoneIds) {
+                const chaptersSnap = await db.collection("zones").doc(zoneId).collection("chapters").get();
+                for (const chapterDoc of chaptersSnap.docs) {
+                    const segments: any[] = chapterDoc.data().segments || [];
+                    for (const seg of segments) {
+                        if (seg.type === "video" && seg.videoId) {
+                            videoIds.add(seg.videoId);
+                        }
+                    }
+                }
+            }
+
+            functions.logger.info(`Found ${videoIds.size} videos for user ${uid}`);
+
+            // Step 3: Fetch each video's storage size from Bunny Stream API
+            let totalVideoBytes = 0;
+            const fetchPromises = Array.from(videoIds).map(async (videoId) => {
+                try {
+                    const resp = await axios.get(
+                        `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`,
+                        { headers: { AccessKey: apiKey } }
+                    );
+                    // Bunny returns storageSize in bytes (includes all transcoded versions)
+                    // We take the original size if available, otherwise storageSize
+                    const originalSize: number = resp.data.originalSize || resp.data.storageSize || 0;
+                    functions.logger.info(`Video ${videoId}: ${originalSize} bytes`);
+                    return originalSize;
+                } catch (err: any) {
+                    functions.logger.warn(`Could not fetch size for video ${videoId}: ${err.message}`);
+                    return 0;
+                }
+            });
+
+            const sizes = await Promise.all(fetchPromises);
+            totalVideoBytes = sizes.reduce((sum, s) => sum + s, 0);
+
+            functions.logger.info(`Total video storage for user ${uid}: ${totalVideoBytes} bytes`);
+
+            // Step 4: Write the accurate per-user total to Firestore
+            await db.collection("users").doc(uid).update({
+                usedStorageBytes: totalVideoBytes,
+                "subscription_entitlements.storageUsed": totalVideoBytes,
+                storageSyncedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            return { usedStorageBytes: totalVideoBytes, videoCount: videoIds.size };
+        } catch (error: any) {
+            functions.logger.error("syncVideoStorage error:", error);
+            throw new functions.https.HttpsError("internal", error.message || "Failed to sync storage.");
+        }
+    }
+);
+
+
 export const bunnyWebhook = onRequest(
     { secrets: ["BUNNY_WEBHOOK_SECRET"] },
     async (req, res) => {
@@ -1268,7 +1376,7 @@ async function checkStorageQuota(uid: string, incomingSize: number): Promise<{ i
  * Enforces user storage quotas.
  */
 export const uploadFileToBunny = onRequest(
-    { secrets: ["BUNNY_API_KEY", "BUNNY_STORAGE_ZONE_NAME", "BUNNY_STORAGE_HOSTNAME", "BUNNY_PULL_ZONE_URL"], cors: true },
+    { secrets: ["BUNNY_STORAGE_PASSWORD", "BUNNY_STORAGE_ZONE_NAME", "BUNNY_STORAGE_HOSTNAME", "BUNNY_PULL_ZONE_URL"], cors: true },
     async (req, res) => {
         // Handle CORS manually for multipart/form-data
         res.set('Access-Control-Allow-Origin', '*');
@@ -1340,12 +1448,12 @@ export const uploadFileToBunny = onRequest(
                 }
 
                 // 4. Bunny Upload
-                const bunnyApiKey = process.env.BUNNY_API_KEY?.trim();
+                const bunnyStoragePassword = process.env.BUNNY_STORAGE_PASSWORD?.trim();
                 const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME?.trim();
                 const hostname = process.env.BUNNY_STORAGE_HOSTNAME?.trim();
                 const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL?.trim();
 
-                if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
+                if (!bunnyStoragePassword || !storageZoneName || !hostname || !pullZoneUrl) {
                     res.status(500).send('Bunny Storage configuration missing');
                     return;
                 }
@@ -1356,7 +1464,7 @@ export const uploadFileToBunny = onRequest(
 
                 await axios.put(uploadUrl, fileBuffer, {
                     headers: {
-                        'AccessKey': bunnyApiKey,
+                        'AccessKey': bunnyStoragePassword,
                         'Content-Type': 'application/octet-stream'
                     }
                 });
@@ -1385,7 +1493,7 @@ export const uploadFileToBunny = onRequest(
 
 export const uploadExamScript = onCall(
     {
-        secrets: ["BUNNY_API_KEY", "BUNNY_STORAGE_ZONE_NAME", "BUNNY_STORAGE_HOSTNAME", "BUNNY_PULL_ZONE_URL"],
+        secrets: ["BUNNY_STORAGE_PASSWORD", "BUNNY_STORAGE_ZONE_NAME", "BUNNY_STORAGE_HOSTNAME", "BUNNY_PULL_ZONE_URL"],
         cors: true
     },
     async (request) => {
@@ -1453,12 +1561,12 @@ export const uploadExamScript = onCall(
             const fileSizeInBytes = watermarkedBuffer.length;
 
             // 7. Bunny Storage Upload
-            const bunnyApiKey = process.env.BUNNY_API_KEY?.trim();
+            const bunnyStoragePassword = process.env.BUNNY_STORAGE_PASSWORD?.trim();
             const storageZoneName = process.env.BUNNY_STORAGE_ZONE_NAME?.trim();
             const hostname = process.env.BUNNY_STORAGE_HOSTNAME?.trim();
             const pullZoneUrl = process.env.BUNNY_PULL_ZONE_URL?.trim();
 
-            if (!bunnyApiKey || !storageZoneName || !hostname || !pullZoneUrl) {
+            if (!bunnyStoragePassword || !storageZoneName || !hostname || !pullZoneUrl) {
                 throw new functions.https.HttpsError("failed-precondition", "Bunny Storage configuration is missing on the server.");
             }
 
@@ -1467,7 +1575,7 @@ export const uploadExamScript = onCall(
 
             await axios.put(uploadUrl, watermarkedBuffer, {
                 headers: {
-                    'AccessKey': bunnyApiKey,
+                    'AccessKey': bunnyStoragePassword,
                     'Content-Type': 'application/pdf'
                 }
             });
@@ -1618,7 +1726,7 @@ export const recordCheatViolation = onCall(
     }
 );
 
-export const submitGradedScript = onCall({ cors: true }, async (request) => {
+export const submitGradedScript = onCall({ cors: true, secrets: [resendApiKey] }, async (request) => {
     try {
         const db = admin.firestore();
         if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
@@ -1712,6 +1820,46 @@ export const submitGradedScript = onCall({ cors: true }, async (request) => {
         await db.collection('zones').doc(zoneId).collection('students').doc(studentId).set({
             activeExamGraded: true
         }, { merge: true });
+
+        // Email Notification
+        try {
+            const apiKey = resendApiKey.value();
+            if (apiKey) {
+                const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(studentId).get();
+                const studentEmail = studentDoc.data()?.email;
+                const studentName = studentDoc.data()?.name || "Student";
+                
+                const examDoc = await db.collection('zones').doc(zoneId).collection('exams').doc(examId).get();
+                const examTitle = examDoc.data()?.title || "Exam";
+                
+                if (studentEmail) {
+                    const resend = new Resend(apiKey);
+                    await resend.emails.send({
+                        from: "Nunma <support@nunma.in>",
+                        to: studentEmail,
+                        subject: `Your marks for ${examTitle} are published! 📝`,
+                        html: `
+                            <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #eee; border-radius: 20px;">
+                                <div style="text-align: center; margin-bottom: 30px;">
+                                    <h1 style="color: #040457; font-size: 24px;">Exam Graded!</h1>
+                                </div>
+                                <p style="color: #333; font-size: 16px;">Hi ${studentName},</p>
+                                <p style="color: #333; font-size: 16px;">Your tutor has graded your submission for <strong>${examTitle}</strong>.</p>
+                                <div style="background: #f8f9fa; padding: 24px; border-radius: 16px; margin: 24px 0;">
+                                    <p style="margin: 0 0 12px 0; font-size: 18px;"><strong>Score:</strong> ${score}</p>
+                                    <p style="margin: 0; font-size: 16px;"><strong>Feedback:</strong> ${feedback || "No additional feedback"}</p>
+                                </div>
+                                <div style="text-align: center; margin: 40px 0;">
+                                    <a href="https://nunma.in/classroom/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold;">View Corrected PDF →</a>
+                                </div>
+                            </div>
+                        `
+                    });
+                }
+            }
+        } catch (emailErr) {
+            console.error("Failed to send grade email:", emailErr);
+        }
 
         return { success: true, gradedUrl: newFileUrl };
 
@@ -2384,9 +2532,9 @@ export const processWhitelist = onCall(
                                     </p>
                                 </div>
                                 <div style="text-align: center; margin: 32px 0;">
-                                    <a href="https://www.nunma.in/classroom/${zoneId}" 
+                                    <a href="https://nunma.in/auth" 
                                        style="display: inline-block; background: #c2f575; color: #040457; padding: 16px 40px; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; letter-spacing: 0.05em; text-transform: uppercase;">
-                                        Enter Classroom →
+                                        Create Account to Enter →
                                     </a>
                                 </div>
                                 <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 32px;">
@@ -2702,6 +2850,77 @@ export const onStudentLeftZone = onDocumentDeleted(
             }
         } catch (error) {
             functions.logger.error(`Error in onStudentLeftZone for ${studentId} in ${zoneId}:`, error);
+        }
+    }
+);
+
+export const onExamAssigned = onDocumentCreated(
+    { document: "zones/{zoneId}/exams/{examId}", secrets: [resendApiKey] },
+    async (event) => {
+        const apiKey = resendApiKey.value();
+        if (!apiKey) {
+            functions.logger.warn("RESEND_API_KEY not configured — exam emails skipped.");
+            return;
+        }
+
+        const examData = event.data?.data();
+        if (!examData) return;
+
+        const zoneId = event.params.zoneId;
+        const db = admin.firestore();
+
+        try {
+            // Get Zone details
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            if (!zoneDoc.exists) return;
+            const zoneData = zoneDoc.data() || {};
+            const zoneName = zoneData.title || "a Learning Zone";
+            const tutorName = zoneData.tutorName || "Your Instructor";
+
+            // Get all students
+            const studentsSnap = await db.collection("zones").doc(zoneId).collection("students").get();
+            if (studentsSnap.empty) return;
+
+            const emails: string[] = [];
+            studentsSnap.forEach(doc => {
+                const data = doc.data();
+                if (data.email) emails.push(data.email);
+            });
+
+            if (emails.length === 0) return;
+
+            const resend = new Resend(apiKey);
+
+            for (const email of emails) {
+                await resend.emails.send({
+                    from: "Nunma <support@nunma.in>",
+                    to: email,
+                    subject: `New Exam Assigned in ${zoneName} 📝`,
+                    html: `
+                        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #eee; border-radius: 20px;">
+                            <div style="text-align: center; margin-bottom: 30px;">
+                                <h1 style="color: #040457; font-size: 24px;">New Exam Assigned!</h1>
+                            </div>
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;">Hi Student,</p>
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;"><strong>${tutorName}</strong> has just assigned a new exam <strong>"${examData.title}"</strong> in the zone <strong>"${zoneName}"</strong>.</p>
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;">Please log in to your account to view the details and complete it on time.</p>
+                            
+                            <div style="text-align: center; margin: 40px 0;">
+                                <a href="https://nunma.in/classroom/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                                    Go to Classroom →
+                                </a>
+                            </div>
+                            
+                            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
+                            <p style="color: #999; font-size: 12px; text-align: center;">Nunma — The Trust Layer for Education</p>
+                        </div>
+                    `
+                });
+            }
+
+            functions.logger.info("Sent exam emails to " + emails.length + " students for zone " + zoneId);
+        } catch (err) {
+            functions.logger.error("Error sending exam assignment emails:", err);
         }
     }
 );

@@ -128,7 +128,7 @@ Generate exactly ${numQ} questions in this JSON format:
 
 Return ONLY valid JSON. Nothing else.`;
         const result = await ai.models.generateContent({
-            model: "gemini-1.5-pro",
+            model: "gemini-2.5-flash",
             config: {
                 systemInstruction: "You are an expert curriculum designer for the NUNMA platform. Your task is to generate a multiple-choice quiz based on the provided topic and difficulty.",
                 responseMimeType: "application/json",

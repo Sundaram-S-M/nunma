@@ -34,7 +34,7 @@ import {
 import { VideoUploadModal } from '../components/VideoUploadModal';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 
-import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../context/AuthContext';
@@ -97,6 +97,66 @@ const Workplace: React.FC = () => {
     { id: 'T-8341', date: 'Sep 28, 2025', amount: '+$49.00', status: 'Completed', service: 'Earnings: Zone Access (User Alpha)', type: 'inbound' },
     { id: 'T-8220', date: 'Sep 10, 2025', amount: '+$199.00', status: 'Completed', service: 'Earnings: Pro Course Bundle', type: 'inbound' },
   ];
+
+  const handleExportStatement = () => {
+    const headers = ['Transaction ID', 'Date', 'Time', 'Service', 'Amount', 'Status', 'Type'];
+    const rows = transactions.map(t => {
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      return `<tr>
+        <td>${t.id}</td>
+        <td>${t.date}</td>
+        <td>${timeStr}</td>
+        <td>${t.service}</td>
+        <td>${t.amount}</td>
+        <td>${t.status}</td>
+        <td>${t.type}</td>
+      </tr>`;
+    });
+    
+    const htmlContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Statement</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          .header { background-color: #22c55e; color: #ffffff; font-weight: bold; text-align: left; padding: 5px; }
+          td { padding: 5px; white-space: nowrap; }
+        </style>
+      </head>
+      <body>
+        <table border="1">
+          <tr>
+            ${headers.map(h => `<th class="header">${h}</th>`).join('')}
+          </tr>
+          ${rows.join('\n')}
+        </table>
+      </body>
+      </html>
+    `;
+    
+    const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `transaction_statement_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const { user } = useAuth();
   const kycVerified = (user?.kycStatus === 'VERIFIED' && user?.razorpay_account_id) || user?.isDevBypass;
@@ -180,7 +240,15 @@ const Workplace: React.FC = () => {
 
   // Separate effect for sessions
   useEffect(() => {
-    if (!user || !user.uid || user.role !== UserRole.THALA || zonesList.length === 0) return;
+    if (!user || !user.uid || user.role !== UserRole.THALA) return;
+    
+    // If no zones, clear everything and return
+    if (zonesList.length === 0) {
+      setLiveSessions([]);
+      setAllStudents([]);
+      return;
+    }
+
     const unsubs: (() => void)[] = [];
 
     zonesList.forEach(zone => {
@@ -214,7 +282,13 @@ const Workplace: React.FC = () => {
       unsubs.push(unSt);
     });
 
-    return () => unsubs.forEach(u => u());
+    return () => {
+      unsubs.forEach(u => u());
+      // When zonesList changes, we need to clear out sessions/students from zones that no longer exist
+      const validZoneIds = new Set(zonesList.map(z => z.id));
+      setLiveSessions(prev => prev.filter(s => validZoneIds.has(s.zoneId)));
+      setAllStudents(prev => prev.filter(s => validZoneIds.has(s.zoneId)));
+    };
   }, [zonesList.map(z => z.id).join(',')]); // minimal dependency change
 
 
@@ -566,13 +640,30 @@ const Workplace: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {upcomingLive.map(session => (
-                      <div key={session.id} className="bg-white p-8 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-red-100 flex flex-col justify-between group hover:-translate-y-1 transition-all duration-500">
+                      <div key={session.id} className="bg-white p-8 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-red-100 flex flex-col justify-between group hover:-translate-y-1 transition-all duration-500 relative">
+                        <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={async () => {
+                              if (window.confirm("Are you sure you want to delete this scheduled stream?")) {
+                                try {
+                                  await deleteDoc(doc(db, 'zones', session.zoneId, 'sessions', session.id));
+                                } catch (e) {
+                                  console.error("Failed to delete session", e);
+                                  alert("Failed to delete stream");
+                                }
+                              }
+                            }}
+                            className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                         <div className="space-y-4">
                           <LiveSessionStatus
                             status={session.status as 'live' | 'scheduled' | 'ended'}
                             startTime={session.startTime}
                           />
-                          <h4 className="text-xl font-black text-indigo-900 tracking-tight leading-tight">{session.title}</h4>
+                          <h4 className="text-xl font-black text-indigo-900 tracking-tight leading-tight pr-12">{session.title}</h4>
                         </div>
                         {session.status === 'live' ? (
                           <button
@@ -711,7 +802,10 @@ const Workplace: React.FC = () => {
                   <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Transaction Registry</h3>
                   <p className="text-sm text-gray-400 mt-1 font-medium">Inclusive ledger of earnings.</p>
                 </div>
-                <button className="text-[10px] font-black text-[#040457] uppercase tracking-widest flex items-center gap-2 px-6 py-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white transition-all shadow-sm active:scale-95">
+                <button 
+                  onClick={handleExportStatement}
+                  className="text-[10px] font-black text-[#040457] uppercase tracking-widest flex items-center gap-2 px-6 py-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white transition-all shadow-sm active:scale-95"
+                >
                   <Download size={14} className="text-[#c2f575]" /> EXPORT STATEMENT
                 </button>
               </div>

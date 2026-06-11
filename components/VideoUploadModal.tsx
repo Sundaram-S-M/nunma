@@ -5,7 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '../utils/firebase';
 import { UploadCloud, X, Film, CheckCircle } from 'lucide-react';
 import Confetti from 'react-confetti';
-import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { AlertTriangle, Play, Pause } from 'lucide-react';
@@ -13,7 +13,7 @@ import { AlertTriangle, Play, Pause } from 'lucide-react';
 interface VideoUploadModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onUploadSuccess: (videoData: { videoId: string, title: string }) => void;
+    onUploadSuccess: (videoData: { videoId: string, title: string, fileSize: number }) => void;
     zoneId?: string; // Optional context if uploading for a specific zone
     chapterId?: string; // Optional context if uploading for a specific chapter
 }
@@ -141,7 +141,18 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                         setUploadStatus('success');
                         setIsUploading(false);
                         toast.success("Video uploaded! It is now processing.", { icon: '🎬' });
-                        onUploadSuccess({ videoId: videoId!, title: title || file.name });
+                        onUploadSuccess({ videoId: videoId!, title: title || file.name, fileSize: file.size });
+                        // Directly update Firestore storage bytes
+                        if (user && db) {
+                            try {
+                                await updateDoc(doc(db, 'users', user.uid), {
+                                    usedStorageBytes: increment(file.size),
+                                    'subscription_entitlements.storageUsed': increment(file.size)
+                                });
+                            } catch (err) {
+                                console.warn('Storage bytes update failed:', err);
+                            }
+                        }
                         setTimeout(() => handleClose(), 2000);
                     } catch (dbError) {
                         console.error("Critical Handoff Error:", dbError);
@@ -223,7 +234,18 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                     }
                     setUploadStatus('success');
                     setIsUploading(false);
-                    onUploadSuccess({ videoId: videoId!, title: title || file.name });
+                    onUploadSuccess({ videoId: videoId!, title: title || file.name, fileSize: file.size });
+                    // Directly update Firestore storage bytes
+                    if (user && db) {
+                        try {
+                            await updateDoc(doc(db, 'users', user.uid), {
+                                usedStorageBytes: increment(file.size),
+                                'subscription_entitlements.storageUsed': increment(file.size)
+                            });
+                        } catch (err) {
+                            console.warn('Storage bytes update (resume) failed:', err);
+                        }
+                    }
                     setTimeout(() => handleClose(), 2000);
                 },
             });

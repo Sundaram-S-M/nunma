@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -208,7 +208,7 @@ const NunmaPageLoader = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <HashRouter>
         <SidebarProvider>
           <Toaster position="top-center" reverseOrder={false}>
             {(t) => (
@@ -233,7 +233,7 @@ const App: React.FC = () => {
           </Toaster>
           <AppContent />
         </SidebarProvider>
-      </BrowserRouter>
+      </HashRouter>
     </AuthProvider>
   );
 };

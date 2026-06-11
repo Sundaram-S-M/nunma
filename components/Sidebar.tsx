@@ -16,10 +16,14 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
+  RefreshCw,
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { AddonManagerModal } from './AddonManagerModal';
+import { toast } from 'react-hot-toast';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../utils/firebase';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -103,17 +107,35 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const role      = user?.role || UserRole.STUDENT;
   const tier      = (user as any)?.current_tier || 'STARTER';
   const [showAddonModal, setShowAddonModal] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const usedBytes  = (user as any)?.usedStorageBytes || 0;
+  const triggerStorageSync = async () => {
+    if (isSyncing || !functions) return;
+    setIsSyncing(true);
+    try {
+      const fn = httpsCallable(functions, 'syncVideoStorage');
+      const result: any = await fn();
+      const mb = ((result?.data?.usedStorageBytes || 0) / (1024 * 1024)).toFixed(2);
+      const count = result?.data?.videoCount || 0;
+      toast.success(`Storage synced: ${mb} MB across ${count} video(s)`, { icon: '💾' });
+    } catch (e: any) {
+      toast.error(`Sync failed: ${e.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const usedBytes  = (user as any)?.usedStorageBytes || (user as any)?.storage_used_bytes || user?.subscription_entitlements?.storageUsed || 0;
   const limitBytes = tier === 'PREMIUM' ? 32212254720 : tier === 'STANDARD' ? 16106127360 : 3221225472;
   const pct        = limitBytes > 0 ? Math.min(100, Math.round((usedBytes / limitBytes) * 100)) : 0;
   const overLimit  = usedBytes > limitBytes;
 
   const fmt = (b: number) => {
     if (b === 0) return '0 B';
-    const k = 1024, s = ['B','KB','MB','GB'];
-    const i = Math.floor(Math.log(b) / Math.log(k));
-    return parseFloat((b / Math.pow(k, i)).toFixed(1)) + ' ' + s[i];
+    const k = 1024, s = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.max(0, Math.floor(Math.log(b) / Math.log(k)));
+    const val = b / Math.pow(k, i);
+    return (i >= 2 ? val.toFixed(2) : val.toFixed(0)) + ' ' + s[i];
   };
 
   const navLinks = [
@@ -266,8 +288,30 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <HardDrive size={12} style={{ color: overLimit ? 'var(--brand-red)' : 'var(--text-faint)' }} />
                     <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>Storage</span>
+                    <button
+                      onClick={triggerStorageSync}
+                      disabled={isSyncing}
+                      title="Sync storage usage from Bunny CDN"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: '2px',
+                        cursor: isSyncing ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: 'var(--text-faint)',
+                        opacity: isSyncing ? 0.4 : 1,
+                      }}
+                    >
+                      <RefreshCw size={10} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
+                    </button>
                   </div>
-                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: overLimit ? 'var(--brand-red)' : 'var(--brand-blue)' }}>{pct}%</span>
+                  <span
+                    title="Storage used"
+                    style={{ fontSize: '0.6875rem', fontWeight: 700, color: overLimit ? 'var(--brand-red)' : 'var(--brand-blue)' }}
+                  >
+                    {pct}%
+                  </span>
                 </div>
 
                 {/* Track */}
@@ -275,7 +319,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   <div style={{ height: '100%', width: `${pct}%`, background: overLimit ? 'var(--brand-red)' : 'var(--brand-blue)', borderRadius: 99, transition: 'width 0.5s' }} />
                 </div>
 
-                <p style={{ fontSize: '0.6875rem', color: 'var(--text-faint)', marginBottom: overLimit ? '0.5rem' : '0.75rem' }}>
+                <p style={{ fontSize: '0.6875rem', color: 'var(--text-faint)', marginBottom: overLimit ? '0.5rem' : '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {fmt(usedBytes)} of {fmt(limitBytes)}
                 </p>
 
