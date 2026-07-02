@@ -341,13 +341,13 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
     if (!isOpen) return null;
 
     return (
-        <div ref={modalRef} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+        <div ref={modalRef} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-nunma-forest/80 backdrop-blur-xl animate-in fade-in duration-300">
             {uploadStatus === 'success' && <Confetti recycle={false} numberOfPieces={500} />}
 
             <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 relative">
                 {/* Header */}
                 <div className="flex justify-between items-center p-6 border-b border-gray-100">
-                    <h3 className="text-2xl font-black text-[#040457]">Upload Video</h3>
+                    <h3 className="text-2xl font-black text-nunma-forest">Upload Video</h3>
                     <button
                         onClick={handleClose}
                         disabled={uploadStatus === 'success'}
@@ -377,7 +377,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                 onChange={handleChange}
                             />
                             <UploadCloud size={64} className={`mb-4 ${dragActive ? 'text-[#c2f575]' : 'text-gray-300'}`} />
-                            <p className="font-bold text-[#040457] text-lg text-center mb-2">
+                            <p className="font-bold text-nunma-forest text-lg text-center mb-2">
                                 Drag & Drop your video here
                             </p>
                             <p className="text-sm font-medium text-gray-400 text-center">
@@ -391,11 +391,11 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                         <div className="space-y-6">
                             <div className="bg-gray-50 p-6 rounded-2xl flex items-center justify-between border border-gray-100">
                                 <div className="flex items-center space-x-4 overflow-hidden">
-                                    <div className="bg-[#040457]/10 p-3 rounded-xl text-[#040457]">
+                                    <div className="bg-nunma-forest/10 p-3 rounded-xl text-nunma-forest">
                                         <Film size={28} />
                                     </div>
                                     <div className="overflow-hidden">
-                                        <p className="font-bold text-[#040457] truncate max-w-[250px]">{file.name}</p>
+                                        <p className="font-bold text-nunma-forest truncate max-w-[250px]">{file.name}</p>
                                         <p className="text-xs font-semibold text-gray-400 mt-1">
                                             {(file.size / (1024 * 1024)).toFixed(2)} MB
                                         </p>
@@ -418,10 +418,10 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                             <AlertTriangle size={20} />
                                         </div>
                                         <div>
-                                            <p className="font-bold text-[#040457]">Incomplete upload detected</p>
+                                            <p className="font-bold text-nunma-forest">Incomplete upload detected</p>
                                             <p className="text-sm text-gray-500 mt-1">We found a partial upload for this file. Would you like to resume?</p>
                                             <div className="flex gap-3 mt-4">
-                                                <button onClick={() => handleResumeUpload()} className="px-4 py-2 bg-[#040457] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:brightness-110 transition-all">Resume</button>
+                                                <button onClick={() => handleResumeUpload()} className="px-4 py-2 bg-nunma-forest text-white rounded-xl text-xs font-black uppercase tracking-widest hover:brightness-110 transition-all">Resume</button>
                                                 <button onClick={() => handleStartFresh()} className="px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Start Fresh</button>
                                             </div>
                                         </div>
@@ -437,7 +437,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                         placeholder="e.g. Introduction to Calculus"
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
-                                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-nunma-forest outline-none transition-all"
                                     />
                                 </div>
                             )}
@@ -445,7 +445,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                             {/* Progress Bar Area */}
                             {(uploadStatus === 'uploading' || uploadStatus === 'success') && (
                                 <div className="space-y-3">
-                                    <div className="flex justify-between items-center text-sm font-bold text-[#040457]">
+                                    <div className="flex justify-between items-center text-sm font-bold text-nunma-forest">
                                         <span>
                                             {uploadStatus === 'uploading' ? 'Uploading...' : 'Upload Complete!'}
                                         </span>
@@ -472,7 +472,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                 {uploadStatus === 'idle' && (
                                     <button
                                         onClick={() => startTusUpload()}
-                                        className="w-full py-4 bg-[#040457] text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:brightness-110 active:scale-95 transition-all shadow-xl"
+                                        className="w-full py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:brightness-110 active:scale-95 transition-all shadow-xl"
                                     >
                                         Start Upload
                                     </button>
@@ -498,7 +498,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                                 {uploadStatus === 'error' && (
                                     <button
                                         onClick={startTusUpload}
-                                        className="w-full py-4 bg-[#040457] text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:brightness-110 active:scale-95 transition-all shadow-xl"
+                                        className="w-full py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:brightness-110 active:scale-95 transition-all shadow-xl"
                                     >
                                         Retry Upload
                                     </button>

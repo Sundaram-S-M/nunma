@@ -67,7 +67,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ zoneId, sessionId, isOpen, on
 
     return (
         <div className="absolute top-0 right-0 h-full w-80 bg-white/5 backdrop-blur-3xl border-l border-white/10 flex flex-col z-50 animate-in slide-in-from-right duration-300">
-            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#040457]/20">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-nunma-forest/20">
                 <h3 className="text-primary font-black uppercase tracking-widest text-xs flex items-center gap-3">
                     <MessageSquare size={16} /> Live Chat
                 </h3>
@@ -97,7 +97,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ zoneId, sessionId, isOpen, on
                 <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSendMessage} className="p-4 border-t border-white/10 bg-[#040457]/40">
+            <form onSubmit={handleSendMessage} className="p-4 border-t border-white/10 bg-nunma-forest/40">
                 <div className="relative">
                     <input
                         type="text"

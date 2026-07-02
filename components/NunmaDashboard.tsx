@@ -15,7 +15,7 @@ const NunmaDashboard: React.FC = () => {
       <nav className="flex items-center justify-between mb-12">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-[#c2f575] rounded-xl flex items-center justify-center">
-            <span className="text-[#1a1a4e] font-bold text-xl">N</span>
+            <span className="text-nunma-forest font-bold text-xl">N</span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Nunma</h1>
         </div>
@@ -40,9 +40,9 @@ const NunmaDashboard: React.FC = () => {
       <main className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Hero Section */}
         <section className="lg:col-span-8 flex flex-col gap-8">
-          <div className="anti-gravity-card bg-gradient-to-br from-[#052e16] to-[#1a1a4e] relative overflow-hidden">
+          <div className="anti-gravity-card bg-gradient-to-br from-[#052e16] to-nunma-forest relative overflow-hidden">
             <div className="relative z-10">
-              <span className="inline-block px-3 py-1 bg-[#c2f575] text-[#1a1a4e] text-xs font-bold rounded-full mb-4 uppercase tracking-wider">
+              <span className="inline-block px-3 py-1 bg-[#c2f575] text-nunma-forest text-xs font-bold rounded-full mb-4 uppercase tracking-wider">
                 Featured Course
               </span>
               <h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">Mastering Digital Logic</h2>
@@ -134,7 +134,7 @@ const NunmaDashboard: React.FC = () => {
               <div className="absolute left-0 top-0 h-full bg-[#c2f575]" style={{ width: '75%' }} />
             </div>
             <div className="p-8">
-              <button className="w-full py-4 bg-white text-[#1a1a4e] font-black rounded-2xl hover:scale-[1.02] transition-transform">
+              <button className="w-full py-4 bg-white text-nunma-forest font-black rounded-2xl hover:scale-[1.02] transition-transform">
                 GO TO CLASSROOM
               </button>
             </div>

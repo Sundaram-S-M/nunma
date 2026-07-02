@@ -105,7 +105,7 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
     const modalRef = useFocusTrap(true, onClose);
 
     return (
-        <div ref={modalRef} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+        <div ref={modalRef} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-nunma-forest/80 backdrop-blur-xl animate-in fade-in duration-300">
             <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden p-10 relative">
                 <button
                     onClick={onClose}
@@ -115,8 +115,8 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
                 </button>
 
                 <div className="mb-8">
-                    <h3 className="text-3xl font-black text-[#040457] tracking-tighter mb-2">Request Refund</h3>
-                    <p className="text-sm text-gray-400 font-medium">Safe-Guard Dispute Resolution for Transaction <span className="text-[#040457] font-bold">{transactionId.substring(0, 8)}...</span></p>
+                    <h3 className="text-3xl font-black text-nunma-forest tracking-tighter mb-2">Request Refund</h3>
+                    <p className="text-sm text-gray-400 font-medium">Safe-Guard Dispute Resolution for Transaction <span className="text-nunma-forest font-bold">{transactionId.substring(0, 8)}...</span></p>
                 </div>
 
                 {isPastDeadline ? (
@@ -147,7 +147,7 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1 mb-2">Dispute Reason *</label>
                                 <select
-                                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all appearance-none"
+                                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all appearance-none"
                                     value={reason}
                                     onChange={(e) => setReason(e.target.value)}
                                     required
@@ -165,7 +165,7 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1 mb-2">Detailed Explanation *</label>
                                 <textarea
-                                    className="w-full h-32 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all resize-none custom-scrollbar"
+                                    className="w-full h-32 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all resize-none custom-scrollbar"
                                     placeholder="Provide a clear, detailed explanation for the dispute..."
                                     value={details}
                                     onChange={(e) => setDetails(e.target.value)}
@@ -177,7 +177,7 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full py-6 mt-4 bg-[#040457] text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl shadow-[#040457]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:hover:scale-100"
+                            className="w-full py-6 mt-4 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl shadow-nunma-forest/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:hover:scale-100"
                         >
                             {isSubmitting ? (
                                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

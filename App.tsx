@@ -79,12 +79,7 @@ const AppContent: React.FC = () => {
   const isLiveMode = isLiveRoute || isWhiteboardRoute;
 
   if (isLoading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-        <div className="w-12 h-12 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p style={{ color: 'var(--text-primary, #ffffff)', fontSize: '1.2rem', fontWeight: 500 }}>Loading Nunma...</p>
-      </div>
-    );
+    return <NunmaPageLoader />;
   }
 
   if (!isAuthenticated && !isPublicRoute && !isAuthRoute) {
@@ -127,7 +122,7 @@ const AppContent: React.FC = () => {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative', overflow: 'hidden' }}>
         {!hideHeader && <Header onToggleRole={toggleRole} />}
 
-        <main className={`flex-1 ${isLiveMode ? 'overflow-hidden p-0' : 'overflow-y-auto p-4 md:p-8'} custom-scrollbar relative`} style={{ background: 'var(--bg)' }}>
+        <main id="main-scroll-container" className={`flex-1 ${isLiveMode ? 'overflow-hidden p-0' : 'overflow-y-auto p-4 md:p-8'} custom-scrollbar relative`} style={{ background: 'var(--bg)' }}>
           <Suspense fallback={<NunmaPageLoader />}>
             <Routes>
               <Route path="/onboarding" element={<OnboardingSystem />} />
@@ -190,17 +185,55 @@ const AppContent: React.FC = () => {
   );
 };
 
-const NunmaPageLoader = () => {
+const NUNMA_FACTS = [
+  "Nunma is built to seamlessly connect students and mentors.",
+  "Our name 'Nunma' signifies excellence and quality.",
+  "The AI Zone Insights Engine analyzes hundreds of records in seconds.",
+  "Nunma's Live Classroom uses ultra-low latency WebRTC for real-time interaction.",
+  "Every zone is fully customizable to fit different learning styles.",
+  "The Nunma Agent can instantly parse and export data to Excel!",
+  "Nunma automatically verifies students using AI face tracking."
+];
+
+export const NunmaPageLoader = () => {
   const [show, setShow] = useState(false);
+  const [factIndex, setFactIndex] = useState(0);
+
   useEffect(() => {
-    const t = setTimeout(() => setShow(true), 300);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => setShow(true), 300); // Prevent flicker for fast loads
+    
+    const interval = setInterval(() => {
+      setFactIndex((prev) => (prev + 1) % NUNMA_FACTS.length);
+    }, 4000); // Rotate fact every 4s
+    
+    return () => {
+      clearTimeout(t);
+      clearInterval(interval);
+    };
   }, []);
+
   if (!show) return null;
+
   return (
-    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#040457' }}>
-      <div style={{ width: 48, height: 48, border: '4px solid #c2f575', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#052E16', fontFamily: 'Inter, sans-serif' }}>
+      <div style={{ position: 'relative', marginBottom: '2rem' }}>
+        <div style={{ width: 80, height: 80, border: '4px solid rgba(194, 245, 117, 0.2)', borderRadius: '50%' }}></div>
+        <div style={{ width: 80, height: 80, border: '4px solid #c2f575', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', position: 'absolute', top: 0, left: 0 }} />
+      </div>
+      
+      <h2 style={{ color: 'white', fontSize: '24px', fontWeight: 800, margin: '0 0 16px 0', letterSpacing: '-0.5px' }}>Please wait, loading...</h2>
+      
+      <div style={{ height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '400px', padding: '0 24px', textAlign: 'center' }}>
+        <p key={factIndex} style={{ color: '#cbd5e1', fontWeight: 500, lineHeight: 1.5, animation: 'fadeIn 0.5s ease-out' }}>
+          <span style={{ color: '#c2f575', fontWeight: 'bold', marginRight: '8px' }}>Did you know?</span> 
+          {NUNMA_FACTS[factIndex]}
+        </p>
+      </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
     </div>
   );
 };

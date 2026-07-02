@@ -54,7 +54,7 @@ const ProductManagement: React.FC = () => {
     // New Product State
     const [showProductModal, setShowProductModal] = useState(false);
     const [productTitle, setProductTitle] = useState('');
-    const [productType, setProductType] = useState<'material' | 'service' | 'mentorship'>('service');
+    const [productType, setProductType] = useState<'material' | 'mentorship'>('material');
     const [productPrice, setProductPrice] = useState('');
     const [productCurrency, setProductCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
     const [isListingProduct, setIsListingProduct] = useState(false);
@@ -169,7 +169,7 @@ const ProductManagement: React.FC = () => {
         <div className="space-y-8 max-w-[1400px] mx-auto animate-in fade-in duration-500 pb-20">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                    <h1 className="text-4xl font-extrabold text-[#040457] tracking-tighter mb-2">Product Management</h1>
+                    <h1 className="text-4xl font-extrabold text-nunma-forest tracking-tighter mb-2">Product Management</h1>
                     <p className="text-gray-400 font-medium">Manage your offerings, availability, and bookings.</p>
                 </div>
                 <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
@@ -182,7 +182,7 @@ const ProductManagement: React.FC = () => {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
                             className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2
-                ${activeTab === tab.id ? 'bg-[#040457] text-white shadow-lg' : 'text-gray-400 hover:text-[#040457] hover:bg-gray-50'}
+                ${activeTab === tab.id ? 'bg-nunma-forest text-white shadow-lg' : 'text-gray-400 hover:text-nunma-forest hover:bg-gray-50'}
               `}
                         >
                             {tab.icon} {tab.label}
@@ -198,7 +198,7 @@ const ProductManagement: React.FC = () => {
                             {/* Calendar Column */}
                             <div className="xl:col-span-7 space-y-8">
                                 <div className="flex items-center justify-between px-4">
-                                    <h3 className="text-2xl font-black text-[#040457] tracking-tight">{monthName} {year}</h3>
+                                    <h3 className="text-2xl font-black text-nunma-forest tracking-tight">{monthName} {year}</h3>
                                     <div className="flex gap-2">
                                         <button onClick={() => setCurrentMonth(new Date(year, currentMonth.getMonth() - 1, 1))} className="p-3 bg-gray-50 hover:bg-[#c2f575] rounded-2xl transition-all"><ChevronLeft size={20} /></button>
                                         <button onClick={() => setCurrentMonth(new Date(year, currentMonth.getMonth() + 1, 1))} className="p-3 bg-gray-50 hover:bg-[#c2f575] rounded-2xl transition-all"><ChevronRight size={20} /></button>
@@ -219,12 +219,12 @@ const ProductManagement: React.FC = () => {
                                                 key={dayNum}
                                                 onClick={() => setSelectedDate(dayNum)}
                                                 className={`aspect-square flex flex-col items-center justify-center rounded-2xl transition-all relative group
-                          ${isSelected ? 'bg-[#040457] text-white shadow-xl' : 'hover:bg-[#c2f575]/10 text-gray-600'}
+                          ${isSelected ? 'bg-nunma-forest text-white shadow-xl' : 'hover:bg-[#c2f575]/10 text-gray-600'}
                         `}
                                             >
                                                 <span className="text-sm font-bold">{dayNum}</span>
                                                 {hasMeeting && (
-                                                    <div className={`absolute bottom-3 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-[#c2f575]' : 'bg-[#040457]'}`} />
+                                                    <div className={`absolute bottom-3 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-[#c2f575]' : 'bg-nunma-forest'}`} />
                                                 )}
                                             </button>
                                         );
@@ -235,11 +235,11 @@ const ProductManagement: React.FC = () => {
                             {/* Details Column */}
                             <div className="xl:col-span-5 space-y-8">
                                 <div className="flex items-center gap-4 mb-4">
-                                    <div className="w-12 h-12 bg-[#c2f575] rounded-[1.25rem] flex items-center justify-center text-[#040457] shadow-lg shadow-[#c2f575]/20">
+                                    <div className="w-12 h-12 bg-[#c2f575] rounded-[1.25rem] flex items-center justify-center text-nunma-forest shadow-lg shadow-[#c2f575]/20">
                                         <Clock size={24} />
                                     </div>
                                     <div>
-                                        <h4 className="text-xl font-black text-[#040457]">Agenda</h4>
+                                        <h4 className="text-xl font-black text-nunma-forest">Agenda</h4>
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{monthName} {selectedDate}, {year}</p>
                                     </div>
                                 </div>
@@ -250,7 +250,7 @@ const ProductManagement: React.FC = () => {
                                             <div className="flex justify-between items-start mb-4">
                                                 <div className="space-y-1">
                                                     <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest">{meeting.time}</p>
-                                                    <h5 className="text-lg font-black text-[#040457]">{meeting.studentName || 'Student'}</h5>
+                                                    <h5 className="text-lg font-black text-nunma-forest">{meeting.studentName || 'Student'}</h5>
                                                 </div>
                                                 <button className="p-2 bg-indigo-50 text-indigo-600 rounded-xl opacity-0 group-hover:opacity-100 transition-all"><Video size={18} /></button>
                                             </div>
@@ -275,7 +275,7 @@ const ProductManagement: React.FC = () => {
                             <div className="flex justify-end">
                                 <button
                                     onClick={() => setShowProductModal(true)}
-                                    className="px-6 py-2.5 bg-[#c2f575] text-[#1A1A4E] rounded-full font-bold uppercase text-[10px] tracking-widest hover:brightness-105 transition-all shadow-lg flex justify-center items-center gap-2"
+                                    className="px-6 py-2.5 bg-[#c2f575] text-nunma-forest rounded-full font-bold uppercase text-[10px] tracking-widest hover:brightness-105 transition-all shadow-lg flex justify-center items-center gap-2"
                                 >
                                     <Plus size={14} /> List Product
                                 </button>
@@ -284,7 +284,7 @@ const ProductManagement: React.FC = () => {
                                 {products.length > 0 ? products.map(product => (
                                     <div key={product.id} className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 hover:bg-white hover:shadow-2xl transition-all group">
                                         <div className="flex justify-between items-start mb-6">
-                                            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-[#040457] shadow-sm group-hover:bg-[#c2f575] transition-colors">
+                                            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-nunma-forest shadow-sm group-hover:bg-[#c2f575] transition-colors">
                                                 <ShoppingBag size={28} />
                                             </div>
                                             <div className="flex gap-2">
@@ -292,14 +292,14 @@ const ProductManagement: React.FC = () => {
                                                 <button onClick={() => handleDeleteProduct(product.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
                                             </div>
                                         </div>
-                                        <h4 className="text-xl font-black text-[#040457] mb-2">{product.title}</h4>
+                                        <h4 className="text-xl font-black text-nunma-forest mb-2">{product.title}</h4>
                                         <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest mb-6">{product.type}</p>
                                         <div className="flex items-center justify-between pt-6 border-t border-gray-100">
-                                            <p className="text-2xl font-black text-[#040457]">
+                                            <p className="text-2xl font-black text-nunma-forest">
                                                 {product.priceINR ? `₹${product.priceINR}` : ''} {product.priceUSD ? `/ $${product.priceUSD}` : ''}
                                                 {(!product.priceINR && !product.priceUSD) ? `${product.price} ${product.currency}` : ''}
                                             </p>
-                                            <button className="p-2 text-gray-300 hover:text-[#040457] transition-all"><ExternalLink size={18} /></button>
+                                            <button className="p-2 text-gray-300 hover:text-nunma-forest transition-all"><ExternalLink size={18} /></button>
                                         </div>
                                     </div>
                                 )) : (
@@ -316,12 +316,12 @@ const ProductManagement: React.FC = () => {
                         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl">
                             <div className="flex items-center justify-between mb-8">
                                 <div>
-                                    <h3 className="text-2xl font-black text-[#040457] tracking-tight">Weekly Schedule</h3>
+                                    <h3 className="text-2xl font-black text-nunma-forest tracking-tight">Weekly Schedule</h3>
                                     <p className="text-sm text-gray-400 font-medium">Set your standard working hours for mentorship sessions.</p>
                                 </div>
                                 <button
                                     onClick={saveAvailability}
-                                    className="bg-[#040457] text-white font-black uppercase text-[10px] tracking-widest px-8 py-4 rounded-2xl shadow-xl hover:scale-105 transition-all flex items-center gap-3"
+                                    className="bg-nunma-forest text-white font-black uppercase text-[10px] tracking-widest px-8 py-4 rounded-2xl shadow-xl hover:scale-105 transition-all flex items-center gap-3"
                                 >
                                     <Save size={16} /> Save Changes
                                 </button>
@@ -339,17 +339,17 @@ const ProductManagement: React.FC = () => {
                                                             newSched[dIdx].active = !newSched[dIdx].active;
                                                             setAvailability(newSched);
                                                         }}
-                                                        className={`w-12 h-6 rounded-full p-1 transition-all ${day.active ? 'bg-[#040457]' : 'bg-gray-200'}`}
+                                                        className={`w-12 h-6 rounded-full p-1 transition-all ${day.active ? 'bg-nunma-forest' : 'bg-gray-200'}`}
                                                     >
                                                         <div className={`w-4 h-4 rounded-full bg-white transition-all ${day.active ? 'translate-x-6' : ''}`}></div>
                                                     </button>
-                                                    <span className={`text-lg font-black tracking-tight ${day.active ? 'text-[#040457]' : 'text-gray-300'}`}>{day.day}</span>
+                                                    <span className={`text-lg font-black tracking-tight ${day.active ? 'text-nunma-forest' : 'text-gray-300'}`}>{day.day}</span>
                                                 </div>
 
                                                 {day.active && (
                                                     <button
                                                         onClick={() => addSlot(dIdx)}
-                                                        className="p-2 bg-[#c2f575] text-[#040457] rounded-xl hover:scale-105 transition-all shadow-sm"
+                                                        className="p-2 bg-[#c2f575] text-nunma-forest rounded-xl hover:scale-105 transition-all shadow-sm"
                                                     >
                                                         <Plus size={18} strokeWidth={3} />
                                                     </button>
@@ -364,14 +364,14 @@ const ProductManagement: React.FC = () => {
                                                                 <input
                                                                     type="time"
                                                                     value={slot.start}
-                                                                    className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2 font-bold text-[#040457] focus:ring-2 focus:ring-[#c2f575]"
+                                                                    className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2 font-bold text-nunma-forest focus:ring-2 focus:ring-[#c2f575]"
                                                                     onChange={(e) => updateSlot(dIdx, sIdx, 'start', e.target.value)}
                                                                 />
                                                                 <span className="text-gray-300 font-black">—</span>
                                                                 <input
                                                                     type="time"
                                                                     value={slot.end}
-                                                                    className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2 font-bold text-[#040457] focus:ring-2 focus:ring-[#c2f575]"
+                                                                    className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2 font-bold text-nunma-forest focus:ring-2 focus:ring-[#c2f575]"
                                                                     onChange={(e) => updateSlot(dIdx, sIdx, 'end', e.target.value)}
                                                                 />
                                                             </div>
@@ -403,31 +403,31 @@ const ProductManagement: React.FC = () => {
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
                         <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center">
-                            <h3 className="text-3xl font-black text-[#040457] tracking-tight">List Digital Product</h3>
+                            <h3 className="text-3xl font-black text-nunma-forest tracking-tight">List Digital Product</h3>
                             <button onClick={() => setShowProductModal(false)} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"><X size={24} /></button>
                         </div>
                         <div className="p-12 space-y-10">
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRODUCT NAME</label>
-                                <input type="text" placeholder="e.g. Masterclass Assets" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
+                                <input type="text" placeholder="e.g. Masterclass Assets" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
                             </div>
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">TYPE</label>
-                                <div className="grid grid-cols-3 gap-4">
-                                    {(['material', 'service', 'mentorship'] as const).map(t => (
-                                        <button key={t} onClick={() => setProductType(t)} className={`py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${productType === t ? 'bg-[#040457] text-white shadow-xl' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{t}</button>
+                                <div className="grid grid-cols-2 gap-4">
+                                    {(['material', 'mentorship'] as const).map(t => (
+                                        <button key={t} onClick={() => setProductType(t)} className={`py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${productType === t ? 'bg-nunma-forest text-white shadow-xl' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{t}</button>
                                     ))}
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none" /></div>
-                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label>                  <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none">
+                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none" /></div>
+                                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label>                  <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none">
                                     <option value="INR">INR (₹)</option>
                                     <option value="USD" disabled>USD ($) - Coming Soon</option>
                                     <option value="EUR" disabled>EUR (€) - Coming Soon</option>
                                 </select></div>
                             </div>
-                            <button onClick={handleListProduct} disabled={isListingProduct} className="w-full py-7 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-70">
+                            <button onClick={handleListProduct} disabled={isListingProduct} className="w-full py-7 bg-nunma-forest text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-70">
                                 {isListingProduct ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div> : <>CONFIRM LISTING <ArrowRight size={20} className="text-[#c2f575]" /></>}
                             </button>
                         </div>
@@ -440,29 +440,29 @@ const ProductManagement: React.FC = () => {
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
                         <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center bg-white">
-                            <h3 className="text-3xl font-black text-[#040457] tracking-tight">Edit Product</h3>
+                            <h3 className="text-3xl font-black text-nunma-forest tracking-tight">Edit Product</h3>
                             <button onClick={() => setEditingProduct(null)} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"><X size={24} /></button>
                         </div>
                         <div className="p-12 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Product Title</label>
-                                <input type="text" value={editingProduct.title} onChange={e => setEditingProduct({ ...editingProduct, title: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
+                                <input type="text" value={editingProduct.title} onChange={e => setEditingProduct({ ...editingProduct, title: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-3">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Price (USD Tier)</label>
-                                    <input type="number" min="0" value={editingProduct.priceUSD || ''} onChange={e => setEditingProduct({ ...editingProduct, priceUSD: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
+                                    <input type="number" min="0" value={editingProduct.priceUSD || ''} onChange={e => setEditingProduct({ ...editingProduct, priceUSD: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
                                 </div>
                                 <div className="space-y-3">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Price (INR Tier)</label>
-                                    <input type="number" min="0" value={editingProduct.priceINR || ''} onChange={e => setEditingProduct({ ...editingProduct, priceINR: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
+                                    <input type="number" min="0" value={editingProduct.priceINR || ''} onChange={e => setEditingProduct({ ...editingProduct, priceINR: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
                                 </div>
                             </div>
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Description</label>
-                                <textarea rows={4} value={editingProduct.description} onChange={e => setEditingProduct({ ...editingProduct, description: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white focus:border-[#c2f575] transition-all resize-none" />
+                                <textarea rows={4} value={editingProduct.description} onChange={e => setEditingProduct({ ...editingProduct, description: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none focus:bg-white focus:border-[#c2f575] transition-all resize-none" />
                             </div>
-                            <button onClick={handleUpdateProduct} className="w-full py-7 bg-[#040457] text-white rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:bg-black transition-all flex items-center justify-center gap-4">
+                            <button onClick={handleUpdateProduct} className="w-full py-7 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:bg-black transition-all flex items-center justify-center gap-4">
                                 Update Product <Save size={20} />
                             </button>
                         </div>

@@ -183,10 +183,10 @@ const Auth: React.FC = () => {
       <div className="w-full max-w-[1280px] min-h-[700px] grid grid-cols-1 lg:grid-cols-[1.1fr,1fr] bg-white rounded-[3rem] lg:rounded-[4.5rem] shadow-[0_80px_160px_rgba(0,0,0,0.06)] overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-1000">
 
         {/* Left Side: Branding */}
-        <div className="hidden lg:flex bg-[#040457] p-24 text-white flex-col justify-between relative overflow-hidden">
+        <div className="hidden lg:flex bg-nunma-forest p-24 text-white flex-col justify-between relative overflow-hidden">
           <div className="relative z-10">
             <div className="flex items-center gap-4 mb-24">
-              <div className="w-20 h-20 rounded-[1.5rem] flex items-center justify-center shadow-2xl rotate-3 overflow-hidden bg-[#040457]">
+              <div className="w-20 h-20 rounded-[1.5rem] flex items-center justify-center shadow-2xl rotate-3 overflow-hidden bg-nunma-forest">
                 <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-full h-full object-cover" />
               </div>
               <span className="text-4xl font-black tracking-tighter">nunma</span>
@@ -205,7 +205,7 @@ const Auth: React.FC = () => {
 
           <div className="relative z-10">
             <div className="inline-flex items-center gap-6 bg-white/5 backdrop-blur-3xl p-8 rounded-[3rem] border border-white/10">
-              <div className="w-14 h-14 rounded-2xl bg-[#c2f575] flex items-center justify-center text-[#040457] shrink-0">
+              <div className="w-14 h-14 rounded-2xl bg-[#c2f575] flex items-center justify-center text-nunma-forest shrink-0">
                 <ShieldCheck size={28} strokeWidth={3} />
               </div>
               <div>
@@ -224,16 +224,16 @@ const Auth: React.FC = () => {
         <div className="p-10 md:p-16 lg:p-24 flex flex-col justify-center bg-white">
           <div className="max-w-md mx-auto w-full">
             <div className="lg:hidden flex items-center gap-3 mb-16">
-              <div className="w-10 h-10 bg-[#040457] rounded-xl flex items-center justify-center overflow-hidden">
+              <div className="w-10 h-10 bg-nunma-forest rounded-xl flex items-center justify-center overflow-hidden">
                 <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" />
               </div>
-              <span className="text-2xl font-black tracking-tighter text-[#040457]">nunma</span>
+              <span className="text-2xl font-black tracking-tighter text-nunma-forest">nunma</span>
             </div>
 
             {isLogin ? (
               <div className="animate-in fade-in duration-700">
                 <div className="mb-14">
-                  <h2 className="text-5xl font-black text-[#040457] tracking-tighter mb-4">Welcome Back</h2>
+                  <h2 className="text-5xl font-black text-nunma-forest tracking-tighter mb-4">Welcome Back</h2>
                   <p className="text-gray-400 font-medium text-lg">Enter your access token to enter the hub.</p>
                 </div>
 
@@ -243,7 +243,7 @@ const Auth: React.FC = () => {
                     type="button"
                     onClick={handleGoogleSignIn}
                     disabled={isLoading}
-                    className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
+                    className="w-full py-5 bg-white border-2 border-gray-100 text-nunma-forest rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
                   >
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                     Continue with Google
@@ -258,10 +258,10 @@ const Auth: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Identity (Email)</label>
                     <div className="relative group">
-                      <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457] transition-colors" size={20} />
+                      <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-nunma-forest transition-colors" size={20} />
                       <input
                         type="email" required placeholder="name@domain.com"
-                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
+                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-bold text-nunma-forest outline-none transition-all shadow-sm placeholder-slate-500"
                         value={email} onChange={(e) => setEmail(e.target.value)}
                       />
                     </div>
@@ -270,19 +270,19 @@ const Auth: React.FC = () => {
                   <div className="space-y-2">
                     <div className="flex justify-between items-center ml-1">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">Access Key</label>
-                      <button type="button" className="text-[10px] font-black text-indigo-400 uppercase tracking-widest hover:text-[#040457]">Recovery</button>
+                      <button type="button" className="text-[10px] font-black text-indigo-400 uppercase tracking-widest hover:text-nunma-forest">Recovery</button>
                     </div>
                     <div className="relative group">
-                      <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457] transition-colors" size={20} />
+                      <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-nunma-forest transition-colors" size={20} />
                       <input
                         type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-16 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
+                        className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-16 py-2 font-bold text-nunma-forest outline-none transition-all shadow-sm placeholder-slate-500"
                         value={password} onChange={(e) => setPassword(e.target.value)}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 hover:text-[#040457] transition-colors"
+                        className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 hover:text-nunma-forest transition-colors"
                       >
                         {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                       </button>
@@ -292,7 +292,7 @@ const Auth: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl shadow-[#040457]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-6 bg-nunma-forest text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl shadow-nunma-forest/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? "Validating..." : "Sign In"} <ArrowRight size={20} className="text-[#c2f575]" />
                   </button>
@@ -302,7 +302,7 @@ const Auth: React.FC = () => {
               /* SIGNUP FLOW */
               <div className="animate-in fade-in slide-in-from-right-8 duration-700">
                 <div className="mb-14">
-                  <h2 className="text-5xl font-black text-[#040457] tracking-tighter mb-4">Join Ecosystem</h2>
+                  <h2 className="text-5xl font-black text-nunma-forest tracking-tighter mb-4">Join Ecosystem</h2>
                   <p className="text-gray-400 font-medium text-lg">
                     {step === 'info' && "Initialize your professional profile."}
                     {step === 'otp' && "Enter the verification code sent to your email."}
@@ -317,7 +317,7 @@ const Auth: React.FC = () => {
                       type="button"
                       onClick={handleGoogleSignIn}
                       disabled={isLoading}
-                      className="w-full py-5 bg-white border-2 border-gray-100 text-[#040457] rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
+                      className="w-full py-5 bg-white border-2 border-gray-100 text-nunma-forest rounded-[1.75rem] font-bold text-sm hover:border-[#c2f575] hover:bg-gray-50 transition-all flex items-center justify-center gap-3 mb-8 shadow-sm"
                     >
                       <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                       Sign up with Google
@@ -332,10 +332,10 @@ const Auth: React.FC = () => {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Full Name</label>
                       <div className="relative group">
-                        <User className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <User className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-nunma-forest" size={20} />
                         <input
                           type="text" required placeholder="Legal full name"
-                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-bold text-[#040457] outline-none transition-all placeholder-slate-500"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-bold text-nunma-forest outline-none transition-all placeholder-slate-500"
                           value={name} onChange={(e) => setName(e.target.value)}
                         />
                       </div>
@@ -344,10 +344,10 @@ const Auth: React.FC = () => {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Identity (Email)</label>
                       <div className="relative group">
-                        <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-nunma-forest" size={20} />
                         <input
                           type="email" required placeholder="name@domain.com"
-                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-bold text-[#040457] outline-none transition-all placeholder-slate-500"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-bold text-nunma-forest outline-none transition-all placeholder-slate-500"
                           value={email} onChange={(e) => setEmail(e.target.value)}
                         />
                       </div>
@@ -358,20 +358,20 @@ const Auth: React.FC = () => {
                       <div className="flex p-2 bg-gray-50 rounded-[1.5rem] border border-gray-100 gap-2">
                         <button
                           type="button" onClick={() => setRole(UserRole.STUDENT)}
-                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.STUDENT ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
+                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.STUDENT ? 'bg-white text-nunma-forest shadow-xl border border-gray-100' : 'text-gray-400'}`}
                         >
                           Learner
                         </button>
                         <button
                           type="button" onClick={() => setRole(UserRole.THALA)}
-                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.THALA ? 'bg-white text-[#040457] shadow-xl border border-gray-100' : 'text-gray-400'}`}
+                          className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${role === UserRole.THALA ? 'bg-white text-nunma-forest shadow-xl border border-gray-100' : 'text-gray-400'}`}
                         >
                           Expert
                         </button>
                       </div>
                     </div>
 
-                    <button type="submit" disabled={isLoading} className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
+                    <button type="submit" disabled={isLoading} className="w-full py-6 bg-nunma-forest text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
                       {isLoading ? "Sending Code..." : "Send Verification Code"} <ArrowRight size={18} className="text-[#c2f575]" />
                     </button>
                   </form>
@@ -382,16 +382,16 @@ const Auth: React.FC = () => {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">6-Digit Verification Code</label>
                       <div className="relative group">
-                        <KeyRound className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <KeyRound className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-nunma-forest" size={20} />
                         <input
                           type="text" required placeholder="••••••" maxLength={6}
-                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-black text-[#040457] outline-none transition-all text-2xl tracking-[0.5em] placeholder-slate-500"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-8 py-2 font-black text-nunma-forest outline-none transition-all text-2xl tracking-[0.5em] placeholder-slate-500"
                           value={otp} onChange={(e) => setOtp(e.target.value)}
                         />
                       </div>
                       <p className="text-[10px] text-gray-400 font-medium ml-1">
-                        Code sent to <span className="text-[#040457] font-bold">{email}</span>.
-                        <button type="button" onClick={() => setStep('info')} className="ml-1 text-[#040457] font-black uppercase tracking-tighter hover:underline">Change</button>
+                        Code sent to <span className="text-nunma-forest font-bold">{email}</span>.
+                        <button type="button" onClick={() => setStep('info')} className="ml-1 text-nunma-forest font-black uppercase tracking-tighter hover:underline">Change</button>
                       </p>
                       <p className="text-[10px] text-gray-400 font-medium ml-1 mt-1">
                         Didn&apos;t receive it? Check your spam folder, or{' '}
@@ -399,14 +399,14 @@ const Auth: React.FC = () => {
                           type="button"
                           onClick={handleResendOTP}
                           disabled={resendCooldown > 0 || isResending}
-                          className="text-[#040457] font-black uppercase tracking-tighter hover:underline disabled:text-gray-300 disabled:cursor-not-allowed"
+                          className="text-nunma-forest font-black uppercase tracking-tighter hover:underline disabled:text-gray-300 disabled:cursor-not-allowed"
                         >
                           {isResending ? 'Sending...' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
                         </button>
                       </p>
                     </div>
 
-                    <button type="submit" disabled={isLoading} className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
+                    <button type="submit" disabled={isLoading} className="w-full py-6 bg-nunma-forest text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
                       {isLoading ? "Verifying..." : "Verify Code"} <ArrowRight size={18} className="text-[#c2f575]" />
                     </button>
                   </form>
@@ -417,16 +417,16 @@ const Auth: React.FC = () => {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Create Access Key</label>
                       <div className="relative group">
-                        <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]" size={20} />
+                        <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-nunma-forest" size={20} />
                         <input
                           type={showPassword ? "text" : "password"} required placeholder="••••••••"
-                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-16 py-2 font-bold text-[#040457] outline-none transition-all shadow-sm placeholder-slate-500"
+                          className="w-full h-[44px] min-h-[48px] md:min-h-[44px] bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-[1.75rem] pl-20 pr-16 py-2 font-bold text-nunma-forest outline-none transition-all shadow-sm placeholder-slate-500"
                           value={password} onChange={(e) => setPassword(e.target.value)}
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 hover:text-[#040457] transition-colors"
+                          className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 hover:text-nunma-forest transition-colors"
                         >
                           {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                         </button>
@@ -436,7 +436,7 @@ const Auth: React.FC = () => {
                       </p>
                     </div>
 
-                    <button type="submit" disabled={isLoading} className="w-full py-6 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
+                    <button type="submit" disabled={isLoading} className="w-full py-6 bg-nunma-forest text-white rounded-[1.75rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 mt-8 disabled:opacity-50">
                       {isLoading ? "Finalizing..." : "Initialize Dashboard"} <Sparkles size={18} className="text-[#c2f575]" />
                     </button>
                   </form>
@@ -452,7 +452,7 @@ const Auth: React.FC = () => {
                     setIsLogin(!isLogin);
                     setStep('info');
                   }}
-                  className="text-[#040457] font-black uppercase text-[10px] tracking-[0.25em] hover:text-[#c2f575] transition-colors ml-2"
+                  className="text-nunma-forest font-black uppercase text-[10px] tracking-[0.25em] hover:text-[#c2f575] transition-colors ml-2"
                 >
                   {isLogin ? 'Create Profile' : 'Sign In'}
                 </button>

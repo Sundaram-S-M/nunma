@@ -103,18 +103,18 @@ const AvailabilitySetup: React.FC = () => {
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-700 pb-20 pt-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <button onClick={() => navigate('/workplace')} className="p-4 bg-white border border-gray-100 rounded-2xl text-[#040457] shadow-sm hover:shadow-xl transition-all">
+          <button onClick={() => navigate('/workplace')} className="p-4 bg-white border border-gray-100 rounded-2xl text-nunma-forest shadow-sm hover:shadow-xl transition-all">
             <ChevronLeft size={24} />
           </button>
           <div>
-            <h1 className="text-4xl font-black text-[#040457] tracking-tighter">Availability Schedule</h1>
+            <h1 className="text-4xl font-black text-nunma-forest tracking-tighter">Availability Schedule</h1>
             <p className="text-gray-400 font-medium text-sm">Define your working hours for student mentorship.</p>
           </div>
         </div>
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="bg-[#040457] text-white font-black uppercase text-[10px] tracking-widest px-8 py-4 rounded-2xl shadow-xl flex items-center gap-3 active:scale-95 transition-all disabled:opacity-50"
+          className="bg-nunma-forest text-white font-black uppercase text-[10px] tracking-widest px-8 py-4 rounded-2xl shadow-xl flex items-center gap-3 active:scale-95 transition-all disabled:opacity-50"
         >
           {isSaving ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><Save size={18} className="text-[#c2f575]" /> SAVE SCHEDULE</>}
         </button>
@@ -123,28 +123,28 @@ const AvailabilitySetup: React.FC = () => {
       <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-[0_40px_100px_rgba(0,0,0,0.03)] overflow-hidden">
         <div className="p-10 space-y-6">
           <div className="flex items-center gap-4 bg-[#faffdf] p-8 rounded-[2rem] border border-[#c2f575]/20 mb-6">
-            <Sparkles size={24} className="text-[#040457]" />
+            <Sparkles size={24} className="text-nunma-forest" />
             <div>
-              <p className="text-[10px] font-black text-[#040457] uppercase tracking-widest">GLOBAL AVAILABILITY SETTINGS</p>
-              <p className="text-[9px] font-bold text-[#040457]/40 uppercase tracking-widest mt-0.5">CONFIGURE YOUR PROFESSIONAL TIME BLOCKS.</p>
+              <p className="text-[10px] font-black text-nunma-forest uppercase tracking-widest">GLOBAL AVAILABILITY SETTINGS</p>
+              <p className="text-[9px] font-bold text-nunma-forest/40 uppercase tracking-widest mt-0.5">CONFIGURE YOUR PROFESSIONAL TIME BLOCKS.</p>
             </div>
           </div>
 
           <div className="space-y-4">
             {schedule.map((day, idx) => (
-              <div key={day.day} className={`transition-all duration-500 rounded-[2.5rem] border ${day.active ? 'bg-white border-[#040457]/5 shadow-[0_30px_60px_rgba(0,0,0,0.06)]' : 'bg-white border-transparent'}`}>
+              <div key={day.day} className={`transition-all duration-500 rounded-[2.5rem] border ${day.active ? 'bg-white border-nunma-forest/5 shadow-[0_30px_60px_rgba(0,0,0,0.06)]' : 'bg-white border-transparent'}`}>
                 <div className={`p-8 flex items-center justify-between ${day.active ? 'border-b border-gray-50' : ''}`}>
                   <div className="flex items-center gap-6">
                     <button
                       onClick={() => toggleDay(idx)}
-                      className={`w-14 h-7 rounded-full p-1 transition-all duration-500 shadow-inner flex items-center ${day.active ? 'bg-[#040457]' : 'bg-gray-200'}`}
+                      className={`w-14 h-7 rounded-full p-1 transition-all duration-500 shadow-inner flex items-center ${day.active ? 'bg-nunma-forest' : 'bg-gray-200'}`}
                     >
                       <div className={`w-5 h-5 rounded-full bg-white transition-transform duration-500 shadow-md ${day.active ? 'translate-x-7' : ''}`} />
                     </button>
-                    <span className={`text-xl font-black ${day.active ? 'text-[#040457]' : 'text-gray-300'}`}>{day.day}</span>
+                    <span className={`text-xl font-black ${day.active ? 'text-nunma-forest' : 'text-gray-300'}`}>{day.day}</span>
                   </div>
                   {day.active && (
-                    <button onClick={() => addSlot(idx)} className="text-[9px] font-black uppercase tracking-widest text-[#040457] bg-[#c2f575] px-5 py-2.5 rounded-full flex items-center gap-2 shadow-lg active:scale-95 transition-all">
+                    <button onClick={() => addSlot(idx)} className="text-[9px] font-black uppercase tracking-widest text-nunma-forest bg-[#c2f575] px-5 py-2.5 rounded-full flex items-center gap-2 shadow-lg active:scale-95 transition-all">
                       <Plus size={14} strokeWidth={4} /> ADD BLOCK
                     </button>
                   )}
@@ -165,7 +165,7 @@ const AvailabilitySetup: React.FC = () => {
                               <input
                                 type="time" value={slot.start}
                                 onChange={(e) => updateSlot(idx, slot.id, 'start', e.target.value)}
-                                className="w-full bg-transparent font-black text-[#040457] outline-none text-sm"
+                                className="w-full bg-transparent font-black text-nunma-forest outline-none text-sm"
                               />
                             </div>
                           </div>
@@ -176,7 +176,7 @@ const AvailabilitySetup: React.FC = () => {
                               <input
                                 type="time" value={slot.end}
                                 onChange={(e) => updateSlot(idx, slot.id, 'end', e.target.value)}
-                                className="w-full bg-transparent font-black text-[#040457] outline-none text-sm"
+                                className="w-full bg-transparent font-black text-nunma-forest outline-none text-sm"
                               />
                             </div>
                           </div>

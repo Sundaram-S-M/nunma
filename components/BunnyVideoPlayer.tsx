@@ -1,7 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../utils/firebase';
-import { Loader2 } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
 
 interface BunnyVideoPlayerProps {
     videoId: string;
@@ -10,74 +7,104 @@ interface BunnyVideoPlayerProps {
 }
 
 export const BunnyVideoPlayer: React.FC<BunnyVideoPlayerProps> = ({ videoId, title, onComplete }) => {
-    const [tokenData, setTokenData] = useState<{ token: string; expires: number; libraryId: string } | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const LIBRARY_ID = '628013';
+    const iframeUrl = `https://iframe.mediadelivery.net/embed/${LIBRARY_ID}/${videoId}?autoplay=true&preload=true`;
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const completedRef = useRef(false);
+    const playerRef = useRef<any>(null);
 
-    useEffect(() => {
-        const fetchToken = async () => {
-            try {
-                const getTokenFn = httpsCallable(functions, 'generateBunnyToken');
-                const result = await getTokenFn({ videoId });
-                setTokenData(result.data as any);
-            } catch (err: any) {
-                console.error("Failed to fetch Bunny token", err);
-                setError(err.message || 'Failed to initialize video player');
-            }
-        };
+    const triggerComplete = () => {
+        if (completedRef.current) return;
+        completedRef.current = true;
+        console.log('[BunnyPlayer] Marking video as completed!');
+        onComplete();
+    };
 
-        if (videoId) {
-            fetchToken();
+    const attachPlayerEvents = () => {
+        if (!(window as any).playerjs || !iframeRef.current) return;
+
+        try {
+            const player = new (window as any).playerjs.Player(iframeRef.current);
+            playerRef.current = player;
+
+            player.on('ready', () => {
+                console.log('[BunnyPlayer] Player ready — attaching events');
+
+                // Primary: ended event
+                player.on('ended', () => {
+                    console.log('[BunnyPlayer] "ended" event fired');
+                    triggerComplete();
+                });
+
+                // Fallback: timeupdate — fires when ≥97% of video is watched
+                player.on('timeupdate', (data: { seconds: number; duration: number }) => {
+                    if (data && data.duration > 0 && !completedRef.current) {
+                        const progress = data.seconds / data.duration;
+                        if (progress >= 0.97) {
+                            console.log('[BunnyPlayer] 97% reached via timeupdate — completing');
+                            triggerComplete();
+                        }
+                    }
+                });
+            });
+        } catch (err) {
+            console.warn('[BunnyPlayer] Player init error:', err);
         }
-    }, [videoId]);
+    };
+
+    const handleIframeLoad = () => {
+        console.log('[BunnyPlayer] iframe loaded');
+        if ((window as any).playerjs) {
+            attachPlayerEvents();
+        } else {
+            // Script still loading — poll until available
+            let attempts = 0;
+            const poll = setInterval(() => {
+                if ((window as any).playerjs) {
+                    clearInterval(poll);
+                    attachPlayerEvents();
+                } else if (++attempts > 25) {
+                    clearInterval(poll);
+                    console.warn('[BunnyPlayer] player.js never became available');
+                }
+            }, 200);
+        }
+    };
 
     useEffect(() => {
-        const handleMessage = (e: MessageEvent) => {
-            // Bunny sends player events via postMessage
-            // Format is { type: "player:ended" } or similar
-            if (e.data === 'ended' || e.data?.type === 'player:ended' || e.data?.event === 'ended') {
-                onComplete();
-            }
+        // Inject Player.js script once
+        if (!document.getElementById('bunny-player-js')) {
+            const script = document.createElement('script');
+            script.id = 'bunny-player-js';
+            script.src = 'https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js';
+            script.async = true;
+            document.body.appendChild(script);
+        }
+
+        return () => {
+            try {
+                if (playerRef.current?.off) {
+                    playerRef.current.off('ended');
+                    playerRef.current.off('ready');
+                    playerRef.current.off('timeupdate');
+                }
+            } catch (_) {}
         };
-
-        window.addEventListener('message', handleMessage);
-        return () => window.removeEventListener('message', handleMessage);
-    }, [onComplete]);
-
-    if (error) {
-        return (
-            <div className="w-full h-full aspect-video flex items-center justify-center bg-gray-50 rounded-[3rem] text-red-500 font-bold p-6 text-center">
-                {error}
-            </div>
-        );
-    }
-
-    if (!tokenData) {
-        return (
-            <div className="w-full h-full aspect-video flex flex-col items-center justify-center bg-gray-50 rounded-[3rem] text-indigo-900">
-                <Loader2 size={48} className="animate-spin mb-4" />
-                <p className="font-bold">Loading secure video player...</p>
-            </div>
-        );
-    }
-
-    const { token, expires, libraryId } = tokenData;
-    // URL Format based on Bunny token authentication
-    const iframeUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?autoplay=true`;
-    console.log("BunnyVideoPlayer - Loading iframe URL (No Token Test):", iframeUrl);
+    }, []);
 
     return (
-        <div className="w-full max-w-full aspect-video rounded-[3rem] overflow-hidden bg-black shadow-2xl relative flex flex-col items-center justify-center">
+        <div className="w-full max-w-full aspect-video rounded-[2rem] overflow-hidden bg-black shadow-2xl">
             <iframe
                 ref={iframeRef}
                 src={iframeUrl}
                 loading="lazy"
+                onLoad={handleIframeLoad}
                 allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
                 allowFullScreen
-                className="w-full h-full border-none object-cover"
+                referrerPolicy="no-referrer"
+                className="w-full h-full border-none"
                 title={title}
             />
-            {/* Absolute positioning to prevent right-clicks outside of player context if needed */}
         </div>
     );
 };

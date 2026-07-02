@@ -19,7 +19,8 @@ import {
   Euro,
   GraduationCap,
   BookOpen,
-  Mic
+  Mic,
+  Lock
 } from 'lucide-react';
 
 const ZONE_TYPES = [
@@ -65,7 +66,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   return (
     <div>
       <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center justify-between ml-1">
-        <span>{label} {required && <span className="text-[9px] text-[#040457] bg-[#c2f575] px-2 py-0.5 rounded-full ml-2">Mandatory</span>}</span>
+        <span>{label} {required && <span className="text-[9px] text-nunma-forest bg-[#c2f575] px-2 py-0.5 rounded-full ml-2">Mandatory</span>}</span>
         {items.length >= maxItems && <span className="text-[9px] text-red-500 uppercase border border-red-200 px-2 py-0.5 rounded-full">Max reached</span>}
       </label>
       <div className="w-full bg-gray-50 border border-gray-100 rounded-[2rem] p-4 min-h-[70px] flex flex-wrap gap-3 items-center focus-within:ring-4 focus-within:ring-[#c1e60d]/20 transition-all shadow-sm">
@@ -104,13 +105,13 @@ const LaunchZone: React.FC = () => {
         <div className="w-24 h-24 bg-red-50 text-red-500 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-xl shadow-red-500/10">
           <X size={48} strokeWidth={3} />
         </div>
-        <h1 className="text-4xl font-black text-[#040457] mb-4 tracking-tighter">Access Restricted</h1>
+        <h1 className="text-4xl font-black text-nunma-forest mb-4 tracking-tighter">Access Restricted</h1>
         <p className="text-gray-400 font-medium max-w-md mx-auto mb-10 text-lg">
           You do not have permission to view this content. Only verified Thalas can access the professional workplace.
         </p>
         <button
           onClick={() => navigate('/dashboard')}
-          className="px-12 py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+          className="px-12 py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
         >
           Return to Dashboard
         </button>
@@ -131,6 +132,7 @@ const LaunchZone: React.FC = () => {
   const [provideCertificate, setProvideCertificate] = useState(true);
   const [zoneImage, setZoneImage] = useState<string | null>(null);
   const [zoneType, setZoneType] = useState<typeof ZONE_TYPES[number]['id']>('Class Management');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -200,7 +202,7 @@ const LaunchZone: React.FC = () => {
         createdAt: serverTimestamp(),
         students: 0,
         image: zoneImage,
-        isPublic: true,
+        isPublic: !isPrivate,
         zoneType: zoneType
       };
 
@@ -230,7 +232,7 @@ const LaunchZone: React.FC = () => {
           <ChevronLeft size={24} />
         </button>
         <div>
-          <h1 className="text-5xl font-black text-[#1A1A4E] tracking-tighter">Launch New Zone</h1>
+          <h1 className="text-5xl font-black text-nunma-forest tracking-tighter">Launch New Zone</h1>
           <p className="text-gray-400 font-medium text-sm mt-1">Create and publish your professional learning stream.</p>
         </div>
       </div>
@@ -245,7 +247,7 @@ const LaunchZone: React.FC = () => {
       <div className="bg-white rounded-[4rem] border border-gray-100 shadow-[0_40px_120px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="px-14 py-10 border-b border-gray-50 flex items-center justify-between bg-gray-50/20">
           <div className="flex items-center gap-5">
-            <div className="w-14 h-14 bg-[#1A1A4E] rounded-2xl flex items-center justify-center text-[#c1e60d] shadow-lg">
+            <div className="w-14 h-14 bg-nunma-forest rounded-2xl flex items-center justify-center text-[#c1e60d] shadow-lg">
               <Layers size={28} />
             </div>
             <div>
@@ -344,27 +346,6 @@ const LaunchZone: React.FC = () => {
                   ))}
                 </div>
               </div>
-
-              <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Zone Type</label>
-                <div className="grid grid-cols-1 gap-4">
-                  {ZONE_TYPES.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => setZoneType(t.id)}
-                      className={`flex items-center gap-6 p-6 rounded-[2rem] border-2 text-left transition-all ${zoneType === t.id ? 'bg-[#1A1A4E] border-[#1A1A4E] text-white shadow-xl scale-[1.02]' : 'bg-gray-50 border-gray-100 text-indigo-900 hover:border-[#c1e60d]'}`}
-                    >
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${zoneType === t.id ? 'bg-white/10 text-[#c1e60d]' : 'bg-white text-indigo-900 shadow-sm'}`}>
-                        <t.icon size={28} />
-                      </div>
-                      <div>
-                        <p className="font-black text-lg leading-none mb-1">{t.label}</p>
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${zoneType === t.id ? 'text-white/40' : 'text-gray-400'}`}>{t.description}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Right Column */}
@@ -372,7 +353,7 @@ const LaunchZone: React.FC = () => {
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1 flex items-center justify-between">
                   Zone Visual
-                  <span className="text-[9px] text-[#040457] bg-[#c2f575] px-2 py-0.5 rounded-full">Mandatory</span>
+                  <span className="text-[9px] text-nunma-forest bg-[#c2f575] px-2 py-0.5 rounded-full">Mandatory</span>
                 </label>
                 <div
                   onClick={() => imageInputRef.current?.click()}
@@ -393,20 +374,20 @@ const LaunchZone: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-6">
-                <div>
+                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Access Fee</label>
                   <div className="relative">
-                    <div className="absolute left-8 top-1/2 -translate-y-1/2 text-gray-300">
-                      {zoneCurrency === 'USD' && <DollarSign size={24} />}
-                      {zoneCurrency === 'INR' && <IndianRupee size={24} />}
-                      {zoneCurrency === 'EUR' && <Euro size={24} />}
+                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300">
+                      {zoneCurrency === 'USD' && <DollarSign size={20} />}
+                      {zoneCurrency === 'INR' && <IndianRupee size={20} />}
+                      {zoneCurrency === 'EUR' && <Euro size={20} />}
                     </div>
                     <input
                       type="number" min="0"
                       placeholder="0.00"
                       value={zonePrice}
                       onChange={e => setZonePrice(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-16 pr-8 py-5 font-black text-2xl text-indigo-900 outline-none shadow-sm focus:ring-4 focus:ring-[#c1e60d]/20 transition-all"
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-3 py-4 font-black text-xl text-indigo-900 outline-none shadow-sm focus:ring-4 focus:ring-[#c1e60d]/20 transition-all"
                     />
                   </div>
                 </div>
@@ -422,6 +403,92 @@ const LaunchZone: React.FC = () => {
                     <option value="EUR" disabled>EUR (€) - Coming Soon</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Fee Breakdown & Net Payout calculation */}
+              {(() => {
+                const priceVal = parseFloat(zonePrice) || 0;
+                const currencySymbol = zoneCurrency === 'INR' ? '₹' : zoneCurrency === 'USD' ? '$' : '€';
+                
+                // Platform fee percent determined by subscription tier
+                const currentTier = (user as any)?.current_tier?.toLowerCase() || 'starter';
+                const platformFeePercent = currentTier === 'premium' ? 0.02 : currentTier === 'standard' ? 0.05 : 0.10;
+                
+                const platformFee = priceVal * platformFeePercent;
+                const gstFee = priceVal * 0.18;
+                const netPayout = priceVal - platformFee - gstFee;
+
+                return priceVal > 0 ? (
+                  <div className="p-8 bg-gray-50/50 rounded-[2.5rem] border border-gray-100/70 space-y-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Price & Fee Breakdown</p>
+                    
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center text-sm font-medium text-gray-500">
+                        <span>Access Fee (Student Pays)</span>
+                        <span className="font-bold text-indigo-900">{currencySymbol}{priceVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-sm font-medium text-gray-500">
+                        <span>Platform Fee ({(platformFeePercent * 100).toFixed(0)}%)</span>
+                        <span className="text-red-500 font-bold">- {currencySymbol}{platformFee.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-sm font-medium text-gray-500">
+                        <span>GST (18%)</span>
+                        <span className="text-red-500 font-bold">- {currencySymbol}{gstFee.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+
+                      <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
+                        <div>
+                          <span className="text-sm font-black text-indigo-900 block">Net Tutor Earnings</span>
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Estimated payout after fees</span>
+                        </div>
+                        <span className="text-2xl font-black text-[#c2f575]" style={{ textShadow: '0px 1px 2px rgba(0,0,0,0.1)' }}>
+                          {currencySymbol}{netPayout.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Zone Type</label>
+                <div className="grid grid-cols-1 gap-4">
+                  {ZONE_TYPES.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setZoneType(t.id)}
+                      className={`flex items-center gap-6 p-6 rounded-[2rem] border-2 text-left transition-all ${zoneType === t.id ? 'bg-nunma-forest border-nunma-forest text-white shadow-xl scale-[1.02]' : 'bg-gray-50 border-gray-100 text-indigo-900 hover:border-[#c1e60d]'}`}
+                    >
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${zoneType === t.id ? 'bg-white/10 text-[#c1e60d]' : 'bg-white text-indigo-900 shadow-sm'}`}>
+                        <t.icon size={28} />
+                      </div>
+                      <div>
+                        <p className="font-black text-lg leading-none mb-1">{t.label}</p>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${zoneType === t.id ? 'text-white/40' : 'text-gray-400'}`}>{t.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-10 bg-white rounded-[3.5rem] border border-gray-100 flex items-center justify-between shadow-sm hover:border-gray-200 transition-colors">
+                <div className="flex items-center gap-6">
+                  <div className={`p-4 rounded-3xl shadow-md transition-colors ${isPrivate ? 'bg-nunma-forest text-[#c1e60d]' : 'bg-gray-50 text-gray-400'}`}>
+                    <Lock size={32} />
+                  </div>
+                  <div>
+                    <p className="text-lg font-black text-indigo-900">Private Zone</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mt-1 max-w-[200px]">STUDENTS CAN'T JOIN THE ZONE UNTIL YOU PROVIDE ACCESS TO THEM.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsPrivate(!isPrivate)}
+                  className={`w-16 h-9 rounded-full p-1.5 transition-all duration-300 shadow-inner ${isPrivate ? 'bg-nunma-forest' : 'bg-gray-300'}`}
+                >
+                  <div className={`w-6 h-6 rounded-full bg-white shadow-xl transition-transform duration-300 ${isPrivate ? 'translate-x-7' : ''}`} />
+                </button>
               </div>
 
               <div className="p-10 bg-[#faffdf] rounded-[3.5rem] border border-[#c1e60d]/20 flex items-center justify-between shadow-sm">
@@ -448,7 +515,7 @@ const LaunchZone: React.FC = () => {
             <button
               onClick={handleCreateZone}
               disabled={isSubmitting}
-              className="w-full py-8 bg-[#1A1A4E] text-white rounded-[2.5rem] font-black uppercase text-sm tracking-[0.4em] shadow-[0_30px_60px_rgba(26,26,78,0.2)] flex items-center justify-center gap-5 hover:scale-[1.01] hover:brightness-110 active:scale-95 transition-all disabled:opacity-70 group"
+              className="w-full py-8 bg-nunma-forest text-white rounded-[2.5rem] font-black uppercase text-sm tracking-[0.4em] shadow-[0_30px_60px_rgba(26,26,78,0.2)] flex items-center justify-center gap-5 hover:scale-[1.01] hover:brightness-110 active:scale-95 transition-all disabled:opacity-70 group"
             >
               {isSubmitting ? (
                 <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>

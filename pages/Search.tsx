@@ -181,7 +181,7 @@ const Search: React.FC = () => {
             }}
             onKeyDown={handleKeyDown}
             placeholder={`Search for ${type === 'People' ? 'people' : 'a zone'}...`}
-            className="flex-1 px-4 py-3 bg-transparent focus:outline-none text-lg font-bold text-[#1A1A4E] placeholder:text-gray-300"
+            className="flex-1 px-4 py-3 bg-transparent focus:outline-none text-lg font-bold text-nunma-forest placeholder:text-gray-300"
           />
           <div className="relative">
             <button
@@ -210,7 +210,7 @@ const Search: React.FC = () => {
           </div>
           <button
             onClick={handleSearch}
-            className="bg-[#1A1A4E] text-white p-3 rounded-xl hover:bg-indigo-900 transition-all"
+            className="bg-nunma-forest text-white p-3 rounded-xl hover:bg-indigo-900 transition-all"
           >
             <SearchIcon size={20} />
           </button>
@@ -235,7 +235,7 @@ const Search: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-[#1A1A4E] group-hover:text-indigo-600 transition-colors">{item.name || item.title}</h4>
+                    <h4 className="text-sm font-bold text-nunma-forest group-hover:text-indigo-600 transition-colors">{item.name || item.title}</h4>
                     <p className="text-xs text-gray-400 line-clamp-1">{item.headline || item.description || (type === 'People' ? 'Member' : 'Zone')}</p>
                   </div>
                 </div>
@@ -248,7 +248,7 @@ const Search: React.FC = () => {
       {isSearched && (
         <div className="w-full max-w-4xl animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-black text-[#1A1A4E]">Results ({results.length})</h3>
+            <h3 className="text-xl font-black text-nunma-forest">Results ({results.length})</h3>
             <button onClick={() => { setSearchQuery(''); setIsSearched(false); setResults([]); }} className="text-gray-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest">Clear</button>
           </div>
 
@@ -266,11 +266,11 @@ const Search: React.FC = () => {
                     <img src={item.avatar || item.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.id}`} alt="" className="w-full h-full object-cover" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-black text-[#1A1A4E] group-hover:text-indigo-600 transition-colors line-clamp-1">{item.name || item.title}</h4>
+                    <h4 className="text-lg font-black text-nunma-forest group-hover:text-indigo-600 transition-colors line-clamp-1">{item.name || item.title}</h4>
                     <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1 line-clamp-1">{item.headline || item.description || (type === 'People' ? 'Member' : 'Learning Zone')}</p>
                   </div>
                   <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0 duration-300">
-                    <div className="w-10 h-10 rounded-full bg-[#c1e60d] flex items-center justify-center text-[#1A1A4E]">
+                    <div className="w-10 h-10 rounded-full bg-[#c1e60d] flex items-center justify-center text-nunma-forest">
                       <ChevronDown size={20} className="-rotate-90" />
                     </div>
                   </div>

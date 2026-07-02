@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Award,
   Check,
@@ -27,6 +28,7 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../utils/firebase';
+import { formatDate } from '../utils/dateUtils';
 import CertificateOverlay from '../components/CertificateOverlay';
 
 const MOCK_TEMPLATES = [
@@ -195,7 +197,7 @@ const AdvancedColorPicker = ({ color, onChange, onClose }: { color: string, onCh
       <div className="flex items-center gap-3">
         <button
           onClick={onClose}
-          className="px-4 py-2 bg-[#040457] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition-all shadow-md shadow-indigo-900/10"
+          className="px-4 py-2 bg-nunma-forest text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition-all shadow-md shadow-indigo-900/10"
         >
           OK
         </button>
@@ -205,7 +207,7 @@ const AdvancedColorPicker = ({ color, onChange, onClose }: { color: string, onCh
             type="text"
             value={hexInput}
             onChange={(e) => handleHexChange(e.target.value)}
-            className="bg-transparent font-bold text-xs text-[#040457] w-24 outline-none"
+            className="bg-transparent font-bold text-xs text-nunma-forest w-24 outline-none"
             placeholder="#000000"
           />
           <div className="h-4 w-[1px] bg-gray-200 shrink-0" />
@@ -216,12 +218,12 @@ const AdvancedColorPicker = ({ color, onChange, onClose }: { color: string, onCh
               const val = parseInt(e.target.value.replace('%', ''));
               if (!isNaN(val)) setAlpha(Math.max(0, Math.min(100, val)));
             }}
-            className="bg-transparent font-bold text-xs text-[#040457] w-14 outline-none"
+            className="bg-transparent font-bold text-xs text-nunma-forest w-14 outline-none"
           />
         </div>
         <button
           onClick={handleEyeDropper}
-          className="p-3 bg-gray-50 border border-gray-100 rounded-xl text-[#040457] hover:bg-gray-100 transition-all"
+          className="p-3 bg-gray-50 border border-gray-100 rounded-xl text-nunma-forest hover:bg-gray-100 transition-all"
           title="Eye Dropper"
         >
           <Pipette size={18} />
@@ -234,6 +236,7 @@ const AdvancedColorPicker = ({ color, onChange, onClose }: { color: string, onCh
 
 const CertificateEngine: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [showGeneratorModal, setShowGeneratorModal] = useState(false);
   const [modalStep, setModalStep] = useState(1);
   const [issuanceMethod, setIssuanceMethod] = useState<'manual' | 'template' | null>(null);
@@ -332,16 +335,77 @@ const CertificateEngine: React.FC = () => {
       return;
     }
 
-    const worksheetData = zoneData.map(h => ({
-      'Student Name': h.studentName,
-      'Zone Name': h.zoneName,
-      'Issuance Date': new Date(h.date).toLocaleDateString()
-    }));
+    const headers = ['Student Name', 'Zone Name', 'Issuance Date'];
+    const rows = zoneData.map(h => `
+      <tr>
+        <td>${h.studentName}</td>
+        <td>${h.zoneName}</td>
+        <td>${formatDate(h.date)}</td>
+      </tr>
+    `);
 
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, zoneName.substring(0, 31));
-    XLSX.writeFile(workbook, `Certificates_${zoneName.replace(/\s+/g, '_')}.xlsx`);
+    const htmlContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>${zoneName.substring(0, 31).replace(/[^a-zA-Z0-9 ]/g, '')}</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          .header { background-color: #C2F575; color: #052E16; font-weight: bold; text-align: left; padding: 5px; }
+          td { padding: 5px; white-space: nowrap; }
+        </style>
+      </head>
+      <body>
+        <table border="1">
+          <tr>
+            <td rowspan="4" colspan="3" style="border:none; text-align:left; vertical-align:top;">
+              <img src="${window.location.origin}/assets/logo-full.png" alt="Nunma" height="60" />
+            </td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
+          <tr>
+            <td style="border:none; font-weight:bold; color:#052E16;">Zone Name</td>
+            <td style="border:none;">${zoneName}</td>
+          </tr>
+          <tr>
+            <td style="border:none; font-weight:bold; color:#052E16;">User Name</td>
+            <td style="border:none;">${user?.displayName || 'Tutor'}</td>
+          </tr>
+          <tr>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
+          <tr>
+            ${headers.map(h => `<th class="header">${h}</th>`).join('')}
+          </tr>
+          ${rows.join('\n')}
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Certificates_${zoneName.replace(/\\s+/g, '_')}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleIssue = () => {
@@ -396,12 +460,18 @@ const CertificateEngine: React.FC = () => {
     <div className="max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
-          <h1 className="text-4xl font-extrabold text-[#040457] mb-2 tracking-tighter">Certificate Engine</h1>
+          <button 
+            onClick={() => navigate(-1)} 
+            className="flex items-center gap-2 text-gray-400 hover:text-nunma-forest font-black text-[10px] uppercase tracking-widest mb-6 transition-colors"
+          >
+            <ChevronLeft size={16} /> Back
+          </button>
+          <h1 className="text-4xl font-extrabold text-nunma-forest mb-2 tracking-tighter">Certificate Engine</h1>
           <p className="text-gray-400 font-medium text-sm italic">Automate professional credentials with Nunma's secure issuance system.</p>
         </div>
         <button
           onClick={() => setShowGeneratorModal(true)}
-          className="bg-[#040457] text-white font-black uppercase tracking-[0.2em] px-8 py-4 rounded-2xl shadow-xl shadow-[#040457]/20 flex items-center gap-3 hover:scale-105 active:scale-95 transition-all"
+          className="bg-nunma-forest text-white font-black uppercase tracking-[0.2em] px-8 py-4 rounded-2xl shadow-xl shadow-nunma-forest/20 flex items-center gap-3 hover:scale-105 active:scale-95 transition-all"
         >
           <Zap size={20} className="text-[#c2f575]" /> Issue Credentials
         </button>
@@ -412,16 +482,16 @@ const CertificateEngine: React.FC = () => {
           <div className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-sm relative">
             <div className="flex justify-between items-start mb-10">
               <div>
-                <h3 className="text-2xl font-black text-[#040457] mb-2">Institution Branding</h3>
+                <h3 className="text-2xl font-black text-nunma-forest mb-2">Institution Branding</h3>
                 <p className="text-xs text-gray-400 font-medium italic">Define your institution's default branding palette.</p>
               </div>
               <ShieldCheck className="text-[#c2f575]" size={32} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-              <div className="space-y-10">
+              <div className="space-y-8">
                 <div className="relative">
-                  <div className="flex items-center gap-4 mb-10">
+                  <div className="flex items-center gap-4 mb-6">
                     {palette.map(color => (
                       <div key={color} className="relative group/palette">
                         <button
@@ -481,7 +551,7 @@ const CertificateEngine: React.FC = () => {
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 block">Primary Signature</label>
                     <div
                       onClick={() => sig1InputRef.current?.click()}
-                      className="h-32 bg-gray-50 border border-gray-100 rounded-[2rem] flex flex-col items-center justify-center border-dashed hover:border-[#040457] transition-colors cursor-pointer overflow-hidden relative shadow-inner"
+                      className="h-32 bg-gray-50 border border-gray-100 rounded-[2rem] flex flex-col items-center justify-center border-dashed hover:border-nunma-forest transition-colors cursor-pointer overflow-hidden relative shadow-inner"
                     >
                       {signature1 ? <img src={signature1} className="w-full h-full object-contain p-4" alt="Sig 1" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 1</span></>}
                       <input ref={sig1InputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleSignatureUpload(e, 1)} />
@@ -492,7 +562,7 @@ const CertificateEngine: React.FC = () => {
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 block">Secondary Signature</label>
                     <div
                       onClick={() => sig2InputRef.current?.click()}
-                      className="h-32 bg-gray-50 border border-gray-100 rounded-[2rem] flex flex-col items-center justify-center border-dashed hover:border-[#040457] transition-colors cursor-pointer overflow-hidden relative shadow-inner"
+                      className="h-32 bg-gray-50 border border-gray-100 rounded-[2rem] flex flex-col items-center justify-center border-dashed hover:border-nunma-forest transition-colors cursor-pointer overflow-hidden relative shadow-inner"
                     >
                       {signature2 ? <img src={signature2} className="w-full h-full object-contain p-4" alt="Sig 2" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Sig 2</span></>}
                       <input ref={sig2InputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleSignatureUpload(e, 2)} />
@@ -514,21 +584,21 @@ const CertificateEngine: React.FC = () => {
                   ).map(([zName, data]: [string, any]) => (
                     <div key={zName} className="flex items-center justify-between p-6 bg-gray-50 rounded-[1.5rem] border border-gray-100 group hover:bg-white hover:shadow-md transition-all">
                       <div>
-                        <p className="text-xs font-black text-[#040457]">{zName}</p>
+                        <p className="text-xs font-black text-nunma-forest">{zName}</p>
                         <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
-                          {data.count} STUDENTS • {new Date(data.lastDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {data.count} STUDENTS • {formatDate(data.lastDate)}
                         </p>
                       </div>
                       <button
                         onClick={() => downloadBatchAsExcel(zName)}
-                        className="p-3 text-[#040457] hover:bg-indigo-50 rounded-xl transition-colors"
+                        className="p-3 text-nunma-forest hover:bg-indigo-50 rounded-xl transition-colors"
                       >
                         <Download size={16} />
                       </button>
                     </div>
                   ))}
                   {issuanceHistory.length === 0 && (
-                    <div className="py-10 text-center opacity-20 flex flex-col items-center">
+                    <div className="py-6 text-center opacity-20 flex flex-col items-start md:items-center">
                       <Database size={32} className="mb-2" />
                       <p className="text-[9px] font-black uppercase tracking-widest">No issuances yet</p>
                     </div>
@@ -540,7 +610,7 @@ const CertificateEngine: React.FC = () => {
               <p className="text-[10px] font-bold text-gray-400 italic">Configure global certificate assets.</p>
               <button
                 onClick={handleSaveSettings}
-                className="px-12 py-5 bg-[#040457] text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all"
+                className="px-12 py-5 bg-nunma-forest text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all"
               >
                 Save Global Settings
               </button>
@@ -548,7 +618,7 @@ const CertificateEngine: React.FC = () => {
           </div>
         </div>
 
-        <div className="lg:col-span-4 bg-[#040457] rounded-[3rem] p-12 text-white relative overflow-hidden shadow-2xl flex flex-col justify-between min-h-[500px]">
+        <div className="lg:col-span-4 bg-nunma-forest rounded-[3rem] p-12 text-white relative overflow-hidden shadow-2xl flex flex-col justify-between min-h-[500px]">
           <div className="relative z-10">
             <Award size={64} className="text-[#c2f575] mb-8" />
             <h3 className="text-3xl font-black mb-6 tracking-tight">Verification Infrastructure</h3>
@@ -583,7 +653,7 @@ const CertificateEngine: React.FC = () => {
           <div className="bg-white rounded-[3.5rem] w-full max-w-4xl shadow-[0_40px_100px_rgba(0,0,0,0.4)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
             <div className="p-12 pb-6 flex items-center justify-between">
               <div>
-                <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Certification Generator</h3>
+                <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Certification Generator</h3>
                 <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mt-2">
                   STEP {modalStep}: {
                     modalStep === 1 ? 'CHOOSE ISSUANCE METHOD' :
@@ -602,12 +672,12 @@ const CertificateEngine: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-8">
                   <button
                     onClick={() => { setIssuanceMethod('manual'); setModalStep(2); }}
-                    className="group p-12 bg-[#fcfdff] border border-gray-100 rounded-[3rem] hover:shadow-2xl hover:border-[#040457] transition-all duration-500 flex flex-col items-center text-center"
+                    className="group p-12 bg-[#fcfdff] border border-gray-100 rounded-[3rem] hover:shadow-2xl hover:border-nunma-forest transition-all duration-500 flex flex-col items-center text-center"
                   >
-                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center text-[#040457] mb-10 shadow-sm border border-gray-50 group-hover:scale-110 transition-transform">
+                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center text-nunma-forest mb-10 shadow-sm border border-gray-50 group-hover:scale-110 transition-transform">
                       <Upload size={32} />
                     </div>
-                    <h4 className="text-2xl font-black text-[#040457] mb-3 tracking-tight">Manual Upload</h4>
+                    <h4 className="text-2xl font-black text-nunma-forest mb-3 tracking-tight">Manual Upload</h4>
                     <p className="text-gray-400 font-medium text-sm leading-relaxed max-w-[200px]">
                       Upload your own .png or .svg template background.
                     </p>
@@ -615,12 +685,12 @@ const CertificateEngine: React.FC = () => {
 
                   <button
                     onClick={() => { setIssuanceMethod('template'); setModalStep(2); }}
-                    className="group p-12 bg-white border border-[#040457] rounded-[3rem] shadow-sm hover:shadow-2xl transition-all duration-500 flex flex-col items-center text-center"
+                    className="group p-12 bg-white border border-nunma-forest rounded-[3rem] shadow-sm hover:shadow-2xl transition-all duration-500 flex flex-col items-center text-center"
                   >
-                    <div className="w-24 h-24 bg-[#040457] rounded-full flex items-center justify-center text-white mb-10 shadow-2xl group-hover:scale-110 transition-transform">
+                    <div className="w-24 h-24 bg-nunma-forest rounded-full flex items-center justify-center text-white mb-10 shadow-2xl group-hover:scale-110 transition-transform">
                       <BookOpen size={32} />
                     </div>
-                    <h4 className="text-2xl font-black text-[#040457] mb-3 tracking-tight">Template Library</h4>
+                    <h4 className="text-2xl font-black text-nunma-forest mb-3 tracking-tight">Template Library</h4>
                     <p className="text-gray-400 font-medium text-sm leading-relaxed max-w-[200px]">
                       Choose from our pre-designed professional templates.
                     </p>
@@ -630,14 +700,14 @@ const CertificateEngine: React.FC = () => {
 
               {modalStep === 2 && issuanceMethod === 'manual' && (
                 <div className="space-y-10 py-8 animate-in slide-in-from-right-4">
-                  <button onClick={() => setModalStep(1)} className="flex items-center gap-2 text-[#040457] font-black text-[10px] uppercase tracking-widest hover:translate-x-[-4px] transition-transform">
+                  <button onClick={() => setModalStep(1)} className="flex items-center gap-2 text-nunma-forest font-black text-[10px] uppercase tracking-widest hover:translate-x-[-4px] transition-transform">
                     <ChevronLeft size={16} /> Back
                   </button>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                     <div
                       onClick={() => uploadInputRef.current?.click()}
-                      className="h-full min-h-[300px] border-4 border-dashed border-gray-100 bg-gray-50 rounded-[3rem] flex flex-col items-center justify-center cursor-pointer hover:border-[#040457] hover:bg-white transition-all group overflow-hidden"
+                      className="h-full min-h-[300px] border-4 border-dashed border-gray-100 bg-gray-50 rounded-[3rem] flex flex-col items-center justify-center cursor-pointer hover:border-nunma-forest hover:bg-white transition-all group overflow-hidden"
                     >
                       {manualFile ? (
                         <div className="p-8 w-full h-full">
@@ -647,7 +717,7 @@ const CertificateEngine: React.FC = () => {
                       ) : (
                         <>
                           <Upload size={48} className="text-gray-300 mb-6 group-hover:scale-110 transition-transform" />
-                          <p className="text-[#040457] font-black text-lg tracking-tight text-center px-6">Click to upload template (PNG/PPT Image)</p>
+                          <p className="text-nunma-forest font-black text-lg tracking-tight text-center px-6">Click to upload template (PNG/PPT Image)</p>
                           <p className="text-gray-400 text-xs mt-2 uppercase font-bold tracking-widest">Supports Student Name & Zone Overlays</p>
                         </>
                       )}
@@ -675,13 +745,13 @@ const CertificateEngine: React.FC = () => {
 
                   <div className="bg-indigo-50/50 p-8 rounded-[2.5rem] border border-indigo-100 flex items-center justify-between">
                     <div className="flex items-center gap-6">
-                      <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-[#040457] shadow-sm"><FileText size={28} /></div>
+                      <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-nunma-forest shadow-sm"><FileText size={28} /></div>
                       <div>
-                        <p className="text-[#040457] font-black tracking-tight">Need a standard template?</p>
+                        <p className="text-nunma-forest font-black tracking-tight">Need a standard template?</p>
                         <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-1">Download our premium starter kit</p>
                       </div>
                     </div>
-                    <a href="#" className="flex items-center gap-2 bg-[#040457] text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all">
+                    <a href="#" className="flex items-center gap-2 bg-nunma-forest text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all">
                       View Kit <ExternalLink size={14} className="text-[#c2f575]" />
                     </a>
                   </div>
@@ -690,7 +760,7 @@ const CertificateEngine: React.FC = () => {
 
               {modalStep === 2 && issuanceMethod === 'template' && (
                 <div className="space-y-10 py-8 animate-in slide-in-from-right-4 relative">
-                  <button onClick={() => setModalStep(1)} className="flex items-center gap-2 text-[#040457] font-black text-[10px] uppercase tracking-widest">
+                  <button onClick={() => setModalStep(1)} className="flex items-center gap-2 text-nunma-forest font-black text-[10px] uppercase tracking-widest">
                     <ChevronLeft size={16} /> Back
                   </button>
                   <div className="grid grid-cols-2 gap-8 opacity-40 grayscale pointer-events-none">
@@ -711,11 +781,11 @@ const CertificateEngine: React.FC = () => {
                   <div className="absolute inset-0 flex items-center justify-center z-20 pt-20">
                     <div className="bg-white/80 backdrop-blur-md p-10 rounded-[3rem] border border-gray-100 shadow-2xl text-center rotate-3 hover:rotate-0 transition-transform duration-500">
                       <Sparkles size={48} className="text-[#c2f575] mx-auto mb-6" />
-                      <h4 className="text-3xl font-black text-[#040457] mb-2 tracking-tighter">Library Coming Soon</h4>
+                      <h4 className="text-3xl font-black text-nunma-forest mb-2 tracking-tighter">Library Coming Soon</h4>
                       <p className="text-gray-400 font-medium max-w-xs mx-auto text-sm leading-relaxed">
                         We are curating high-fidelity certificate templates tailored for your professional brand. Stay tuned!
                       </p>
-                      <button onClick={() => setModalStep(1)} className="mt-8 px-10 py-4 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest">Return to Methods</button>
+                      <button onClick={() => setModalStep(1)} className="mt-8 px-10 py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest">Return to Methods</button>
                     </div>
                   </div>
                 </div>
@@ -723,7 +793,7 @@ const CertificateEngine: React.FC = () => {
 
               {modalStep === 3 && (
                 <div className="space-y-10 py-8 animate-in slide-in-from-bottom-4">
-                  <button onClick={() => setModalStep(2)} className="flex items-center gap-2 text-[#040457] font-black text-[10px] uppercase tracking-widest">
+                  <button onClick={() => setModalStep(2)} className="flex items-center gap-2 text-nunma-forest font-black text-[10px] uppercase tracking-widest">
                     <ChevronLeft size={16} /> Back to Design
                   </button>
 
@@ -735,7 +805,7 @@ const CertificateEngine: React.FC = () => {
                         <select
                           value={selectedZone}
                           onChange={(e) => setSelectedZone(e.target.value)}
-                          className="w-full bg-gray-50 border border-gray-100 rounded-3xl pl-16 pr-8 py-5 font-black text-lg text-[#040457] outline-none appearance-none focus:ring-4 focus:ring-[#c2f575]/20 transition-all cursor-pointer shadow-sm"
+                          className="w-full bg-gray-50 border border-gray-100 rounded-3xl pl-16 pr-8 py-5 font-black text-lg text-nunma-forest outline-none appearance-none focus:ring-4 focus:ring-[#c2f575]/20 transition-all cursor-pointer shadow-sm"
                         >
                           {zonesList.map(z => <option key={z.id} value={z.title}>{z.title}</option>)}
                           {zonesList.length === 0 && <option disabled>No zones found</option>}
@@ -745,19 +815,19 @@ const CertificateEngine: React.FC = () => {
 
                     <div className="p-10 bg-[#faffdf] rounded-[3.5rem] border border-[#c2f575]/20 flex items-center justify-between shadow-sm group">
                       <div className="flex items-center gap-6">
-                        <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-[#040457] shadow-md group-hover:rotate-12 transition-transform duration-500">
+                        <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-nunma-forest shadow-md group-hover:rotate-12 transition-transform duration-500">
                           <Mail size={32} />
                         </div>
                         <div>
-                          <p className="text-lg font-black text-[#040457]">Email Automation</p>
-                          <p className="text-[10px] font-bold text-[#040457]/40 uppercase tracking-[0.1em] mt-1 max-w-[300px]">
+                          <p className="text-lg font-black text-nunma-forest">Email Automation</p>
+                          <p className="text-[10px] font-bold text-nunma-forest/40 uppercase tracking-[0.1em] mt-1 max-w-[300px]">
                             SECURELY SEND CREDENTIALS TO EVERY REGISTERED STUDENT'S MAILBOX
                           </p>
                         </div>
                       </div>
                       <button
                         onClick={() => setAutoEmail(!autoEmail)}
-                        className={`w-16 h-9 rounded-full p-1.5 transition-all duration-300 shadow-inner ${autoEmail ? 'bg-[#040457]' : 'bg-gray-300'}`}
+                        className={`w-16 h-9 rounded-full p-1.5 transition-all duration-300 shadow-inner ${autoEmail ? 'bg-nunma-forest' : 'bg-gray-300'}`}
                       >
                         <div className={`w-6 h-6 rounded-full bg-white shadow-xl transition-transform duration-300 ${autoEmail ? 'translate-x-7' : ''}`} />
                       </button>
@@ -768,7 +838,7 @@ const CertificateEngine: React.FC = () => {
                     <button
                       onClick={handleIssue}
                       disabled={isIssuing}
-                      className="w-full py-8 bg-[#040457] text-white rounded-[2.5rem] font-black uppercase text-sm tracking-[0.4em] shadow-2xl flex items-center justify-center gap-5 hover:scale-[1.01] hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                      className="w-full py-8 bg-nunma-forest text-white rounded-[2.5rem] font-black uppercase text-sm tracking-[0.4em] shadow-2xl flex items-center justify-center gap-5 hover:scale-[1.01] hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
                     >
                       {isIssuing ? (
                         <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>

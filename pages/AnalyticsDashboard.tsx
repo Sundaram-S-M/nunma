@@ -10,10 +10,11 @@ import {
   Search, ShieldAlert, GraduationCap, TrendingDown, Clock, Sparkles
 } from 'lucide-react';
 import { db } from '../utils/firebase';
+import { formatDate } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
 import { doc, getDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 
-const COLORS = ['#1A1A4E', '#c2f575', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = ['#052E16', '#c2f575', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const AnalyticsDashboard: React.FC = () => {
   const { zoneId } = useParams<{ zoneId: string }>();
@@ -113,7 +114,7 @@ const AnalyticsDashboard: React.FC = () => {
               justify-content: center;
               gap: 1.5rem;
               background: #fbfbfb;
-              color: #1A1A4E;
+              color: #052E16;
               font-weight: 800;
               font-family: Inter, sans-serif;
            }
@@ -148,7 +149,7 @@ const AnalyticsDashboard: React.FC = () => {
            }
            .back-link {
               padding: 0.75rem 1.5rem;
-              background: #1A1A4E;
+              background: #052E16;
               color: #fff;
               border-radius: 1rem;
               text-decoration: none;
@@ -196,7 +197,7 @@ const AnalyticsDashboard: React.FC = () => {
         
         const weekStart = new Date(date);
         weekStart.setDate(date.getDate() - date.getDay());
-        const key = weekStart.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+        const key = formatDate(weekStart);
         weeks[key] = (weeks[key] || 0) + 1;
      });
      // Sort by date would be better, but keys like "06 Apr" are tricky. 
@@ -234,7 +235,7 @@ const AnalyticsDashboard: React.FC = () => {
             <h1 className="flex items-center gap-4">{zone?.title} <span className="badge">Analytics</span></h1>
             <button 
               onClick={() => navigate(`/workplace/analytics/${zoneId}/chat`)}
-              className="flex items-center gap-2 px-6 py-3 bg-[#1A1A4E] text-[#c2f575] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-900/20"
+              className="flex items-center gap-2 px-6 py-3 bg-nunma-forest text-[#c2f575] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-900/20"
             >
               <Sparkles size={14} /> Ask AI Analyst
             </button>
@@ -380,7 +381,7 @@ const AnalyticsDashboard: React.FC = () => {
           padding: 1.5rem;
           max-width: 1400px;
           margin: 0 auto;
-          color: #1A1A4E;
+          color: #052E16;
           font-family: Inter, system-ui, sans-serif;
           animation: fadeIn 0.5s ease-out;
         }
@@ -409,13 +410,13 @@ const AnalyticsDashboard: React.FC = () => {
           justify-content: center;
           cursor: pointer;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          color: #1A1A4E;
+          color: #052E16;
         }
 
         .back-btn:hover {
           background: #f8f8f8;
           transform: translateX(-5px);
-          border-color: #1A1A4E;
+          border-color: #052E16;
         }
 
         .header-text h1 {
@@ -426,13 +427,13 @@ const AnalyticsDashboard: React.FC = () => {
           display: flex;
           align-items: center;
           gap: 1rem;
-          color: #1A1A4E;
+          color: #052E16;
         }
 
         .badge {
           font-size: 0.7rem;
           background: #c2f575;
-          color: #1A1A4E;
+          color: #052E16;
           padding: 0.5rem 1.25rem;
           border-radius: 2rem;
           letter-spacing: 0.15em;
@@ -541,7 +542,7 @@ const AnalyticsDashboard: React.FC = () => {
            display: flex;
            align-items: center;
            gap: 1rem;
-           color: #1A1A4E;
+           color: #052E16;
            letter-spacing: -0.02em;
         }
 
@@ -591,6 +592,7 @@ const AnalyticsDashboard: React.FC = () => {
         }
 
         @media (max-width: 768px) {
+           .back-btn { display: none; }
            .header-text h1 { font-size: 2rem; flex-wrap: wrap; }
            .chart-wrapper { padding: 2rem; }
            .metric-card { padding: 1.5rem; gap: 1rem; }

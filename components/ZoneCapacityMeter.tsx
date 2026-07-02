@@ -71,13 +71,13 @@ const ZoneCapacityMeter: React.FC<ZoneCapacityMeterProps> = ({ zoneId }) => {
     return (
         <div className="relative group">
             <button
-                className="bg-white border border-gray-100 text-[#040457] font-bold px-4 py-3 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                className="bg-white border border-gray-100 text-nunma-forest font-bold px-4 py-3 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 cursor-pointer"
                 onClick={() => setShowTooltip(!showTooltip)}
                 onMouseEnter={() => setShowTooltip(true)}
                 onMouseLeave={() => setShowTooltip(false)}
             >
                 <div className="flex items-center gap-2 bg-[#f8fafc] px-2 py-1 rounded-xl">
-                    <Users size={16} className="text-[#040457]" />
+                    <Users size={16} className="text-nunma-forest" />
                     <span className="text-xs">
                         {isLoading ? '...' : currentStudents} / {studentLimitRaw} Students
                     </span>
@@ -85,7 +85,7 @@ const ZoneCapacityMeter: React.FC<ZoneCapacityMeterProps> = ({ zoneId }) => {
             </button>
 
             {showTooltip && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max bg-[#1A1A4E] text-white text-xs font-bold px-4 py-3 rounded-xl shadow-xl z-50 flex flex-col items-center gap-2 animate-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max bg-nunma-forest text-white text-xs font-bold px-4 py-3 rounded-xl shadow-xl z-50 flex flex-col items-center gap-2 animate-in slide-in-from-top-2 duration-200">
                     <div className="flex items-center gap-2">
                         <Info size={14} className="text-[#c2f575]" />
                         <span>Cumulative capacity across all your zones</span>
@@ -95,7 +95,7 @@ const ZoneCapacityMeter: React.FC<ZoneCapacityMeterProps> = ({ zoneId }) => {
                             Base: {baseLimit} • Add-ons: {addonBlocks * 50}
                         </div>
                     )}
-                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 border-x-8 border-b-8 border-transparent border-b-[#1A1A4E]"></div>
+                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 border-x-8 border-b-8 border-transparent border-b-[#052E16]"></div>
                 </div>
             )}
         </div>

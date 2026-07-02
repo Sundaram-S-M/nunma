@@ -161,7 +161,7 @@ const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, type = 'avat
                         </div>
 
                         <div className="mt-10 text-sm text-gray-400 font-medium">
-                            In case you are not satisfied with photo - <button onClick={onChangePhoto} className="text-[#1a1a4e] font-bold hover:text-[#c2f575] hover:shadow-[0_0_15px_#c2f575] transition-all">Change photo</button>
+                            In case you are not satisfied with photo - <button onClick={onChangePhoto} className="text-nunma-forest font-bold hover:text-[#c2f575] hover:shadow-[0_0_15px_#c2f575] transition-all">Change photo</button>
                         </div>
                     </div>
 
@@ -198,7 +198,7 @@ const PhotoAdjustModal: React.FC<PhotoAdjustModalProps> = ({ image, type = 'avat
 
                         <button
                             onClick={handleSave}
-                            className="w-full py-6 bg-[#1a1a4e] text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:shadow-[0_0_15px_#c2f575] hover:scale-[1.02] active:scale-95 transition-all"
+                            className="w-full py-6 bg-nunma-forest text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:shadow-[0_0_15px_#c2f575] hover:scale-[1.02] active:scale-95 transition-all"
                         >
                             Save photo
                         </button>

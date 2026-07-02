@@ -31,11 +31,11 @@ const QuizModuleEditor: React.FC<QuizModuleEditorProps> = ({ onClose, onSuccess 
     };
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 overflow-y-auto">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-nunma-forest/80 backdrop-blur-xl animate-in fade-in duration-300 overflow-y-auto">
             <div className="bg-white rounded-[3rem] w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative my-8">
                 <div className="p-8 border-b border-gray-100 flex items-center justify-between shrink-0">
                     <div>
-                        <h3 className="text-3xl font-black text-[#040457] tracking-tighter mb-1">Add Quiz Module</h3>
+                        <h3 className="text-3xl font-black text-nunma-forest tracking-tighter mb-1">Add Quiz Module</h3>
                         <p className="text-sm text-gray-400 font-medium">Create a quiz section for this chapter.</p>
                     </div>
                     <button
@@ -54,7 +54,7 @@ const QuizModuleEditor: React.FC<QuizModuleEditorProps> = ({ onClose, onSuccess 
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             placeholder="e.g., Chapter 1 Assessment"
-                            className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                            className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all"
                         />
                     </div>
 
@@ -66,7 +66,7 @@ const QuizModuleEditor: React.FC<QuizModuleEditorProps> = ({ onClose, onSuccess 
                                 min="1"
                                 value={maxMark}
                                 onChange={(e) => setMaxMark(parseInt(e.target.value) || 0)}
-                                className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                                className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all"
                             />
                         </div>
                         <div>
@@ -77,7 +77,7 @@ const QuizModuleEditor: React.FC<QuizModuleEditorProps> = ({ onClose, onSuccess 
                                 max={maxMark}
                                 value={minMark}
                                 onChange={(e) => setMinMark(parseInt(e.target.value) || 0)}
-                                className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                                className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all"
                             />
                         </div>
                     </div>
@@ -97,7 +97,7 @@ const QuizModuleEditor: React.FC<QuizModuleEditorProps> = ({ onClose, onSuccess 
                     </button>
                     <button
                         onClick={handleSave}
-                        className="flex-1 py-5 bg-[#c2f575] text-[#040457] rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
+                        className="flex-1 py-5 bg-[#c2f575] text-nunma-forest rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
                     >
                         <Sparkles size={18} /> Add Quiz Module
                     </button>

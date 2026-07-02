@@ -284,9 +284,9 @@ const Inbox: React.FC = () => {
   };
 
   const categories = [
-    { id: 'chat', label: 'CHAT', icon: <MessageCircle size={16} />, color: 'text-blue-500' },
-    { id: 'community', label: 'COMMUNITY', icon: <Users size={16} />, color: 'text-[#7cc142]' },
-    { id: 'collaboration', label: 'COLLAB', icon: <Zap size={16} />, color: 'text-purple-500' },
+    { id: 'chat', label: 'CHAT', icon: <MessageCircle size={16} />, color: 'text-nunma-forest' },
+    { id: 'community', label: 'COMMUNITY', icon: <Users size={16} />, color: 'text-[#c2f575]' },
+    { id: 'collaboration', label: 'COLLAB', icon: <Zap size={16} />, color: 'text-nunma-forest' },
   ];
 
   const filteredChats = chats.filter(c => (c.type || 'chat') === activeCategory);
@@ -389,7 +389,7 @@ const Inbox: React.FC = () => {
           <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 relative flex flex-col max-h-[90vh]">
             <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30 shrink-0">
               <div>
-                <h3 className="text-2xl font-black text-indigo-900">Group Profile</h3>
+                <h3 className="text-2xl font-black text-nunma-forest">Group Profile</h3>
                 <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Manage details & members</p>
               </div>
               <button onClick={() => { setShowGroupProfile(false); setIsEditingGroup(false); }} className="p-3 text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
@@ -402,7 +402,7 @@ const Inbox: React.FC = () => {
                     <img src={activeChat.avatar || 'https://picsum.photos/seed/group/200/200'} alt="Group" className="w-full h-full rounded-[2rem] object-cover" />
                   </div>
                   {canEditGroup && (
-                    <button onClick={() => groupAvatarRef.current?.click()} className="absolute bottom-[-10px] right-[-10px] w-12 h-12 bg-[#c2f575] text-indigo-900 rounded-2xl shadow-lg flex items-center justify-center hover:scale-110 transition-all border-4 border-white z-10">
+                    <button onClick={() => groupAvatarRef.current?.click()} className="absolute bottom-[-10px] right-[-10px] w-12 h-12 bg-[#c2f575] text-nunma-forest rounded-2xl shadow-lg flex items-center justify-center hover:scale-110 transition-all border-4 border-white z-10">
                       <Camera size={20} className="ml-[1px]" />
                     </button>
                   )}
@@ -415,7 +415,7 @@ const Inbox: React.FC = () => {
                       value={groupEditName}
                       onChange={(e) => setGroupEditName(e.target.value)}
                       placeholder="Group Name"
-                      className="w-full text-center text-2xl font-black text-indigo-900 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 outline-none focus:border-[#c2f575] transition-colors"
+                      className="w-full text-center text-2xl font-black text-nunma-forest bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 outline-none focus:border-[#c2f575] transition-colors"
                     />
                     <textarea
                       value={groupEditDesc}
@@ -424,16 +424,16 @@ const Inbox: React.FC = () => {
                       maxLength={150}
                       className="w-full text-center text-sm font-bold text-gray-500 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 outline-none focus:border-[#c2f575] transition-colors resize-none h-24"
                     />
-                    <button onClick={handleSaveGroupProfile} className="w-full py-4 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
+                    <button onClick={handleSaveGroupProfile} className="w-full py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
                       Save Changes
                     </button>
                   </div>
                 ) : (
                   <div className="text-center w-full">
-                    <h2 className="text-3xl font-black text-indigo-900 tracking-tight leading-tight mb-2">{activeChat.name}</h2>
+                    <h2 className="text-3xl font-black text-nunma-forest tracking-tight leading-tight mb-2">{activeChat.name}</h2>
                     <p className="text-sm font-medium text-gray-500 italic mb-6 max-w-[250px] mx-auto">{activeChat.description || 'No description provided.'}</p>
                     {canEditGroup && (
-                      <button onClick={() => setIsEditingGroup(true)} className="px-8 py-3 bg-gray-50 text-indigo-900 rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] hover:bg-gray-100 transition-colors">
+                      <button onClick={() => setIsEditingGroup(true)} className="px-8 py-3 bg-gray-50 text-nunma-forest rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] hover:bg-gray-100 transition-colors">
                         Edit Group Info
                       </button>
                     )}
@@ -444,7 +444,7 @@ const Inbox: React.FC = () => {
               <div className="border-t border-gray-50 pt-8">
                 <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex justify-between items-center">
                   <span>Participants</span>
-                  <span className="bg-gray-100 text-indigo-900 px-3 py-1 rounded-full">{groupParticipants.length}</span>
+                  <span className="bg-gray-100 text-nunma-forest px-3 py-1 rounded-full">{groupParticipants.length}</span>
                 </h4>
 
                 {loadingParticipants ? (
@@ -461,7 +461,7 @@ const Inbox: React.FC = () => {
                       >
                         <img src={p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`} className="w-12 h-12 rounded-[1rem] object-cover shadow-sm" alt="" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-black text-indigo-900 truncate">{p.name}</p>
+                          <p className="text-sm font-black text-nunma-forest truncate">{p.name}</p>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{p.headline || 'Member'}</p>
                         </div>
                         <ArrowRight size={16} className="text-gray-300" />
@@ -480,7 +480,7 @@ const Inbox: React.FC = () => {
           <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
             <div className="p-10 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
               <div>
-                <h3 className="text-2xl font-black text-indigo-900">New Collab Group</h3>
+                <h3 className="text-2xl font-black text-nunma-forest">New Collab Group</h3>
                 <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
                   {createGroupStep === 1 ? 'Step 1 of 2: Group Info' : 'Step 2 of 2: Select Members'}
                 </p>
@@ -509,7 +509,7 @@ const Inbox: React.FC = () => {
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
                     placeholder="e.g. Design Sync, Exam Prep..."
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-bold text-indigo-900 focus:outline-none focus:border-[#c2f575] transition-colors"
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-bold text-nunma-forest focus:outline-none focus:border-[#c2f575] transition-colors"
                   />
                 </div>
                 <div className="space-y-2">
@@ -519,13 +519,13 @@ const Inbox: React.FC = () => {
                     onChange={(e) => setNewGroupDetails(e.target.value)}
                     placeholder="What is this collaboration group about?"
                     maxLength={150}
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-bold text-indigo-900 focus:outline-none focus:border-[#c2f575] transition-colors resize-none h-28"
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-bold text-nunma-forest focus:outline-none focus:border-[#c2f575] transition-colors resize-none h-28"
                   />
                 </div>
                 <button
                   disabled={!newGroupName.trim()}
                   onClick={() => setCreateGroupStep(2)}
-                  className="w-full py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl disabled:opacity-50 hover:scale-[1.02] active:scale-95 transition-all"
+                  className="w-full py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl disabled:opacity-50 hover:scale-[1.02] active:scale-95 transition-all"
                 >
                   Next: Select Members
                 </button>
@@ -539,7 +539,7 @@ const Inbox: React.FC = () => {
                     placeholder="Search mutual followers..."
                     value={memberSearchQuery}
                     onChange={(e) => setMemberSearchQuery(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 font-bold text-indigo-900 focus:outline-none"
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 font-bold text-nunma-forest focus:outline-none"
                   />
                 </div>
                 <div className="space-y-4 max-h-60 overflow-y-auto custom-scrollbar">
@@ -552,11 +552,11 @@ const Inbox: React.FC = () => {
                       <div key={mUser.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
                         <div className="flex items-center gap-4">
                           <img src={mUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mUser.id}`} className="w-10 h-10 rounded-xl object-cover" alt="" />
-                          <p className="text-sm font-black text-indigo-900">{mUser.name}</p>
+                          <p className="text-sm font-black text-nunma-forest">{mUser.name}</p>
                         </div>
                         <button
                           onClick={() => setSelectedForGroup(prev => prev.includes(mUser.id) ? prev.filter(id => id !== mUser.id) : [...prev, mUser.id])}
-                          className={`p-2 rounded-xl transition-colors ${selectedForGroup.includes(mUser.id) ? 'bg-indigo-900 text-white' : 'bg-[#c2f575] text-indigo-900'}`}
+                          className={`p-2 rounded-xl transition-colors ${selectedForGroup.includes(mUser.id) ? 'bg-nunma-forest text-white' : 'bg-[#c2f575] text-nunma-forest'}`}
                         >
                           {selectedForGroup.includes(mUser.id) ? <CheckCheck size={16} /> : <Plus size={16} />}
                         </button>
@@ -571,7 +571,7 @@ const Inbox: React.FC = () => {
                 <div className="flex gap-4">
                   <button
                     onClick={() => setCreateGroupStep(1)}
-                    className="flex-1 py-5 bg-gray-50 text-indigo-900 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-100 transition-colors"
+                    className="flex-1 py-5 bg-gray-50 text-nunma-forest rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-100 transition-colors"
                   >
                     Back
                   </button>
@@ -602,7 +602,7 @@ const Inbox: React.FC = () => {
                         console.error("Error creating group", e);
                       }
                     }}
-                    className="flex-[2] py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl disabled:opacity-50 hover:scale-[1.02] active:scale-95 transition-all"
+                    className="flex-[2] py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl disabled:opacity-50 hover:scale-[1.02] active:scale-95 transition-all"
                   >
                     Create Group {selectedForGroup.length > 0 && `(${selectedForGroup.length})`}
                   </button>
@@ -616,7 +616,7 @@ const Inbox: React.FC = () => {
       {/* Sidebar */}
       <div className="w-96 border-r border-gray-100 flex flex-col bg-white overflow-hidden">
         <div className="p-10 pb-4 flex items-center justify-between">
-          <h2 className="text-4xl font-black text-[#1A1A4E] tracking-tighter">Inbox</h2>
+          <h2 className="text-4xl font-black text-nunma-forest tracking-tighter">Inbox</h2>
         </div>
 
         <div className="px-8 py-4">
@@ -630,7 +630,7 @@ const Inbox: React.FC = () => {
                 }}
                 className={`flex-1 flex flex-col items-center justify-center py-4 rounded-2xl transition-all border
                   ${activeCategory === cat.id
-                    ? 'bg-white border-[#c2f575] text-indigo-900 shadow-xl'
+                    ? 'bg-white border-[#c2f575] text-nunma-forest shadow-xl'
                     : 'bg-transparent border-transparent text-gray-400 hover:text-gray-600'
                   }
                 `}
@@ -645,11 +645,11 @@ const Inbox: React.FC = () => {
         <div className="px-8 py-4 space-y-4">
           <div className="flex items-center gap-3">
             <div className="relative group flex-1">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-200 group-focus-within:text-indigo-900 transition-colors" size={18} />
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-200 group-focus-within:text-nunma-forest transition-colors" size={18} />
               <input
                 type="text"
                 placeholder={`Search in ${activeCategory}...`}
-                className="w-full bg-gray-50 border border-transparent focus:border-indigo-900/10 focus:bg-white rounded-[1.5rem] pl-14 pr-4 py-4 text-xs font-bold text-indigo-900 placeholder:text-gray-300 transition-all outline-none"
+                className="w-full bg-gray-50 border border-transparent focus:border-nunma-forest/10 focus:bg-white rounded-[1.5rem] pl-14 pr-4 py-4 text-xs font-bold text-nunma-forest placeholder:text-gray-300 transition-all outline-none"
               />
             </div>
             {activeCategory === 'collaboration' && (
@@ -662,7 +662,7 @@ const Inbox: React.FC = () => {
                   setCreateGroupStep(1);
                   setShowCreateGroup(true);
                 }}
-                className="w-12 h-12 bg-indigo-900 text-white rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-900/10 hover:scale-110 active:scale-95 transition-all"
+                className="w-12 h-12 bg-nunma-forest text-white rounded-2xl flex items-center justify-center shadow-xl shadow-nunma-forest/10 hover:scale-110 active:scale-95 transition-all"
               >
                 <Plus size={24} />
               </button>
@@ -689,14 +689,14 @@ const Inbox: React.FC = () => {
                 </div>
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex justify-between items-center mb-1">
-                    <h4 className="font-black text-indigo-900 text-sm truncate">{chat.name}</h4>
+                    <h4 className="font-black text-nunma-forest text-sm truncate">{chat.name}</h4>
                     <span className="text-[9px] font-black text-gray-300 uppercase">
                       {chat.lastMessageTime && typeof chat.lastMessageTime.toDate === 'function'
                         ? chat.lastMessageTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                         : ''}
                     </span>
                   </div>
-                  <p className={`text-xs truncate ${chat.unreadCount ? 'text-indigo-900 font-black' : 'text-gray-400 font-medium'}`}>
+                  <p className={`text-xs truncate ${chat.unreadCount ? 'text-nunma-forest font-black' : 'text-gray-400 font-medium'}`}>
                     {chat.lastMessage}
                   </p>
                 </div>
@@ -724,7 +724,7 @@ const Inbox: React.FC = () => {
                   {activeChat.online && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#7cc142] border-[3px] border-white rounded-full"></div>}
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black text-indigo-900 tracking-tighter leading-none mb-2">{activeChat.name}</h3>
+                  <h3 className="text-2xl font-black text-nunma-forest tracking-tighter leading-none mb-2">{activeChat.name}</h3>
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${activeChat.online ? 'bg-[#7cc142]' : 'bg-gray-300'}`}></span>
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{activeChat.online ? 'Online' : 'Offline'}</span>
@@ -734,13 +734,13 @@ const Inbox: React.FC = () => {
               <div className="flex items-center gap-3 relative">
                 <button
                   onClick={() => setShowOptionsMenu(!showOptionsMenu)}
-                  className="w-12 h-12 flex items-center justify-center hover:bg-gray-50 rounded-2xl text-gray-400 hover:text-indigo-900 transition-all bg-white border border-gray-100 shadow-sm relative z-40"
+                  className="w-12 h-12 flex items-center justify-center hover:bg-gray-50 rounded-2xl text-gray-400 hover:text-nunma-forest transition-all bg-white border border-gray-100 shadow-sm relative z-40"
                 >
                   <MoreVertical size={20} />
                 </button>
                 {showOptionsMenu && (
                   <div className="absolute top-14 right-0 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 p-2 z-50 w-48 animate-in slide-in-from-top-2">
-                    <button onClick={() => { setShowOptionsMenu(false); navigate(`/profile/${activeChat.otherUser?.uid || activeChat.id}`); }} className="w-full text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-indigo-900 hover:bg-gray-50 rounded-xl transition-colors">View Profile</button>
+                    <button onClick={() => { setShowOptionsMenu(false); navigate(`/profile/${activeChat.otherUser?.uid || activeChat.id}`); }} className="w-full text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-nunma-forest hover:bg-gray-50 rounded-xl transition-colors">View Profile</button>
                     <button onClick={() => { setShowOptionsMenu(false); alert("Options menu active."); }} className="w-full text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 rounded-xl transition-colors mt-1">Block User</button>
                   </div>
                 )}
@@ -755,8 +755,8 @@ const Inbox: React.FC = () => {
                 <div key={msg.id} className={`flex w-full ${msg.senderId === user?.uid ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-500`}>
                   <div className="max-w-[70%] group relative">
                     <div className={`p-6 rounded-[2.5rem] shadow-xl relative ${msg.senderId === user?.uid
-                      ? 'bg-indigo-900 text-white rounded-tr-none'
-                      : 'bg-white text-indigo-900 rounded-tl-none border border-gray-100'
+                      ? 'bg-nunma-forest text-white rounded-tr-none'
+                      : 'bg-white text-nunma-forest rounded-tl-none border border-gray-100'
                       }`}>
                       <p className="text-base font-medium leading-relaxed">{msg.text}</p>
                     </div>
@@ -779,13 +779,13 @@ const Inbox: React.FC = () => {
                 <div className="relative" ref={addMenuRef}>
                   <button
                     onClick={() => setShowAddMenu(!showAddMenu)}
-                    className={`w-14 h-14 rounded-2xl transition-all flex items-center justify-center shadow-xl ${showAddMenu ? 'bg-indigo-900 text-white rotate-45 scale-90' : 'text-gray-400 hover:text-indigo-900 hover:bg-gray-50 bg-white border border-gray-100'}`}
+                    className={`w-14 h-14 rounded-2xl transition-all flex items-center justify-center shadow-xl ${showAddMenu ? 'bg-nunma-forest text-white rotate-45 scale-90' : 'text-gray-400 hover:text-nunma-forest hover:bg-gray-50 bg-white border border-gray-100'}`}
                   >
                     <Plus size={28} />
                   </button>
                   {showAddMenu && (
                     <div className="absolute bottom-full left-0 mb-6 w-64 bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 p-4 z-50 animate-in slide-in-from-bottom-4 duration-300">
-                      <p className="px-5 py-3 text-[9px] font-black text-indigo-900/30 uppercase tracking-[0.25em] border-b border-gray-50 mb-3">Attach Resource</p>
+                      <p className="px-5 py-3 text-[9px] font-black text-nunma-forest/30 uppercase tracking-[0.25em] border-b border-gray-50 mb-3">Attach Resource</p>
                       <div className="space-y-2">
                         <input type="file" ref={fileUploadRef} className="hidden" accept="application/pdf, image/*" onChange={(e) => {
                           const file = e.target.files?.[0];
@@ -795,7 +795,7 @@ const Inbox: React.FC = () => {
                         {[
                           { label: 'Upload PDF / Image', icon: <FileText size={20} />, color: 'text-orange-500', bg: 'bg-orange-50', onClick: () => fileUploadRef.current?.click() },
                         ].map((opt) => (
-                          <button key={opt.label} onClick={opt.onClick} className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest text-indigo-900 transition-all group">
+                          <button key={opt.label} onClick={opt.onClick} className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest text-nunma-forest transition-all group">
                             <div className={`w-10 h-10 rounded-2xl ${opt.bg} ${opt.color} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>{opt.icon}</div>
                             {opt.label}
                           </button>
@@ -811,10 +811,10 @@ const Inbox: React.FC = () => {
                     onChange={(e) => setMessageText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Type your message..."
-                    className="w-full bg-gray-50 border border-gray-100 rounded-[2.25rem] pl-8 pr-16 py-5 focus:outline-none focus:ring-4 focus:ring-[#c2f575]/10 font-bold text-indigo-900 transition-all shadow-inner text-lg"
+                    className="w-full bg-gray-50 border border-gray-100 rounded-[2.25rem] pl-8 pr-16 py-5 focus:outline-none focus:ring-4 focus:ring-[#c2f575]/10 font-bold text-nunma-forest transition-all shadow-inner text-lg"
                   />
                   <div className="absolute right-5 top-1/2 -translate-y-1/2">
-                    <button className="text-gray-300 hover:text-indigo-900">
+                    <button className="text-gray-300 hover:text-nunma-forest">
                       <Smile size={24} />
                     </button>
                   </div>
@@ -822,7 +822,7 @@ const Inbox: React.FC = () => {
                 <button
                   onClick={handleSendMessage}
                   className={`w-16 h-16 rounded-[2rem] flex items-center justify-center shadow-2xl transition-all active:scale-90
-                    ${messageText.trim() ? 'bg-[#c2f575] text-indigo-900 shadow-[#c2f575]/20 scale-105' : 'bg-indigo-900 text-white shadow-indigo-900/20'}
+                    ${messageText.trim() ? 'bg-[#c2f575] text-nunma-forest shadow-[#c2f575]/20 scale-105' : 'bg-nunma-forest text-white shadow-nunma-forest/20'}
                   `}
                 >
                   {messageText.trim() ? <Send size={28} strokeWidth={2.5} className="ml-1" /> : <Mic size={28} />}
@@ -834,15 +834,15 @@ const Inbox: React.FC = () => {
           <div className="flex-1 flex flex-col items-center justify-center p-20 text-center bg-gray-50/5">
             <div className="w-72 h-72 bg-white rounded-[6rem] flex items-center justify-center mb-12 relative shadow-2xl border border-gray-100">
               <MessageCircle size={120} className="text-gray-50" strokeWidth={1} />
-              <div className="absolute -top-6 -right-6 w-28 h-28 bg-[#c2f575] rounded-[3rem] flex items-center justify-center text-indigo-900 shadow-2xl rotate-12 ring-8 ring-white animate-bounce-slow">
+              <div className="absolute -top-6 -right-6 w-28 h-28 bg-[#c2f575] rounded-[3rem] flex items-center justify-center text-nunma-forest shadow-2xl rotate-12 ring-8 ring-white animate-bounce-slow">
                 <Zap size={48} fill="currentColor" />
               </div>
             </div>
-            <h3 className="text-5xl font-black text-indigo-900 tracking-tighter mb-6 leading-none uppercase">Collaboration Hub</h3>
+            <h3 className="text-5xl font-black text-nunma-forest tracking-tighter mb-6 leading-none uppercase">Collaboration Hub</h3>
             <p className="text-gray-400 font-semibold max-w-sm mx-auto mb-12 text-xl leading-relaxed italic">
               Select a conversation to sync with your squad and start the stream.
             </p>
-            <button className="bg-indigo-900 text-white px-16 py-7 rounded-[3rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl shadow-indigo-900/20 hover:scale-105 transition-all flex items-center gap-4">
+            <button className="bg-nunma-forest text-white px-16 py-7 rounded-[3rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl shadow-nunma-forest/20 hover:scale-105 transition-all flex items-center gap-4">
               Explore The Squad <ArrowRight size={22} className="text-[#c2f575]" />
             </button>
           </div>

@@ -52,7 +52,8 @@ import {
   Search,
   Star,
   Trophy,
-  Loader2, Calendar as CalendarIcon, Settings, MoreVertical, ShieldAlert, FileSearch, HelpCircle, BarChart3
+  Loader2, Calendar as CalendarIcon, Settings, MoreVertical, ShieldAlert, Shield, FileSearch, HelpCircle, BarChart3,
+  IndianRupee, DollarSign, Euro, Camera, ChevronRight
 } from 'lucide-react';
 
 
@@ -67,6 +68,8 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
 import { sendEnrollmentEmail } from '../utils/notifications';
 import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import PDFViewer from '../components/PDFViewer'; // Import added for grading
 import GradingHub from '../components/GradingHub';
 import ExamAnalytics from '../components/ExamAnalytics';
@@ -121,6 +124,7 @@ interface Chapter {
   id: string;
   title: string;
   segments: Segment[];
+  order?: number;
 }
 
 interface Segment {
@@ -174,7 +178,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
   return (
     <div>
       <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center justify-between ml-1">
-        <span>{label} {required && <span className="text-[9px] text-[#040457] bg-[#c2f575] px-2 py-0.5 rounded-full ml-2">Mandatory</span>}</span>
+        <span>{label} {required && <span className="text-[9px] text-nunma-forest bg-[#c2f575] px-2 py-0.5 rounded-full ml-2">Mandatory</span>}</span>
         {items.length >= maxItems && <span className="text-[9px] text-red-500 uppercase border border-red-200 px-2 py-0.5 rounded-full">Max reached</span>}
       </label>
       <div className="w-full bg-gray-50 border border-gray-100 rounded-[2rem] p-4 min-h-[70px] flex flex-wrap gap-3 items-center focus-within:ring-4 focus-within:ring-[#c1e60d]/20 transition-all shadow-sm">
@@ -215,7 +219,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       <div className="flex flex-col gap-4 p-2 min-w-[280px]">
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nunma Admin</span>
-          <span className="font-bold text-[#040457] text-sm leading-tight">{msg}</span>
+          <span className="font-bold text-nunma-forest text-sm leading-tight">{msg}</span>
         </div>
         <div className="flex gap-3">
           <button 
@@ -250,6 +254,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const [zone, setZone] = useState<any>(null);
   const [activeSession, setActiveSession] = useState<any>(null);
 
+  // RBAC Helpers
+  const isCreator = zone?.createdBy === user?.uid || zone?.tutorId === user?.uid;
+  const currentCoTutor = zone?.coTutors?.find((t: any) => t.uid === user?.uid);
+  const isCoTutor = !!currentCoTutor;
+  const hasEditAccess = isCreator || isCoTutor;
+
   // Zone Settings State
   const [showZoneSettingsModal, setShowZoneSettingsModal] = useState(false);
   const [editZoneTitle, setEditZoneTitle] = useState('');
@@ -259,6 +269,21 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const [editSkillsGained, setEditSkillsGained] = useState<string[]>([]);
   const [editSubjects, setEditSubjects] = useState<string[]>([]);
   const [editZoneLevel, setEditZoneLevel] = useState('Beginner');
+  const [editZonePrice, setEditZonePrice] = useState('');
+  const [editZoneCurrency, setEditZoneCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
+  const [editZoneImage, setEditZoneImage] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditZoneImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleOpenZoneSettings = () => {
     if (!zone) return;
@@ -269,13 +294,16 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     setEditSkillsGained(zone.skillsGained || []);
     setEditSubjects(zone.subjects || []);
     setEditZoneLevel(zone.level || 'Beginner');
+    setEditZonePrice(zone.price || '');
+    setEditZoneCurrency(zone.currency || 'INR');
+    setEditZoneImage(zone.image || null);
     setShowZoneSettingsModal(true);
   };
 
   const handleUpdateZoneSettings = async () => {
     if (!zoneId) return;
-    if (editSubjects.length > 5) {
-      nunmaAlert("You can strictly only add up to 5 subjects.", "success");
+    if (editSubjects.length > 7) {
+      nunmaAlert("You can strictly only add up to 7 subjects.", "success");
       return;
     }
     try {
@@ -286,7 +314,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         learningOutcomes: editLearningOutcomes,
         skillsGained: editSkillsGained,
         subjects: editSubjects,
-        level: editZoneLevel
+        level: editZoneLevel,
+        price: editZonePrice,
+        currency: editZoneCurrency,
+        image: editZoneImage
       });
       setShowZoneSettingsModal(false);
       toast.success("Zone settings updated successfully!");
@@ -320,6 +351,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
   // Modals
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [showShareAccessModal, setShowShareAccessModal] = useState(false);
   const [showAddExamModal, setShowAddExamModal] = useState(false);
   const [showMarkEntryModal, setShowMarkEntryModal] = useState(false);
   const [showAiGeneratorModal, setShowAiGeneratorModal] = useState(false);
@@ -331,6 +363,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   // Input States
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentEmail, setNewStudentEmail] = useState('');
+  const [newCoTutorEmail, setNewCoTutorEmail] = useState('');
+  const [selectedCoTutorSubject, setSelectedCoTutorSubject] = useState('');
   const [isWhitelisting, setIsWhitelisting] = useState(false);
   const [examToStart, setExamToStart] = useState<Exam | null>(null);
   const [newAttendanceClassName, setNewAttendanceClassName] = useState('');
@@ -389,6 +423,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
   // Drag and Drop State
   const [draggedChapterIndex, setDraggedChapterIndex] = useState<number | null>(null);
+  const [draggedSegment, setDraggedSegment] = useState<{ chapterId: string; index: number } | null>(null);
 
   // Smart Marker State
   const [isSmartMarking, setIsSmartMarking] = useState(false);
@@ -499,6 +534,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   // Grading Hub State
   const [showGradingHubModal, setShowGradingHubModal] = useState(false);
   const [selectedExamForGrading, setSelectedExamForGrading] = useState<Exam | null>(null);
+  const [showExamSelectionModal, setShowExamSelectionModal] = useState(false);
+  const [evaluableExamsList, setEvaluableExamsList] = useState<any[]>([]);
 
   // New Exam Modal State
   const [newExamTitle, setNewExamTitle] = useState('');
@@ -525,6 +562,24 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const handleCreateExam = async () => {
     if (!zoneId) return;
 
+    // Build remindAt: exam start time minus 24 hours
+    let remindAt: string | null = null;
+    if (newExamDate && newExamTime) {
+      const parts = newExamDate.split('-');
+      const timeParts = newExamTime.split(':');
+      if (parts.length === 3 && timeParts.length === 2) {
+        const examStart = new Date(
+          parseInt(parts[0]),
+          parseInt(parts[1]) - 1,
+          parseInt(parts[2]),
+          parseInt(timeParts[0]),
+          parseInt(timeParts[1])
+        );
+        const remind = new Date(examStart.getTime() - 24 * 60 * 60 * 1000);
+        remindAt = remind.toISOString();
+      }
+    }
+
     const examData: any = {
       title: newExamTitle,
       date: newExamDate,
@@ -535,6 +590,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       minMark: parseInt(newExamMinMark),
       questions: newExamType === 'online-mcq' ? newExamQuestions : [],
       subject: newExamSubject,
+      ...(remindAt ? { remindAt } : {}),
     };
 
     if (newExamType !== 'online-mcq') {
@@ -545,11 +601,56 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       examData.pdfUrl = URL.createObjectURL(newExamFile);
     }
     if (newExamType === 'offline' && newExamFile) {
-      examData.pdfUrl = URL.createObjectURL(newExamFile); // Save as pdf URL for download
+      examData.pdfUrl = URL.createObjectURL(newExamFile);
     }
 
     try {
-      await addDoc(collection(db, 'zones', zoneId, 'exams'), examData);
+      const examRef = await addDoc(collection(db, 'zones', zoneId, 'exams'), examData);
+
+      // === Notify all enrolled students ===
+      try {
+        const studentsSnap = await getDocs(collection(db, 'zones', zoneId, 'students'));
+        const notifyPromises: Promise<any>[] = [];
+
+        studentsSnap.forEach(studentDoc => {
+          const studentUid = studentDoc.id;
+
+          // 1. In-app notification
+          notifyPromises.push(
+            addDoc(collection(db, 'users', studentUid, 'notifications'), {
+              type: 'EXAM_SCHEDULED',
+              title: 'New Exam Scheduled',
+              message: `Exam "${newExamTitle}" has been scheduled on ${newExamDate} @ ${newExamTime}. Be prepared!`,
+              zoneId,
+              examId: examRef.id,
+              read: false,
+              createdAt: serverTimestamp(),
+            })
+          );
+
+          // 2. Calendar event on the exam date
+          if (newExamDate) {
+            notifyPromises.push(
+              addDoc(collection(db, 'users', studentUid, 'calendar_events'), {
+                title: `📝 Exam: ${newExamTitle}`,
+                time: newExamTime || '00:00',
+                dateKey: newExamDate, // YYYY-MM-DD — matches Dashboard calendar format
+                type: 'exam',
+                color: 'indigo',
+                important: true,
+                zoneId,
+                examId: examRef.id,
+                createdAt: serverTimestamp(),
+              })
+            );
+          }
+        });
+
+        await Promise.allSettled(notifyPromises);
+      } catch (notifyErr) {
+        console.warn('Could not send exam notifications to students:', notifyErr);
+      }
+
       setShowAddExamModal(false);
       // Reset fields
       setNewExamTitle('');
@@ -561,39 +662,102 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       setNewExamMinMark('40');
       setNewExamQuestions([]);
       setNewExamFile(null);
-      nunmaAlert(`Exam "${newExamTitle}" created! Notifications sent.`);
+      nunmaAlert(`Exam "${newExamTitle}" created! Students have been notified.`);
     } catch (e) {
       console.error("Error creating exam:", e);
       nunmaAlert("Failed to create exam.", "error");
     }
   };
 
-  const handleDownloadTemplate = () => {
-    if (!selectedExamForMarks) return;
+  const handleDownloadTemplate = async () => {
+    if (!selectedExamForMarks || !zone) return;
 
-    const templateData = students.map((student, index) => ({
-      'S.no': index + 1,
-      'Student Name': student.name,
-      'Exam Name': selectedExamForMarks.title,
-      'Subject': selectedExamForMarks.subject || '',
-      'Mark': '' // Blank column for grading
-    }));
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Marks Template');
 
-    if (templateData.length === 0) {
-      templateData.push({
-        'S.no': 1,
-        'Student Name': 'Example Student',
-        'Exam Name': selectedExamForMarks.title,
-        'Subject': selectedExamForMarks.subject || '',
-        'Mark': ''
+    // Sort students alphabetically
+    const sortedStudents = [...students].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    // Rows 1-3: Headers
+    // Row 1: Logo placeholder (A1:B3) & Zone Name (C1:E1)
+    const row1 = worksheet.addRow(['NUNMA', '', zone.title || 'Zone Name']);
+    row1.height = 25;
+    row1.getCell(1).font = { bold: true, size: 20, color: { argb: 'FF1A1A4E' } };
+    row1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.mergeCells('A1:B3'); // Merge for NUNMA logo area
+    
+    worksheet.mergeCells('C1:E1');
+    row1.getCell(3).font = { bold: true, size: 14 };
+    row1.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // Row 2: Subject (C2:E2)
+    const row2 = worksheet.addRow(['', '', selectedExamForMarks.subject || 'Subject']);
+    row2.height = 20;
+    worksheet.mergeCells('C2:E2');
+    row2.getCell(3).font = { bold: true, size: 12 };
+    row2.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // Row 3: Empty row for formatting space under subject if needed
+    const row3 = worksheet.addRow(['', '', '', '', '']);
+    row3.height = 15;
+
+    // Row 4: Column Headers
+    const headers = ['S.no', 'Student Name', 'Exam name', 'Exam name', 'Exam name'];
+    const headerRow = worksheet.addRow(headers);
+    headerRow.height = 25;
+
+    const borderStyle = {
+      top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
+    };
+
+    headerRow.eachCell((cell, colNum) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC2F575' } } as any;
+      cell.border = borderStyle as any;
+      cell.font = { bold: true, color: { argb: 'FF1A1A4E' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      // Replace Exam name placeholders with actual exam title for the first mark column
+      if (colNum === 3) {
+        cell.value = selectedExamForMarks.title;
+      } else if (colNum > 3) {
+        cell.value = ''; // Leave blank if not used
+      }
+    });
+
+    // Column widths
+    worksheet.getColumn(1).width = 8;
+    worksheet.getColumn(2).width = 35;
+    worksheet.getColumn(3).width = 20;
+    worksheet.getColumn(4).width = 20;
+    worksheet.getColumn(5).width = 20;
+
+    // Apply borders to header region (A1:E3)
+    for (let r = 1; r <= 3; r++) {
+      for (let c = 1; c <= 5; c++) {
+        const cell = worksheet.getCell(r, c);
+        cell.border = borderStyle as any;
+      }
+    }
+
+    // Student Data Rows
+    if (sortedStudents.length === 0) {
+      const row = worksheet.addRow([1, 'Example Student', '', '', '']);
+      row.eachCell(cell => { cell.border = borderStyle as any; });
+    } else {
+      sortedStudents.forEach((student, index) => {
+        const row = worksheet.addRow([index + 1, student.name || 'Unknown', '', '', '']);
+        row.eachCell(cell => { 
+          cell.border = borderStyle as any; 
+          cell.alignment = { vertical: 'middle' };
+        });
+        row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
       });
     }
 
-    const worksheet = XLSX.utils.json_to_sheet(templateData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Marks Template');
-    XLSX.writeFile(workbook, `${selectedExamForMarks.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_template.xlsx`);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, `${selectedExamForMarks.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_template.xlsx`);
   };
+
 
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>, examId: string) => {
     const file = e.target.files?.[0];
@@ -612,11 +776,21 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         return;
       }
 
-      const headers = json[0] as string[];
+      // Find the header row by looking for 'Mark', 'Score', etc.
+      let headerRowIndex = 0;
+      for (let i = 0; i < Math.min(10, json.length); i++) {
+        const row = json[i] || [];
+        if (row.some((val: any) => typeof val === 'string' && ['mark', 'marks', 'score'].includes(val.toLowerCase().trim()))) {
+          headerRowIndex = i;
+          break;
+        }
+      }
+
+      const headers = (json[headerRowIndex] || []) as string[];
       // Find the index of the column that might contain marks (e.g., "Mark", "Score", "Marks")
-      const markIndex = headers.findIndex(h => typeof h === 'string' && ['mark', 'marks', 'score'].includes(h.toLowerCase() || ""));
+      const markIndex = headers.findIndex(h => typeof h === 'string' && ['mark', 'marks', 'score'].includes(h.toLowerCase().trim()));
       // Find the index of the column that might contain student names (or we just map by row assuming order if needed)
-      const nameIndex = headers.findIndex(h => typeof h === 'string' && ['name', 'student'].includes(h.toLowerCase() || ""));
+      const nameIndex = headers.findIndex(h => typeof h === 'string' && ['name', 'student name', 'student'].includes(h.toLowerCase().trim()));
 
       if (markIndex === -1) {
         nunmaAlert("Could not find a 'Mark' or 'Score' column in the Excel sheet.");
@@ -627,7 +801,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       const exam = exams.find(e => e.id === examId);
       const minPassMark = exam ? exam.minMark : 40;
 
-      for (let i = 1; i < json.length; i++) {
+      for (let i = headerRowIndex + 1; i < json.length; i++) {
         const row = json[i];
         if (!row || row.length === 0) continue;
 
@@ -759,7 +933,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           segments: d.segments || [] 
         } as Chapter;
       });
-      // Sort if needed, or rely on client-side order
+      // Sort chapters by order
+      data.sort((a, b) => (a.order || 0) - (b.order || 0));
       setChapters(data);
     });
 
@@ -787,7 +962,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     // 6. Attendance Sessions
     const attSessionsq = query(collection(db, 'zones', zoneId, 'attendance_sessions'));
     const attSessionsUnsub = onSnapshot(attSessionsq, (snapshot) => {
-      setAttendanceSessions((snapshot.docs || []).map(doc => {
+      const sessions = (snapshot.docs || []).map(doc => {
         const data = doc.data();
         return { 
           ...data, 
@@ -795,7 +970,14 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           // Keep the original timestamp ID for matching older records
           originalId: data.id 
         } as AttendanceSession & { originalId?: string };
-      }));
+      });
+      // Sort by date and time ascending so .slice(-5) gets the most recent
+      sessions.sort((a, b) => {
+        const dateA = new Date(`${a.date}T${a.time || '00:00'}`).getTime();
+        const dateB = new Date(`${b.date}T${b.time || '00:00'}`).getTime();
+        return dateA - dateB;
+      });
+      setAttendanceSessions(sessions);
     });
 
     // 7. Active Invite Listener (Hotfix) - Only run if zoneId is truthy
@@ -916,6 +1098,56 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     const debounceTimer = setTimeout(searchUsers, 500);
     return () => clearTimeout(debounceTimer);
   }, [newStudentEmail]);
+
+  const [coTutorSearchResults, setCoTutorSearchResults] = useState<any[]>([]);
+  const [isSearchingCoTutors, setIsSearchingCoTutors] = useState(false);
+  const [showCoTutorSuggestions, setShowCoTutorSuggestions] = useState(false);
+
+  useEffect(() => {
+    const searchCoTutors = async () => {
+      if (newCoTutorEmail.length < 3) {
+        setCoTutorSearchResults([]);
+        setShowCoTutorSuggestions(false);
+        return;
+      }
+
+      setIsSearchingCoTutors(true);
+      setShowCoTutorSuggestions(true);
+
+      if (db) {
+        try {
+          const searchTerm = newCoTutorEmail.toLowerCase();
+          const q = query(
+            collection(db, 'users'),
+            where('email', '>=', searchTerm),
+            where('email', '<=', searchTerm + '\uf8ff'),
+            limit(5)
+          );
+          const querySnapshot = await getDocs(q);
+          const results = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setCoTutorSearchResults(results);
+        } catch (err) {
+          console.error("Error searching users:", err);
+        } finally {
+          setIsSearchingCoTutors(false);
+        }
+      } else {
+        // Mock Search Results
+        setTimeout(() => {
+          const mockUsers = [
+            { id: '1', name: 'Sundaram S M', email: 'sundaramsm55@gmail.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sundaram' },
+            { id: '2', name: 'John Doe', email: 'john.doe@example.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john' },
+            { id: '3', name: 'Jane Smith', email: 'jane.smith@test.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=jane' }
+          ].filter(u => (u?.email || "").toLowerCase().includes((newCoTutorEmail || "").toLowerCase()));
+          setCoTutorSearchResults(mockUsers);
+          setIsSearchingCoTutors(false);
+        }, 300);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchCoTutors, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [newCoTutorEmail]);
 
   // --- Canvas Logic ---
   useEffect(() => {
@@ -1238,7 +1470,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     e.preventDefault();
   };
 
-  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
     if (draggedChapterIndex === null || draggedChapterIndex === dropIndex) return;
 
@@ -1246,6 +1478,68 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     const [movedChapter] = newChapters.splice(draggedChapterIndex, 1);
     newChapters.splice(dropIndex, 0, movedChapter);
     setChapters(newChapters);
+
+    if (zoneId && db) {
+      try {
+        const batchUpdates = newChapters.map((chapter, index) => 
+          updateDoc(doc(db, 'zones', zoneId, 'chapters', chapter.id), { order: index })
+        );
+        await Promise.all(batchUpdates);
+      } catch (err) {
+        console.error("Failed to reorder chapters in DB", err);
+      }
+    }
+  };
+
+  const handleSegmentDragStart = (e: React.DragEvent, chapterId: string, index: number) => {
+    e.stopPropagation();
+    setDraggedSegment({ chapterId, index });
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4';
+    }
+  };
+
+  const handleSegmentDragEnd = (e: React.DragEvent) => {
+    e.stopPropagation();
+    setDraggedSegment(null);
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1';
+    }
+  };
+
+  const handleSegmentDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleSegmentDrop = async (e: React.DragEvent, targetChapterId: string, dropIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedSegment || draggedSegment.chapterId !== targetChapterId || draggedSegment.index === dropIndex) return;
+
+    const chapterIndex = chapters.findIndex(c => c.id === targetChapterId);
+    if (chapterIndex === -1) return;
+
+    const newChapters = [...chapters];
+    const chapter = newChapters[chapterIndex];
+    const newSegments = [...(chapter.segments || [])];
+    
+    const [movedSegment] = newSegments.splice(draggedSegment.index, 1);
+    newSegments.splice(dropIndex, 0, movedSegment);
+    
+    chapter.segments = newSegments;
+    setChapters(newChapters);
+
+    if (zoneId && db) {
+      try {
+        await updateDoc(doc(db, 'zones', zoneId, 'chapters', targetChapterId), {
+          segments: newSegments
+        });
+      } catch (err) {
+        console.error("Failed to persist segment order:", err);
+      }
+    }
   };
 
   const initSmartMarking = () => {
@@ -1421,7 +1715,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     }
     if (!zoneId) return;
 
-    const newSession: AttendanceSession = {
+    const newSession: Omit<AttendanceSession, 'id'> = {
       // Don't set id here, let Firestore generate it
       date: attendanceDate,
       time: attendanceTime,
@@ -1438,12 +1732,24 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         // Change default to Present
         const status = manualAttendanceState[student.id] || 'Present';
         const history = student.attendanceHistory || [];
-        const newHistory = [...history, { sessionId: sessionId, status, date: attendanceDate }];
+        const newHistory = [...history, { sessionId: sessionId, status, date: attendanceDate, className: newAttendanceClassName || '' }];
 
         // Only update if changed or new record (simplified: just update all)
         return updateDoc(doc(db, 'zones', zoneId, 'students', student.id), {
           status: status,
           attendanceHistory: newHistory
+        }).then(() => {
+          const studentUid = (student as any).uid || student.id;
+          if (studentUid) {
+            addDoc(collection(db, 'users', studentUid, 'notifications'), {
+              type: 'ATTENDANCE_RECORDED',
+              message: `Your attendance has been recorded as ${status} for "${newAttendanceClassName || attendanceDate}" in "${zone?.title || 'Learning Zone'}".`,
+              zoneId,
+              actionUrl: `/classroom/zone/${zoneId}?tab=attendance`,
+              read: false,
+              createdAt: serverTimestamp()
+            }).catch(err => console.error('Notification write failed:', err));
+          }
         });
       });
 
@@ -1483,91 +1789,211 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
   return (
     <React.Fragment>
-      <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-20 relative">
 
-        {/* EDIT ZONE SETTINGS MODAL */}
-        {showZoneSettingsModal && (
-          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
-            <div className="bg-white rounded-[3rem] w-full max-w-3xl shadow-2xl p-10 animate-in zoom-in-95 duration-500 max-h-[90vh] flex flex-col">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-3xl font-black text-[#040457]">Zone Settings</h3>
-                <button onClick={() => setShowZoneSettingsModal(false)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400"><X size={24} /></button>
+      {/* EDIT ZONE SETTINGS MODAL */}
+      {showZoneSettingsModal && (
+        <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[200] bg-gray-50 animate-in fade-in duration-300 transition-all flex flex-col`}>
+          {/* Modal Header without the white box */}
+          <div className="flex items-center justify-between px-10 pt-10 pb-4 shrink-0">
+            <div className="flex items-center gap-6">
+              <button onClick={() => setShowZoneSettingsModal(false)} className="w-12 h-12 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-500 hover:bg-nunma-forest hover:text-white transition-all hover:scale-105 active:scale-95">
+                <X size={24} />
+              </button>
+              <div>
+                <h1 className="text-3xl font-black text-nunma-forest tracking-tight">Zone Settings</h1>
+                <p className="text-sm text-gray-500 font-medium mt-1">Configure your zone details, pricing & content structure</p>
               </div>
-              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8 pb-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-8">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Zone Title</label>
-                      <input
-                        type="text"
-                        value={editZoneTitle}
-                        onChange={e => setEditZoneTitle(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-8 py-5 font-black text-xl text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all shadow-sm"
-                      />
+            </div>
+            <div className="flex items-center gap-4">
+              <button onClick={() => setShowZoneSettingsModal(false)} className="px-8 py-4 bg-white border border-gray-100 shadow-sm text-gray-600 rounded-[1.2rem] font-black uppercase text-[11px] tracking-[0.2em] hover:bg-gray-50 transition-all active:scale-95">Cancel</button>
+              <button onClick={handleUpdateZoneSettings} className="px-10 py-4 bg-nunma-forest text-white rounded-[1.2rem] font-black uppercase text-[11px] tracking-[0.2em] shadow-[0_10px_20px_rgba(5,46,22,0.15)] hover:bg-[#074220] hover:-translate-y-0.5 active:translate-y-0 transition-all">Save Changes</button>
+            </div>
+          </div>
+
+          {/* Full-page Content — full-width 3-column layout */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="h-full px-10 pb-10">
+              <div className="grid grid-cols-3 gap-8 h-full">
+
+                {/* ── Column 1: Zone Identity ── */}
+                <div className="flex flex-col gap-6">
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col gap-5">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Zone Visual</p>
+                      <div
+                        onClick={() => imageInputRef.current?.click()}
+                        className="aspect-video bg-gray-50 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden group shadow-inner border-gray-200 hover:border-[#c1e60d] hover:bg-white"
+                      >
+                        {editZoneImage ? (
+                          <img src={editZoneImage} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Preview" />
+                        ) : (
+                          <>
+                            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-gray-300 mb-3 shadow-sm group-hover:scale-110 group-hover:bg-[#c1e60d] group-hover:text-indigo-900 transition-all duration-500">
+                              <Camera size={32} />
+                            </div>
+                            <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Upload Cover Photo</span>
+                          </>
+                        )}
+                        <input ref={imageInputRef} type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Subtitle</label>
-                      <input
-                        type="text"
-                        value={editZoneSubtitle}
-                        onChange={e => setEditZoneSubtitle(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-8 py-5 font-bold text-lg text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all shadow-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Detailed Description</label>
-                      <textarea
-                        value={editZoneDescription}
-                        onChange={e => setEditZoneDescription(e.target.value)}
-                        rows={4}
-                        className="w-full bg-gray-50 border border-gray-100 rounded-3xl px-8 py-6 font-medium text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all shadow-sm resize-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Experience Level</label>
-                      <div className="flex p-2 bg-gray-50 rounded-[1.75rem] border border-gray-100 shadow-inner">
-                        {(['Beginner', 'Intermediate', 'Expert'] as const).map(lvl => (
-                          <button
-                            key={lvl}
-                            onClick={() => setEditZoneLevel(lvl)}
-                            className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${editZoneLevel === lvl ? 'bg-white text-indigo-900 shadow-md border border-gray-50' : 'text-gray-400 hover:text-indigo-900'}`}
-                          >
-                            {lvl}
-                          </button>
-                        ))}
+
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col gap-5">
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 block">Zone Title</label>
+                        <input
+                          type="text"
+                          value={editZoneTitle}
+                          onChange={e => setEditZoneTitle(e.target.value)}
+                          className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-black text-lg text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 block">Subtitle</label>
+                        <input
+                          type="text"
+                          value={editZoneSubtitle}
+                          onChange={e => setEditZoneSubtitle(e.target.value)}
+                          className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-bold text-base text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 block">Detailed Description</label>
+                        <textarea
+                          value={editZoneDescription}
+                          onChange={e => setEditZoneDescription(e.target.value)}
+                          rows={11}
+                          className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-medium text-indigo-900 outline-none focus:ring-4 focus:ring-[#c1e60d]/20 transition-all resize-none"
+                        />
                       </div>
                     </div>
                   </div>
-                  <div className="space-y-8">
-                    <TagInput label="Learning Outcomes" items={editLearningOutcomes} setItems={setEditLearningOutcomes} placeholder="Type outcome & press Enter" />
-                    <TagInput label="Skills Gained" items={editSkillsGained} setItems={setEditSkillsGained} placeholder="Type skill & press Enter" />
-                    <TagInput label="Subjects (Max 5)" items={editSubjects} setItems={setEditSubjects} maxItems={5} placeholder="Type subject & press Enter" />
+
+                  {/* ── Column 2: Learning Content ── */}
+                  <div className="flex flex-col gap-5">
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col gap-6">
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 block">Experience Level</label>
+                        <div className="flex p-1.5 bg-gray-50 rounded-2xl border border-gray-100">
+                          {(['Beginner', 'Intermediate', 'Expert'] as const).map(lvl => (
+                            <button
+                              key={lvl}
+                              onClick={() => setEditZoneLevel(lvl)}
+                              className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${editZoneLevel === lvl ? 'bg-white text-indigo-900 shadow-md border border-gray-50' : 'text-gray-400 hover:text-indigo-900'}`}
+                            >
+                              {lvl}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <TagInput label="Learning Outcomes" items={editLearningOutcomes} setItems={setEditLearningOutcomes} placeholder="Type outcome & press Enter" />
+                      <TagInput label="Skills Gained" items={editSkillsGained} setItems={setEditSkillsGained} placeholder="Type skill & press Enter" />
+                      <TagInput label="Subjects (Max 7)" items={editSubjects} setItems={setEditSubjects} maxItems={7} placeholder="Type subject & press Enter" />
+                    </div>
                   </div>
+
+                  {/* ── Column 3: Pricing & Access ── */}
+                  <div className="flex flex-col gap-5">
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col gap-5">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Pricing & Access</p>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 block">Access Fee</label>
+                        <div className="relative">
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300">
+                            {editZoneCurrency === 'USD' && <DollarSign size={20} />}
+                            {editZoneCurrency === 'INR' && <IndianRupee size={20} />}
+                            {editZoneCurrency === 'EUR' && <Euro size={20} />}
+                          </div>
+                          <input
+                            type="number" min="0"
+                            placeholder="0.00"
+                            value={editZonePrice}
+                            onChange={e => setEditZonePrice(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-10 pr-4 py-4 font-black text-xl text-indigo-900 outline-none shadow-sm focus:ring-4 focus:ring-[#c1e60d]/20 transition-all"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 block">Currency</label>
+                        <select
+                          value={editZoneCurrency}
+                          onChange={e => setEditZoneCurrency(e.target.value as any)}
+                          className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-black text-base text-indigo-900 outline-none shadow-sm focus:ring-4 focus:ring-[#c1e60d]/20 transition-all"
+                        >
+                          <option value="INR">INR (₹)</option>
+                          <option value="USD" disabled>USD ($) - Coming Soon</option>
+                          <option value="EUR" disabled>EUR (€) - Coming Soon</option>
+                        </select>
+                      </div>
+
+                      {/* Fee Breakdown */}
+                      {(() => {
+                        const priceVal = parseFloat(editZonePrice) || 0;
+                        const currencySymbol = editZoneCurrency === 'INR' ? '₹' : editZoneCurrency === 'USD' ? '$' : '€';
+                        const currentTier = (user as any)?.current_tier?.toLowerCase() || 'starter';
+                        const platformFeePercent = currentTier === 'premium' ? 0.02 : currentTier === 'standard' ? 0.05 : 0.10;
+                        const platformFee = priceVal * platformFeePercent;
+                        const gstFee = priceVal * 0.18;
+                        const netPayout = priceVal - platformFee - gstFee;
+
+                        return priceVal > 0 ? (
+                          <div className="bg-nunma-forest/5 rounded-2xl border border-nunma-forest/10 p-5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <p className="text-[10px] font-black text-nunma-forest/60 uppercase tracking-[0.2em]">Fee Breakdown</p>
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center text-sm font-medium text-gray-500">
+                                <span>Student Pays</span>
+                                <span className="font-bold text-indigo-900">{currencySymbol}{priceVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm font-medium text-gray-500">
+                                <span>Platform Fee ({(platformFeePercent * 100).toFixed(0)}%)</span>
+                                <span className="text-red-500 font-bold">− {currencySymbol}{platformFee.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm font-medium text-gray-500">
+                                <span>GST (18%)</span>
+                                <span className="text-red-500 font-bold">− {currencySymbol}{gstFee.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                            </div>
+                            <div className="pt-3 border-t border-nunma-forest/10 flex justify-between items-center">
+                              <div>
+                                <span className="text-sm font-black text-nunma-forest block">Net Earnings</span>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">After all fees</span>
+                              </div>
+                              <span className="text-2xl font-black text-emerald-600">
+                                {currencySymbol}{netPayout.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-2xl border-2 border-dashed border-gray-100 p-6 text-center">
+                            <p className="text-xs text-gray-300 font-bold">Enter a price to see fee breakdown</p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
                 </div>
-              </div>
-              <div className="pt-6 border-t border-gray-100 flex gap-4 mt-2">
-                <button onClick={() => setShowZoneSettingsModal(false)} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest hover:bg-gray-100 transition-all">Cancel</button>
-                <button onClick={handleUpdateZoneSettings} className="flex-[2] py-5 bg-[#040457] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-[0_20px_40px_rgba(4,4,87,0.2)] hover:scale-[1.02] hover:brightness-110 active:scale-95 transition-all">Save Changes</button>
               </div>
             </div>
           </div>
         )}
 
+      <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-20 relative">
+
         {/* START EXAM MODAL */}
         {showStartExamModal && (
-          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
+          <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[120] flex items-center justify-center p-6 bg-nunma-forest/80 max-md:bg-black/40 backdrop-blur-xl max-md:backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500">
-              <h3 className="text-3xl font-black text-[#040457] mb-4">Launch Exam</h3>
+              <h3 className="text-3xl font-black text-nunma-forest mb-4">Launch Exam</h3>
               <p className="text-sm text-gray-400 mb-10 leading-relaxed font-medium">Verify the broadcasting schedule before going live.</p>
 
               <div className="space-y-6 mb-12">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Scheduled Date</label>
-                  <input type="date" value={examStartDate} onChange={e => setExamStartDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                  <input type="date" value={examStartDate} onChange={e => setExamStartDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Time (Local)</label>
-                  <input type="time" value={examStartTime} onChange={e => setExamStartTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                  <input type="time" value={examStartTime} onChange={e => setExamStartTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
                 </div>
               </div>
 
@@ -1584,7 +2010,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       nunmaAlert("Database update failed.", "error");
                     }
                   }}
-                  className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95"
+                  className="flex-[2] py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:brightness-110 active:scale-95"
                 >
                   Confirm Launch
                 </button>
@@ -1631,10 +2057,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
         {/* SCHEDULE SESSION MODAL */}
         {showScheduleModal && (
-          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[150] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
+          <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[150] flex items-center justify-center p-6 bg-nunma-forest/80 max-md:bg-black/40 backdrop-blur-xl max-md:backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-y-auto max-h-[90vh] p-12 animate-in zoom-in-95 duration-500">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-3xl font-black text-[#040457]">{editingSession ? 'Edit' : 'Schedule'} Session</h3>
+                <h3 className="text-3xl font-black text-nunma-forest">{editingSession ? 'Edit' : 'Schedule'} Session</h3>
                 <button
                   onClick={() => { setShowScheduleModal(false); setEditingSession(null); setScheduleCoHosts([]); }}
                   className="p-2 hover:bg-gray-100 rounded-xl text-gray-400"
@@ -1651,7 +2077,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     value={scheduleTitle}
                     onChange={e => setScheduleTitle(e.target.value)}
                     placeholder="e.g. Masterclass on Logic"
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-nunma-forest outline-none transition-all"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -1661,7 +2087,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       type="date"
                       value={scheduleDate}
                       onChange={e => setScheduleDate(e.target.value)}
-                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-nunma-forest outline-none transition-all"
                     />
                   </div>
                   {/* Interactive Clock Picker */}
@@ -1673,7 +2099,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         value={scheduleTime}
                         onChange={(e) => setScheduleTime(e.target.value)}
                         placeholder={`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`}
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl pl-6 pr-14 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl pl-6 pr-14 h-14 font-bold text-base text-nunma-forest outline-none transition-all"
                       />
                       <button
                         type="button"
@@ -1688,7 +2114,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       <div className="absolute top-full right-0 mt-4 bg-white rounded-[2rem] shadow-[0_32px_80px_-8px_rgba(4,4,87,0.25)] border border-gray-100 p-5 z-[9999] animate-in slide-in-from-top-4 duration-300 min-w-[220px]" style={{width:'max-content'}}>
                         {/* Clock Display */}
                         <div className="flex flex-col items-center mb-5 mt-1 relative">
-                          <div className="relative w-40 h-40 bg-gradient-to-br from-[#040457] to-indigo-900 rounded-full shadow-2xl p-3">
+                          <div className="relative w-40 h-40 bg-gradient-to-br from-nunma-forest to-indigo-900 rounded-full shadow-2xl p-3">
                             <div className="absolute inset-4 bg-white rounded-full flex items-center justify-center">
                               {/* Hour Markers */}
                               {Array.from({ length: 12 }, (_, i) => {
@@ -1717,7 +2143,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                       }
                                     }}
                                     className={`absolute w-7 h-7 rounded-full font-black text-[10px] transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
-                                      ? 'bg-[#c2f575] text-[#040457] scale-110 shadow-lg'
+                                      ? 'bg-[#c2f575] text-nunma-forest scale-110 shadow-lg'
                                       : 'bg-gray-50 text-gray-600 hover:bg-[#c2f575]/20 hover:scale-105'
                                       }`}
                                     style={{ left: `${x}%`, top: `${y}%` }}
@@ -1729,7 +2155,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
                               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <div className="text-center">
-                                  <div className="text-lg font-black text-[#040457] tracking-tight">
+                                  <div className="text-lg font-black text-nunma-forest tracking-tight">
                                     {selectedHour}:{selectedMinute.toString().padStart(2, '0')}
                                   </div>
                                   <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">
@@ -1752,8 +2178,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                   setScheduleTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${p}`);
                                 }}
                                 className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${selectedPeriod === p
-                                  ? 'bg-[#040457] text-white shadow-lg'
-                                  : 'text-gray-400 hover:text-[#040457]'
+                                  ? 'bg-nunma-forest text-white shadow-lg'
+                                  : 'text-gray-400 hover:text-nunma-forest'
                                   }`}
                               >
                                 {p}
@@ -1765,7 +2191,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               setScheduleTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
                               setShowClockPicker(false);
                             }}
-                            className="px-6 py-3 bg-[#c2f575] text-[#040457] rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
+                            className="px-6 py-3 bg-[#c2f575] text-nunma-forest rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
                           >
                             Done
                           </button>
@@ -1780,7 +2206,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     type="number" min="0"
                     value={scheduleDuration}
                     onChange={e => setScheduleDuration(e.target.value)}
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-nunma-forest outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-4">
@@ -1792,7 +2218,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       }
                       e.target.value = '';
                     }}
-                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-[#040457] outline-none transition-all cursor-pointer"
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 h-14 font-bold text-base text-nunma-forest outline-none transition-all cursor-pointer"
                   >
                     <option value="">Select a student to co-host...</option>
                     {students.map(s => (
@@ -1803,7 +2229,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     {scheduleCoHosts.map(hostId => {
                       const host = students.find(s => s.id === hostId);
                       return (
-                        <div key={hostId} className="flex items-center gap-2 bg-[#c2f575]/20 text-[#040457] px-3 py-1.5 rounded-lg text-xs font-bold">
+                        <div key={hostId} className="flex items-center gap-2 bg-[#c2f575]/20 text-nunma-forest px-3 py-1.5 rounded-lg text-xs font-bold">
                           {host ? host.name : hostId}
                           <button type="button" onClick={() => setScheduleCoHosts(scheduleCoHosts.filter(id => id !== hostId))} className="text-red-500 hover:scale-110"><X size={12} /></button>
                         </div>
@@ -1852,7 +2278,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       nunmaAlert("Failed to schedule session.", "error");
                     }
                   }}
-                  className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all"
+                  className="flex-[2] py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all"
                 >
                   {editingSession ? 'Update' : 'Schedule'} Session
                 </button>
@@ -1863,11 +2289,11 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
         {/* CREATE EXAM MODAL */}
         {showAddExamModal && (
-          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[130] bg-white animate-in fade-in duration-300 overflow-y-auto font-inter transition-all`}>
+          <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[130] bg-white animate-in fade-in duration-300 overflow-y-auto font-inter transition-all`}>
             <div className="w-full min-h-screen p-12 md:p-20 flex flex-col">
               <div className="flex justify-between items-center mb-16">
                 <div>
-                  <h3 className="text-5xl font-black text-[#040457] tracking-tighter">Create Achievement Gate</h3>
+                  <h3 className="text-5xl font-black text-nunma-forest tracking-tighter">Create Achievement Gate</h3>
                   <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-widest">Configuration & Assessment Setup</p>
                 </div>
                 <button onClick={() => setShowAddExamModal(false)} className="p-6 bg-gray-50 text-gray-400 rounded-3xl hover:bg-black hover:text-white transition-all shadow-sm"><X size={32} /></button>
@@ -1877,26 +2303,26 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                 <div className="lg:col-span-4 space-y-10">
                   <div className="space-y-3">
                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Exam Name</label>
-                    <input value={newExamTitle} onChange={e => setNewExamTitle(e.target.value)} placeholder="e.g. Final Certification Phase 1" className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all text-lg shadow-sm" />
+                    <input value={newExamTitle} onChange={e => setNewExamTitle(e.target.value)} placeholder="e.g. Final Certification Phase 1" className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all text-lg shadow-sm" />
                   </div>
                   <div className="space-y-3">
                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Date</label>
-                    <input type="date" value={newExamDate} onChange={e => setNewExamDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
+                    <input type="date" value={newExamDate} onChange={e => setNewExamDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
                   </div>
                   <div className="space-y-3">
                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Time</label>
-                    <input type="time" value={newExamTime} onChange={e => setNewExamTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
+                    <input type="time" value={newExamTime} onChange={e => setNewExamTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
                   </div>
                   {newExamType !== 'online-mcq' && (
                     <div className="space-y-3">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Duration (Minutes)</label>
-                      <input type="number" min="1" value={newExamDuration} onChange={e => setNewExamDuration(e.target.value)} placeholder="e.g. 60" className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
+                      <input type="number" min="1" value={newExamDuration} onChange={e => setNewExamDuration(e.target.value)} placeholder="e.g. 60" className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
                     </div>
                   )}
                   {zone?.subjects && zone.subjects.length > 0 && (
                     <div className="space-y-3">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Subject</label>
-                      <select value={newExamSubject} onChange={e => setNewExamSubject(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm cursor-pointer">
+                      <select value={newExamSubject} onChange={e => setNewExamSubject(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm cursor-pointer">
                         <option value="">Select Subject...</option>
                         {zone.subjects.map((sub: string) => (
                           <option key={sub} value={sub}>{sub}</option>
@@ -1908,7 +2334,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Assessment Mode</label>
                     <div className="flex gap-4 p-2 bg-gray-50 rounded-3xl border border-gray-100">
                       {(['online-test', 'online-mcq', 'offline'] as const).map(mode => (
-                        <button key={mode} onClick={() => setNewExamType(mode)} className={`flex-1 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${newExamType === mode ? 'bg-[#040457] text-white shadow-xl scale-[1.02]' : 'text-gray-400 hover:text-[#040457]'}`}>
+                        <button key={mode} onClick={() => setNewExamType(mode)} className={`flex-1 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${newExamType === mode ? 'bg-nunma-forest text-white shadow-xl scale-[1.02]' : 'text-gray-400 hover:text-nunma-forest'}`}>
                           {mode}
                         </button>
                       ))}
@@ -1917,11 +2343,11 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-3">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Max Marks</label>
-                      <input type="number" min="0" value={newExamMaxMark} onChange={e => setNewExamMaxMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
+                      <input type="number" min="0" value={newExamMaxMark} onChange={e => setNewExamMaxMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
                     </div>
                     <div className="space-y-3">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Pass Marks</label>
-                      <input type="number" min="0" value={newExamMinMark} onChange={e => setNewExamMinMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-[#040457] outline-none transition-all shadow-sm" />
+                      <input type="number" min="0" value={newExamMinMark} onChange={e => setNewExamMinMark(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
                     </div>
                   </div>
                 </div>
@@ -1938,7 +2364,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               <FileText size={48} />
                             </div>
                             <div>
-                              <p className="font-black text-2xl text-[#040457] tracking-tight">Offline Assessment Mode</p>
+                              <p className="font-black text-2xl text-nunma-forest tracking-tight">Offline Assessment Mode</p>
                               <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-wide">Standard Paper-Based Testing</p>
                             </div>
                             <p className="text-gray-400 max-w-md mx-auto leading-relaxed">Upload a PDF question paper for students to download. After the exam, upload the students' marks via an Excel sheet in the gradebook.</p>
@@ -1956,7 +2382,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               <FileText size={48} />
                             </div>
                             <div>
-                                <p className="font-black text-2xl text-[#040457] tracking-tight">Online PDF Test Mode</p>
+                                <p className="font-black text-2xl text-nunma-forest tracking-tight">Online PDF Test Mode</p>
                                 <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-wide">Live Monitored Assessment</p>
                             </div>
                             <p className="text-gray-400 max-w-md mx-auto leading-relaxed">Students will view your uploaded PDF question paper while their camera/mic is monitored. They will have 20 mins after the exam to scan and upload their answers.</p>
@@ -1976,7 +2402,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               </div>
 
               <div className="mt-20 pt-10 border-t border-gray-100">
-                <button onClick={handleCreateExam} className="w-full py-8 bg-[#c2f575] text-[#040457] rounded-[2.5rem] font-black uppercase text-sm tracking-[0.3em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-6">
+                <button onClick={handleCreateExam} className="w-full py-8 bg-[#c2f575] text-nunma-forest rounded-[2.5rem] font-black uppercase text-sm tracking-[0.3em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-6">
                   <Sparkles size={24} /> Deploy Exam Instance
                 </button>
               </div>
@@ -1986,11 +2412,11 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
         {/* MARK ENTRY MODAL (FOR OFFLINE) */}
         {showMarkEntryModal && selectedExamForMarks && (
-          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[130] flex items-center justify-center p-6 bg-[#040457]/90 backdrop-blur-2xl animate-in fade-in duration-300 transition-all`}>
+          <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[130] flex items-center justify-center p-6 bg-nunma-forest/90 max-md:bg-black/40 backdrop-blur-2xl max-md:backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[4rem] w-full max-w-5xl shadow-3xl overflow-hidden p-12 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-500">
               <div className="flex justify-between items-center mb-10">
                 <div>
-                  <h3 className="text-4xl font-black text-[#040457] tracking-tight">Gradebook: {selectedExamForMarks.title}</h3>
+                  <h3 className="text-4xl font-black text-nunma-forest tracking-tight">Gradebook: {selectedExamForMarks.title}</h3>
                   <p className="text-sm text-gray-400 mt-2 font-medium">Bulk import marks or enter them manually for each student.</p>
                 </div>
                 <button onClick={() => setShowMarkEntryModal(false)} className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all"><X size={24} /></button>
@@ -2000,7 +2426,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                 <div className="flex-1 bg-gray-50 p-8 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-center space-y-4 hover:border-[#c2f575] transition-all relative">
                   <Upload size={32} className="text-gray-300" />
                   <div>
-                    <h4 className="font-bold text-[#040457]">Excel Import</h4>
+                    <h4 className="font-bold text-nunma-forest">Excel Import</h4>
                     <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">S.no, Name, Mark</p>
                   </div>
                   <input type="file" accept=".xls,.xlsx,.csv" onChange={(e) => handleExcelUpload(e, selectedExamForMarks.id)} className="absolute inset-0 opacity-0 cursor-pointer" />
@@ -2008,10 +2434,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                 <div className="flex-1 bg-gray-50 p-8 rounded-[2.5rem] border-2 border-gray-100 flex flex-col items-center justify-center text-center space-y-4">
                   <FileDown size={32} className="text-gray-300" />
                   <div>
-                    <h4 className="font-bold text-[#040457]">Download Template</h4>
+                    <h4 className="font-bold text-nunma-forest">Download Template</h4>
                     <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Get blank sheet with student list</p>
                   </div>
-                  <button onClick={handleDownloadTemplate} className="text-[10px] font-black text-[#040457] bg-[#c2f575] px-6 py-3 rounded-xl uppercase tracking-widest">Download</button>
+                  <button onClick={handleDownloadTemplate} className="text-[10px] font-black text-nunma-forest bg-[#c2f575] px-6 py-3 rounded-xl uppercase tracking-widest">Download</button>
                 </div>
               </div>
 
@@ -2030,7 +2456,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         <div key={student.id} className="grid grid-cols-4 items-center bg-white p-5 rounded-2xl shadow-sm">
                           <div className="flex items-center gap-4">
                             <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" />
-                            <span className="font-bold text-[#040457] text-sm">{student.name}</span>
+                            <span className="font-bold text-nunma-forest text-sm">{student.name}</span>
                           </div>
                           <div className="text-center">
                             <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${result ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
@@ -2059,7 +2485,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                   { id: Math.random().toString(), examId: selectedExamForMarks.id, studentId: student.id, studentName: student.name, marks: mark, status, warnings: 0 }
                                 ]);
                               }}
-                              className="w-20 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-xl px-4 py-2 text-center font-bold text-[#040457] outline-none"
+                              className="w-20 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-xl px-4 py-2 text-center font-bold text-nunma-forest outline-none"
                             />
                           </div>
                           <div className="text-right">
@@ -2078,7 +2504,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
               <div className="mt-10 flex gap-4">
                 <button onClick={() => setShowMarkEntryModal(false)} className="flex-1 py-5 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
-                <button onClick={() => { setShowMarkEntryModal(false); nunmaAlert('Gradebook synchronized successfully.', "success"); }} className="flex-[2] py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Complete Synchronization</button>
+                <button onClick={() => { setShowMarkEntryModal(false); nunmaAlert('Gradebook synchronized successfully.', "success"); }} className="flex-[2] py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Complete Synchronization</button>
               </div>
             </div>
           </div>
@@ -2102,13 +2528,158 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           />
         )}
 
-        {/* WHITELIST MODAL */}
-        {showAddStudentModal && (
-          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[120] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
+        {/* SHARE ACCESS MODAL */}
+        {showShareAccessModal && (
+          <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[120] flex items-center justify-center p-6 bg-nunma-forest/80 max-md:bg-black/40 backdrop-blur-xl max-md:backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-2xl overflow-hidden p-12 animate-in zoom-in-95 duration-500 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-start mb-10">
                 <div>
-                  <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Whitelist Access</h3>
+                  <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Share Access</h3>
+                  <p className="text-sm text-gray-400 mt-2 font-medium">Add co-tutors and assign them a specific subject to manage.</p>
+                </div>
+                <button onClick={() => setShowShareAccessModal(false)} className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all"><X size={24} /></button>
+              </div>
+
+              <div className="space-y-8">
+                {/* Current Co-tutors */}
+                {zone?.coTutors && zone.coTutors.length > 0 && (
+                  <div>
+                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Current Co-Tutors ({zone.coTutors.length}/7)</h4>
+                    <div className="space-y-3">
+                      {zone.coTutors.map((ct: any) => (
+                        <div key={ct.uid} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                          <div className="flex items-center gap-4">
+                            <img src={ct.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${ct.name}`} alt="" className="w-10 h-10 rounded-xl" />
+                            <div>
+                              <p className="font-bold text-nunma-forest">{ct.name}</p>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{ct.subject}</p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={async () => {
+                              try {
+                                const newCoTutors = zone.coTutors.filter((t: any) => t.uid !== ct.uid);
+                                await updateDoc(doc(db, 'zones', zoneId!), { coTutors: newCoTutors });
+                                toast.success("Access revoked");
+                              } catch(e) {
+                                toast.error("Failed to revoke access");
+                              }
+                            }}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!zone?.coTutors || zone.coTutors.length < 7) ? (
+                  <div className="space-y-6 pt-6 border-t border-gray-100">
+                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Add New Co-Tutor</h4>
+                    
+                    <div className="space-y-4 relative">
+                      <input
+                        type="email"
+                        placeholder="Search user by email..."
+                        value={newCoTutorEmail}
+                        onChange={e => setNewCoTutorEmail(e.target.value)}
+                        onFocus={() => setShowCoTutorSuggestions(true)}
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all"
+                      />
+
+                      {showCoTutorSuggestions && (coTutorSearchResults.length > 0 || isSearchingCoTutors) && (
+                        <div className="absolute left-0 right-0 top-14 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[130]">
+                          {isSearchingCoTutors ? (
+                            <div className="p-4 flex items-center justify-center gap-3 text-gray-400 text-xs font-bold uppercase tracking-widest">
+                              <Loader2 size={16} className="animate-spin" /> Searching...
+                            </div>
+                          ) : (
+                            <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                              {coTutorSearchResults.map(u => (
+                                <button
+                                  key={u.id}
+                                  onClick={() => {
+                                    setNewCoTutorEmail(u.email);
+                                    setShowCoTutorSuggestions(false);
+                                  }}
+                                  className="w-full p-4 flex items-center gap-4 hover:bg-[#c2f575]/10 transition-colors text-left"
+                                >
+                                  <img src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name}`} className="w-10 h-10 rounded-xl" alt="" />
+                                  <div>
+                                    <p className="font-black text-nunma-forest text-sm">{u.name}</p>
+                                    <p className="text-xs text-gray-400 font-medium">{u.email}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <select
+                        value={selectedCoTutorSubject}
+                        onChange={(e) => setSelectedCoTutorSubject(e.target.value)}
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all cursor-pointer"
+                      >
+                        <option value="">Select a subject to assign...</option>
+                        {zone?.subjects?.map((sub: string) => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      disabled={!newCoTutorEmail || !selectedCoTutorSubject}
+                      onClick={async () => {
+                        const targetUser = coTutorSearchResults.find(u => u.email === newCoTutorEmail);
+                        if (!targetUser) return toast.error("Please select a valid user from the search results");
+                        if (zone?.coTutors?.some((t: any) => t.uid === targetUser.id)) return toast.error("User already has access");
+
+                        try {
+                          const newTutor = {
+                            uid: targetUser.id,
+                            email: targetUser.email,
+                            name: targetUser.name,
+                            avatar: targetUser.avatar || '',
+                            subject: selectedCoTutorSubject
+                          };
+                          
+                          const updatedTutors = [...(zone?.coTutors || []), newTutor];
+                          await updateDoc(doc(db, 'zones', zoneId!), { coTutors: updatedTutors });
+                          toast.success("Co-tutor added successfully!");
+                          setNewCoTutorEmail('');
+                          setSelectedCoTutorSubject('');
+                          setShowCoTutorSuggestions(false);
+                        } catch(e) {
+                          toast.error("Failed to add co-tutor");
+                        }
+                      }}
+                      className="w-full py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Grant Co-Tutor Access
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center p-6 bg-red-50 text-red-500 rounded-2xl text-sm font-bold">
+                    Maximum limit of 7 co-tutors reached.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* WHITELIST MODAL */}
+        {showAddStudentModal && (
+          <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[120] flex items-center justify-center p-6 bg-nunma-forest/80 max-md:bg-black/40 backdrop-blur-xl max-md:backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
+            <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-2xl overflow-hidden p-12 animate-in zoom-in-95 duration-500 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-start mb-10">
+                <div>
+                  <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Add Student</h3>
                   <p className="text-sm text-gray-400 mt-2 font-medium">Grant account access by providing student email addresses.</p>
                 </div>
                 <button onClick={() => setShowAddStudentModal(false)} className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all"><X size={24} /></button>
@@ -2116,33 +2687,31 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
               <div className="space-y-10">
                 {/* Promote Zone Section */}
-                {zone?.zoneType === 'Workshop' && (
-                  <div className="bg-gray-50 rounded-3xl p-6 border-2 border-dashed border-gray-200">
-                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><Globe size={16} /> Promote Workshop</h4>
-                    <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">
-                      <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100 flex-shrink-0">
-                        <QRCodeSVG value={`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`} size={100} fgColor="#040457" />
-                      </div>
-                      <div className="space-y-4 flex-1 w-full">
-                        <p className="text-xs text-gray-500 font-bold">Share your unique event link or QR code to gather registrations.</p>
-                        <div className="flex gap-2">
-                          <button onClick={() => navigator?.clipboard?.writeText(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`).then(() => nunmaAlert('Link copied!', "success"))} className="flex-1 py-3 bg-white border border-gray-200 text-[#040457] rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2">
-                            <Copy size={14} /> Copy Link
-                          </button>
-                          <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join my workshop: ${zone?.title || ""}`)}&url=${encodeURIComponent(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-sm">
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" /></svg>
-                          </a>
-                          <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-700 hover:text-white transition-all shadow-sm">
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" clipRule="evenodd" /></svg>
-                          </a>
-                          <a href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my workshop: ${zone?.title || ""} ${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-green-50 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-sm">
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
-                          </a>
-                        </div>
+                <div className="bg-gray-50 rounded-3xl p-6 border-2 border-dashed border-gray-200">
+                  <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><Globe size={16} /> Share Public Link</h4>
+                  <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">
+                    <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100 flex-shrink-0">
+                      <QRCodeSVG value={`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`} size={100} fgColor="#052E16" />
+                    </div>
+                    <div className="space-y-4 flex-1 w-full">
+                      <p className="text-xs text-gray-500 font-bold">Share your unique event link or QR code to gather registrations.</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => navigator?.clipboard?.writeText(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`).then(() => nunmaAlert('Link copied!', "success"))} className="flex-1 py-3 bg-white border border-gray-200 text-nunma-forest rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2">
+                          <Copy size={14} /> Copy Link
+                        </button>
+                        <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join my space: ${zone?.title || ""}`)}&url=${encodeURIComponent(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-sm">
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" /></svg>
+                        </a>
+                        <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-700 hover:text-white transition-all shadow-sm">
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" clipRule="evenodd" /></svg>
+                        </a>
+                        <a href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my space: ${zone?.title || ""} ${window?.location?.origin || ""}/workplace?join=${zoneId || ""}`)}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-green-50 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-sm">
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                        </a>
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
                 <div className="space-y-4">
                   <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Individual Invite</label>
                   <div className="flex gap-4">
@@ -2153,7 +2722,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         value={newStudentEmail}
                         onChange={e => setNewStudentEmail(e.target.value)}
                         onFocus={() => setShowUserSuggestions(true)}
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 font-bold text-[#040457] outline-none transition-all"
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-5 font-bold text-nunma-forest outline-none transition-all"
                       />
 
                       {showUserSuggestions && (userSearchResults.length > 0 || isSearchingUsers) && (
@@ -2176,7 +2745,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                 >
                                   <img src={u.avatar} className="w-10 h-10 rounded-xl" alt="" />
                                   <div>
-                                    <p className="font-black text-[#040457] text-sm group-hover:text-indigo-600 transition-colors">{u.name}</p>
+                                    <p className="font-black text-nunma-forest text-sm group-hover:text-indigo-600 transition-colors">{u.name}</p>
                                     <p className="text-xs text-gray-400 font-medium">{u.email}</p>
                                   </div>
                                 </button>
@@ -2222,9 +2791,9 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               }).catch(err => console.error('Enrollment email failed:', err));
                             }
 
-                            toast.success('Student successfully whitelisted and notified.', { icon: '✅' });
+                            toast.success('Student successfully added and notified.', { icon: '✅' });
                           } else if (data.pending > 0) {
-                            toast.success('Email whitelisted. Access will be granted when they register.', { icon: '📧' });
+                            toast.success('Email added. Access will be granted when they register.', { icon: '📧' });
                           } else if (data.alreadyEnrolled > 0) {
                             toast('Student is already enrolled in this Zone.', { icon: 'ℹ️' });
                           } else {
@@ -2240,7 +2809,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                           setIsWhitelisting(false);
                         }
                       }}
-                      className={`px-8 py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl ${isWhitelisting ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      className={`px-8 py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl ${isWhitelisting ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
                       {isWhitelisting ? (
                         <div className="w-4 h-4 border-2 border-[#c2f575] border-t-transparent rounded-full animate-spin" />
@@ -2259,14 +2828,14 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
                 <div className="space-y-4">
                   <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1 flex items-center gap-3">
-                    <FileSpreadsheet size={16} /> Bulk Whitelist (Excel/CSV)
+                    <FileSpreadsheet size={16} /> Bulk Add (Excel/CSV)
                   </label>
                   <div className="relative group">
                     <div className="w-full h-48 bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2.5rem] flex flex-col items-center justify-center text-center p-8 group-hover:border-[#c2f575] transition-all relative overflow-hidden">
                       <div className="p-4 bg-white rounded-2xl shadow-sm mb-4">
                         <Upload size={32} className="text-indigo-900" />
                       </div>
-                      <p className="text-sm font-bold text-[#040457] mb-1">Upload Student List</p>
+                      <p className="text-sm font-bold text-nunma-forest mb-1">Upload Student List</p>
                       <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">
                         Column A: Name · Column B: Email
                       </p>
@@ -2337,22 +2906,21 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
         {/* TAKE ATTENDANCE MODAL */}
         {showTakeAttendanceModal && (
-          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[140] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
-            <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500 max-h-[90vh] flex flex-col">
-              <h3 className="text-3xl font-black text-[#040457] mb-4">Take Attendance</h3>
-              <p className="text-sm text-gray-400 mb-8 leading-relaxed font-medium">Record attendance for the current class session.</p>
+          <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[140] flex items-center justify-center p-6 bg-nunma-forest/80 max-md:bg-black/40 backdrop-blur-xl max-md:backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
+            <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-visible p-10 animate-in zoom-in-95 duration-500 max-h-[90vh] flex flex-col">
+              <h3 className="text-3xl font-black text-nunma-forest mb-4">Take Attendance</h3>
 
               <div className="space-y-6 mb-8">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Date</label>
-                    <input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                    <input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
                   </div>
                   <div className="space-y-2 relative">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Time</label>
                     <div
                       onClick={() => setShowTimePicker(!showTimePicker)}
-                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] cursor-pointer flex items-center justify-between hover:bg-gray-100 transition-all"
+                      className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest cursor-pointer flex items-center justify-between hover:bg-gray-100 transition-all"
                     >
                       <span>{attendanceTime}</span>
                       <Clock size={18} className="text-gray-400" />
@@ -2360,18 +2928,18 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
                     {/* Use the unified Clock Picker for Attendance too */}
                     {showTimePicker && (
-                      <div className="absolute top-full left-0 mt-2 bg-white rounded-[2rem] shadow-2xl border border-gray-100 p-8 z-50 animate-in slide-in-from-top-2 w-[320px]">
+                      <div className="absolute top-full right-0 mt-2 bg-white rounded-[2rem] shadow-2xl border border-gray-100 p-8 z-50 animate-in slide-in-from-top-2 w-[320px]">
                         <div className="flex justify-between items-center mb-4">
                           <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Time</h4>
                           <button onClick={() => setShowTimePicker(false)} className="text-gray-300 hover:text-red-500"><X size={16} /></button>
                         </div>
 
                         <div className="flex flex-col items-center mb-6 relative">
-                          <div className="relative w-48 h-48 bg-gradient-to-br from-[#040457] to-indigo-900 rounded-full shadow-xl p-3">
+                          <div className="relative w-48 h-48 bg-gradient-to-br from-nunma-forest to-indigo-900 rounded-full shadow-xl p-3">
                             <div className="absolute inset-3 bg-white rounded-full flex items-center justify-center">
                               {Array.from({ length: 12 }, (_, i) => {
                                 const angle = (i * 30 - 90) * (Math.PI / 180);
-                                const radius = 75;
+                                const radius = 38;
                                 const x = 50 + radius * Math.cos(angle);
                                 const y = 50 + radius * Math.sin(angle);
                                 const number = clockMode === 'hour' ? (i === 0 ? 12 : i) : i * 5;
@@ -2394,7 +2962,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                       }
                                     }}
                                     className={`absolute w-8 h-8 rounded-full font-black text-[10px] transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
-                                      ? 'bg-[#c2f575] text-[#040457] scale-110 shadow-lg'
+                                      ? 'bg-[#c2f575] text-nunma-forest scale-110 shadow-lg'
                                       : 'bg-gray-50 text-gray-600 hover:bg-[#c2f575]/20 hover:scale-105'
                                       }`}
                                     style={{ left: `${x}%`, top: `${y}%` }}
@@ -2405,7 +2973,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               })}
 
                               <div className="text-center pointer-events-none">
-                                <div className="text-lg font-black text-[#040457]">{tpHour}:{tpMinute}</div>
+                                <div className="text-lg font-black text-nunma-forest">{tpHour}:{tpMinute}</div>
                                 <div className="text-[6px] font-black text-gray-400 uppercase tracking-widest">{clockMode === 'hour' ? 'Hour' : 'Min'}</div>
                               </div>
                             </div>
@@ -2418,7 +2986,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               <button
                                 key={p}
                                 onClick={() => updateTimeFromPicker(tpHour, tpMinute, p)}
-                                className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all ${tpPeriod === p ? 'bg-[#040457] text-white shadow-md' : 'text-gray-400'}`}
+                                className={`flex-1 py-2 rounded-lg text-[9px] font-black transition-all ${tpPeriod === p ? 'bg-nunma-forest text-white shadow-md' : 'text-gray-400'}`}
                               >
                                 {p}
                               </button>
@@ -2426,7 +2994,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                           </div>
                           <button
                             onClick={() => setShowTimePicker(false)}
-                            className="px-4 py-2 bg-[#c2f575] text-[#040457] rounded-xl font-black text-[9px] uppercase tracking-widest hover:scale-105 transition-all shadow-md"
+                            className="px-4 py-2 bg-[#c2f575] text-nunma-forest rounded-xl font-black text-[9px] uppercase tracking-widest hover:scale-105 transition-all shadow-md"
                           >
                             Done
                           </button>
@@ -2436,7 +3004,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Class Name (Optional)</label>
-                    <input type="text" placeholder="e.g. Morning Theory" value={newAttendanceClassName} onChange={e => setNewAttendanceClassName(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                    <input type="text" placeholder="e.g. Morning Theory" value={newAttendanceClassName} onChange={e => setNewAttendanceClassName(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
                   </div>
                 </div>
               </div>
@@ -2452,7 +3020,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   <tbody className="divide-y divide-gray-50">
                     {students.map(student => (
                       <tr key={student.id}>
-                        <td className="py-4 font-bold text-[#040457]">{student.name}</td>
+                        <td className="py-4 font-bold text-nunma-forest">{student.name}</td>
                         <td className="py-4">
                           <div className="flex justify-end gap-2">
                             <button
@@ -2493,47 +3061,59 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
               <div className="flex gap-4">
                 <button onClick={() => setShowTakeAttendanceModal(false)} className="flex-1 py-4 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
-                <button onClick={handleTakeAttendance} className="flex-[2] py-4 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Save Session</button>
+                <button onClick={handleTakeAttendance} className="flex-[2] py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Save Session</button>
               </div>
             </div>
           </div>
         )}
 
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="flex items-center gap-8">
-            <button onClick={() => navigate('/workplace')} className="p-5 bg-white border border-gray-100 rounded-[1.5rem] text-[#040457] hover:shadow-2xl transition-all shadow-sm active:scale-90"><ArrowLeft size={28} /></button>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 max-md:mt-16">
+          <div className="flex items-center gap-8 max-md:gap-4">
+            <button onClick={() => navigate('/workplace')} className="hidden md:block p-5 bg-white border border-gray-100 rounded-[1.5rem] text-nunma-forest hover:shadow-2xl transition-all shadow-sm active:scale-90"><ArrowLeft size={28} /></button>
             <div>
               <div className="flex items-center gap-4 mb-3">
-                <h1 className="text-6xl font-black text-[#040457] tracking-tighter leading-tight pb-2">{zone.title}</h1>
-                <button onClick={handleOpenZoneSettings} className="p-3 bg-white border border-gray-100 text-[#040457] rounded-2xl hover:bg-gray-50 hover:shadow-lg transition-all active:scale-95 shadow-sm" title="Zone Settings">
-                  <Settings size={28} />
-                </button>
+                <h1 className="text-6xl max-md:text-4xl font-black text-nunma-forest tracking-tighter leading-tight pb-2">{zone.title}</h1>
+                {isCreator && (
+                  <button onClick={handleOpenZoneSettings} className="p-3 bg-white border border-gray-100 text-nunma-forest rounded-2xl hover:bg-gray-50 hover:shadow-lg transition-all active:scale-95 shadow-sm" title="Zone Settings">
+                    <Settings size={28} />
+                  </button>
+                )}
               </div>
-              <p className="text-[11px] font-bold text-[#040457]/70 uppercase tracking-[0.4em]">{zone.level} LEVEL FACILITY</p>
+              <p className="text-[11px] font-bold text-nunma-forest/70 uppercase tracking-[0.4em]">{zone.level} LEVEL FACILITY</p>
             </div>
           </div>
-          <div className="flex gap-4">
-            <ZoneCapacityMeter zoneId={zoneId!} />
-            <button onClick={() => navigate(`/workplace/analytics/${zoneId}`)} className="px-10 py-5 bg-white border border-gray-100 text-[#040457] rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:shadow-2xl transition-all shadow-sm active:scale-95">
+          <div className="flex gap-4 max-md:flex-wrap max-md:w-full max-md:mt-4">
+            {/* Analytics: visible on desktop only, moved to mobile grid */}
+            <button onClick={() => navigate(`/workplace/analytics/${zoneId}`)} className="max-md:hidden px-10 py-5 bg-white border border-gray-100 text-nunma-forest rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center justify-center gap-4 hover:shadow-2xl transition-all shadow-sm active:scale-95">
               <BarChart3 size={20} /> Analytics
             </button>
-            <button onClick={handleSharePublicLink} className="px-6 py-5 bg-[#c2f575] text-[#040457] rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-xl">
-              <Share2 size={20} />
-            </button>
 
-            <button onClick={() => setShowAddStudentModal(true)} className="px-10 py-5 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-[#040457]/20">
-              <UserPlus size={20} /> Whitelist
-            </button>
-            <button onClick={handleDeleteZone} className="px-6 py-5 bg-red-50 text-red-500 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:bg-red-500 hover:text-white transition-all shadow-xl">
-              <Trash2 size={20} />
-            </button>
+            {isCreator && (
+              <button onClick={() => setShowAddStudentModal(true)} className="px-10 py-5 max-md:px-6 max-md:py-4 max-md:flex-1 bg-nunma-forest text-white rounded-[1.75rem] font-black uppercase text-xs max-md:text-[10px] tracking-widest flex items-center justify-center gap-4 max-md:gap-3 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-nunma-forest/20">
+                <UserPlus size={20} /> <span className="max-md:hidden">Add Student</span>
+              </button>
+            )}
+
+            {isCreator && (
+              <>
+                <button onClick={() => setShowShareAccessModal(true)} className="px-8 py-5 max-md:px-6 max-md:py-4 max-md:flex-1 bg-[#c2f575] text-nunma-forest rounded-[1.75rem] font-black uppercase text-xs max-md:text-[10px] tracking-widest flex items-center justify-center gap-4 max-md:gap-3 hover:scale-105 active:scale-95 transition-all shadow-xl">
+                  <Shield size={20} /> <span className="max-md:hidden">Share Access</span>
+                </button>
+
+                <button onClick={handleDeleteZone} className="px-6 py-5 max-md:py-4 max-md:flex-none bg-red-50 text-red-500 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center justify-center gap-4 max-md:gap-3 hover:bg-red-500 hover:text-white transition-all shadow-xl">
+                  <Trash2 size={20} />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
         {view === 'management' ? (
-          <div className="bg-white rounded-[4rem] border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.02)] overflow-hidden min-h-[740px] flex flex-col">
-            <div className="flex bg-gray-50/50 p-4 border-b border-gray-100 gap-2 overflow-x-auto no-scrollbar">
+          <div className="bg-white max-md:bg-transparent rounded-[4rem] max-md:rounded-none border max-md:border-none border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.02)] max-md:shadow-none overflow-hidden min-h-[740px] flex flex-col">
+
+            {/* ── DESKTOP TAB BAR (unchanged) ── */}
+            <div className="hidden md:flex bg-gray-50/50 p-4 border-b border-gray-100 gap-2 overflow-x-auto no-scrollbar">
               {[
                 { id: 'attendance', label: 'ATTENDANCE', icon: <CheckCircle2 size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' },
                 { id: 'curriculum', label: 'COURSE', icon: <Layers size={16} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course' },
@@ -2546,10 +3126,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex-1 py-5 px-10 rounded-[1.75rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-4 whitespace-nowrap 
+                  className={`flex-1 py-5 px-10 rounded-[1.75rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-4 whitespace-nowrap
                   ${activeTab === tab.id
-                      ? 'bg-white text-[#040457] shadow-xl border border-gray-100'
-                      : 'text-gray-400 hover:text-[#040457] hover:bg-white/50'
+                      ? 'bg-white text-nunma-forest shadow-xl border border-gray-100'
+                      : 'text-gray-400 hover:text-nunma-forest hover:bg-white/50'
                     }`}
                 >
                   {tab.icon} {tab.label}
@@ -2557,30 +3137,72 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               ))}
             </div>
 
-            <div className="p-16 flex-1">
+            {/* ── MOBILE: 2-column icon grid (no scroll needed) ── */}
+            <div className="md:hidden px-4 pt-4 pb-2">
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'attendance', label: 'Attendance', icon: <CheckCircle2 size={22} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' },
+                  { id: 'curriculum', label: 'Course', icon: <Layers size={22} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course' },
+                  { id: 'exams', label: 'Exam Streams', icon: <GraduationCap size={22} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' },
+                  { id: 'schedule', label: 'Schedule Live', icon: <Video size={22} />, visible: !zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Workshop' },
+                  { id: 'students', label: 'Students', icon: <Users size={22} />, visible: true },
+                  { id: 'landing', label: 'Landing Page', icon: <Globe size={22} />, visible: zone?.zoneType === 'Workshop' },
+                  { id: 'post-session', label: 'Post-Session', icon: <FileText size={22} />, visible: zone?.zoneType === 'Workshop' }
+                ].filter(t => t.visible).map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-95 text-left
+                      ${activeTab === tab.id
+                        ? 'bg-nunma-forest text-white shadow-lg shadow-nunma-forest/20'
+                        : 'bg-white text-gray-400 border border-gray-100 shadow-sm'
+                      }`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all
+                      ${activeTab === tab.id ? 'bg-white/20' : 'bg-gray-50'}`}>
+                      {tab.icon}
+                    </div>
+                    <span className="text-[11px] font-black uppercase tracking-wide leading-tight">{tab.label}</span>
+                  </button>
+                ))}
+
+                {/* Analytics tile - always last */}
+                <button
+                  onClick={() => navigate(`/workplace/analytics/${zoneId}`)}
+                  className="flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-95 text-left bg-white text-gray-400 border border-gray-100 shadow-sm"
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gray-50">
+                    <BarChart3 size={22} />
+                  </div>
+                  <span className="text-[11px] font-black uppercase tracking-wide leading-tight">Analytics</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-16 max-md:p-4 flex-1">
               {activeTab === 'attendance' && (
-                <div className="space-y-10 animate-in fade-in duration-500">
-                  <div className="flex justify-between items-center gap-6">
-                    <div className="flex-1 relative">
+                <div className="space-y-10 max-md:space-y-8 animate-in fade-in duration-500">
+                  <div className="flex justify-between items-center gap-6 max-md:flex-col max-md:items-stretch max-md:gap-4">
+                    <div className="flex-1 relative max-md:w-full">
                       <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                       <input
                         type="text"
                         placeholder="Search students by name or email..."
                         value={attendanceSearchQuery}
                         onChange={(e) => setAttendanceSearchQuery(e.target.value)}
-                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl pl-16 pr-8 py-5 font-bold text-nunma-forest outline-none transition-all max-md:pl-14 max-md:pr-6 max-md:py-4 max-md:text-sm"
                       />
                     </div>
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 max-md:flex-col sm:max-md:flex-row max-md:w-full">
                       <button
                         onClick={() => setShowTakeAttendanceModal(true)}
-                        className="px-8 py-5 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
+                        className="px-8 py-5 bg-[#c2f575] text-nunma-forest rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl max-md:flex-1 max-md:px-6 max-md:py-4 max-md:justify-center"
                       >
                         <CheckCircle2 size={18} /> Take Attendance
                       </button>
                       <button
                         onClick={() => setShowDownloadModal(true)}
-                        className="px-8 py-5 bg-[#040457] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
+                        className="px-8 py-5 bg-nunma-forest text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl max-md:flex-1 max-md:px-6 max-md:py-4 max-md:justify-center"
                       >
                         <Download size={18} /> Download List
                       </button>
@@ -2589,51 +3211,121 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
                   {/* DOWNLOAD MODAL */}
                   {showDownloadModal && (
-                    <div className="fixed inset-0 z-[140] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+                    <div className="fixed inset-0 z-[140] flex items-center justify-center p-6 bg-nunma-forest/80 max-md:bg-black/40 backdrop-blur-xl max-md:backdrop-blur-sm animate-in fade-in duration-300">
                       <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl p-10 animate-in zoom-in-95 duration-500">
-                        <h3 className="text-2xl font-black text-[#040457] mb-6">Download Report</h3>
+                        <h3 className="text-2xl font-black text-nunma-forest mb-6">Download Report</h3>
                         <div className="space-y-4 mb-8">
                           <div>
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1 mb-2">Start Date</label>
-                            <input type="date" value={downloadStartDate} onChange={e => setDownloadStartDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none" />
+                            <input type="date" value={downloadStartDate} onChange={e => setDownloadStartDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none" />
                           </div>
                           <div>
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1 mb-2">End Date</label>
-                            <input type="date" value={downloadEndDate} onChange={e => setDownloadEndDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none" />
+                            <input type="date" value={downloadEndDate} onChange={e => setDownloadEndDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none" />
                           </div>
                         </div>
                         <div className="flex gap-4">
                           <button onClick={() => setShowDownloadModal(false)} className="flex-1 py-4 bg-gray-50 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               const filteredSessions = attendanceSessions.filter(s => s.date >= downloadStartDate && s.date <= downloadEndDate);
-                              // Header
-                              let csvContent = "Name,Email,Attendance %,";
-                              csvContent += filteredSessions.map(s => `${s.date} ${s.time}${s.className ? ` (${s.className})` : ''}`).join(",") + "\n";
+                              
+                              const workbook = new ExcelJS.Workbook();
+                              const worksheet = workbook.addWorksheet('Attendance');
 
-                              // Rows
+                              // Title Row
+                              const titleRow = worksheet.addRow(['NUNMA', zone?.title || 'Zone Attendance Report']);
+                              titleRow.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FF1A1A4E' } };
+                              if (filteredSessions.length > 0) {
+                                worksheet.mergeCells('B1', String.fromCharCode(65 + 2 + filteredSessions.length) + '1');
+                              }
+                              titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC2F575' } };
+                              titleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+                              titleRow.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' };
+                              titleRow.height = 30;
+
+                              // Headers (Session Name)
+                              const header1 = ['Student Name', 'Email', 'Attendance %'];
+                              filteredSessions.forEach(session => {
+                                header1.push(session.className || 'Class Session');
+                              });
+                              const headerRow1 = worksheet.addRow(header1);
+
+                              // Headers (Date & Time)
+                              const header2 = ['', '', ''];
+                              filteredSessions.forEach(session => {
+                                header2.push(`${session.date}\n${session.time || ''}`);
+                              });
+                              const headerRow2 = worksheet.addRow(header2);
+
+                              // Merge Headers
+                              worksheet.mergeCells('A2:A3');
+                              worksheet.mergeCells('B2:B3');
+                              worksheet.mergeCells('C2:C3');
+
+                              const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC2F575' } };
+                              const headerBorder = {
+                                top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
+                              };
+
+                              [headerRow1, headerRow2].forEach(row => {
+                                row.eachCell(cell => {
+                                  cell.fill = headerFill as any;
+                                  cell.border = headerBorder as any;
+                                  cell.font = { bold: true, color: { argb: 'FF1A1A4E' } };
+                                  cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                                });
+                              });
+                              
+                              headerRow1.height = 25;
+                              headerRow2.height = 30;
+
+                              worksheet.getColumn(1).width = 25;
+                              worksheet.getColumn(2).width = 30;
+                              worksheet.getColumn(3).width = 15;
+                              for(let i = 4; i <= 3 + filteredSessions.length; i++) {
+                                worksheet.getColumn(i).width = 15;
+                              }
+
+                              // Data Rows
                               students.forEach(student => {
-                                const row = [student.name, student.email, `${calculateAttendancePercentage(student)}%`];
+                                const history = student.attendanceHistory || [];
+                                let presentCount = 0;
+                                let totalCount = 0;
+                                
+                                const rowData = [student.name || 'Unknown', student.email || 'N/A', ''];
+                                
                                 filteredSessions.forEach(session => {
-                                  const record = student.attendanceHistory?.find(h => h.sessionId === session.id || h.sessionId === (session as any).originalId);
-                                  if (record) {
-                                    row.push(record.status === 'Present' ? 'P' : record.status === 'Absent' ? 'A' : record.status === 'Late' ? 'L' : record.status);
-                                  } else {
-                                    // Default to A if there is no record for this session
-                                    row.push('A');
+                                  const status = history.find(h => h.sessionId === session.id || h.sessionId === (session as any).originalId)?.status || 'Pending';
+                                  if (status !== 'Pending') totalCount++;
+                                  if (status === 'Present') presentCount++;
+                                  
+                                  const displayStatus = status === 'Present' ? 'P' : (status === 'Absent' ? 'A' : (status === 'Late' ? 'L' : '-'));
+                                  rowData.push(displayStatus);
+                                });
+
+                                rowData[2] = totalCount > 0 ? `${Math.round((presentCount / totalCount) * 100)}%` : '0%';
+
+                                const row = worksheet.addRow(rowData);
+                                
+                                row.eachCell((cell, colNumber) => {
+                                  cell.border = headerBorder as any;
+                                  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                                  if (colNumber > 3) {
+                                    if (cell.value === 'P') cell.font = { bold: true, color: { argb: 'FF16A34A' } };
+                                    else if (cell.value === 'A') cell.font = { bold: true, color: { argb: 'FFDC2626' } };
+                                    else if (cell.value === 'L') cell.font = { bold: true, color: { argb: 'FFD97706' } };
                                   }
                                 });
-                                csvContent += row.join(",") + "\n";
                               });
 
-                              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                              const link = document.createElement("a");
-                              link.href = URL.createObjectURL(blob);
-                              link.download = `attendance_report_${downloadStartDate}_to_${downloadEndDate}.csv`;
-                              link.click();
+                              const buffer = await workbook.xlsx.writeBuffer();
+                              const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                              saveAs(blob, `attendance_report_${downloadStartDate}_to_${downloadEndDate}.xlsx`);
+
                               setShowDownloadModal(false);
                             }}
-                            className="flex-[2] py-4 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl"
+                            className="flex-[2] py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl"
                           >
                             Download
                           </button>
@@ -2642,7 +3334,67 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     </div>
                   )}
 
-                  <div className="bg-white border border-gray-100 rounded-[3rem] overflow-hidden shadow-sm overflow-x-auto">
+                  {/* ── MOBILE: Beautiful Student Cards (name + attendance % only) ── */}
+                  <div className="md:hidden space-y-3">
+                    {(students || []).filter(s =>
+                      (s?.name || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) ||
+                      (s?.email || '').toLowerCase().includes((attendanceSearchQuery || "").toLowerCase())
+                    ).length === 0 ? (
+                      <div className="py-16 text-center">
+                        <div className="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                          <Users size={28} className="text-gray-300" />
+                        </div>
+                        <p className="text-sm font-black text-gray-300 uppercase tracking-widest">No students found</p>
+                      </div>
+                    ) : (
+                      (students || []).filter(s =>
+                        (s?.name || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) ||
+                        (s?.email || '').toLowerCase().includes((attendanceSearchQuery || "").toLowerCase())
+                      ).map(student => {
+                        const pct = calculateAttendancePercentage(student);
+                        const isGood = pct >= 75;
+                        const isMid = pct >= 50 && pct < 75;
+                        const color = isGood ? '#16a34a' : isMid ? '#d97706' : '#dc2626';
+                        const bgColor = isGood ? 'bg-green-50' : isMid ? 'bg-amber-50' : 'bg-red-50';
+                        const textColor = isGood ? 'text-green-600' : isMid ? 'text-amber-600' : 'text-red-600';
+                        const circumference = 2 * Math.PI * 20;
+                        const dashOffset = circumference - (pct / 100) * circumference;
+                        return (
+                          <div key={student.id} className="flex items-center gap-4 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 active:scale-[0.98] transition-transform">
+                            {/* Avatar */}
+                            <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover flex-shrink-0 shadow-sm" alt="" />
+                            {/* Name + Email */}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-black text-nunma-forest text-sm leading-tight truncate">{student.name}</p>
+                              <p className="text-[11px] text-gray-400 font-medium truncate mt-0.5">{student.email}</p>
+                            </div>
+                            {/* Circular Progress + % */}
+                            <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                              <div className="relative w-12 h-12">
+                                <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+                                  <circle cx="24" cy="24" r="20" fill="none" stroke="#f3f4f6" strokeWidth="4" />
+                                  <circle
+                                    cx="24" cy="24" r="20" fill="none"
+                                    stroke={color} strokeWidth="4"
+                                    strokeDasharray={circumference}
+                                    strokeDashoffset={dashOffset}
+                                    strokeLinecap="round"
+                                    className="transition-all duration-700"
+                                  />
+                                </svg>
+                                <span className={`absolute inset-0 flex items-center justify-center text-[10px] font-black ${textColor}`}>
+                                  {pct}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* ── DESKTOP: Original table (unchanged) ── */}
+                  <div className="hidden md:block bg-white border border-gray-100 rounded-[3rem] overflow-hidden shadow-sm overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-gray-50/50">
@@ -2656,6 +3408,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               (s?.date || "").includes(attendanceSearchQuery || "")
                             )
                             .slice(-5)
+                            .reverse()
                             .map(session => (
                               <th key={session.id} className="px-6 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
                                 {session.date}<br />
@@ -2672,13 +3425,13 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               <div className="flex items-center gap-4">
                                 <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" alt="" />
                                 <div className="flex flex-col">
-                                  <span className="font-bold text-[#040457]">{student.name}</span>
+                                  <span className="font-bold text-nunma-forest">{student.name}</span>
                                   <span className="text-xs text-gray-400 font-medium">{student.email}</span>
                                 </div>
                               </div>
                             </td>
                             <td className="px-10 py-6">
-                              <span className="font-black text-[#040457] text-lg">{calculateAttendancePercentage(student)}%</span>
+                              <span className="font-black text-nunma-forest text-lg">{calculateAttendancePercentage(student)}%</span>
                             </td>
                             {/* Dynamic Session Status */}
                             {attendanceSessions
@@ -2688,6 +3441,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                 (s?.date || "").includes(attendanceSearchQuery || "")
                               )
                               .slice(-5)
+                              .reverse()
                               .map(session => {
                                 const status = (student?.attendanceHistory || []).find(h => h?.sessionId === session?.id || h?.sessionId === (session as any)?.originalId)?.status || 'Pending';
                                 return (
@@ -2714,7 +3468,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               {activeTab === 'curriculum' && (
                 <div className="space-y-12 animate-in fade-in duration-500">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Build Course</h3>
+                    <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Build Course</h3>
                     <div className="flex gap-4">
                       <input
                         type="file"
@@ -2738,30 +3492,32 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         onRevoke={() => setActiveInvite(null)}
                         onGenerate={handleGenerateInvite}
                       />
-                      <button
-                        onClick={async () => {
-                          try {
-                            const newOrder = chapters.length;
-                            const newTitle = 'New Chapter';
-                            const chaptersRef = collection(db, 'zones', zoneId!, 'chapters');
-                            const docRef = await addDoc(chaptersRef, {
-                              title: newTitle,
-                              order: newOrder,
-                              segments: [],
-                              createdAt: serverTimestamp()
-                            });
+                      {isCreator && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const newOrder = chapters.length;
+                              const newTitle = 'New Chapter';
+                              const chaptersRef = collection(db, 'zones', zoneId!, 'chapters');
+                              const docRef = await addDoc(chaptersRef, {
+                                title: newTitle,
+                                order: newOrder,
+                                segments: [],
+                                createdAt: serverTimestamp()
+                              });
 
-                            const newChapter: Chapter = { id: docRef.id, title: newTitle, segments: [] };
-                            setChapters([...chapters, newChapter]);
-                          } catch (error: any) {
-                            console.error("Error creating chapter:", error);
-                            nunmaAlert("Failed to create chapter. Please try again.", "error");
-                          }
-                        }}
-                        className="px-8 py-5 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
-                      >
-                        <Plus size={18} /> Add Chapter
-                      </button>
+                              const newChapter: Chapter = { id: docRef.id, title: newTitle, segments: [] };
+                              setChapters([...chapters, newChapter]);
+                            } catch (error: any) {
+                              console.error("Error creating chapter:", error);
+                              nunmaAlert("Failed to create chapter. Please try again.", "error");
+                            }
+                          }}
+                          className="px-8 py-5 bg-[#c2f575] text-nunma-forest rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-xl"
+                        >
+                          <Plus size={18} /> Add Chapter
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -2776,118 +3532,137 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         onDrop={(e) => handleDrop(e, index)}
                         className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm group cursor-default"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-6 flex-1">
-                            <GripVertical className="text-gray-200 cursor-grab active:cursor-grabbing" size={24} />
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                          <div className="flex items-center gap-6 flex-1 w-full">
+                            <GripVertical className="text-gray-200 cursor-grab active:cursor-grabbing shrink-0" size={24} />
                             <input
                               type="text"
                               value={chapter.title}
                               onChange={(e) => setChapters(chapters.map(c => c.id === chapter.id ? { ...c, title: e.target.value } : c))}
                               onBlur={(e) => updateChapterTitle(chapter.id, e.target.value)}
-                              className="bg-transparent text-2xl font-black text-[#040457] outline-none border-b-4 border-transparent focus:border-[#c2f575]/20 w-full"
+                              className="bg-transparent text-2xl font-black text-nunma-forest outline-none border-b-4 border-transparent focus:border-[#c2f575]/20 w-full min-w-0"
                             />
                           </div>
-                          <div className="flex gap-4">
-                            <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto mt-4 md:mt-0 items-stretch md:items-center">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 md:flex md:items-center gap-2 md:flex-wrap flex-1">
                               <button
                                 onClick={() => handleAddSegment(chapter.id, 'video')}
-                                className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-xl hover:bg-green-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                                className="flex items-center justify-center md:justify-start gap-2 px-4 py-3 md:py-2 bg-green-50 text-green-700 rounded-xl hover:bg-green-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest w-full md:w-auto"
                                 title="Add Video"
                               >
                                 <FileVideo size={14} /> Video
                               </button>
                               <button
                                 onClick={() => handleAddSegment(chapter.id, 'reading')}
-                                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl hover:bg-indigo-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                                className="flex items-center justify-center md:justify-start gap-2 px-4 py-3 md:py-2 bg-indigo-50 text-indigo-700 rounded-xl hover:bg-indigo-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest w-full md:w-auto"
                                 title="Add Text Module"
                               >
                                 <FileText size={14} /> Text
                               </button>
                               <button
                                 onClick={() => handleAddSegment(chapter.id, 'pdf')}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                                className="flex items-center justify-center md:justify-start gap-2 px-4 py-3 md:py-2 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest w-full md:w-auto"
                                 title="Add Document"
                               >
                                 <FileDown size={14} /> Document
                               </button>
                               <button
                                 onClick={() => handleAddSegment(chapter.id, 'quiz')}
-                                className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                                className="flex items-center justify-center md:justify-start gap-2 px-4 py-3 md:py-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest w-full md:w-auto"
                                 title="Add Quiz"
                               >
                                 <Radio size={14} /> Quiz
                               </button>
                             </div>
-                            <button
-                              onClick={async () => {
-                                if (!zoneId) return;
-                                try {
-                                  await deleteDoc(doc(db, 'zones', zoneId, 'chapters', chapter.id));
-                                } catch (e) {
-                                  console.error("Failed to delete chapter:", e);
-                                  nunmaAlert("Failed to delete chapter", "error");
-                                }
-                              }}
-                              className="p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
-                            >
-                              <Trash2 size={20} />
-                            </button>
+                            {isCreator && (
+                              <button
+                                onClick={async () => {
+                                  if (!zoneId) return;
+                                  try {
+                                    await deleteDoc(doc(db, 'zones', zoneId, 'chapters', chapter.id));
+                                  } catch (e) {
+                                    console.error("Failed to delete chapter:", e);
+                                    nunmaAlert("Failed to delete chapter", "error");
+                                  }
+                                }}
+                                className="flex items-center justify-center p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all w-full md:w-auto"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            )}
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-12">
-                          {(chapter.segments || []).filter((s: any) => s.status !== 'uploading').map((seg) => (
-                            <div key={seg.id} className="p-6 bg-gray-50 border border-transparent hover:border-[#c2f575]/20 rounded-3xl flex items-center justify-between group/seg transition-all">
-                              <div className="flex items-center gap-4">
-                                <div className="p-4 bg-white rounded-2xl shadow-sm text-[#040457]">
-                                  {seg.type === 'video' ? <FileVideo size={20} /> : <FileText size={20} />}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 pl-0 md:pl-12 mt-4 md:mt-0">
+                          {(chapter.segments || []).map((seg, segIndex) => {
+                            if ((seg as any).status === 'uploading') return null;
+                            return (
+                              <div 
+                                key={seg.id} 
+                                draggable={true}
+                                onDragStart={(e) => handleSegmentDragStart(e, chapter.id, segIndex)}
+                                onDragEnd={handleSegmentDragEnd}
+                                onDragOver={handleSegmentDragOver}
+                                onDrop={(e) => handleSegmentDrop(e, chapter.id, segIndex)}
+                                className="p-6 bg-gray-50 border border-transparent hover:border-[#c2f575]/20 rounded-3xl flex items-center justify-between group/seg transition-all cursor-move relative"
+                              >
+                                <div className="absolute right-6 flex gap-2 opacity-0 group-hover/seg:opacity-100 group-focus-within/seg:opacity-100 group-active/seg:opacity-100 transition-opacity shrink-0 z-10 peer">
+                                  {isCreator && (
+                                    <button
+                                      onClick={async () => {
+                                        if (!zoneId) return;
+                                        if (await asyncConfirm('Are you sure you want to delete this segment?')) {
+                                          try {
+                                            if (seg.type === 'video' && (seg as any).videoId) {
+                                              try {
+                                                const deleteFn = httpsCallable(functions, 'deleteBunnyVideo');
+                                                await deleteFn({ videoId: (seg as any).videoId });
+                                              } catch (videoError) {
+                                                console.warn("Failed to delete video from BunnyCDN, proceeding with segment deletion:", videoError);
+                                              }
+                                            }
+                                            const updatedSegments = (chapter.segments || []).filter(s => s.id !== seg.id);
+                                            await updateDoc(doc(db, 'zones', zoneId, 'chapters', chapter.id), {
+                                              segments: updatedSegments
+                                            });
+                                            nunmaAlert("Segment deleted successfully", "success");
+                                          } catch (e) {
+                                            console.error("Failed to delete segment:", e);
+                                            nunmaAlert("Failed to delete segment", "error");
+                                          }
+                                        }
+                                      }}
+                                      className="p-3 bg-white text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
                                 </div>
-                                <div>
-                                  <input
-                                    type="text"
-                                    value={seg.title}
-                                    onChange={(e) => {
-                                      setChapters(chapters.map(c => c.id === chapter.id ? {
-                                        ...c,
-                                        segments: (c.segments || []).map(s => s.id === seg.id ? { ...s, title: e.target.value } : s)
-                                      } : c));
-                                    }}
-                                    onBlur={(e) => updateSegmentTitle(chapter.id, seg.id, e.target.value)}
-                                    className="bg-transparent font-bold text-[#040457] outline-none border-b-2 border-transparent focus:border-[#c2f575]/20 block mb-1"
-                                  />
-                                  <div className="flex gap-2">
-                                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{seg.type} {seg.duration ? `• ${seg.duration}` : ''}</span>
+                                <div className="flex items-center gap-4 flex-1 min-w-0 pr-2 transition-opacity duration-200 peer-hover:opacity-0 peer-focus-within:opacity-0">
+                                  <GripVertical className="hidden md:block text-gray-300 opacity-0 group-hover/seg:opacity-100 transition-opacity cursor-grab active:cursor-grabbing shrink-0" size={20} />
+                                  <div className="p-4 bg-white rounded-2xl shadow-sm text-nunma-forest shrink-0">
+                                    {seg.type === 'video' ? <FileVideo size={20} /> : <FileText size={20} />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
                                     <input
-                                      placeholder="Enter URL or content..."
-                                      className="bg-transparent text-[10px] text-indigo-400 border-none outline-none focus:ring-0 w-32"
+                                      type="text"
+                                      value={seg.title}
+                                      onChange={(e) => {
+                                        setChapters(chapters.map(c => c.id === chapter.id ? {
+                                          ...c,
+                                          segments: (c.segments || []).map(s => s.id === seg.id ? { ...s, title: e.target.value } : s)
+                                        } : c));
+                                      }}
+                                      onBlur={(e) => updateSegmentTitle(chapter.id, seg.id, e.target.value)}
+                                      className="bg-transparent font-bold text-nunma-forest outline-none border-b-2 border-transparent focus:border-[#c2f575]/20 block mb-1 w-full min-w-0 text-ellipsis overflow-hidden whitespace-nowrap"
                                     />
+                                    <div className="flex gap-2">
+                                      <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{seg.type} {seg.duration ? `• ${seg.duration}` : ''}</span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex gap-2 opacity-0 group-hover/seg:opacity-100 transition-opacity">
-                                <button className="p-3 bg-white text-gray-400 rounded-xl hover:text-[#040457] transition-all shadow-sm">
-                                  <Edit3 size={14} />
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    if (!zoneId) return;
-                                    try {
-                                      const updatedSegments = (chapter.segments || []).filter(s => s.id !== seg.id);
-                                      await updateDoc(doc(db, 'zones', zoneId, 'chapters', chapter.id), {
-                                        segments: updatedSegments
-                                      });
-                                    } catch (e) {
-                                      console.error("Failed to delete segment:", e);
-                                      nunmaAlert("Failed to delete segment", "error");
-                                    }
-                                  }}
-                                  className="p-3 bg-white text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
+                          )})}
                         </div>
                       </div>
                     ))}
@@ -2898,48 +3673,52 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               {activeTab === 'students' && (
                 <div className="space-y-12 animate-in fade-in duration-500">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Enrolled Minds</h3>
+                    <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Enrolled Minds</h3>
                     <div className="flex items-center gap-4 text-sm font-bold text-gray-400">
                       <Users size={20} /> {students.length} Students Total
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                    {students.map(student => (
+                    {[...students]
+                      .sort((a, b) => (b.engagementScore || 0) - (a.engagementScore || 0))
+                      .map(student => (
                       <div key={student.id} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
                         <div className="relative">
                           <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
                             <img src={student.avatar} className="w-full h-full object-cover" alt="" />
                           </div>
-                          <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
+                          <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-nunma-forest shadow-lg">
                             <Check size={16} strokeWidth={3} />
                           </div>
                         </div>
                         <div>
-                          <h4 className="text-xl font-black text-[#040457] mb-1">{student.name}</h4>
+                          <h4 className="text-xl font-black text-nunma-forest mb-1">{student.name}</h4>
                           <p className="text-xs text-gray-400 font-medium">{student.email}</p>
                         </div>
                         <div className="pt-4 border-t border-gray-50 w-full flex justify-around">
                           <div className="text-center">
                             <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Score</p>
-                            <p className="font-bold text-[#040457]">{student.engagementScore}%</p>
+                            <p className="font-bold text-nunma-forest">{student.engagementScore || 0}%</p>
                           </div>
                           <div className="text-center">
                             <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Attendance</p>
-                            <p className="font-bold text-[#040457]">{calculateAttendancePercentage(student)}%</p>
+                            <p className="font-bold text-nunma-forest">{calculateAttendancePercentage(student)}%</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Time</p>
-                            <p className="font-bold text-[#040457]">{student.durationInSession}m</p>
+                            <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Pts</p>
+                            <p className="font-bold text-nunma-forest">{student.engagementScore || 0}</p>
                           </div>
                         </div>
                         <div className="w-full pt-4">
-                          <button
-                            onClick={() => handleDismissStudent(student)}
-                            className="w-full py-3 bg-red-50 text-red-500 rounded-2xl font-black uppercase text-[9px] tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
-                          >
-                            <X size={14} /> Dismiss Access
-                          </button>
+                          {isCreator && (
+                            <button
+                              onClick={() => handleDismissStudent(student)}
+                              className="w-full py-3 bg-red-50 text-red-500 rounded-2xl font-black uppercase text-[9px] tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
+                            >
+                              <X size={14} /> Dismiss Access
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -2949,7 +3728,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               {activeTab === 'schedule' && (
                 <div className="space-y-16 animate-in fade-in duration-500">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-5xl font-black text-[#040457] tracking-tighter">Live Session Control</h3>
+                    <h3 className="text-5xl font-black text-nunma-forest tracking-tighter">Live Session Control</h3>
                     {!activeSession ? (
                       <button
                         onClick={handleLaunchLive}
@@ -2961,7 +3740,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       <div className="flex gap-4">
                         <button
                           onClick={() => navigate(`/classroom/${zoneId}`)}
-                          className="bg-[#c2f575] text-[#040457] px-10 py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] flex items-center gap-4 shadow-2xl hover:brightness-110 active:scale-95 transition-all"
+                          className="bg-[#c2f575] text-nunma-forest px-10 py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] flex items-center gap-4 shadow-2xl hover:brightness-110 active:scale-95 transition-all"
                         >
                           <ExternalLink size={20} /> JOIN ROOM
                         </button>
@@ -2975,13 +3754,13 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                    <div className="p-12 bg-white border border-gray-100 rounded-[4rem] flex flex-col items-center justify-center text-center space-y-8 shadow-sm">
-                      <div className={`w-32 h-32 rounded-[3.5rem] flex items-center justify-center shadow-2xl ${activeSession ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-300'}`}>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                      <div className="hidden md:flex p-12 bg-white border border-gray-100 rounded-[4rem] flex-col items-center justify-center text-center space-y-8 shadow-sm">
+                        <div className={`w-32 h-32 rounded-[3.5rem] flex items-center justify-center shadow-2xl ${activeSession ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-300'}`}>
                         <Video size={64} />
                       </div>
                       <div>
-                        <h4 className="text-3xl font-black text-[#040457] mb-2">{activeSession ? 'Broadcasting Meta-Stream' : 'Camera Ready'}</h4>
+                        <h4 className="text-3xl font-black text-nunma-forest mb-2">{activeSession ? 'Broadcasting Meta-Stream' : 'Camera Ready'}</h4>
                         <p className="text-sm text-gray-400 font-medium">Standard WebRTC connection via Nunma Relays.</p>
                       </div>
                       {activeSession && (
@@ -2993,7 +3772,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     </div>
 
                     <div className="p-12 bg-white border border-gray-100 rounded-[4rem] space-y-8 shadow-sm">
-                      <h4 className="text-2xl font-black text-[#040457] flex items-center gap-4">
+                      <h4 className="text-2xl font-black text-nunma-forest flex items-center gap-4">
                         <Link className="text-[#c2f575]" /> Invite Students
                       </h4>
                       <p className="text-sm text-gray-400 font-medium">Share this deep-link to grant students instant access to your live zone.</p>
@@ -3001,7 +3780,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         {activeSession ? `${window.location.origin}/#/classroom/${zoneId}` : 'Launch session to generate link'}
                         {activeSession && (
                           <div className="absolute inset-0 bg-white/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <button onClick={handleCopyLink} className="flex items-center gap-3 text-[#040457] font-black uppercase text-[10px] tracking-widest">
+                            <button onClick={handleCopyLink} className="flex items-center gap-3 text-nunma-forest font-black uppercase text-[10px] tracking-widest">
                               <Copy size={16} /> {isCopying ? 'COPIED!' : 'COPY TO CLIPBOARD'}
                             </button>
                           </div>
@@ -3010,7 +3789,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       {activeSession && (
                         <button
                           onClick={handleCopyLink}
-                          className="w-full py-5 bg-[#c2f575] text-[#040457] rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] flex items-center justify-center gap-4 shadow-xl active:scale-95 transition-all"
+                          className="w-full py-5 bg-[#c2f575] text-nunma-forest rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] flex items-center justify-center gap-4 shadow-xl active:scale-95 transition-all"
                         >
                           <ExternalLink size={18} /> {isCopying ? 'COPIED!' : 'SHARE INVITE LINK'}
                         </button>
@@ -3019,98 +3798,108 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   </div>
 
                   <div className="space-y-8">
-                    <h4 className="text-2xl font-black text-[#040457] tracking-tight">Upcoming Broadcasts</h4>
+                    <h4 className="text-2xl font-black text-nunma-forest tracking-tight">Upcoming Broadcasts</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                       {scheduledSessions.map((session, idx) => (
                         <div key={idx} className="p-8 bg-gray-50/50 border border-gray-100 rounded-[2.5rem] space-y-6 hover:bg-white hover:shadow-xl transition-all duration-500 group relative">
                           <div className="flex justify-between items-start">
-                            <div className="p-4 bg-white rounded-2xl shadow-sm text-gray-400 group-hover:text-[#040457] transition-all">
+                            <div className="p-4 bg-white rounded-2xl shadow-sm text-gray-400 group-hover:text-nunma-forest transition-all">
                               <Clock size={20} />
                             </div>
                             <div className="flex gap-2">
-                              <button
-                                onClick={() => {
-                                  setEditingSession(session);
-                                  setScheduleTitle(session.title);
-                                  setScheduleDate(session.date);
-                                  setScheduleTime(session.time);
-                                  setScheduleDuration(session.duration);
+                              {isCreator && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingSession(session);
+                                      setScheduleTitle(session.title);
+                                      setScheduleDate(session.date);
+                                      setScheduleTime(session.time);
+                                      setScheduleDuration(session.duration);
 
-                                  // Parse time string (e.g. "10:30 AM")
-                                  const parts = session.time.split(/[:\s]/);
-                                  if (parts.length === 3) {
-                                    setSelectedHour(parseInt(parts[0]));
-                                    setSelectedMinute(parseInt(parts[1]));
-                                    setSelectedPeriod(parts[2] as 'AM' | 'PM');
-                                  }
+                                      // Parse time string (e.g. "10:30 AM")
+                                      const parts = session.time.split(/[:\s]/);
+                                      if (parts.length === 3) {
+                                        setSelectedHour(parseInt(parts[0]));
+                                        setSelectedMinute(parseInt(parts[1]));
+                                        setSelectedPeriod(parts[2] as 'AM' | 'PM');
+                                      }
 
-                                  setShowScheduleModal(true);
-                                }}
-                                className="text-[10px] font-black text-[#040457] bg-[#c2f575] px-4 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                              >
-                                EDIT
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (await asyncConfirm('Delete this scheduled session?')) {
-                                    setScheduledSessions(scheduledSessions.filter(s => s.id !== session.id));
-                                  }
-                                }}
-                                className="text-[10px] font-black text-white bg-red-500 px-4 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                              >
-                                <Trash2 size={12} />
-                              </button>
+                                      setShowScheduleModal(true);
+                                    }}
+                                    className="text-[10px] font-black text-nunma-forest bg-[#c2f575] px-4 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                  >
+                                    EDIT
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (await asyncConfirm('Delete this scheduled session?')) {
+                                        setScheduledSessions(scheduledSessions.filter(s => s.id !== session.id));
+                                      }
+                                    }}
+                                    className="text-[10px] font-black text-white bg-red-500 px-4 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                           <div>
-                            <h5 className="text-lg font-black text-[#040457] mb-1">{session.title}</h5>
+                            <h5 className="text-lg font-black text-nunma-forest mb-1">{session.title}</h5>
                             <p className="text-xs text-gray-400 font-medium">
-                              {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, {session.time} • {session.duration} mins
+                              {new Date(session.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}, {session.time} • {session.duration} mins
                             </p>
                           </div>
                         </div>
                       ))}
-                      <button
-                        onClick={() => {
-                          setEditingSession(null);
-                          setScheduleTitle('');
-                          setScheduleDate('');
-                          setScheduleTime('');
-                          setScheduleDuration('60');
-                          setSelectedHour(12);
-                          setSelectedMinute(0);
-                          setSelectedPeriod('PM');
-                          setClockMode('hour');
-                          setShowScheduleModal(true);
-                        }}
-                        className="p-8 border-2 border-dashed border-gray-100 rounded-[2.5rem] flex flex-col items-center justify-center gap-4 text-gray-300 hover:border-[#c2f575] hover:text-[#c2f575] transition-all group min-h-[180px]"
-                      >
-                        <div className="p-4 rounded-2xl bg-gray-50 group-hover:bg-[#c2f575]/10 transition-all">
-                          <Plus size={24} />
-                        </div>
-                        <span className="font-black uppercase text-[10px] tracking-widest">Schedule Session</span>
-                      </button>
+                      {isCreator && (
+                        <button
+                          onClick={() => {
+                            setEditingSession(null);
+                            setScheduleTitle('');
+                            setScheduleDate('');
+                            setScheduleTime('');
+                            setScheduleDuration('60');
+                            setSelectedHour(12);
+                            setSelectedMinute(0);
+                            setSelectedPeriod('PM');
+                            setClockMode('hour');
+                            setShowScheduleModal(true);
+                          }}
+                          className="p-8 border-2 border-dashed border-gray-100 rounded-[2.5rem] flex flex-col items-center justify-center gap-4 text-gray-300 hover:border-[#c2f575] hover:text-[#c2f575] transition-all group min-h-[180px]"
+                        >
+                          <div className="p-4 rounded-2xl bg-gray-50 group-hover:bg-[#c2f575]/10 transition-all">
+                            <Plus size={24} />
+                          </div>
+                          <span className="font-black uppercase text-[10px] tracking-widest">Schedule Session</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
               )}
 
               {activeTab === 'exams' && (
-                <div className="space-y-12 animate-in fade-in duration-500">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="space-y-12 max-md:space-y-4 animate-in fade-in duration-500">
+                  {/* Desktop heading + inline buttons */}
+                  <div className="hidden md:flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div>
-                      <h3 className="text-5xl font-black text-[#040457] tracking-tighter">Achievement Gating</h3>
+                      <h3 className="text-5xl font-black text-nunma-forest tracking-tighter">Achievement Gating</h3>
                       <p className="text-sm text-gray-400 font-bold mt-2">Manage online proctored exams and offline certifications.</p>
                     </div>
                     <div className="flex gap-4">
                       <button
                         onClick={() => {
-                          const conducts = exams.filter(e => getExamStatus(e) === 'CONDUCTED');
+                          let conducts = exams.filter(e => getExamStatus(e) === 'CONDUCTED');
+                          if (isCoTutor && currentCoTutor) {
+                            conducts = conducts.filter(e => e.subject === currentCoTutor.subject);
+                          }
                           if (conducts.length > 0) {
                             setSelectedExamForMarks(conducts[conducts.length - 1]);
                             setShowMarkEntryModal(true);
                           } else {
-                            nunmaAlert("No conducted exams found to upload marks for.", "success");
+                            nunmaAlert("No conducted exams found to upload marks for your subject.", "success");
                           }
                         }}
                         className="px-6 py-5 bg-emerald-100 text-emerald-700 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:shadow-xl transition-all"
@@ -3119,12 +3908,18 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       </button>
                       <button
                         onClick={() => {
-                          const conducts = exams.filter(e => getExamStatus(e) === 'CONDUCTED');
-                          if (conducts.length > 0) {
-                            setSelectedExamForGrading(conducts[conducts.length - 1]);
+                          let conducts = exams.filter(e => e.type === 'online-test' && getExamStatus(e) === 'CONDUCTED');
+                          if (isCoTutor && currentCoTutor) {
+                            conducts = conducts.filter(e => e.subject === currentCoTutor.subject);
+                          }
+                          if (conducts.length === 1) {
+                            setSelectedExamForGrading(conducts[0]);
                             setShowGradingHubModal(true);
+                          } else if (conducts.length > 1) {
+                            setEvaluableExamsList(conducts);
+                            setShowExamSelectionModal(true);
                           } else {
-                            nunmaAlert("No conducted exams found for evaluation.", "success");
+                            nunmaAlert("No evaluated online test exams found for your subject.", "success");
                           }
                         }}
                         className="px-6 py-5 bg-indigo-100 text-indigo-700 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:shadow-xl transition-all"
@@ -3135,18 +3930,77 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         onClick={() => setShowExamAnalytics(!showExamAnalytics)}
                         className={`px-8 py-5 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 transition-all ${showExamAnalytics
                           ? 'bg-indigo-100 text-indigo-700 shadow-inner'
-                          : 'bg-white border border-gray-100 text-[#040457] hover:shadow-xl'
+                          : 'bg-white border border-gray-100 text-nunma-forest hover:shadow-xl'
                           }`}
                       >
                         <Trophy size={20} /> {showExamAnalytics ? 'Exams List' : 'Download Analytics'}
                       </button>
+                      {isCreator && (
+                        <button
+                          onClick={() => setShowAddExamModal(true)}
+                          className="px-10 py-5 bg-nunma-forest text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl"
+                        >
+                          <Plus size={20} /> Create Exam
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mobile: 2-column action grid */}
+                  <div className="md:hidden">
+                    <h4 className="text-3xl font-black text-nunma-forest tracking-tighter mb-4">Exam Streams</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                      onClick={() => {
+                        let conducts = exams.filter(e => getExamStatus(e) === 'CONDUCTED');
+                        if (isCoTutor && currentCoTutor) conducts = conducts.filter(e => e.subject === currentCoTutor.subject);
+                        if (conducts.length > 0) { setSelectedExamForMarks(conducts[conducts.length - 1]); setShowMarkEntryModal(true); }
+                        else nunmaAlert("No conducted exams found to upload marks for your subject.", "success");
+                      }}
+                      className="flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-95 text-left bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm"
+                    >
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-100">
+                        <FileSpreadsheet size={20} />
+                      </div>
+                      <span className="text-[11px] font-black uppercase tracking-wide leading-tight">Upload Mark</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        let conducts = exams.filter(e => e.type === 'online-test' && getExamStatus(e) === 'CONDUCTED');
+                        if (isCoTutor && currentCoTutor) conducts = conducts.filter(e => e.subject === currentCoTutor.subject);
+                        if (conducts.length === 1) { setSelectedExamForGrading(conducts[0]); setShowGradingHubModal(true); }
+                        else if (conducts.length > 1) { setEvaluableExamsList(conducts); setShowExamSelectionModal(true); }
+                        else nunmaAlert("No evaluated online test exams found for your subject.", "success");
+                      }}
+                      className="flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-95 text-left bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm"
+                    >
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-indigo-100">
+                        <Wand2 size={20} />
+                      </div>
+                      <span className="text-[11px] font-black uppercase tracking-wide leading-tight">Evaluate Exams</span>
+                    </button>
+                    <button
+                      onClick={() => setShowExamAnalytics(!showExamAnalytics)}
+                      className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-95 text-left border shadow-sm
+                        ${showExamAnalytics ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-400 border-gray-100'}`}
+                    >
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${showExamAnalytics ? 'bg-indigo-100' : 'bg-gray-50'}`}>
+                        <Trophy size={20} />
+                      </div>
+                      <span className="text-[11px] font-black uppercase tracking-wide leading-tight">{showExamAnalytics ? 'Exams List' : 'Analytics'}</span>
+                    </button>
+                    {isCreator && (
                       <button
                         onClick={() => setShowAddExamModal(true)}
-                        className="px-10 py-5 bg-[#040457] text-white rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-4 hover:scale-105 active:scale-95 transition-all shadow-2xl"
+                        className="flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-95 text-left bg-nunma-forest text-white shadow-lg shadow-nunma-forest/20"
                       >
-                        <Plus size={20} /> Create Exam
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-white/20">
+                          <Plus size={20} />
+                        </div>
+                        <span className="text-[11px] font-black uppercase tracking-wide leading-tight">Create Exam</span>
                       </button>
-                    </div>
+                    )}
+                  </div>
                   </div>
 
                   {showExamAnalytics ? (
@@ -3161,13 +4015,17 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                             placeholder="Find exam by name or status..."
                             value={examSearchQuery}
                             onChange={(e) => setExamSearchQuery(e.target.value)}
-                            className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[2rem] pl-16 pr-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                            className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[2rem] pl-16 pr-8 py-5 font-bold text-nunma-forest outline-none transition-all"
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                        {exams.filter(e => e.title.toLowerCase().includes(examSearchQuery.toLowerCase())).map(exam => (
+                        {exams.filter(e => {
+                          const matchesSearch = e.title.toLowerCase().includes(examSearchQuery.toLowerCase());
+                          const matchesSubject = isCoTutor && currentCoTutor ? e.subject === currentCoTutor.subject : true;
+                          return matchesSearch && matchesSubject;
+                        }).map(exam => (
                           <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-10 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group">
                             <div className="flex justify-between items-start">
                               <div className={`p-5 rounded-[1.75rem] shadow-sm ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
@@ -3179,7 +4037,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                             </div>
 
                             <div className="space-y-3">
-                              <h4 className="text-2xl font-black text-[#040457] tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{exam.title}</h4>
+                              <h4 className="text-2xl font-black text-nunma-forest tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{exam.title}</h4>
                               <div className="flex items-center gap-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
                                 <Calendar size={14} /> {exam.date} @ {exam.time}
                               </div>
@@ -3188,14 +4046,14 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                             <div className="pt-8 border-t border-gray-50 flex justify-between items-center">
                               <div className="space-y-1">
                                 <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Target Marks</p>
-                                <p className="font-bold text-[#040457]">{exam.minMark}/{exam.maxMark} <span className="text-[10px] text-gray-400">(Pass)</span></p>
+                                <p className="font-bold text-nunma-forest">{exam.minMark}/{exam.maxMark} <span className="text-[10px] text-gray-400">(Pass)</span></p>
                               </div>
                               {getExamStatus(exam) === 'CONDUCTED' ? (
                                 <div className="flex gap-2">
                                   {exam.type === 'online-test' && (
                                     <button
                                       onClick={() => { setSelectedExamForGrading(exam); setShowGradingHubModal(true); }}
-                                      className="bg-[#c2f575] text-[#040457] px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
+                                      className="bg-[#c2f575] text-nunma-forest px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
                                     >
                                       Grade Submissions
                                     </button>
@@ -3203,7 +4061,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                   {(exam.type === 'offline' || exam.type === 'online-mcq') && (
                                     <button
                                       onClick={() => { setSelectedExamForMarks(exam); setShowMarkEntryModal(true); }}
-                                      className="bg-[#040457] text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all"
+                                      className="bg-nunma-forest text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all"
                                     >
                                       Open Gradebook
                                     </button>
@@ -3271,7 +4129,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                 <div className="space-y-12 animate-in fade-in duration-500">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Landing Page Config</h3>
+                      <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Landing Page Config</h3>
                       <p className="text-sm text-gray-400 mt-2 font-medium">Customize registration workflows and automated emails.</p>
                     </div>
                     <button onClick={async () => {
@@ -3285,7 +4143,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         });
                         nunmaAlert('Landing Page configuration saved!', "success");
                       } catch (e) { nunmaAlert('Failed to save config.', "error"); }
-                    }} className="px-8 py-4 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
+                    }} className="px-8 py-4 bg-[#c2f575] text-nunma-forest rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
                       <Save size={18} className="inline mr-2" /> Save Settings
                     </button>
                   </div>
@@ -3293,7 +4151,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Registration Settings */}
                     <div className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm">
-                      <h4 className="text-2xl font-black text-[#040457] flex items-center gap-3"><Globe className="text-[#c2f575]" /> Registration Form</h4>
+                      <h4 className="text-2xl font-black text-nunma-forest flex items-center gap-3"><Globe className="text-[#c2f575]" /> Registration Form</h4>
 
                       <div className="space-y-6">
                         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
@@ -3306,7 +4164,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         {lpPaid && (
                           <div className="space-y-2 animate-in slide-in-from-top-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Zoho Payment Link</label>
-                            <input value={lpPaymentLink} onChange={e => setLpPaymentLink(e.target.value)} placeholder="https://zoho.com/pay..." className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                            <input value={lpPaymentLink} onChange={e => setLpPaymentLink(e.target.value)} placeholder="https://zoho.com/pay..." className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
                           </div>
                         )}
 
@@ -3320,12 +4178,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         <div className="space-y-4">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Custom Form Fields</label>
                           <div className="flex gap-2">
-                            <input value={newCustomField} onChange={e => setNewCustomField(e.target.value)} placeholder="e.g. Job Title" className="flex-1 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-xl px-4 py-3 font-bold text-sm text-[#040457] outline-none" />
-                            <button onClick={() => { if (newCustomField) { setLpCustomFields([...lpCustomFields, newCustomField]); setNewCustomField(''); } }} className="px-4 py-3 bg-[#040457] text-white rounded-xl font-black text-xs hover:scale-105"><Plus size={16} /></button>
+                            <input value={newCustomField} onChange={e => setNewCustomField(e.target.value)} placeholder="e.g. Job Title" className="flex-1 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-xl px-4 py-3 font-bold text-sm text-nunma-forest outline-none" />
+                            <button onClick={() => { if (newCustomField) { setLpCustomFields([...lpCustomFields, newCustomField]); setNewCustomField(''); } }} className="px-4 py-3 bg-nunma-forest text-white rounded-xl font-black text-xs hover:scale-105"><Plus size={16} /></button>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {lpCustomFields.map((f, i) => (
-                              <div key={i} className="flex items-center gap-2 bg-[#c2f575]/20 text-[#040457] px-3 py-1.5 rounded-lg text-xs font-bold">
+                              <div key={i} className="flex items-center gap-2 bg-[#c2f575]/20 text-nunma-forest px-3 py-1.5 rounded-lg text-xs font-bold">
                                 {f} <button onClick={() => setLpCustomFields(lpCustomFields.filter((_, idx) => idx !== i))} className="text-red-500"><X size={12} /></button>
                               </div>
                             ))}
@@ -3336,15 +4194,15 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
                     {/* Email Configurations */}
                     <div className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm">
-                      <h4 className="text-2xl font-black text-[#040457] flex items-center gap-3"><Mic className="text-indigo-400" /> Auto-Emails</h4>
+                      <h4 className="text-2xl font-black text-nunma-forest flex items-center gap-3"><Mic className="text-indigo-400" /> Auto-Emails</h4>
                       <div className="space-y-6">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Email Subject</label>
-                          <input value={lpEmailSubject} onChange={e => setLpEmailSubject(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all" />
+                          <input value={lpEmailSubject} onChange={e => setLpEmailSubject(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Confirmation Body</label>
-                          <textarea value={lpEmailBody} onChange={e => setLpEmailBody(e.target.value)} rows={5} className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-[1.5rem] px-6 py-4 font-bold text-[#040457] outline-none transition-all resize-none"></textarea>
+                          <textarea value={lpEmailBody} onChange={e => setLpEmailBody(e.target.value)} rows={5} className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-[1.5rem] px-6 py-4 font-bold text-nunma-forest outline-none transition-all resize-none"></textarea>
                         </div>
                       </div>
                     </div>
@@ -3355,7 +4213,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                 <div className="space-y-12 animate-in fade-in duration-500">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Post-Session Survey</h3>
+                      <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Post-Session Survey</h3>
                       <p className="text-sm text-gray-400 mt-2 font-medium">Automatically collect NPS and feedback after completed sessions.</p>
                     </div>
                     <button onClick={async () => {
@@ -3368,7 +4226,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         });
                         nunmaAlert('Survey configuration saved!', "success");
                       } catch (e) { nunmaAlert('Failed to save survey.', "error"); }
-                    }} className="px-8 py-4 bg-[#c2f575] text-[#040457] rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
+                    }} className="px-8 py-4 bg-[#c2f575] text-nunma-forest rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all">
                       <Save size={18} className="inline mr-2" /> Save Survey
                     </button>
                   </div>
@@ -3376,7 +4234,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   <div className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm max-w-2xl">
                     <div className="flex items-center justify-between p-6 bg-gray-50 border border-gray-100 rounded-[2rem]">
                       <div className="space-y-1">
-                        <h4 className="font-black text-[#040457] uppercase text-xs tracking-widest">Enable Automatic Survey</h4>
+                        <h4 className="font-black text-nunma-forest uppercase text-xs tracking-widest">Enable Automatic Survey</h4>
                         <p className="text-[10px] text-gray-400 font-bold">Pops up for students immediately upon session end.</p>
                       </div>
                       <button onClick={() => setPsEnabled(!psEnabled)} className={`w-14 h-8 rounded-full transition-colors relative shadow-inner ${psEnabled ? 'bg-[#c2f575]' : 'bg-gray-300'}`}>
@@ -3394,12 +4252,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                             { id: 'feedback', label: 'Open Feedback Box', icon: <FileText size={18} />, state: psFeedback, set: setPsFeedback }
                           ].map(mod => (
                             <div key={mod.id} className="flex items-center justify-between p-5 bg-white border-2 hover:border-[#c2f575]/50 border-gray-50 rounded-2xl transition-all cursor-pointer" onClick={() => mod.set(!mod.state)}>
-                              <div className="flex items-center gap-4 text-[#040457] font-bold text-sm">
+                              <div className="flex items-center gap-4 text-nunma-forest font-bold text-sm">
                                 <div className={`p-2 rounded-lg ${mod.state ? 'bg-[#c2f575]/20 text-indigo-600' : 'bg-gray-50 text-gray-400'}`}>{mod.icon}</div>
                                 {mod.label}
                               </div>
                               <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${mod.state ? 'bg-[#c2f575] border-[#c2f575]' : 'border-gray-200 bg-gray-50'}`}>
-                                {mod.state && <Check size={14} className="text-[#040457]" />}
+                                {mod.state && <Check size={14} className="text-nunma-forest" />}
                               </div>
                             </div>
                           ))}
@@ -3411,7 +4269,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               )}
               {!['attendance', 'curriculum', 'exams', 'schedule', 'students', 'landing', 'post-session'].includes(activeTab) && <div className="py-20 text-center text-gray-300 italic">Configuration module loading...</div>}
             </div>
-          </div >
+          </div>
         ) : view === 'grading' ? (
           /* GRADING POWER-VIEW */
           <div className={`animate-in fade-in slide-in-from-right-10 duration-700 h-[calc(100vh-140px)] flex flex-col ${isSmartMarking ? 'bg-[#03031f] -m-12 p-12 rounded-none fixed inset-0 z-[100]' : ''}`}>
@@ -3419,7 +4277,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
             <div className="flex items-center justify-between mb-12">
               <div className="flex items-center gap-6">
-                <button onClick={() => { setView('management'); setIsSmartMarking(false); }} className={`flex items-center gap-4 font-black text-sm uppercase tracking-[0.25em] hover:translate-x-[-8px] transition-all ${isSmartMarking ? 'text-white' : 'text-[#040457]'}`}>
+                <button onClick={() => { setView('management'); setIsSmartMarking(false); }} className={`flex items-center gap-4 font-black text-sm uppercase tracking-[0.25em] hover:translate-x-[-8px] transition-all ${isSmartMarking ? 'text-white' : 'text-nunma-forest'}`}>
                   <ArrowLeft size={24} /> Exit Canvas
                 </button>
                 {isSmartMarking && (
@@ -3431,7 +4289,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               </div>
 
               <div className="flex items-center gap-6">
-                <button onClick={handleSaveGrading} className="bg-[#c2f575] text-[#040457] px-10 py-5 rounded-[1.5rem] font-black uppercase text-xs tracking-[0.3em] hover:brightness-110 shadow-2xl active:scale-95 transition-all">
+                <button onClick={handleSaveGrading} className="bg-[#c2f575] text-nunma-forest px-10 py-5 rounded-[1.5rem] font-black uppercase text-xs tracking-[0.3em] hover:brightness-110 shadow-2xl active:scale-95 transition-all">
                   Publish Grades
                 </button>
               </div>
@@ -3457,13 +4315,13 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                             key={cluster.id}
                             onClick={() => handleClusterSelect(cluster)}
                             className={`w-full p-8 rounded-[2.5rem] text-left transition-all border-2 relative overflow-hidden group 
-                                 ${activeClusterId === cluster.id ? 'bg-[#c2f575] border-[#c2f575] text-[#040457] scale-[1.02] shadow-2xl' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'}`}
+                                 ${activeClusterId === cluster.id ? 'bg-[#c2f575] border-[#c2f575] text-nunma-forest scale-[1.02] shadow-2xl' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'}`}
                           >
                             <div className="flex justify-between items-start mb-4">
                               <span className="font-black text-lg tracking-tight">{cluster.label}</span>
-                              <span className={`text-[10px] font-black px-3 py-1.5 rounded-xl ${activeClusterId === cluster.id ? 'bg-[#040457]/10' : 'bg-white/10'}`}>{cluster.studentIds.length}</span>
+                              <span className={`text-[10px] font-black px-3 py-1.5 rounded-xl ${activeClusterId === cluster.id ? 'bg-nunma-forest/10' : 'bg-white/10'}`}>{cluster.studentIds.length}</span>
                             </div>
-                            <p className={`text-sm leading-relaxed font-medium ${activeClusterId === cluster.id ? 'text-[#040457]/70' : 'text-gray-500'}`}>{cluster.description}</p>
+                            <p className={`text-sm leading-relaxed font-medium ${activeClusterId === cluster.id ? 'text-nunma-forest/70' : 'text-gray-500'}`}>{cluster.description}</p>
                             <div className="mt-6 flex items-center gap-4">
                               <div className="flex-1 h-2 bg-black/10 rounded-full overflow-hidden">
                                 <div className="h-full bg-current opacity-60" style={{ width: `${cluster.confidence}%` }}></div>
@@ -3481,7 +4339,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     {generatedFeedback ? (
                       <div className="space-y-6 animate-in slide-in-from-bottom-4">
                         <div className="p-6 bg-black/40 rounded-3xl border border-white/5"><p className="text-indigo-200 text-sm italic leading-relaxed">"{generatedFeedback}"</p></div>
-                        <button className="w-full py-5 bg-[#c2f575] text-[#040457] rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] flex items-center justify-center gap-3 hover:scale-105 shadow-xl transition-all"><Play size={16} fill="currentColor" /> Preview Audio</button>
+                        <button className="w-full py-5 bg-[#c2f575] text-nunma-forest rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] flex items-center justify-center gap-3 hover:scale-105 shadow-xl transition-all"><Play size={16} fill="currentColor" /> Preview Audio</button>
                       </div>
                     ) : (
                       <button onClick={handleGenerateFeedback} disabled={!activeClusterId} className="w-full py-6 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-indigo-500 transition-all flex items-center justify-center gap-4 disabled:opacity-50"><Wand2 size={20} /> Generate AI Batch Note</button>
@@ -3548,7 +4406,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
             <h2 className="text-4xl font-black uppercase tracking-widest">Workspace View</h2>
           </div>
         )}
-      </div >
+      </div>
       {/* UPLOAD OVERLAY */}
       {
         isUploading && (
@@ -3578,6 +4436,40 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           </div>
         )
       }
+      {showExamSelectionModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl overflow-hidden relative">
+            <h2 className="text-2xl font-black text-nunma-forest mb-6">Select Exam to Evaluate</h2>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+              {evaluableExamsList.map(ex => (
+                <button
+                  key={ex.id}
+                  onClick={() => {
+                    setSelectedExamForGrading(ex);
+                    setShowExamSelectionModal(false);
+                    setShowGradingHubModal(true);
+                  }}
+                  className="w-full text-left p-4 rounded-xl border border-gray-100 bg-gray-50 hover:bg-indigo-50 hover:border-indigo-100 transition-all flex items-center justify-between group"
+                >
+                  <div>
+                    <h3 className="font-bold text-nunma-forest group-hover:text-indigo-700">{ex.title}</h3>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">{ex.date} @ {ex.time}</p>
+                  </div>
+                  <ChevronRight size={20} className="text-gray-400 group-hover:text-indigo-500" />
+                </button>
+              ))}
+            </div>
+            <div className="mt-8 flex justify-end">
+              <button
+                onClick={() => setShowExamSelectionModal(false)}
+                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-gray-200 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </React.Fragment>
   );
 };

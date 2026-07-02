@@ -118,7 +118,7 @@ const PdfAnnotator: React.FC<PdfAnnotatorProps> = ({ url, onPathsChange }) => {
           >
             <ChevronLeft size={20} />
           </button>
-          <span className="font-black text-[11px] uppercase tracking-widest text-[#1A1A4E]">Page {pageNumber} of {numPages}</span>
+          <span className="font-black text-[11px] uppercase tracking-widest text-nunma-forest">Page {pageNumber} of {numPages}</span>
           <button 
             disabled={pageNumber >= numPages} 
             onClick={() => setPageNumber(p => p + 1)}

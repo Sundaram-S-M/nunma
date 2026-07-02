@@ -29,7 +29,9 @@ import {
   CheckCircle,
   Radio,
   BookOpen,
-  Users
+  Users,
+  Award,
+  IndianRupee
 } from 'lucide-react';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 
@@ -67,7 +69,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
   // Profile Completion Logic
   const calculateProfileCompletion = () => {
     if (!user) return 0;
-    const fields = ['name', 'email', 'location', 'bio', 'dob'];
+    const fields = ['name', 'email', 'location', 'bio'];
     let filledCount = fields.filter(field => (user as any)[field] && (user as any)[field].length > 0).length;
 
     // Check if avatar is custom (not the default DiceBear URL)
@@ -134,17 +136,17 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         if (role === UserRole.STUDENT) {
           const studentZonesCount = zonesList.filter(z => z.role === 'student').length;
           setStats([
-            { label: 'Active Courses', value: studentZonesCount },
-            { label: 'Completed Courses', value: 0 },
-            { label: 'Hours Learned', value: '24' }, // Placeholder
-            { label: 'Certificates', value: 0 }
+            { label: 'Active Courses', value: studentZonesCount, icon: BookOpen },
+            { label: 'Completed Courses', value: 0, icon: CheckCircle },
+            { label: 'Hours Learned', value: '24', icon: Clock }, // Placeholder
+            { label: 'Certificates', value: 0, icon: Award }
           ]);
         } else {
           setStats([
-            { label: 'Active Zones', value: zonesList.filter(z => z.role === 'tutor').length },
-            { label: 'Total Students', value: totalStudents },
-            { label: 'Hours Streamed', value: '0' }, // Dynamically updated below
-            { label: 'Earnings', value: `₹${totalEarnings.toLocaleString('en-IN')}` }
+            { label: 'Active Zones', value: zonesList.filter(z => z.role === 'tutor').length, icon: Zap },
+            { label: 'Total Students', value: totalStudents, icon: Users },
+            { label: 'Hours Streamed', value: '0', icon: Video }, // Dynamically updated below
+            { label: 'Earnings', value: `${totalEarnings.toLocaleString('en-IN')}`, icon: IndianRupee }
           ]);
         }
 
@@ -327,11 +329,11 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
       {/* ... Event Modal ... */}
       {showEventModal && (
         <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
-          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-visible animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-gray-50 flex justify-between items-start bg-gray-50/30">
               <div>
                 <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-[0.2em] mb-1">Agenda for</p>
-                <h3 className="text-2xl font-black text-[#1A1A4E]">{monthName} {modalDate}, {year}</h3>
+                <h3 className="text-2xl font-black text-nunma-forest">{monthName} {modalDate}, {year}</h3>
               </div>
               <button onClick={() => { setShowEventModal(false); setIsCreatingEvent(false); setEditingEventId(null); setNewEventTitle(''); setNewEventTime(''); }} className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-red-500 transition-all shadow-sm">
                 <X size={20} />
@@ -342,7 +344,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                   <input
                     type="text" autoFocus placeholder="Event Title"
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold text-[#1A1A4E]"
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold text-nunma-forest"
                     value={newEvenTitle} onChange={(e) => setNewEventTitle(e.target.value)}
                   />
 
@@ -351,9 +353,9 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                     <button
                       type="button"
                       onClick={() => setShowClockPicker(!showClockPicker)}
-                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold text-[#1A1A4E] text-left flex items-center justify-between hover:bg-gray-100 transition-all"
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold text-nunma-forest text-left flex items-center justify-between hover:bg-gray-100 transition-all"
                     >
-                      <span className={newEventTime || (selectedHour !== 12 || selectedMinute !== 0) ? 'text-[#1A1A4E]' : 'text-gray-400'}>
+                      <span className={newEventTime || (selectedHour !== 12 || selectedMinute !== 0) ? 'text-nunma-forest' : 'text-gray-400'}>
                         {newEventTime || `${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`}
                       </span>
                       <Clock size={20} className="text-[#c2f575]" />
@@ -363,13 +365,13 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                       <div className="absolute top-full left-0 right-0 mt-4 bg-white rounded-[3rem] shadow-2xl border border-gray-100 p-12 z-50 animate-in slide-in-from-top-4 duration-300">
                         {/* Clock Display */}
                         <div className="flex flex-col items-center mb-20 mt-6 relative">
-                          <div className="relative w-80 h-80 bg-gradient-to-br from-[#1A1A4E] to-indigo-900 rounded-full shadow-2xl p-5">
+                          <div className="relative w-80 h-80 bg-gradient-to-br from-nunma-forest to-indigo-900 rounded-full shadow-2xl p-5">
                             {/* Clock Face */}
                             <div className="absolute inset-5 bg-white rounded-full flex items-center justify-center">
                               {/* Hour Markers */}
                               {Array.from({ length: 12 }, (_, i) => {
                                 const angle = (i * 30 - 90) * (Math.PI / 180);
-                                const radius = 85;
+                                const radius = 38;
                                 const x = 50 + radius * Math.cos(angle);
                                 const y = 50 + radius * Math.sin(angle);
                                 const number = clockMode === 'hour' ? (i === 0 ? 12 : i) : i * 5;
@@ -396,7 +398,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                                       }
                                     }}
                                     className={`absolute w-12 h-12 rounded-full font-black text-base transition-all transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 ${isSelected
-                                      ? 'bg-[#c2f575] text-[#1A1A4E] scale-110 shadow-lg'
+                                      ? 'bg-[#c2f575] text-nunma-forest scale-110 shadow-lg'
                                       : 'bg-gray-50 text-gray-600 hover:bg-[#c2f575]/20 hover:scale-105'
                                       }`}
                                     style={{ left: `${x}%`, top: `${y}%` }}
@@ -408,7 +410,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
                               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <div className="text-center pointer-events-auto">
-                                  <div className="text-4xl font-black text-[#1A1A4E] tracking-tight flex justify-center items-center">
+                                  <div className="text-4xl font-black text-nunma-forest tracking-tight flex justify-center items-center">
                                     <input
                                       type="number"
                                       min="1" max="12"
@@ -421,8 +423,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                                         setSelectedHour(val);
                                         setNewEventTime(`${val}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
                                       }}
-                                      className="w-16 bg-transparent text-center focus:outline-none focus:bg-white/50 rounded-xl appearance-none m-0"
-                                      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                                      className="w-20 bg-transparent text-center focus:outline-none focus:bg-white/50 rounded-xl m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                     :
                                     <input
@@ -437,8 +438,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                                         setSelectedMinute(val);
                                         setNewEventTime(`${selectedHour}:${val.toString().padStart(2, '0')} ${selectedPeriod}`);
                                       }}
-                                      className="w-16 bg-transparent text-center focus:outline-none focus:bg-white/50 rounded-xl appearance-none m-0"
-                                      style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                                      className="w-20 bg-transparent text-center focus:outline-none focus:bg-white/50 rounded-xl m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
                                   </div>
                                   <div className="text-sm font-black text-gray-400 uppercase tracking-widest mt-2">
@@ -459,8 +459,8 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                                 setNewEventTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} AM`);
                               }}
                               className={`flex-1 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all ${selectedPeriod === 'AM'
-                                ? 'bg-[#1A1A4E] text-white shadow-lg'
-                                : 'text-gray-400 hover:text-[#1A1A4E]'
+                                ? 'bg-nunma-forest text-white shadow-lg'
+                                : 'text-gray-400 hover:text-nunma-forest'
                                 }`}
                             >
                               AM
@@ -471,8 +471,8 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                                 setNewEventTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} PM`);
                               }}
                               className={`flex-1 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all ${selectedPeriod === 'PM'
-                                ? 'bg-[#1A1A4E] text-white shadow-lg'
-                                : 'text-gray-400 hover:text-[#1A1A4E]'
+                                ? 'bg-nunma-forest text-white shadow-lg'
+                                : 'text-gray-400 hover:text-nunma-forest'
                                 }`}
                             >
                               PM
@@ -483,7 +483,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                               setNewEventTime(`${selectedHour}:${selectedMinute.toString().padStart(2, '0')} ${selectedPeriod}`);
                               setShowClockPicker(false);
                             }}
-                            className="px-8 py-4 bg-[#c2f575] text-[#1A1A4E] rounded-xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
+                            className="px-8 py-4 bg-[#c2f575] text-nunma-forest rounded-xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-lg"
                           >
                             Done
                           </button>
@@ -499,7 +499,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                       <div className={`w-2 h-12 rounded-full ${event.color === 'lime' ? 'bg-[#c2f575]' : event.color === 'indigo' ? 'bg-indigo-600' : 'bg-gray-200'}`} />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-base font-black text-[#1A1A4E]">{event.title}</p>
+                          <p className="text-base font-black text-nunma-forest">{event.title}</p>
                           {event.isLive && (
                             <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${event.session?.status === 'live' ? 'bg-red-500 text-white' : 'bg-indigo-900 text-[#c2f575]'}`}>
                               {event.session?.status}
@@ -576,11 +576,11 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         </div>
       )}
 
-      <div className="flex flex-col gap-1">
-        <h1 className="text-5xl font-black text-[#1A1A4E] tracking-tighter">
+      <div className="hidden md:flex flex-col gap-1">
+        <h1 className="text-5xl font-black text-nunma-forest tracking-tighter">
           Greetings, {user?.name || 'Achiever'}
         </h1>
-        <p className="text-gray-400 font-semibold text-lg max-w-2xl leading-relaxed">
+        <p className="hidden md:block text-gray-400 font-semibold text-lg max-w-2xl leading-relaxed">
           The future belongs to those who prepare. Manage your {role === UserRole.STUDENT ? 'learning path' : 'Thala workspace'} with surgical precision.
         </p>
       </div>
@@ -589,20 +589,20 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         <div className="bg-nunma-lime/10 rounded-[2.5rem] p-8 border border-[#c2f575]/20 shadow-sm flex flex-col md:flex-row items-center gap-8 animate-in fade-in slide-in-from-top-4 duration-700">
           <div className="flex-1 w-full space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-black text-nunma-navy">Profile Completion</h3>
-              <span className="text-2xl font-black text-nunma-navy">{completionPercentage}%</span>
+              <h3 className="text-xl font-black text-nunma-forest">Profile Completion</h3>
+              <span className="text-2xl font-black text-nunma-forest">{completionPercentage}%</span>
             </div>
-            <div className="h-4 w-full bg-nunma-navy/10 rounded-full overflow-hidden">
+            <div className="h-4 w-full bg-nunma-forest/10 rounded-full overflow-hidden">
               <div
-                className="h-full bg-nunma-navy rounded-full transition-all duration-1000 ease-out"
+                className="h-full bg-gradient-to-r from-[#c2f575] to-nunma-forest rounded-full transition-all duration-1000 ease-out"
                 style={{ width: `${completionPercentage}%` }}
               />
             </div>
-            <p className="text-nunma-navy/70 text-sm font-medium">
+            <p className="text-nunma-forest/70 text-sm font-medium">
               Complete your profile to unlock full network access and verify your identity.
             </p>
           </div>
-          <Link to="/settings/profile" className="px-8 py-4 bg-nunma-navy text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap">
+          <Link to="/settings/profile" className="px-8 py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap">
             Complete Profile
           </Link>
         </div>
@@ -610,59 +610,19 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
       {role === UserRole.STUDENT ? (
         <>
-          {myZones.length > 0 && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-4">
-                  <BookOpen className="text-[#c2f575]" /> My Active Courses
-                </h2>
-                <Link to="/classroom" className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-900 transition-colors flex items-center gap-2">
-                  Explore All <ArrowRight size={14} />
-                </Link>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {myZones.map((zone) => (
-                  <div key={zone.id} className="bg-white rounded-[3.5rem] p-10 border border-gray-100 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
-                    <div className="flex justify-between items-start mb-8">
-                      <div className="w-16 h-16 bg-gray-50 rounded-[1.75rem] flex items-center justify-center text-indigo-900 shadow-inner group-hover:bg-indigo-900 group-hover:text-nunma-lime transition-all duration-500 overflow-hidden">
-                        {zone.avatar ? <img src={zone.avatar} alt="" className="w-full h-full object-cover" /> : <Zap size={32} />}
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[9px] font-black bg-[#c2f575] text-indigo-900 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">
-                          {zone.level}
-                        </span>
-                        <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2">{zone.domain}</p>
-                      </div>
-                    </div>
 
-                    <h3 className="text-2xl font-black text-[#1A1A4E] mb-6 tracking-tight line-clamp-1 group-hover:text-indigo-600 transition-colors">
-                      {zone.title}
-                    </h3>
-
-                    <Link
-                      to={`/classroom/zone/${zone.id}`}
-                      className="w-full py-5 bg-indigo-900 text-white rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-indigo-900/10"
-                    >
-                      Resume Learning <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                    </Link>
-
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-[#c2f575]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            {stats.map((stat, idx) => {
+              return (
+                <div key={idx} className="bg-nunma-forest p-6 md:p-8 rounded-[2rem] shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-500 group flex flex-col justify-center min-h-[120px] md:min-h-[140px]">
+                  <div className="text-left">
+                    <p className="text-4xl md:text-5xl font-black text-white mb-2 tracking-tighter leading-none group-hover:scale-105 transition-transform duration-300 origin-left">{stat.value}</p>
+                    <p className="text-white/70 text-xs md:text-sm font-bold tracking-wide uppercase">{stat.label}</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {stats.map((stat, idx) => (
-              <div key={idx} className="bg-[#e9ecef]/60 p-6 rounded-[3rem] flex flex-col justify-center min-h-[180px] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 group">
-                <div className="bg-white p-8 rounded-[2.5rem] flex flex-col items-center justify-center shadow-inner text-center border border-gray-50 group-hover:border-[#c2f575]/30 transition-colors">
-                  <p className="text-5xl font-black text-[#1A1A4E] mb-2 tracking-tighter leading-none">{stat.value}</p>
-                  <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.3em]">{stat.label}</p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
@@ -670,7 +630,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
               {upcomingLiveSessions.length > 0 ? (
                 <div className="bg-white rounded-[4rem] p-12 border border-gray-100 shadow-xl overflow-hidden relative">
                   <div className="flex items-center justify-between mb-12">
-                    <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-5">
+                    <h3 className="text-3xl font-black text-nunma-forest tracking-tighter flex items-center gap-5">
                       <Radio className="text-red-500 animate-pulse" /> Scheduled Curriculum
                     </h3>
                     <div className="flex items-center gap-2 px-5 py-2 bg-red-50 text-red-600 rounded-full">
@@ -687,7 +647,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                             startTime={session.startTime}
                             className="bg-white"
                           />
-                          <h4 className="text-xl font-black text-[#1A1A4E] leading-tight tracking-tighter group-hover:text-indigo-600 transition-colors">{session.title}</h4>
+                          <h4 className="text-xl font-black text-nunma-forest leading-tight tracking-tighter group-hover:text-indigo-600 transition-colors">{session.title}</h4>
                           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{session.zoneTitle}</p>
                         </div>
                         <button
@@ -704,7 +664,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                 <div className="bg-white rounded-[4rem] p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
                   {activeSessions.length > 0 ? (
                     <div className="w-full">
-                      <div className="bg-[#1A1A4E] rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
+                      <div className="bg-nunma-forest rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
                         <div className="relative z-10 flex flex-col items-center justify-center gap-8 text-center">
                           <LiveSessionStatus
                             status="live"
@@ -718,7 +678,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                           </div>
                           <button
                             onClick={() => navigate(`/classroom/${activeSessions[0].zoneId}`)}
-                            className="px-12 py-6 bg-[#c2f575] text-[#1A1A4E] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                            className="px-12 py-6 bg-[#c2f575] text-nunma-forest rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
                           >
                             Enter Room
                           </button>
@@ -731,7 +691,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                       <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mb-10 text-gray-200">
                         <CalendarIcon size={48} />
                       </div>
-                      <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter mb-4">A Quiet Horizon</h3>
+                      <h3 className="text-3xl font-black text-nunma-forest tracking-tighter mb-4">A Quiet Horizon</h3>
                       <p className="text-gray-400 font-medium max-w-sm mx-auto leading-relaxed text-lg italic">
                         No scheduled sessions found. Use this time to sharpen your skills or explore new zones.
                       </p>
@@ -742,19 +702,19 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
             </div>
 
             <div className="xl:col-span-4 space-y-8">
-              <div className="bg-white rounded-[4rem] p-10 border border-gray-100 shadow-xl overflow-hidden">
-                <div className="flex items-center justify-between mb-10 px-4">
-                  <span className="text-2xl font-black text-[#1A1A4E] tracking-tighter">{monthName} {year}</span>
+              <div className="bg-white rounded-[3rem] p-6 md:p-8 border border-gray-100 shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between mb-6 px-2">
+                  <span className="text-xl font-black text-nunma-forest tracking-tighter">{monthName} {year}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronLeft size={20} /></button>
-                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronRight size={20} /></button>
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="w-9 h-9 flex items-center justify-center bg-gray-100 hover:bg-nunma-forest hover:text-white rounded-full text-nunma-forest transition-all duration-200"><ChevronLeft size={16} /></button>
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="w-9 h-9 flex items-center justify-center bg-gray-100 hover:bg-nunma-forest hover:text-white rounded-full text-nunma-forest transition-all duration-200"><ChevronRight size={16} /></button>
                   </div>
                 </div>
-                <div className="grid grid-cols-7 gap-y-2 text-center mb-4">
-                  {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map(day => (
-                    <div key={day} className="text-[10px] font-black text-gray-300 uppercase tracking-widest py-3">{day}</div>
+                <div className="grid grid-cols-7 text-center mb-2">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                    <div key={i} className="text-[11px] font-bold text-gray-400 py-2">{day}</div>
                   ))}
-                  {Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`} className="p-2" />)}
+                  {Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`} />)}
                   {Array.from({ length: daysCount }, (_, i) => {
                     const dayNum = i + 1;
                     const dateKey = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
@@ -762,31 +722,31 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                     const sessions = getSessionsForDay(dayNum);
                     const hasEvent = (meetingsData[dateKey] && meetingsData[dateKey].length > 0) || sessions.length > 0;
                     const hasLive = sessions.some(s => s.status === 'live');
+                    const isPast = new Date(year, currentMonth.getMonth(), dayNum) < todayDateObj;
+
+                    let bgClass = '';
+                    let textClass = 'text-gray-600';
+                    if (isToday) { bgClass = 'bg-nunma-forest'; textClass = 'text-white'; }
+                    else if (hasLive) { bgClass = 'bg-orange-400'; textClass = 'text-white'; }
+                    else if (hasEvent) { bgClass = 'bg-nunma-lime'; textClass = 'text-nunma-forest'; }
+                    else if (isPast) { textClass = 'text-gray-300'; }
 
                     return (
-                      <div
-                        key={dayNum}
-                        onClick={() => handleDayClick(dayNum)}
-                        className={`relative aspect-square flex flex-col items-center justify-center transition-all rounded-[1.25rem] m-1 cursor-pointer
-                            ${isToday ? 'bg-[#c2f575] text-[#1A1A4E] shadow-[0_10px_30px_rgba(194,245,117,0.4)]' : 'text-gray-500 hover:bg-gray-50'}
-                          `}
-                      >
-                        <span className="text-sm font-black">{dayNum}</span>
-                        {hasEvent && !isToday && (
-                          <div className={`absolute bottom-2 w-1.5 h-1.5 rounded-full ${hasLive ? 'bg-red-500 animate-pulse' : 'bg-indigo-500'}`} />
-                        )}
+                      <div key={dayNum} className="flex items-center justify-center py-1">
+                        <button
+                          onClick={() => handleDayClick(dayNum)}
+                          className={`w-9 h-9 flex items-center justify-center rounded-full text-sm font-bold transition-all duration-200 hover:scale-110 ${bgClass} ${textClass} ${!bgClass ? 'hover:bg-gray-100' : 'shadow-md'}`}
+                        >
+                          {dayNum}
+                        </button>
                       </div>
                     );
                   })}
                 </div>
-                <div className="mt-10 p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-                  <div className="flex items-center gap-4 mb-2">
-                    <div className="p-2 bg-white rounded-xl text-[#c2f575] shadow-sm"><Zap size={18} fill="currentColor" /></div>
-                    <p className="text-[11px] font-black text-[#1A1A4E] uppercase tracking-widest">Growth Tip</p>
-                  </div>
-                  <p className="text-gray-400 text-sm font-medium leading-relaxed italic">
-                    Consistency is the language of mastery. Tag your daily goals on the calendar.
-                  </p>
+                <div className="mt-4 flex items-center gap-4 px-2">
+                  <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-nunma-lime inline-block"></span><span className="text-[10px] text-gray-400 font-semibold">Event</span></div>
+                  <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-orange-400 inline-block"></span><span className="text-[10px] text-gray-400 font-semibold">Live</span></div>
+                  <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-nunma-forest inline-block"></span><span className="text-[10px] text-gray-400 font-semibold">Today</span></div>
                 </div>
               </div>
             </div>
@@ -794,15 +754,17 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
         </>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {stats.map((stat, idx) => (
-              <div key={idx} className="bg-[#e9ecef]/60 p-6 rounded-[3rem] flex flex-col justify-center min-h-[180px] hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 group">
-                <div className="bg-white p-8 rounded-[2.5rem] flex flex-col items-center justify-center shadow-inner text-center border border-gray-50 group-hover:border-[#c2f575]/30 transition-colors">
-                  <p className="text-5xl font-black text-[#1A1A4E] mb-2 tracking-tighter leading-none">{stat.value}</p>
-                  <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.3em]">{stat.label}</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            {stats.map((stat, idx) => {
+              return (
+                <div key={idx} className="bg-nunma-forest p-6 md:p-8 rounded-[2rem] shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-500 group flex flex-col justify-center min-h-[120px] md:min-h-[140px]">
+                  <div className="text-left">
+                    <p className="text-4xl md:text-5xl font-black text-white mb-2 tracking-tighter leading-none group-hover:scale-105 transition-transform duration-300 origin-left">{stat.value}</p>
+                    <p className="text-white/70 text-xs md:text-sm font-bold tracking-wide uppercase">{stat.label}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
@@ -810,7 +772,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
               {upcomingLiveSessions.length > 0 ? (
                 <div className="bg-white rounded-[4rem] p-12 border border-gray-100 shadow-xl overflow-hidden relative">
                   <div className="flex items-center justify-between mb-12">
-                    <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-5">
+                    <h3 className="text-3xl font-black text-nunma-forest tracking-tighter flex items-center gap-5">
                       <Radio className="text-red-500 animate-pulse" /> Scheduled Curriculum
                     </h3>
                     <div className="flex items-center gap-2 px-5 py-2 bg-red-50 text-red-600 rounded-full">
@@ -827,7 +789,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                             startTime={session.startTime}
                             className="bg-white"
                           />
-                          <h4 className="text-xl font-black text-[#1A1A4E] leading-tight tracking-tighter group-hover:text-indigo-600 transition-colors">{session.title}</h4>
+                          <h4 className="text-xl font-black text-nunma-forest leading-tight tracking-tighter group-hover:text-indigo-600 transition-colors">{session.title}</h4>
                           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{session.zoneTitle}</p>
                         </div>
                         <button
@@ -844,7 +806,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                 <div className="bg-white rounded-[4rem] p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
                   {activeSessions.length > 0 ? (
                     <div className="w-full">
-                      <div className="bg-[#1A1A4E] rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
+                      <div className="bg-nunma-forest rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
                         <div className="relative z-10 flex flex-col items-center justify-center gap-8 text-center">
                           <LiveSessionStatus
                             status="live"
@@ -858,7 +820,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                           </div>
                           <button
                             onClick={() => setActiveLiveRoom(activeSessions[0])}
-                            className="px-12 py-6 bg-[#c2f575] text-[#1A1A4E] rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                            className="px-12 py-6 bg-[#c2f575] text-nunma-forest rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
                           >
                             Enter Room
                           </button>
@@ -871,7 +833,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                       <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mb-10 text-gray-200">
                         <CalendarIcon size={48} />
                       </div>
-                      <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter mb-4">A Quiet Horizon</h3>
+                      <h3 className="text-3xl font-black text-nunma-forest tracking-tighter mb-4">A Quiet Horizon</h3>
                       <p className="text-gray-400 font-medium max-w-sm mx-auto leading-relaxed text-lg italic">
                         No scheduled sessions found. Use this time to sharpen your skills or explore new zones.
                       </p>
@@ -882,19 +844,19 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
             </div>
 
             <div className="xl:col-span-4 space-y-8">
-              <div className="bg-white rounded-[4rem] p-10 border border-gray-100 shadow-xl overflow-hidden">
-                <div className="flex items-center justify-between mb-10 px-4">
-                  <span className="text-2xl font-black text-[#1A1A4E] tracking-tighter">{monthName} {year}</span>
+              <div className="bg-white rounded-[3rem] p-6 md:p-8 border border-gray-100 shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between mb-6 px-2">
+                  <span className="text-xl font-black text-nunma-forest tracking-tighter">{monthName} {year}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronLeft size={20} /></button>
-                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2.5 bg-gray-50 hover:bg-[#c2f575] rounded-2xl text-[#1A1A4E] transition-all"><ChevronRight size={20} /></button>
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="w-9 h-9 flex items-center justify-center bg-gray-100 hover:bg-nunma-forest hover:text-white rounded-full text-nunma-forest transition-all duration-200"><ChevronLeft size={16} /></button>
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="w-9 h-9 flex items-center justify-center bg-gray-100 hover:bg-nunma-forest hover:text-white rounded-full text-nunma-forest transition-all duration-200"><ChevronRight size={16} /></button>
                   </div>
                 </div>
-                <div className="grid grid-cols-7 gap-y-2 text-center mb-4">
-                  {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map(day => (
-                    <div key={day} className="text-[10px] font-black text-gray-300 uppercase tracking-widest py-3">{day}</div>
+                <div className="grid grid-cols-7 text-center mb-2">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                    <div key={i} className="text-[11px] font-bold text-gray-400 py-2">{day}</div>
                   ))}
-                  {Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`} className="p-2" />)}
+                  {Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`} />)}
                   {Array.from({ length: daysCount }, (_, i) => {
                     const dayNum = i + 1;
                     const dateKey = `${year}-${(currentMonth.getMonth() + 1).toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
@@ -902,31 +864,31 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                     const sessions = getSessionsForDay(dayNum);
                     const hasEvent = (meetingsData[dateKey] && meetingsData[dateKey].length > 0) || sessions.length > 0;
                     const hasLive = sessions.some(s => s.status === 'live');
+                    const isPast = new Date(year, currentMonth.getMonth(), dayNum) < todayDateObj;
+
+                    let bgClass = '';
+                    let textClass = 'text-gray-600';
+                    if (isToday) { bgClass = 'bg-nunma-forest'; textClass = 'text-white'; }
+                    else if (hasLive) { bgClass = 'bg-orange-400'; textClass = 'text-white'; }
+                    else if (hasEvent) { bgClass = 'bg-nunma-lime'; textClass = 'text-nunma-forest'; }
+                    else if (isPast) { textClass = 'text-gray-300'; }
 
                     return (
-                      <div
-                        key={dayNum}
-                        onClick={() => handleDayClick(dayNum)}
-                        className={`relative aspect-square flex flex-col items-center justify-center transition-all rounded-[1.25rem] m-1 cursor-pointer
-                            ${isToday ? 'bg-[#c2f575] text-[#1A1A4E] shadow-[0_10px_30px_rgba(194,245,117,0.4)]' : 'text-gray-500 hover:bg-gray-50'}
-                          `}
-                      >
-                        <span className="text-sm font-black">{dayNum}</span>
-                        {hasEvent && !isToday && (
-                          <div className={`absolute bottom-2 w-1.5 h-1.5 rounded-full ${hasLive ? 'bg-red-500 animate-pulse' : 'bg-indigo-500'}`} />
-                        )}
+                      <div key={dayNum} className="flex items-center justify-center py-1">
+                        <button
+                          onClick={() => handleDayClick(dayNum)}
+                          className={`w-9 h-9 flex items-center justify-center rounded-full text-sm font-bold transition-all duration-200 hover:scale-110 ${bgClass} ${textClass} ${!bgClass ? 'hover:bg-gray-100' : 'shadow-md'}`}
+                        >
+                          {dayNum}
+                        </button>
                       </div>
                     );
                   })}
                 </div>
-                <div className="mt-10 p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-                  <div className="flex items-center gap-4 mb-2">
-                    <div className="p-2 bg-white rounded-xl text-[#c2f575] shadow-sm"><Zap size={18} fill="currentColor" /></div>
-                    <p className="text-[11px] font-black text-[#1A1A4E] uppercase tracking-widest">Growth Tip</p>
-                  </div>
-                  <p className="text-gray-400 text-sm font-medium leading-relaxed italic">
-                    Consistency is the language of mastery. Tag your daily goals on the calendar.
-                  </p>
+                <div className="mt-4 flex items-center gap-4 px-2">
+                  <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-nunma-lime inline-block"></span><span className="text-[10px] text-gray-400 font-semibold">Event</span></div>
+                  <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-orange-400 inline-block"></span><span className="text-[10px] text-gray-400 font-semibold">Live</span></div>
+                  <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-nunma-forest inline-block"></span><span className="text-[10px] text-gray-400 font-semibold">Today</span></div>
                 </div>
               </div>
             </div>

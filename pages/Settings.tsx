@@ -282,12 +282,12 @@ const Security = () => {
       </div>
 
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-[#040457]/90 backdrop-blur-xl animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-nunma-forest/90 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden p-12 text-center relative">
             <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center text-red-600 mx-auto mb-8">
               <ShieldCheck size={40} />
             </div>
-            <h3 className="text-3xl font-black text-[#040457] tracking-tighter mb-4">Are you sure?</h3>
+            <h3 className="text-3xl font-black text-nunma-forest tracking-tighter mb-4">Are you sure?</h3>
             <p className="text-gray-500 font-medium mb-10 leading-relaxed">
               This action is <span className="text-red-600 font-bold uppercase">permanent</span>. You will lose access to all your videos, PDFs, and courses. There is no way to recover your data.
             </p>
@@ -391,7 +391,7 @@ const PricingPlans = () => {
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
       <div className="text-center max-w-3xl mx-auto mb-16">
         <h2 className="text-[#c2f575] font-black tracking-widest uppercase text-sm mb-4">Pricing Plans</h2>
-        <h1 className="text-4xl md:text-6xl font-black text-[#040457] tracking-tighter mb-6">
+        <h1 className="text-4xl md:text-6xl font-black text-nunma-forest tracking-tighter mb-6">
           Scale Your Teaching Empire
         </h1>
         <p className="text-xl text-gray-500 font-medium">
@@ -411,7 +411,7 @@ const PricingPlans = () => {
           >
             {tier.popular && currentTier !== tier.id && (
               <div className="absolute top-0 right-10 -translate-y-1/2">
-                <span className="bg-[#c2f575] text-[#040457] text-xs font-black uppercase tracking-widest py-2 px-4 rounded-full shadow-lg">
+                <span className="bg-[#c2f575] text-nunma-forest text-xs font-black uppercase tracking-widest py-2 px-4 rounded-full shadow-lg">
                   Most Popular
                 </span>
               </div>
@@ -426,7 +426,7 @@ const PricingPlans = () => {
 
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-2xl font-black text-[#040457]">{tier.name}</h3>
+                <h3 className="text-2xl font-black text-nunma-forest">{tier.name}</h3>
                 <div className={`
           w-12 h-12 rounded-2xl flex items-center justify-center
           ${tier.color === 'lime' ? 'bg-[#c2f575]/20' :
@@ -439,7 +439,7 @@ const PricingPlans = () => {
                 "{tier.badge}"
               </div>
               <div className="flex items-baseline gap-2 mb-4">
-                <span className="text-5xl font-black text-[#040457] tracking-tight">{tier.price}</span>
+                <span className="text-5xl font-black text-nunma-forest tracking-tight">{tier.price}</span>
                 <span className="text-gray-400 font-medium">{tier.period}</span>
               </div>
               <p className="text-sm text-gray-500 font-medium min-h-[40px]">
@@ -453,7 +453,7 @@ const PricingPlans = () => {
                   <div className={`mt-1 shrink-0 ${feature.included ? 'text-green-500' : 'text-gray-300'}`}>
                     {feature.included ? <Check size={18} strokeWidth={3} /> : <X size={18} strokeWidth={3} />}
                   </div>
-                  <span className={`text-sm ${feature.included ? 'text-gray-700 font-medium' : 'text-gray-400 line-through'} ${feature.highlight ? 'font-black text-[#040457]' : ''}`}>
+                  <span className={`text-sm ${feature.included ? 'text-gray-700 font-medium' : 'text-gray-400 line-through'} ${feature.highlight ? 'font-black text-nunma-forest' : ''}`}>
                     {feature.name}
                   </span>
                 </div>
@@ -466,8 +466,8 @@ const PricingPlans = () => {
               className={`
         w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all
         ${currentTier === tier.id ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
-                  tier.buttonVariant === 'primary' ? 'bg-[#c2f575] text-[#040457] hover:bg-[#b0eb54] shadow-xl hover:shadow-[#c2f575]/40 hover:-translate-y-1' :
-                    tier.buttonVariant === 'dark' ? 'bg-[#040457] text-white hover:bg-black shadow-xl hover:shadow-[#040457]/40 hover:-translate-y-1' :
+                  tier.buttonVariant === 'primary' ? 'bg-[#c2f575] text-nunma-forest hover:bg-[#b0eb54] shadow-xl hover:shadow-[#c2f575]/40 hover:-translate-y-1' :
+                    tier.buttonVariant === 'dark' ? 'bg-nunma-forest text-white hover:bg-black shadow-xl hover:shadow-nunma-forest/40 hover:-translate-y-1' :
                       'bg-white border-2 border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'}
       `}
             >
@@ -479,18 +479,18 @@ const PricingPlans = () => {
       </div>
 
       <div className="mt-20 max-w-4xl mx-auto bg-indigo-50/50 rounded-[3rem] p-10 text-center border border-indigo-100">
-        <h3 className="text-2xl font-black text-[#040457] mb-4">Need more resources?</h3>
+        <h3 className="text-2xl font-black text-nunma-forest mb-4">Need more resources?</h3>
         <p className="text-gray-600 font-medium mb-8 max-w-2xl mx-auto">
           Standard and Premium users can easily purchase add-ons at any time to expand their limits without jumping to the next tier.
         </p>
         <div className="flex flex-col sm:flex-row gap-6 justify-center">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex-1">
-            <h4 className="font-black text-[#040457] mb-2">Extra Storage Block</h4>
+            <h4 className="font-black text-nunma-forest mb-2">Extra Storage Block</h4>
             <p className="text-lg font-bold text-[#c2f575] mb-2">₹499 <span className="text-xs text-gray-400 font-normal">/ month</span></p>
             <p className="text-sm text-gray-500">+50 GB Persistent Storage</p>
           </div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex-1">
-            <h4 className="font-black text-[#040457] mb-2">Extra Student Block</h4>
+            <h4 className="font-black text-nunma-forest mb-2">Extra Student Block</h4>
             <p className="text-lg font-bold text-[#c2f575] mb-2">₹999 <span className="text-xs text-gray-400 font-normal">/ month</span></p>
             <p className="text-sm text-gray-500">+50 Student Slots</p>
           </div>
@@ -636,12 +636,39 @@ const Billings = () => {
         </xml>
         <![endif]-->
         <style>
-          .header { background-color: #22c55e; color: #ffffff; font-weight: bold; text-align: left; padding: 5px; }
+          .header { background-color: #C2F575; color: #052E16; font-weight: bold; text-align: left; padding: 5px; }
           td { padding: 5px; white-space: nowrap; }
         </style>
       </head>
       <body>
         <table border="1">
+          <tr>
+            <td rowspan="4" colspan="3" style="border:none; text-align:left; vertical-align:top;">
+              <img src="${window.location.origin}/assets/logo-full.png" alt="Nunma" height="60" />
+            </td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
+          <tr>
+            <td style="border:none; font-weight:bold; color:#052E16;">Zone Name</td>
+            <td style="border:none;">Global Platform</td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
+          <tr>
+            <td style="border:none; font-weight:bold; color:#052E16;">User Name</td>
+            <td style="border:none;">${user?.tutorProfile?.legalName || user?.displayName || 'Tutor'}</td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
+          <tr>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
           <tr>
             ${headers.map(h => `<th class="header">${h}</th>`).join('')}
           </tr>
@@ -694,39 +721,49 @@ const Billings = () => {
   return (
     <div className="space-y-12 animate-in fade-in duration-500">
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-[#1A1A4E] rounded-[2.5rem] p-10 text-white shadow-xl relative overflow-hidden flex flex-col justify-center min-h-[160px]">
-          <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">TOTAL EARNINGS</p>
-          <p className="text-5xl font-black text-[#c1e60d] tracking-tighter">$1,240.50</p>
-          <Wallet className="absolute -bottom-4 -right-4 w-24 h-24 opacity-5" />
-        </div>
-        <div className="bg-gray-100 rounded-[2.5rem] p-10 border border-gray-200/50 shadow-sm flex flex-col justify-center min-h-[160px]">
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">PENDING PAYOUT</p>
-          <p className="text-5xl font-black text-indigo-900 tracking-tighter">$320.00</p>
-        </div>
-        <div className="bg-gray-100 rounded-[2.5rem] p-10 border border-gray-200/50 shadow-sm relative group flex flex-col justify-center min-h-[160px]">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">NUNMA PLAN</p>
-              <p className="text-2xl font-black text-indigo-900">Pro Streamer</p>
-            </div>
-            <div className="bg-white p-2 rounded-xl text-indigo-900 shadow-sm">
-              <Zap size={20} fill="currentColor" />
-            </div>
+      {user?.role === UserRole.THALA ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-nunma-forest rounded-[2.5rem] p-10 text-white shadow-xl relative overflow-hidden flex flex-col justify-center min-h-[160px]">
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">TOTAL EARNINGS</p>
+            <p className="text-5xl font-black text-[#c1e60d] tracking-tighter">$1,240.50</p>
+            <Wallet className="absolute -bottom-4 -right-4 w-24 h-24 opacity-5" />
           </div>
-          <Link to="/settings/pricing" className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-900 mt-2 text-left">MANAGE SUBSCRIPTION</Link>
+          <div className="bg-gray-100 rounded-[2.5rem] p-10 border border-gray-200/50 shadow-sm flex flex-col justify-center min-h-[160px]">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">PENDING PAYOUT</p>
+            <p className="text-5xl font-black text-indigo-900 tracking-tighter">$320.00</p>
+          </div>
+          <div className="bg-gray-100 rounded-[2.5rem] p-10 border border-gray-200/50 shadow-sm relative group flex flex-col justify-center min-h-[160px]">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">NUNMA PLAN</p>
+                <p className="text-2xl font-black text-indigo-900">Pro Streamer</p>
+              </div>
+              <div className="bg-white p-2 rounded-xl text-indigo-900 shadow-sm">
+                <Zap size={20} fill="currentColor" />
+              </div>
+            </div>
+            <Link to="/settings/pricing" className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-900 mt-2 text-left">MANAGE SUBSCRIPTION</Link>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-nunma-forest rounded-[2.5rem] p-10 text-white shadow-xl relative overflow-hidden flex flex-col justify-center min-h-[160px]">
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">TOTAL PAID</p>
+            <p className="text-5xl font-black text-[#c1e60d] tracking-tighter">$150.00</p>
+            <Wallet className="absolute -bottom-4 -right-4 w-24 h-24 opacity-5" />
+          </div>
+        </div>
+      )}
 
       {/* Revenue Payout Section - Only for Tutors */}
       {user?.role === UserRole.THALA && (
         <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] p-12">
           <div className="flex items-center gap-6 mb-12">
-            <div className="w-16 h-16 bg-[#eef2ff] rounded-[2rem] flex items-center justify-center text-[#1A1A4E] shadow-sm">
+            <div className="w-16 h-16 bg-[#eef2ff] rounded-[2rem] flex items-center justify-center text-nunma-forest shadow-sm">
               <Building2 size={32} />
             </div>
             <div>
-              <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tight">Revenue Payout</h3>
+              <h3 className="text-3xl font-black text-nunma-forest tracking-tight">Revenue Payout</h3>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">BANK DETAILS FOR YOUR EARNINGS</p>
             </div>
           </div>
@@ -826,44 +863,46 @@ const Billings = () => {
         </div>
       )}
 
-      {/* Subscription Billing Details */}
-      <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-sm p-12 space-y-12">
-        <div>
-          <h3 className="text-2xl font-black text-indigo-900 tracking-tighter">Subscription Billing</h3>
-          <p className="text-sm text-gray-400 mt-1 font-medium">Manage how you pay for your Nunma Pro subscription.</p>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
-          <div className="space-y-6">
-            <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex items-center justify-between shadow-sm group hover:border-indigo-100 transition-all">
-              <div className="flex items-center gap-6">
-                <div className="w-16 h-10 bg-indigo-900 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:scale-105 transition-transform">
-                  <CardIcon size={24} />
-                </div>
-                <div>
-                  <p className="font-black text-indigo-900">Visa ending in 4242</p>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Expires 12/28</p>
-                </div>
-              </div>
-              <button className="text-[10px] font-black text-indigo-900 uppercase tracking-widest hover:text-indigo-600 active:scale-95 transition-all">UPDATE</button>
-            </div>
-            <button className="w-full py-5 border-2 border-dashed border-gray-200 rounded-[2.5rem] text-gray-400 font-black uppercase text-[10px] tracking-widest hover:border-indigo-900 hover:text-indigo-900 transition-all flex items-center justify-center gap-2">
-              <Plus size={16} /> ADD BACKUP PAYMENT METHOD
-            </button>
+      {/* Subscription Billing Details - Only for Tutors */}
+      {user?.role === UserRole.THALA && (
+        <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-sm p-12 space-y-12">
+          <div>
+            <h3 className="text-2xl font-black text-indigo-900 tracking-tighter">Subscription Billing</h3>
+            <p className="text-sm text-gray-400 mt-1 font-medium">Manage how you pay for your Nunma Pro subscription.</p>
           </div>
-          <div className="bg-indigo-50/50 p-10 rounded-[3rem] border border-indigo-100 flex flex-col justify-center relative overflow-hidden">
-            <div className="flex items-center gap-4 mb-4 relative z-10">
-              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-900 shadow-sm">
-                <Receipt size={20} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+            <div className="space-y-6">
+              <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex items-center justify-between shadow-sm group hover:border-indigo-100 transition-all">
+                <div className="flex items-center gap-6">
+                  <div className="w-16 h-10 bg-indigo-900 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:scale-105 transition-transform">
+                    <CardIcon size={24} />
+                  </div>
+                  <div>
+                    <p className="font-black text-indigo-900">Visa ending in 4242</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Expires 12/28</p>
+                  </div>
+                </div>
+                <button className="text-[10px] font-black text-indigo-900 uppercase tracking-widest hover:text-indigo-600 active:scale-95 transition-all">UPDATE</button>
               </div>
-              <p className="text-lg font-black text-indigo-900">Next billing cycle</p>
+              <button className="w-full py-5 border-2 border-dashed border-gray-200 rounded-[2.5rem] text-gray-400 font-black uppercase text-[10px] tracking-widest hover:border-indigo-900 hover:text-indigo-900 transition-all flex items-center justify-center gap-2">
+                <Plus size={16} /> ADD BACKUP PAYMENT METHOD
+              </button>
             </div>
-            <p className="text-indigo-900/60 font-medium leading-relaxed relative z-10">
-              Your next payment of <span className="font-black text-indigo-900">$29.00</span> will be automatically charged on <span className="font-black text-indigo-900">Nov 01, 2025</span>.
-            </p>
-            <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-900/5 rounded-full blur-3xl"></div>
+            <div className="bg-indigo-50/50 p-10 rounded-[3rem] border border-indigo-100 flex flex-col justify-center relative overflow-hidden">
+              <div className="flex items-center gap-4 mb-4 relative z-10">
+                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-900 shadow-sm">
+                  <Receipt size={20} />
+                </div>
+                <p className="text-lg font-black text-indigo-900">Next billing cycle</p>
+              </div>
+              <p className="text-indigo-900/60 font-medium leading-relaxed relative z-10">
+                Your next payment of <span className="font-black text-indigo-900">$29.00</span> will be automatically charged on <span className="font-black text-indigo-900">Nov 01, 2025</span>.
+              </p>
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-900/5 rounded-full blur-3xl"></div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Transaction Registry */}
       <div className="bg-white rounded-[3.5rem] p-12 border border-gray-100 shadow-sm">
@@ -883,7 +922,7 @@ const Billings = () => {
           {transactions.map((t) => (
             <div key={t.id} className="flex items-center justify-between p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 group hover:bg-indigo-50/30 transition-all hover:translate-x-1">
               <div className="flex items-center gap-6">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${t.type === 'inbound' ? 'bg-[#c1e60d]/20 text-[#7cc142]' : t.type === 'outbound' ? 'bg-[#1A1A4E] text-white' : 'bg-orange-50 text-orange-500'}`}>
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${t.type === 'inbound' ? 'bg-[#c1e60d]/20 text-[#7cc142]' : t.type === 'outbound' ? 'bg-nunma-forest text-white' : 'bg-orange-50 text-orange-500'}`}>
                   {t.type === 'inbound' ? <TrendingUp size={24} /> : t.type === 'outbound' ? <Zap size={24} /> : <CreditCard size={24} />}
                 </div>
                 <div>
@@ -899,7 +938,7 @@ const Billings = () => {
                 <button
                   onClick={() => handleDownloadInvoice(t)}
                   disabled={downloadingTx === t.id}
-                  className="px-4 py-2 mt-2 bg-indigo-50 text-indigo-900 rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-[#c1e60d] hover:text-[#1A1A4E] transition-all disabled:opacity-50"
+                  className="px-4 py-2 mt-2 bg-indigo-50 text-indigo-900 rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-[#c1e60d] hover:text-nunma-forest transition-all disabled:opacity-50"
                   title="Download Invoice"
                 >
                   <Download size={12} />
@@ -924,8 +963,8 @@ const Settings: React.FC = () => {
   const tabs = [
     { label: 'PREFERENCES', path: '/settings/preferences', icon: <Sliders size={14} /> },
     { label: 'SECURITY OPTIONS', path: '/settings/security', icon: <ShieldCheck size={14} /> },
+    { label: 'BILLING', path: '/settings/billing', icon: <CreditCard size={14} /> },
     ...(user.role === UserRole.THALA ? [
-      { label: 'BILLINGS', path: '/settings/billing', icon: <CreditCard size={14} /> },
       { label: 'PRICING', path: '/settings/pricing', icon: <Gem size={14} /> },
     ] : [])
   ];
@@ -935,7 +974,7 @@ const Settings: React.FC = () => {
       <div className="space-y-12">
         <div className="flex flex-col md:flex-row justify-between items-start gap-8">
           <div className="space-y-2">
-            <h1 className="text-6xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-6">
+            <h1 className="text-6xl font-black text-nunma-forest tracking-tighter flex items-center gap-6">
               <button onClick={() => navigate('/dashboard')} className="p-4 bg-white border border-gray-100 rounded-2xl text-indigo-900 hover:shadow-xl transition-all shadow-sm active:scale-90">
                 <ChevronLeft size={28} />
               </button>

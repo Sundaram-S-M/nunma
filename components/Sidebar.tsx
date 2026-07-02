@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -45,15 +45,13 @@ const LogoFull = () => (
 /* ─── STYLES ──────────────────────────────────────────────── */
 
 const sidebarBase: React.CSSProperties = {
-  /* Flat solid white — no blur, no transparency */
-  background: '#ffffff',
-  borderRight: '1px solid #E5E7EB',
+  /* Flat solid surface — no blur, no transparency */
+  background: 'var(--surface)',
+  borderRight: '1px solid var(--border)',
   boxShadow: 'none',
   height: '100vh',
   position: 'sticky',
   top: 0,
-  display: 'flex',
-  flexDirection: 'column',
   zIndex: 40,
   overflow: 'visible',
   flexShrink: 0,
@@ -108,6 +106,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const tier      = (user as any)?.current_tier || 'STARTER';
   const [showAddonModal, setShowAddonModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const lastScrollY = React.useRef(0);
+
+  useEffect(() => {
+    const container = document.getElementById('main-scroll-container');
+    if (!container) return;
+
+    const handleScroll = () => {
+      const currentScrollY = container.scrollTop;
+      if (currentScrollY > lastScrollY.current && currentScrollY > 50) {
+        setIsNavVisible(false);
+      } else if (currentScrollY < lastScrollY.current) {
+        setIsNavVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const triggerStorageSync = async () => {
     if (isSyncing || !functions) return;
@@ -178,12 +197,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
               ...toggleBtnStyle,
               position: isOpen ? 'static' : 'absolute',
               right: isOpen ? 'auto' : '-14px',
-              background: '#ffffff',
+              background: 'var(--surface)',
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
               zIndex: 50
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F3F4F6'; (e.currentTarget as HTMLElement).style.color = '#374151'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#ffffff'; (e.currentTarget as HTMLElement).style.color = '#9CA3AF'; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-faint)'; }}
           >
             {isOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
           </button>
@@ -253,7 +272,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   borderRadius: 8,
                   fontSize: '0.75rem',
                   fontWeight: 600,
-                  color: 'var(--brand-blue)',
+                  color: 'var(--nunma-navy)',
                   background: 'var(--surface-active)',
                   textDecoration: 'none',
                   border: '1px solid var(--border)',
@@ -308,7 +327,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                   </div>
                   <span
                     title="Storage used"
-                    style={{ fontSize: '0.6875rem', fontWeight: 700, color: overLimit ? 'var(--brand-red)' : 'var(--brand-blue)' }}
+                    style={{ fontSize: '0.6875rem', fontWeight: 700, color: overLimit ? 'var(--brand-red)' : 'var(--nunma-navy)' }}
                   >
                     {pct}%
                   </span>
@@ -316,7 +335,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
                 {/* Track */}
                 <div style={{ height: 3, background: 'var(--border)', borderRadius: 99, marginBottom: '0.5rem', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: overLimit ? 'var(--brand-red)' : 'var(--brand-blue)', borderRadius: 99, transition: 'width 0.5s' }} />
+                  <div style={{ height: '100%', width: `${pct}%`, background: overLimit ? 'var(--brand-red)' : 'var(--nunma-navy)', borderRadius: 99, transition: 'width 0.5s' }} />
                 </div>
 
                 <p style={{ fontSize: '0.6875rem', color: 'var(--text-faint)', marginBottom: overLimit ? '0.5rem' : '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -386,23 +405,46 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
         )}
       </aside>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full z-[50] flex justify-around items-center p-2 pb-4 border-t border-gray-100 bg-white/80 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.06)]"
-           style={{ WebkitBackdropFilter: 'blur(12px)' }}>
-        {navLinks.slice(0, 5).map(link => (
+      {/* Mobile Bottom Nav Island */}
+      <nav className={`md:hidden fixed bottom-6 left-4 right-4 z-[50] flex justify-between items-center bg-nunma-forest shadow-[0_20px_40px_rgba(0,0,0,0.4)] rounded-full px-2 py-2 transition-transform duration-500 ${isNavVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
+        
+        {navLinks.slice(0, 4).map(link => (
           <NavLink
             key={link.id}
             to={link.path}
             className={({ isActive }) => 
-              `flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 min-h-[48px] min-w-[48px] ${
-                isActive ? 'text-nunma-lime bg-nunma-navy' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+              `relative flex items-center justify-center rounded-full transition-all duration-300 ${
+                isActive ? 'w-14 h-14 bg-nunma-lime shadow-lg' : 'w-14 h-14 text-white/40 hover:text-white/80'
               }`
             }
           >
-            {link.icon}
-            <span className="text-[10px] mt-1 font-bold">{link.label}</span>
+            {({ isActive }) => (
+              <div className={`${isActive ? 'text-nunma-forest' : 'text-current'} transition-colors duration-300 flex items-center justify-center`}>
+                {React.cloneElement(link.icon as React.ReactElement, { size: isActive ? 24 : 22, strokeWidth: isActive ? 2.5 : 2 })}
+              </div>
+            )}
           </NavLink>
         ))}
+
+        {/* Profile (Right corner) */}
+        <NavLink
+          to="/profile/me"
+          className={({ isActive }) => 
+            `relative flex items-center justify-center rounded-full transition-all duration-300 ${
+              isActive ? 'w-14 h-14 bg-nunma-lime shadow-lg' : 'w-14 h-14 text-white/40 hover:text-white/80'
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <div className={`transition-all duration-300 flex items-center justify-center w-full h-full rounded-full ${isActive ? 'scale-105' : 'opacity-70 hover:opacity-100'}`}>
+              <img 
+                src={user?.avatar || '/assets/default-avatar.png'} 
+                alt="Profile" 
+                className={`rounded-full object-cover transition-all duration-300 ${isActive ? 'w-12 h-12' : 'w-8 h-8 grayscale'}`} 
+              />
+            </div>
+          )}
+        </NavLink>
       </nav>
 
       <AddonManagerModal isOpen={showAddonModal} onClose={() => setShowAddonModal(false)} />

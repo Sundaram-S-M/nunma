@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./pages/**/*.{js,ts,jsx,tsx}",
@@ -21,7 +22,7 @@ export default {
         sans: ['"Open Sans"', '"Inter"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
       },
       colors: {
-        'nunma-navy': '#1a1a4e',
+        'nunma-navy': '#052e16',
         'nunma-lime': '#c2f575',
         'nunma-forest': '#052e16',
         'nunma-white': '#fcfcfc',

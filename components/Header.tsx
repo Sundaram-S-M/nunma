@@ -8,6 +8,10 @@ import {
   CreditCard,
   Search,
   Bell,
+  Gem,
+  MoreVertical,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
@@ -21,10 +25,9 @@ interface HeaderProps {
 
 /* ─── STYLES ──────────────────────────────────────────────── */
 
-/** Flat header — solid white, 1px bottom border, no blur */
 const headerStyle: React.CSSProperties = {
   height: 64,
-  background: 'var(--surface)',
+  background: 'transparent',
   borderBottom: 'none',
   boxShadow: 'none',
   display: 'flex',
@@ -32,28 +35,15 @@ const headerStyle: React.CSSProperties = {
   justifyContent: 'flex-end',
   padding: '0 1.5rem',
   gap: '0.375rem',
-  position: 'sticky',
+  position: 'fixed',
   top: 0,
+  right: 0,
+  left: 0,
   zIndex: 30,
-  flexShrink: 0,
+  pointerEvents: 'none',
 };
 
-const iconBtnStyle: React.CSSProperties = {
-  width: 40,
-  height: 40,
-  borderRadius: 'var(--r-full)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: 'transparent',
-  border: 'none',
-  cursor: 'pointer',
-  color: 'var(--text-muted)',
-  transition: 'background 0.12s, color 0.12s',
-  textDecoration: 'none',
-  position: 'relative',
-  flexShrink: 0,
-};
+/* iconBtnStyle replaced by liquid-glass tailwind classes */
 
 const menuItemStyle: React.CSSProperties = {
   display: 'flex',
@@ -77,11 +67,28 @@ const menuItemStyle: React.CSSProperties = {
 
 const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
   const [showMenu, setShowMenu] = useState(false);
-  const { user, logout }        = useAuth();
-  const menuRef   = useRef<HTMLDivElement>(null);
-  const btnRef    = useRef<HTMLButtonElement>(null);
-  const location  = useLocation();
+  const { user, logout } = useAuth();
+  const menuRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const location = useLocation();
   const [unread, setUnread] = useState(0);
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(
+    (localStorage.getItem('theme') as 'light' | 'dark') || 'light'
+  );
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
 
   const boundaryStyles = useDropdownBoundary(btnRef, menuRef, showMenu, 'bottom-right');
 
@@ -98,7 +105,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
     const cb = (e: MouseEvent) => {
       if (
         menuRef.current && !menuRef.current.contains(e.target as Node) &&
-        btnRef.current  && !btnRef.current.contains(e.target as Node)
+        btnRef.current && !btnRef.current.contains(e.target as Node)
       ) setShowMenu(false);
     };
     if (showMenu) document.addEventListener('mousedown', cb);
@@ -108,24 +115,24 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
   /* Notification badge */
   useEffect(() => {
     if (!user) return;
-    let cal = 0, msgs = 0;
-    const update = () => setUnread(cal + msgs);
+    let cal = 0, msgs = 0, gen = 0;
+    const update = () => setUnread(cal + msgs + gen);
 
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth()+1).padStart(2,'0')}-${String(tomorrow.getDate()).padStart(2,'0')}`;
+    const tKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
 
     const unsubCal = onSnapshot(
-      query(collection(db,'users',user.uid,'calendar_events'), where('dateKey','==',tKey)),
+      query(collection(db, 'users', user.uid, 'calendar_events'), where('dateKey', '==', tKey)),
       snap => {
         const lv = parseInt(localStorage.getItem(`lastNotificationsView_${user.uid}`) || '0');
-        cal = Date.now() - lv < 12*3600*1000 ? 0 : snap.docs.length;
+        cal = Date.now() - lv < 12 * 3600 * 1000 ? 0 : snap.docs.length;
         update();
       }
     );
 
     const unsubMsg = onSnapshot(
-      query(collection(db,'conversations'), where('participants','array-contains',user.uid)),
+      query(collection(db, 'conversations'), where('participants', 'array-contains', user.uid)),
       snap => {
         const lv = parseInt(localStorage.getItem(`lastNotificationsView_${user.uid}`) || '0');
         msgs = snap.docs.filter(d => {
@@ -140,16 +147,29 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
       }
     );
 
-    return () => { unsubCal(); unsubMsg(); };
+    const unsubGen = onSnapshot(
+      collection(db, 'users', user.uid, 'notifications'),
+      snap => {
+        const lv = parseInt(localStorage.getItem(`lastNotificationsView_${user.uid}`) || '0');
+        gen = snap.docs.filter(d => {
+          const data = d.data();
+          try {
+            const t = (data.createdAt && typeof data.createdAt.toDate === 'function') ? data.createdAt.toDate().getTime() : Date.now();
+            return t > lv && !data.read;
+          } catch { return false; }
+        }).length;
+        update();
+      }
+    );
+
+    return () => { unsubCal(); unsubMsg(); unsubGen(); };
   }, [user]);
 
   if (!user) return null;
 
   /* hover helpers */
-  const hoverOn  = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; };
-  const hoverOff = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; };
-  const menuOn   = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-hover)'; };
-  const menuOff  = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; };
+  const menuOn = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-hover)'; };
+  const menuOff = (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; };
 
   /* ══════════════════════════════════════════════════════════ */
   return (
@@ -157,12 +177,12 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
 
       {/* ── Icon strip ─────────────────────────── */}
       {/* Search */}
-      <Link to="/search" aria-label="Search" style={iconBtnStyle} onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
+      <Link to="/search" aria-label="Search" className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 pointer-events-auto relative liquid-glass liquid-glass-white transition-all duration-300 hover:scale-110">
         <Search size={17} />
       </Link>
 
       {/* Notifications */}
-      <Link to="/notifications" aria-label="Notifications" style={iconBtnStyle} onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
+      <Link to="/notifications" aria-label="Notifications" className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 pointer-events-auto relative liquid-glass liquid-glass-white transition-all duration-300 hover:scale-110">
         <Bell size={17} />
         {unread > 0 && (
           <span style={{
@@ -183,13 +203,25 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
       </Link>
 
       {/* ── Divider ────────────────────────────── */}
-      <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 0.25rem' }} />
+      <div className="hidden md:block" style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 0.25rem' }} />
 
       {/* ── Avatar / menu ──────────────────────── */}
-      <div style={{ position: 'relative' }}>
+      <div ref={btnRef} style={{ position: 'relative', pointerEvents: 'auto', display: 'flex' }}>
+        {/* Mobile Three Dots */}
         <button
-          ref={btnRef}
+          id="header-mobile-menu-button"
+          onClick={() => setShowMenu(p => !p)}
+          aria-haspopup="true"
+          aria-expanded={showMenu}
+          className="md:hidden w-10 h-10 rounded-full flex items-center justify-center shrink-0 pointer-events-auto relative liquid-glass liquid-glass-white transition-all duration-300 hover:scale-110"
+        >
+          <MoreVertical size={17} />
+        </button>
+
+        {/* Desktop Avatar */}
+        <button
           id="header-avatar-button"
+          className="hidden md:block"
           onClick={() => setShowMenu(p => !p)}
           aria-haspopup="true"
           aria-expanded={showMenu}
@@ -203,7 +235,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
             overflow: 'hidden',
             background: 'var(--surface)',
             transition: 'border-color 0.12s',
-            display: 'block',
           }}
           onMouseEnter={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = 'var(--text-muted)'; }}
           onMouseLeave={e => { if (!showMenu) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
@@ -232,7 +263,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
             }}
           >
             {/* User info */}
-            <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
+            <div className="hidden md:block" style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-light)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                 <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
                   <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -251,27 +282,31 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
             {/* Menu items */}
             <div style={{ padding: '0.375rem' }}>
               {[
-                { to: '/profile/me',           icon: <User size={14} />,         label: 'My Profile'   },
-                { to: '/settings/preferences', icon: <SettingsIcon size={14} />, label: 'Preferences'  },
-                { to: '/settings/billing',     icon: <CreditCard size={14} />,   label: 'Billing'      },
+                { to: '/profile/me', icon: <User size={14} />, label: 'My Profile', desktopOnly: true },
+                ...(user.role === UserRole.THALA ? [
+                  { to: '/settings/pricing', icon: <Gem size={14} />, label: 'Pricing' },
+                ] : []),
+                { to: '/settings/preferences', icon: <SettingsIcon size={14} />, label: 'Preferences' },
+                { to: '/settings/billing', icon: <CreditCard size={14} />, label: 'Billing' },
               ].map(item => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  role="menuitem"
-                  onClick={() => setShowMenu(false)}
-                  style={{ ...menuItemStyle, display: 'flex' }}
-                  onMouseEnter={menuOn}
-                  onMouseLeave={menuOff}
-                >
-                  <span style={{ color: 'var(--text-faint)', flexShrink: 0 }}>{item.icon}</span>
-                  {item.label}
-                </Link>
+                <div key={item.to} className={item.desktopOnly ? "hidden md:block" : ""}>
+                  <Link
+                    to={item.to}
+                    role="menuitem"
+                    onClick={() => setShowMenu(false)}
+                    style={{ ...menuItemStyle, display: 'flex' }}
+                    onMouseEnter={menuOn}
+                    onMouseLeave={menuOff}
+                  >
+                    <span style={{ color: 'var(--text-faint)', flexShrink: 0 }}>{item.icon}</span>
+                    {item.label}
+                  </Link>
+                </div>
               ))}
             </div>
 
-            {/* Role toggle */}
-            <div style={{ padding: '0.625rem 1rem', borderTop: '1px solid var(--border-light)', borderBottom: '1px solid var(--border-light)' }}>
+            {/* Role toggle (Desktop) */}
+            <div className="hidden md:block" style={{ padding: '0.625rem 1rem', borderTop: '1px solid var(--border-light)', borderBottom: '1px solid var(--border-light)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Switch to {user.role === UserRole.STUDENT ? 'Tutor' : 'Student'}
@@ -303,6 +338,57 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
                   }} />
                 </button>
               </div>
+            </div>
+
+            {/* Role toggle (Mobile) */}
+            <div className="md:hidden" style={{ padding: '0.375rem', borderTop: '1px solid var(--border-light)' }}>
+              <button
+                role="menuitem"
+                onClick={() => { setShowMenu(false); onToggleRole(); }}
+                style={{ ...menuItemStyle, display: 'flex', width: '100%' }}
+                onMouseEnter={menuOn}
+                onMouseLeave={menuOff}
+              >
+                <span style={{ color: 'var(--text-faint)', flexShrink: 0 }}><User size={14} /></span>
+                Switch to {user.role === UserRole.STUDENT ? 'Tutor' : 'Student'}
+              </button>
+            </div>
+
+            {/* Theme Toggle (Desktop & Mobile) */}
+            <div style={{ padding: '0.375rem', borderTop: '1px solid var(--border-light)', borderBottom: '1px solid var(--border-light)' }}>
+              <button
+                role="menuitem"
+                onClick={(e) => { e.preventDefault(); toggleTheme(); }}
+                style={{ ...menuItemStyle, display: 'flex', width: '100%', justifyContent: 'space-between' }}
+                onMouseEnter={menuOn}
+                onMouseLeave={menuOff}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                  <span style={{ color: 'var(--text-faint)', flexShrink: 0 }}>
+                    {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} />}
+                  </span>
+                  Dark Mode
+                </div>
+                <div style={{
+                  width: 38,
+                  height: 20,
+                  borderRadius: 999,
+                  background: theme === 'dark' ? 'var(--nunma-lime)' : 'var(--border)',
+                  padding: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'background 0.2s',
+                }}>
+                  <div style={{
+                    width: 16, height: 16,
+                    borderRadius: '50%',
+                    background: 'var(--surface)',
+                    boxShadow: 'var(--shadow-sm)',
+                    transform: theme === 'dark' ? 'translateX(18px)' : 'translateX(0)',
+                    transition: 'transform 0.2s',
+                  }} />
+                </div>
+              </button>
             </div>
 
             {/* Sign out */}

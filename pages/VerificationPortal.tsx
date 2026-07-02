@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, ShieldAlert, Award, User, Share2, ArrowRight, ExternalLink, Download } from 'lucide-react';
+import { formatDate } from '../utils/dateUtils';
 import { QRCodeSVG } from 'qrcode.react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
@@ -49,7 +50,7 @@ const VerificationPortal: React.FC = () => {
   const payload = certData?.payload;
   const studentName = payload?.credentialSubject?.name || "Student";
   const courseName = payload?.credentialSubject?.achievement?.name || "Course Completion";
-  const issueDate = payload?.issuanceDate ? new Date(payload.issuanceDate).toLocaleDateString() : new Date().toLocaleDateString();
+  const issueDate = payload?.issuanceDate ? formatDate(new Date(payload.issuanceDate)) : formatDate(new Date());
 
   return (
     <>
@@ -160,7 +161,12 @@ const VerificationPortal: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pt-8 lg:pt-10 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-0 no-print">
+                <div className="pt-8 lg:pt-10 border-t border-gray-100 flex items-center justify-between mt-8">
+                  <img src="/assets/logo-full.png" alt="Nunma" className="h-10 object-contain" />
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest hidden print:block">Official Document</p>
+                </div>
+
+                <div className="pt-8 lg:pt-10 flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-0 no-print">
                   <button
                     onClick={() => navigate('/')}
                     className="text-[10px] lg:text-[11px] font-black text-indigo-900 uppercase tracking-[0.2em] lg:tracking-[0.25em] flex items-center gap-3 hover:translate-x-2 transition-transform w-full sm:w-auto justify-center sm:justify-start"

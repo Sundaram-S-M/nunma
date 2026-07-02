@@ -167,14 +167,14 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
                     <div className="w-16 h-16 rounded-3xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-6">
                         <Users size={32} />
                     </div>
-                    <h3 className="text-2xl font-black text-[#040457] mb-2">Single Exam View</h3>
+                    <h3 className="text-2xl font-black text-nunma-forest mb-2">Single Exam View</h3>
                     <p className="text-sm text-gray-400 mb-8 font-medium">Select an exam to view detailed results and download a specific report.</p>
 
                     <div className="w-full relative mb-6">
                         <select
                             value={selectedExamId || ''}
                             onChange={(e) => setSelectedExamId(e.target.value)}
-                            className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-2xl px-6 py-4 text-sm font-bold text-[#040457] appearance-none outline-none"
+                            className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-2xl px-6 py-4 text-sm font-bold text-nunma-forest appearance-none outline-none"
                         >
                             <option value="" disabled>Select an exam</option>
                             {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
@@ -186,11 +186,11 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
                             <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200 text-left">
                                 <div>
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Max Marks</p>
-                                    <p className="text-2xl font-black text-[#040457] truncate w-24">{selectedExam?.maxMark}</p>
+                                    <p className="text-2xl font-black text-nunma-forest truncate w-24">{selectedExam?.maxMark}</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Attendance</p>
-                                    <p className="text-2xl font-black text-[#c2f575] bg-[#040457] px-4 py-1 rounded-xl inline-block mt-1">
+                                    <p className="text-2xl font-black text-[#c2f575] bg-nunma-forest px-4 py-1 rounded-xl inline-block mt-1">
                                         {loading ? '...' : examResults.length}
                                     </p>
                                 </div>
@@ -211,7 +211,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
                     <div className="w-16 h-16 rounded-3xl bg-[#c2f575]/20 text-[#6ea812] flex items-center justify-center mb-6">
                         <FileSpreadsheet size={32} />
                     </div>
-                    <h3 className="text-2xl font-black text-[#040457] mb-2">Bulk Date Range Export</h3>
+                    <h3 className="text-2xl font-black text-nunma-forest mb-2">Bulk Date Range Export</h3>
                     <p className="text-sm text-gray-400 mb-8 font-medium">Download aggregated performance metrics across multiple exams in a given timeframe.</p>
 
                     <div className="w-full grid grid-cols-2 gap-4 mb-6">
@@ -221,7 +221,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="w-full mt-1 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-xl px-4 py-3 text-sm font-bold text-[#040457] outline-none"
+                                className="w-full mt-1 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-xl px-4 py-3 text-sm font-bold text-nunma-forest outline-none"
                             />
                         </div>
                         <div className="relative text-left">
@@ -230,7 +230,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="w-full mt-1 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-xl px-4 py-3 text-sm font-bold text-[#040457] outline-none"
+                                className="w-full mt-1 bg-gray-50 border-2 border-transparent focus:border-[#c2f575] focus:bg-white rounded-xl px-4 py-3 text-sm font-bold text-nunma-forest outline-none"
                             />
                         </div>
                     </div>
@@ -238,7 +238,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
                     <button
                         onClick={handleBulkExport}
                         disabled={isExporting}
-                        className="w-full mt-auto py-5 bg-[#040457] text-[#c2f575] rounded-xl font-black uppercase text-[12px] tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:active:scale-100"
+                        className="w-full mt-auto py-5 bg-nunma-forest text-[#c2f575] rounded-xl font-black uppercase text-[12px] tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:active:scale-100"
                     >
                         {isExporting ? 'Generating...' : <><Calendar size={18} /> Extract Bulk Report</>}
                     </button>
@@ -248,7 +248,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
             {/* Preview Table for Single Exam */}
             {selectedExamId && !loading && examResults.length > 0 && (
                 <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100 mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <h4 className="text-xl font-black text-[#040457] mb-6">Score Preview</h4>
+                    <h4 className="text-xl font-black text-nunma-forest mb-6">Score Preview</h4>
                     <div className="overflow-hidden rounded-2xl border border-gray-100">
                         <table className="w-full text-left">
                             <thead className="bg-gray-50">
@@ -261,7 +261,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
                             <tbody className="divide-y divide-gray-100">
                                 {examResults.slice(0, 10).map(r => (
                                     <tr key={r.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4 font-bold text-[#040457] text-sm">{r.studentName || 'Unknown Student'}</td>
+                                        <td className="px-6 py-4 font-bold text-nunma-forest text-sm">{r.studentName || 'Unknown Student'}</td>
                                         <td className="px-6 py-4 text-center">
                                             <span className="font-black text-lg text-indigo-600">{r.marks ?? '-'}</span>
                                             <span className="text-xs text-gray-400 font-bold ml-1">/ {selectedExam?.maxMark}</span>
@@ -287,7 +287,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
             {/* Floating Action Button for AI Chat */}
             <button
                 onClick={() => setShowAIChat(true)}
-                className="fixed bottom-10 right-10 w-20 h-20 bg-[#040457] text-[#c2f575] rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 group"
+                className="fixed bottom-10 right-10 w-20 h-20 bg-nunma-forest text-[#c2f575] rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 group"
             >
                 <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-bounce">AI</div>
                 <Bot className="group-hover:rotate-12 transition-transform" size={40} />
@@ -295,11 +295,11 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
 
             {/* Full-Screen AI Chat Modal */}
             {showAIChat && (
-                <div className="fixed inset-0 z-[100] bg-[#040457] flex flex-col animate-in fade-in zoom-in duration-300">
+                <div className="fixed inset-0 z-[100] bg-nunma-forest flex flex-col animate-in fade-in zoom-in duration-300">
                     {/* Header */}
                     <div className="flex items-center justify-between p-8 border-b border-white/10">
                         <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 bg-[#c2f575] rounded-3xl flex items-center justify-center text-[#040457]">
+                            <div className="w-16 h-16 bg-[#c2f575] rounded-3xl flex items-center justify-center text-nunma-forest">
                                 <Sparkles size={32} />
                             </div>
                             <div>
@@ -342,7 +342,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
 
                         {chatMessages.map((msg, i) => (
                             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                                <div className={`max-w-4xl p-8 rounded-[2rem] ${msg.role === 'user' ? 'bg-[#c2f575] text-[#040457] rounded-tr-none' : 'bg-white/5 text-white border border-white/10 rounded-tl-none'}`}>
+                                <div className={`max-w-4xl p-8 rounded-[2rem] ${msg.role === 'user' ? 'bg-[#c2f575] text-nunma-forest rounded-tr-none' : 'bg-white/5 text-white border border-white/10 rounded-tl-none'}`}>
                                     {msg.role === 'assistant' ? (
                                         <div className="prose prose-invert max-w-none prose-p:font-medium prose-li:font-medium prose-li:my-1">
                                             <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -382,7 +382,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
                             <button 
                                 type="submit"
                                 disabled={!chatInput.trim() || isChatAnalyzing}
-                                className="absolute right-4 top-4 bottom-4 px-8 bg-[#c2f575] text-[#040457] rounded-full font-black uppercase text-xs tracking-widest hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center"
+                                className="absolute right-4 top-4 bottom-4 px-8 bg-[#c2f575] text-nunma-forest rounded-full font-black uppercase text-xs tracking-widest hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center"
                             >
                                 {isChatAnalyzing ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
                             </button>

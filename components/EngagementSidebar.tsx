@@ -187,7 +187,7 @@ const EngagementSidebar: React.FC = () => {
                                         <div 
                                             className={`px-3 py-2 rounded-2xl text-sm ${
                                                 msg.senderId === user?.uid 
-                                                ? 'bg-[#c2f575] text-[#1A1A4E] rounded-tr-sm' 
+                                                ? 'bg-[#c2f575] text-nunma-forest rounded-tr-sm' 
                                                 : 'bg-white/10 text-white rounded-tl-sm'
                                             }`}
                                         >
@@ -209,7 +209,7 @@ const EngagementSidebar: React.FC = () => {
                             <button 
                                 type="submit"
                                 disabled={!newMessage.trim()}
-                                className="w-10 h-10 bg-[#c2f575] text-[#1A1A4E] rounded-xl flex items-center justify-center disabled:opacity-50 transition-transform active:scale-95"
+                                className="w-10 h-10 bg-[#c2f575] text-nunma-forest rounded-xl flex items-center justify-center disabled:opacity-50 transition-transform active:scale-95"
                             >
                                 <Send size={16} />
                             </button>
@@ -221,7 +221,7 @@ const EngagementSidebar: React.FC = () => {
                     <div className="absolute inset-0 flex flex-col p-4">
                         {!isTutor && (
                             <div className="mb-6 flex flex-col items-center justify-center p-8 bg-white/5 rounded-[2rem] border border-white/10 text-center">
-                                <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 transition-all duration-500 ${isHandRaised ? 'bg-[#c2f575] text-[#1A1A4E] shadow-[0_0_30px_rgba(194,245,117,0.3)]' : 'bg-white/10 text-white'}`}>
+                                <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 transition-all duration-500 ${isHandRaised ? 'bg-[#c2f575] text-nunma-forest shadow-[0_0_30px_rgba(194,245,117,0.3)]' : 'bg-white/10 text-white'}`}>
                                     <Hand size={40} className={isHandRaised ? 'animate-bounce' : ''} />
                                 </div>
                                 <h3 className="text-lg font-black tracking-tight mb-2">
@@ -235,7 +235,7 @@ const EngagementSidebar: React.FC = () => {
                                     className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${
                                         isHandRaised 
                                         ? 'bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500 hover:text-white' 
-                                        : 'bg-[#c2f575] text-[#1A1A4E] hover:scale-105 active:scale-95'
+                                        : 'bg-[#c2f575] text-nunma-forest hover:scale-105 active:scale-95'
                                     }`}
                                 >
                                     {isHandRaised ? 'Lower Hand' : 'Raise Hand'}
@@ -266,7 +266,7 @@ const EngagementSidebar: React.FC = () => {
                                                 {hand.status === 'waiting' ? (
                                                     <button 
                                                         onClick={() => handleToggleAudio(hand.uid, hand.name, 'waiting')}
-                                                        className="w-10 h-10 bg-[#c2f575] text-[#1A1A4E] rounded-xl flex items-center justify-center hover:scale-110 transition-transform"
+                                                        className="w-10 h-10 bg-[#c2f575] text-nunma-forest rounded-xl flex items-center justify-center hover:scale-110 transition-transform"
                                                         title="Allow to Speak"
                                                     >
                                                         <Mic size={18} />

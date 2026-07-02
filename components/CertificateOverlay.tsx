@@ -16,7 +16,7 @@ const CertificateOverlay: React.FC<CertificateOverlayProps> = ({
     zoneName,
     signature1,
     signature2,
-    brandColor = '#1A1A4E'
+    brandColor = '#052E16'
 }) => {
     return (
         <div className="relative w-full aspect-[1.414/1] bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 group">

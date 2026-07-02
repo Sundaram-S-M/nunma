@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import LiveSessionStatus from '../components/LiveSessionStatus';
+import { formatDate } from '../utils/dateUtils';
 
 import {
    collection,
@@ -319,12 +320,12 @@ const Classroom: React.FC = () => {
 
          {/* Post-Session Survey Modal */}
          {surveyForRoom && (
-            <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
+            <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[200] flex items-center justify-center p-6 bg-nunma-forest/80 backdrop-blur-xl animate-in fade-in duration-300 transition-all`}>
                <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 duration-500 text-center">
                   <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] mx-auto flex items-center justify-center mb-6">
                      <Star size={32} className="text-[#c2f575]" />
                   </div>
-                  <h3 className="text-3xl font-black text-[#040457] tracking-tight mb-2">Session Completed</h3>
+                  <h3 className="text-3xl font-black text-nunma-forest tracking-tight mb-2">Session Completed</h3>
                   <p className="text-sm font-medium text-gray-400 mb-8">We'd love to hear your thoughts on this session.</p>
 
                   <div className="space-y-8 mb-10 text-left">
@@ -346,7 +347,7 @@ const Classroom: React.FC = () => {
                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">How likely to recommend?</label>
                            <div className="flex justify-between items-center gap-1 bg-gray-50 p-2 rounded-2xl">
                               {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
-                                 <button key={score} onClick={() => setSurveyNps(score)} className={`w-8 h-10 rounded-xl font-black text-xs transition-all ${surveyNps === score ? 'bg-[#c2f575] text-[#040457] shadow-lg scale-110' : 'text-gray-400 hover:bg-white'}`}>
+                                 <button key={score} onClick={() => setSurveyNps(score)} className={`w-8 h-10 rounded-xl font-black text-xs transition-all ${surveyNps === score ? 'bg-[#c2f575] text-nunma-forest shadow-lg scale-110' : 'text-gray-400 hover:bg-white'}`}>
                                     {score}
                                  </button>
                               ))}
@@ -357,7 +358,7 @@ const Classroom: React.FC = () => {
                      {surveyForRoom.config.feedbackText && (
                         <div className="space-y-3">
                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Additional Feedback</label>
-                           <textarea value={surveyFeedback} onChange={e => setSurveyFeedback(e.target.value)} rows={3} placeholder="What did you like? What could be improved?" className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-[1.5rem] px-6 py-4 font-bold text-[#040457] outline-none transition-all resize-none"></textarea>
+                           <textarea value={surveyFeedback} onChange={e => setSurveyFeedback(e.target.value)} rows={3} placeholder="What did you like? What could be improved?" className="w-full bg-gray-50 border-2 border-transparent focus:border-indigo-400 rounded-[1.5rem] px-6 py-4 font-bold text-nunma-forest outline-none transition-all resize-none"></textarea>
                         </div>
                      )}
                   </div>
@@ -370,15 +371,15 @@ const Classroom: React.FC = () => {
                         setSurveyForRoom(null);
                         setSurveyRating(0);
                         setSurveyFeedback('');
-                     }} className="flex-[2] py-4 bg-[#c2f575] text-[#040457] rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 transition-all">Submit Feedback</button>
+                     }} className="flex-[2] py-4 bg-[#c2f575] text-nunma-forest rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 transition-all">Submit Feedback</button>
                   </div>
                </div>
             </div>
          )}
 
          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-            <div>
-               <h1 className="text-6xl font-black text-[#1A1A4E] mb-3 tracking-tighter">My Classroom</h1>
+            <div className="hidden md:block">
+               <h1 className="text-6xl font-black text-nunma-forest mb-3 tracking-tighter">My Classroom</h1>
                <p className="text-gray-400 font-medium text-xl">Your professional growth hub.</p>
             </div>
             <div className="bg-[#c2f575] px-8 py-4 rounded-[2rem] shadow-xl shadow-[#c2f575]/20 flex items-center gap-4 border-4 border-white">
@@ -474,13 +475,13 @@ const Classroom: React.FC = () => {
             <div className="xl:col-span-8 space-y-10">
                <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl relative overflow-hidden">
                   <div className="flex justify-between items-center mb-14">
-                     <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tighter flex items-center gap-5">
+                     <h3 className="text-3xl font-black text-nunma-forest tracking-tighter flex items-center gap-5">
                         <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-900">
                            <MonitorPlay size={24} />
                         </div>
                         Enrolled Learning Zones
                      </h3>
-                     <button className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#1A1A4E]">
+                     <button className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-nunma-forest">
                         View All Streams
                      </button>
                   </div>
@@ -495,12 +496,9 @@ const Classroom: React.FC = () => {
                            >
                               <div className="h-48 rounded-[2rem] overflow-hidden mb-8 relative shadow-lg">
                                  <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
-                                 <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl text-[9px] font-black text-indigo-900 flex items-center gap-1">
-                                    <Star size={12} fill="#c2f575" className="text-[#c2f575]" /> {zone.rating || '4.8'}
-                                 </div>
                               </div>
                               <div>
-                                 <h4 className="text-2xl font-black text-[#1A1A4E] group-hover:text-indigo-600 transition-colors mb-2">{zone.title}</h4>
+                                 <h4 className="text-2xl font-black text-nunma-forest group-hover:text-indigo-600 transition-colors mb-2">{zone.title}</h4>
                                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">By {zone.tutorName || 'Expert Tutor'}</p>
 
                                  {/* Progress Bar */}
@@ -535,7 +533,7 @@ const Classroom: React.FC = () => {
                   <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-3xl"></div>
                </div>
 
-               <div className="bg-[#1A1A4E] rounded-[4rem] p-14 text-white border border-white/5 relative overflow-hidden group">
+               <div className="bg-nunma-forest rounded-[4rem] p-14 text-white border border-white/5 relative overflow-hidden group">
                   <div className="flex items-center justify-between mb-14 relative z-10">
                      <div className="flex items-center gap-5">
                         <Award size={32} className="text-[#c2f575]" />
@@ -562,7 +560,7 @@ const Classroom: React.FC = () => {
                            </div>
                            <div>
                               <h4 className="text-2xl font-black mb-1 line-clamp-1">{cert.zoneName}</h4>
-                              <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest">Issued: {new Date(cert.date).toLocaleDateString()}</p>
+                              <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest">Issued: {formatDate(cert.date)}</p>
                            </div>
                            <div className="flex gap-4">
                               <button className="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
@@ -579,14 +577,14 @@ const Classroom: React.FC = () => {
             </div>
 
             <div className="xl:col-span-4 space-y-10">
-               <div className="bg-[#1A1A4E] rounded-[3.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+               <div className="bg-nunma-forest rounded-[3.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
                   <div className="flex items-center justify-between mb-10 relative z-10">
                      <h3 className="text-2xl font-black tracking-tighter">My Mentors</h3>
                      <button className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest px-4 py-2 bg-white/5 rounded-xl">Search</button>
                   </div>
                   <div className="space-y-4 relative z-10">
                      {followedTutors.length > 0 ? followedTutors.map(tutor => (
-                        <div key={tutor.uid} className="flex items-center gap-5 p-6 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-white/10 transition-all cursor-pointer group/tutor">
+                        <div key={tutor.uid} onClick={() => navigate(`/u/${tutor.uid}`)} className="flex items-center gap-5 p-6 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-white/10 transition-all cursor-pointer group/tutor">
                            <div className="relative">
                               <img src={tutor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutor.uid}`} className="w-16 h-16 rounded-2xl object-cover shadow-2xl" alt="" />
                               <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 bg-[#7cc142] border-[4px] border-indigo-900 rounded-full shadow-lg"></div>
@@ -608,7 +606,7 @@ const Classroom: React.FC = () => {
                         <Calendar size={28} />
                      </div>
                      <div>
-                        <h3 className="text-2xl font-black text-[#1A1A4E] tracking-tighter">Milestones</h3>
+                        <h3 className="text-2xl font-black text-nunma-forest tracking-tighter">Milestones</h3>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Next 48 Hours</p>
                      </div>
                   </div>
@@ -619,7 +617,7 @@ const Classroom: React.FC = () => {
                            <div className="flex items-center justify-between">
                               <span className="px-3 py-1 bg-red-50 text-red-500 rounded-full text-[9px] font-black uppercase">Upcoming Live</span>
                               <span className="text-[10px] font-black text-gray-400">
-                                 {new Date(session.startTime).toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+                                 {formatDate(session.startTime)} {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                            </div>
                            <h4 className="font-black text-indigo-900 text-sm line-clamp-1">{session.title}</h4>

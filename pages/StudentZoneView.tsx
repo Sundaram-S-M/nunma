@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, onSnapshot, addDoc, orderBy, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, onSnapshot, addDoc, orderBy, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { formatDate } from '../utils/dateUtils';
 import { db, functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { Student } from '../types';
@@ -47,10 +47,10 @@ const formatJoinedDate = (joinedAt: any) => {
   if (typeof joinedAt === 'string') return joinedAt;
   if (joinedAt && typeof joinedAt === 'object') {
     if (joinedAt.toDate && typeof joinedAt.toDate === 'function') {
-      return joinedAt.toDate().toLocaleDateString();
+      return formatDate(joinedAt.toDate());
     }
     if (joinedAt.seconds !== undefined) {
-      return new Date(joinedAt.seconds * 1000).toLocaleDateString();
+      return formatDate(new Date(joinedAt.seconds * 1000));
     }
   }
   return String(joinedAt);
@@ -66,6 +66,7 @@ const StudentZoneView: React.FC = () => {
   const [expandedChapters, setExpandedChapters] = useState<string[]>(['c1']);
   const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
+  const [showFullAttendance, setShowFullAttendance] = useState(false);
   const [activeTab, setActiveTab] = useState<'content' | 'exams' | 'students' | 'attendance' | 'marks'>('content');
   const [exams, setExams] = useState<any[]>([]);
   const [notifiedExams, setNotifiedExams] = useState<string[]>([]);
@@ -86,7 +87,7 @@ const StudentZoneView: React.FC = () => {
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [hasExplicitConsent, setHasExplicitConsent] = useState(false);
   const [postExamTimer, setPostExamTimer] = useState<number | null>(null);
-  const [uploadedAnswerFiles, setUploadedAnswerFiles] = useState<File | null>(null);
+  const [uploadedAnswerFiles, setUploadedAnswerFiles] = useState<Record<string, File>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [curriculum, setCurriculum] = useState<any[]>([]);
   const [studentData, setStudentData] = useState<any>(null);
@@ -99,6 +100,39 @@ const StudentZoneView: React.FC = () => {
   const [showCertModal, setShowCertModal] = useState(false);
   const [isGeneratingCert, setIsGeneratingCert] = useState(false);
   const [generatedVC, setGeneratedVC] = useState<any>(null);
+  // Anti-Screen Capture Logic
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'PrintScreen') {
+        navigator.clipboard.writeText(''); 
+        alert('Screenshots are disabled in this zone.');
+        e.preventDefault();
+      }
+      if ((e.ctrlKey || e.metaKey) && ['p', 's', 'c'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && ['3', '4', '5', 's'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
+    };
+    
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      alert('Copying content is disabled in this zone.');
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('copy', handleCopy);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('copy', handleCopy);
+    };
+  }, []);
 
 
   // Notification & Exam Re-evaluation interval
@@ -120,11 +154,27 @@ const StudentZoneView: React.FC = () => {
         isLive = new Date(exam.scheduledAt.seconds * 1000) <= new Date();
       } else if (exam.status === 'LIVE') {
         isLive = true;
+      } else if (exam.date && exam.time) {
+        // Exams are created with date (YYYY-MM-DD) and time (HH:MM) strings
+        const parts = exam.date.split('-');
+        const timeParts = exam.time.split(':');
+        if (parts.length === 3 && timeParts.length === 2) {
+          const examStart = new Date(
+            parseInt(parts[0]),
+            parseInt(parts[1]) - 1,
+            parseInt(parts[2]),
+            parseInt(timeParts[0]),
+            parseInt(timeParts[1])
+          );
+          isLive = examStart <= new Date() && exam.status !== 'CONDUCTED';
+        }
       }
 
+      // EXAM_LIVE notification
       if (isLive && exam.id && !notifiedExams.includes(exam.id)) {
         addDoc(collection(db, 'users', authUser.uid, 'notifications'), {
           type: 'EXAM_LIVE',
+          title: 'Exam Starting Now!',
           message: `Your exam "${exam.title}" is now live! You have limited time to attempt it.`,
           zoneId,
           examId: exam.id,
@@ -132,6 +182,24 @@ const StudentZoneView: React.FC = () => {
           createdAt: new Date()
         }).catch(console.error);
         setNotifiedExams(prev => [...prev, exam.id]);
+      }
+
+      // 24-HOUR REMINDER notification
+      const remindKey = `reminded_${exam.id}`;
+      if (exam.remindAt && exam.id && !notifiedExams.includes(remindKey) && !isLive) {
+        const remindTime = new Date(exam.remindAt);
+        if (remindTime <= new Date()) {
+          addDoc(collection(db, 'users', authUser.uid, 'notifications'), {
+            type: 'EXAM_REMINDER',
+            title: '24-Hour Exam Reminder',
+            message: `Reminder: Exam "${exam.title}" is scheduled tomorrow on ${exam.date} @ ${exam.time}. Be prepared!`,
+            zoneId,
+            examId: exam.id,
+            read: false,
+            createdAt: new Date()
+          }).catch(console.error);
+          setNotifiedExams(prev => [...prev, remindKey]);
+        }
       }
     });
   }, [exams, authUser, zoneId, notifiedExams]);
@@ -150,6 +218,11 @@ const StudentZoneView: React.FC = () => {
         // Adjust activeTab if current one is not allowed
         const zType = (zoneData as any).zoneType;
         setActiveTab(prev => {
+          const params = new URLSearchParams(location.search);
+          const tabParam = params.get('tab');
+          if (tabParam && ['content', 'exams', 'students', 'attendance', 'marks'].includes(tabParam)) {
+            return tabParam as any;
+          }
           if (zType === 'Course' && prev === 'exams') return 'content';
           if (zType === 'Workshop' && (prev === 'exams' || prev === 'content')) return 'students';
           return prev;
@@ -221,11 +294,25 @@ const StudentZoneView: React.FC = () => {
     if (!studentData && zone?.createdBy !== authUser.uid) return;
 
     // 6. Exam Results (My Results)
-    const resultsQ = query(collection(db, 'zones', zoneId, 'exam_results'), where('studentId', '==', authUser.uid));
-    const resultsUnsub = onSnapshot(resultsQ, (snapshot) => {
-      setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.warn("Error loading exam results:", error);
+    // Submissions are stored under zones/{zoneId}/exams/{examId}/submissions/{uid}
+    const unsubs: any[] = [];
+    exams.forEach(exam => {
+      const docRef = doc(db, 'zones', zoneId, 'exams', exam.id, 'submissions', authUser.uid);
+      const unsub = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setExamResults(prev => {
+            const data = { id: docSnap.id, examId: exam.id, studentId: authUser.uid, ...docSnap.data() };
+            const existing = prev.findIndex(r => r.examId === exam.id);
+            if (existing >= 0) {
+              const newArr = [...prev];
+              newArr[existing] = data;
+              return newArr;
+            }
+            return [...prev, data];
+          });
+        }
+      });
+      unsubs.push(unsub);
     });
 
     // 7. All Students (for Student List tab)
@@ -237,10 +324,10 @@ const StudentZoneView: React.FC = () => {
     });
 
     return () => {
-      resultsUnsub();
+      unsubs.forEach(u => u());
       allStudentsUnsub();
     };
-  }, [zoneId, authUser, studentData, zone]);
+  }, [zoneId, authUser, studentData, zone, exams]);
 
   // Payment Check Effect
   useEffect(() => {
@@ -273,7 +360,7 @@ const StudentZoneView: React.FC = () => {
             id: authUser.uid,
             name: whitelistedName || authUser.name || authUser.email.split('@')[0],
             avatar: authUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser.uid}`,
-            joinedAt: new Date().toLocaleDateString(),
+            joinedAt: formatDate(new Date()),
             status: 'Present',
             engagementScore: 0,
             email: authUser.email
@@ -445,7 +532,7 @@ const StudentZoneView: React.FC = () => {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const UPLOAD_BUFFER_MS = 10 * 60 * 1000;
+  const UPLOAD_BUFFER_MS = 15 * 60 * 1000;
 
   const handleTerminateExam = async (status: 'passed' | 'failed' | 'ongoing', logsOverride?: string[]) => {
     if (!zoneId || !activeExam || !studentData) return;
@@ -456,9 +543,9 @@ const StudentZoneView: React.FC = () => {
         const remainingMs = (endTime + UPLOAD_BUFFER_MS) - Date.now();
         setPostExamTimer(Math.max(0, Math.ceil(remainingMs / 1000)));
       } else {
-        setPostExamTimer(10 * 60);
+        setPostExamTimer(15 * 60);
       }
-      alert("Time is up! You have 10 minutes to scan and upload your answer sheet as a PDF.");
+      alert("Time is up! You have 15 minutes to scan and upload your answer script as a PDF.");
       return;
     }
 
@@ -509,10 +596,10 @@ const StudentZoneView: React.FC = () => {
     }
   };
 
-  const handleUploadAnswerSheet = async () => {
-    if (!uploadedAnswerFiles || !zoneId || !activeExam || !studentData) return;
+  const handleUploadAnswerSheet = async (targetExam: any, file: File) => {
+    if (!file || !zoneId || !targetExam || !studentData) return;
     
-    if (uploadedAnswerFiles.size > 5 * 1024 * 1024) {
+    if (file.size > 5 * 1024 * 1024) {
       alert("File is too large. Please compress your PDF to under 5MB.");
       return;
     }
@@ -520,21 +607,21 @@ const StudentZoneView: React.FC = () => {
     try {
       setIsUploading(true);
 
-      const toBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+      const toBase64 = (f: File) => new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(f);
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = error => reject(error);
       });
 
-      const base64File = await toBase64(uploadedAnswerFiles);
+      const base64File = await toBase64(file);
 
       const uploadFn = httpsCallable(functions, 'uploadExamScript');
       const uploadRes = await uploadFn({
         file: base64File,
-        fileName: uploadedAnswerFiles.name,
+        fileName: file.name,
         zoneId,
-        examId: activeExam.id
+        examId: targetExam.id
       });
 
       const answerSheetUrl = (uploadRes.data as any).fileUrl;
@@ -542,8 +629,8 @@ const StudentZoneView: React.FC = () => {
       const submitFn = httpsCallable(functions, 'submitExam');
       await submitFn({
         zoneId,
-        examId: activeExam.id,
-        answers: {}, 
+        examId: targetExam.id,
+        answers: {},
         violationLogs,
         answerSheetUrl
       });
@@ -552,26 +639,34 @@ const StudentZoneView: React.FC = () => {
         currentExamWarnings: 0,
         violationLogs: []
       });
-      setExamResults(prev => [...prev, { 
+      setExamResults(prev => [...prev, {
         id: 'temp-' + Date.now(),
-        examId: activeExam.id, 
-        studentId: authUser?.uid || 'anon', 
-        status: 'ongoing', 
+        examId: targetExam.id,
+        studentId: authUser?.uid || 'anon',
+        status: 'ongoing',
         cheatViolations: violationLogs,
         answerSheetUrl,
-        completedAt: new Date().toISOString() 
+        completedAt: new Date().toISOString()
       }]);
+      // Clear only this exam's file
+      setUploadedAnswerFiles(prev => {
+        const next = { ...prev };
+        delete next[targetExam.id];
+        return next;
+      });
       setPostExamTimer(null);
-      setActiveExam(null);
-      setCameraStatus('off');
-      if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-        setVideoStream(null);
+      if (activeExam?.id === targetExam.id) {
+        setActiveExam(null);
+        setCameraStatus('off');
+        if (videoStream) {
+          videoStream.getTracks().forEach(track => track.stop());
+          setVideoStream(null);
+        }
       }
-      alert("Answer sheet submitted successfully. Awaiting grading.");
+      alert("Answer script submitted successfully. Awaiting grading.");
     } catch (e) {
       console.error("Failed to save exam result via function", e);
-      alert("Failed to submit exam result. Verify file limits and time window.");
+      alert("Time over. You can't upload the answer sheet after the allowed time window has passed.");
     } finally {
       setIsUploading(false);
     }
@@ -770,11 +865,11 @@ const StudentZoneView: React.FC = () => {
 
       <div className="flex flex-col md:flex-row justify-between items-center gap-8">
         <div className="flex items-center gap-6 w-full">
-          <button onClick={() => navigate('/classroom')} className="p-4 bg-white border border-gray-100 rounded-2xl text-indigo-900 hover:shadow-xl transition-all shadow-sm active:scale-90">
+          <button onClick={() => navigate('/classroom')} className="hidden md:block p-4 bg-white border border-gray-100 rounded-2xl text-indigo-900 hover:shadow-xl transition-all shadow-sm active:scale-90">
             <ArrowLeft size={24} />
           </button>
           <div>
-            <h1 className="text-5xl font-black text-[#1A1A4E] tracking-tighter leading-tight mb-2">{zone.title}</h1>
+            <h1 className="text-5xl font-black text-nunma-forest tracking-tighter leading-tight mb-2">{zone.title}</h1>
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-black bg-[#c2f575] text-indigo-900 px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm">
                 {zone.level} Level
@@ -801,7 +896,7 @@ const StudentZoneView: React.FC = () => {
           {zone.provideCertificate && (
             <div
               onClick={() => isCourseComplete ? handleClaimCertificate() : alert(`Complete all modules to unlock certification. Progress: ${completedSegmentsCount}/${totalSegmentsCount}`)}
-              className={`px-8 py-4 rounded-[1.75rem] border flex flex-col items-center gap-1 shadow-2xl transition-all ${isCourseComplete ? 'bg-[#1A1A4E] border-white/10 shadow-indigo-900/20 cursor-pointer hover:brightness-110 active:scale-95' : 'bg-gray-100 border-gray-200 cursor-not-allowed grayscale'}`}
+              className={`px-8 py-4 rounded-[1.75rem] border flex flex-col items-center gap-1 shadow-2xl transition-all ${isCourseComplete ? 'bg-nunma-forest border-white/10 shadow-indigo-900/20 cursor-pointer hover:brightness-110 active:scale-95' : 'bg-gray-100 border-gray-200 cursor-not-allowed grayscale'}`}
             >
               <div className="flex items-center gap-4">
                 <Award size={24} className={isCourseComplete ? "text-[#c2f575]" : "text-gray-400"} />
@@ -830,14 +925,14 @@ const StudentZoneView: React.FC = () => {
         <div className="xl:col-span-8 space-y-8">
           <div className="flex bg-white/50 p-2 rounded-3xl border border-gray-100 gap-2 mb-4 overflow-x-auto no-scrollbar">
             {(!zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course') && (
-              <button onClick={() => setActiveTab('content')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'content' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Learning Content</button>
+              <button onClick={() => setActiveTab('content')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'content' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Learning Content</button>
             )}
             {(!zone?.zoneType || zone.zoneType === 'Class Management') && (
-              <button onClick={() => setActiveTab('exams')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'exams' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Exam Portal</button>
+              <button onClick={() => setActiveTab('exams')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'exams' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Exam Portal</button>
             )}
-            <button onClick={() => setActiveTab('students')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'students' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Student List</button>
-            <button onClick={() => setActiveTab('attendance')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'attendance' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Attendance</button>
-            <button onClick={() => setActiveTab('marks')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'marks' ? 'bg-[#1A1A4E] text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Marks</button>
+            <button onClick={() => setActiveTab('students')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'students' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Student List</button>
+            <button onClick={() => setActiveTab('attendance')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'attendance' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Attendance</button>
+            <button onClick={() => setActiveTab('marks')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'marks' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Marks</button>
           </div>
 
           {activeTab === 'content' ? (
@@ -885,7 +980,7 @@ const StudentZoneView: React.FC = () => {
                   ) : activeContent.type !== 'video' && (
                     <button
                       onClick={() => handleMarkAsCompleted(activeContent.id)}
-                      className="px-14 py-5 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all bg-[#c2f575] text-indigo-900 shadow-[#c2f575]/30 hover:brightness-110 active:scale-95"
+                      className="px-14 py-5 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all bg-[#c2f575] text-indigo-900 shadow-[#c2f575]/30 hover:brightness-110 active:scale-95 flex items-center gap-3"
                     >
                       Mark as Completed
                     </button>
@@ -912,8 +1007,22 @@ const StudentZoneView: React.FC = () => {
                     isLive = new Date(exam.scheduledAt.seconds * 1000) <= new Date();
                   } else if (exam.status === 'LIVE') {
                     isLive = true;
+                  } else if (exam.date && exam.time) {
+                    // Exams created with date (YYYY-MM-DD) + time (HH:MM) strings
+                    const parts = exam.date.split('-');
+                    const timeParts = exam.time.split(':');
+                    if (parts.length === 3 && timeParts.length === 2) {
+                      const examStart = new Date(
+                        parseInt(parts[0]),
+                        parseInt(parts[1]) - 1,
+                        parseInt(parts[2]),
+                        parseInt(timeParts[0]),
+                        parseInt(timeParts[1])
+                      );
+                      isLive = examStart <= new Date() && exam.status !== 'CONDUCTED';
+                    }
                   }
-                  
+
                   const computedStatus = isLive ? 'LIVE' : 'UPCOMING';
 
                   const result = examResults.find(r => r.examId === exam.id && r.studentId === (authUser?.uid || 'anon'));
@@ -924,8 +1033,8 @@ const StudentZoneView: React.FC = () => {
                           {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
                         </div>
                         {result ? (
-                          <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${result.status === 'passed' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                            Result: {result.status}
+                          <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${result.status === 'passed' ? 'bg-green-100 text-green-600' : result.status === 'PENDING_GRADING' ? 'bg-amber-100 text-amber-600' : result.status === 'graded' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+                            Result: {result.status === 'PENDING_GRADING' ? 'Evaluating' : result.status === 'graded' ? 'Evaluated' : result.status}
                           </span>
                         ) : (
                           <span className="px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest">
@@ -934,7 +1043,7 @@ const StudentZoneView: React.FC = () => {
                         )}
                       </div>
                       <div>
-                        <h4 className="text-2xl font-black text-[#1A1A4E] tracking-tight truncate">{exam.title}</h4>
+                        <h4 className="text-2xl font-black text-nunma-forest tracking-tight truncate">{exam.title}</h4>
                         <div className="mt-4 flex flex-wrap gap-4">
                           <div className="flex items-center gap-2 text-gray-400 text-xs font-bold uppercase">
                             <Clock size={14} /> {exam.date} @ {exam.time}
@@ -945,35 +1054,73 @@ const StudentZoneView: React.FC = () => {
                         </div>
                       </div>
                       {result ? (
-                        <div className="pt-8 border-t border-gray-50 flex items-center justify-between">
-                          <div>
-                            <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Your Score</p>
-                            <p className="font-black text-3xl text-[#1A1A4E]">{result.marks}</p>
+                        <div className="pt-8 border-t border-gray-50 flex flex-col gap-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Your Score</p>
+                              <p className="font-black text-3xl text-nunma-forest">{result.status === 'PENDING_GRADING' ? '-' : (result.marks ?? 0)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Points Awarded</p>
+                              <p className="font-black text-xl text-[#c2f575]">{result.status === 'passed' ? (result.marks || 0) * 10 : 0} XP</p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Points Awarded</p>
-                            <p className="font-black text-xl text-[#c2f575]">{result.status === 'passed' ? result.marks * 10 : 0} XP</p>
-                          </div>
+                          {exam.type === 'online-test' && result.status === 'graded' && result.answerSheetUrl && (
+                            <button
+                              onClick={() => window.open(result.answerSheetUrl, '_blank')}
+                              className="w-full py-4 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-100 transition-all flex items-center justify-center gap-2"
+                            >
+                              <FileText size={14} /> View your evaluated answer script
+                            </button>
+                          )}
                         </div>
                       ) : (
-                        (exam.type === 'online-test' || exam.type === 'online-mcq') && computedStatus === 'LIVE' ? (
+                        computedStatus === 'UPCOMING' ? (
+                          <button disabled className="w-full py-5 bg-gray-100 text-gray-400 rounded-2xl font-black uppercase text-[11px] tracking-widest cursor-not-allowed">Starts Soon</button>
+                        ) : exam.type === 'online-mcq' && computedStatus === 'LIVE' ? (
+                          // MCQ: auto-graded, just launch
                           <button onClick={() => {
                             if (!exam?.id || !zoneId || !studentData?.id) return;
                             updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), { activeExamId: exam.id });
+                            setActiveExam(exam);
                             setShowExamRules(true);
-                          }} className="w-full py-5 bg-[#1A1A4E] text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
-                        ) : computedStatus === 'UPCOMING' ? (
-                          <button disabled className="w-full py-5 bg-gray-100 text-gray-400 rounded-2xl font-black uppercase text-[11px] tracking-widest cursor-not-allowed">Starts Soon</button>
+                          }} className="w-full py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
+                        ) : exam.type === 'online-test' && computedStatus === 'LIVE' ? (
+                          // Online-test: launch portal + upload answer script (within 15 min after exam)
+                          <div className="space-y-3">
+                            <button onClick={() => {
+                              if (!exam?.id || !zoneId || !studentData?.id) return;
+                              updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), { activeExamId: exam.id });
+                              setActiveExam(exam);
+                              setShowExamRules(true);
+                            }} className="w-full py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
+                            <div className="pt-1 border-t border-gray-50 space-y-2">
+                              <p className="text-center text-[10px] text-gray-400 font-bold px-2">After completing, upload your written answer script within 15 minutes for tutor evaluation.</p>
+                              <label className="w-full py-4 bg-[#c2f575]/10 border border-[#c2f575]/30 text-indigo-900 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-[#c2f575]/20 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                                <Upload size={14} /> Upload Answer Script
+                                <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    // Store keyed by THIS exam's id — completely isolated
+                                    setUploadedAnswerFiles(prev => ({ ...prev, [exam.id]: file }));
+                                  }
+                                }} />
+                              </label>
+                              {uploadedAnswerFiles[exam.id] && (
+                                <button
+                                  onClick={() => handleUploadAnswerSheet(exam, uploadedAnswerFiles[exam.id])}
+                                  disabled={isUploading}
+                                  className="w-full py-4 bg-[#c2f575] text-indigo-900 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-xl disabled:opacity-60"
+                                >
+                                  {isUploading ? 'Submitting...' : `Submit: ${uploadedAnswerFiles[exam.id].name}`}
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         ) : exam.type === 'offline' && computedStatus === 'LIVE' ? (
-                          <div className="space-y-4">
-                            <a href={exam.pdfUrl || '#'} target="_blank" rel="noreferrer" download className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-200 transition-all flex items-center justify-center gap-2">
-                              <FileDown size={16} /> Download Question Paper
-                            </a>
-                            <p className="text-center text-[10px] text-gray-400 font-bold px-2">Write your answers and upload them as a PDF during the exam window.</p>
-                            <label className="w-full py-4 bg-[#c2f575] text-indigo-900 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xl">
-                              <Upload size={16} /> Upload Answer Sheet
-                              <input type="file" className="hidden" accept=".pdf" onChange={() => alert("File uploaded successfully. Awaiting grading.")} />
-                            </label>
+                          // Offline: fully physical — paper given and submitted in person
+                          <div className="pt-4 border-t border-gray-50 text-center">
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">This is an offline exam. Attend in person and submit your answer sheet to the tutor.</p>
                           </div>
                         ) : null
                       )}
@@ -1017,31 +1164,70 @@ const StudentZoneView: React.FC = () => {
               </div>
               <div className="flex flex-col md:flex-row gap-12 items-center">
                 <div className="w-64 h-64 rounded-full border-[16px] border-[#c2f575] flex flex-col items-center justify-center shadow-xl relative">
-                  <span className="text-6xl font-black text-[#1A1A4E]">85%</span>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">Overall</span>
+                  {(() => {
+                    const history = studentData?.attendanceHistory || [];
+                    const present = history.filter((h: any) => h.status === 'Present').length;
+                    const total = history.length;
+                    const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+                    return (
+                      <>
+                        <span className="text-6xl font-black text-nunma-forest">{pct}%</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">Overall</span>
+                      </>
+                    );
+                  })()}
                 </div>
                 <div className="flex-1 w-full space-y-4">
-                  {[...Array(5)].map((_, i) => {
-                    const d = new Date();
-                    d.setDate(d.getDate() - i);
-                    const isPresent = i !== 2; // mock one absence
+                  {(() => {
+                    const history = studentData?.attendanceHistory || [];
+                    const sorted = [...history].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    if (sorted.length === 0) {
+                      return <p className="text-gray-400 font-bold">No attendance records found yet.</p>;
+                    }
+                    const displayed = showFullAttendance ? sorted : sorted.slice(0, 5);
                     return (
-                      <div key={i} className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:shadow-md transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className={`p-3 rounded-2xl ${isPresent ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                            {isPresent ? <CheckCircle size={20} /> : <X size={20} />}
-                          </div>
-                          <div>
-                            <p className="font-black text-indigo-900 text-sm">{d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Regular Class</p>
-                          </div>
-                        </div>
-                        <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${isPresent ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                          {isPresent ? 'Present' : 'Absent'}
-                        </span>
-                      </div>
+                      <>
+                        {displayed.map((record: any, i: number) => {
+                          const d = new Date(record.date);
+                          const isPresent = record.status === 'Present';
+                          return (
+                            <div key={i} className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:shadow-md transition-all">
+                              <div className="flex items-center gap-4">
+                                <div className={`p-3 rounded-2xl ${isPresent ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                  {isPresent ? <CheckCircle size={20} /> : <X size={20} />}
+                                </div>
+                                <div>
+                                  <p className="font-black text-indigo-900 text-sm">{formatDate(d)}</p>
+                                  {record.className && (
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{record.className}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${isPresent ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                {record.status}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {sorted.length > 5 && !showFullAttendance && (
+                          <button 
+                            onClick={() => setShowFullAttendance(true)}
+                            className="w-full py-4 text-xs font-black text-indigo-900 bg-indigo-50 hover:bg-indigo-100 rounded-2xl uppercase tracking-widest transition-colors"
+                          >
+                            See Full List
+                          </button>
+                        )}
+                        {showFullAttendance && sorted.length > 5 && (
+                          <button 
+                            onClick={() => setShowFullAttendance(false)}
+                            className="w-full py-4 text-xs font-black text-indigo-900 bg-indigo-50 hover:bg-indigo-100 rounded-2xl uppercase tracking-widest transition-colors"
+                          >
+                            Show Less
+                          </button>
+                        )}
+                      </>
                     );
-                  })}
+                  })()}
                 </div>
               </div>
             </div>
@@ -1072,13 +1258,13 @@ const StudentZoneView: React.FC = () => {
                           </div>
                           <div>
                             <p className="font-black text-indigo-900 text-xl">{exam?.title || 'Assessment'}</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Completed: {new Date(result.completedAt).toLocaleDateString()}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Completed: {formatDate(new Date(result.completedAt))}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-200 pt-4 md:pt-0 md:pl-8">
                           <div className="text-center">
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Score</p>
-                            <p className="font-black text-3xl text-[#1A1A4E]">{result.marks !== undefined ? result.marks : '--'}<span className="text-lg text-gray-400">/{exam?.maxMark || 100}</span></p>
+                            <p className="font-black text-3xl text-nunma-forest">{result.marks !== undefined ? result.marks : '--'}<span className="text-lg text-gray-400">/{exam?.maxMark || 100}</span></p>
                           </div>
                           <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${result.status === 'passed' ? 'bg-green-100 text-green-600' : result.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-500'}`}>
                             {result.status || 'Pending'}
@@ -1200,20 +1386,41 @@ const StudentZoneView: React.FC = () => {
               <p className="text-indigo-900/60 text-xs font-bold uppercase tracking-[0.2em] mb-12">Direct Channel to Mentor</p>
               <button
                 onClick={() => {
-                  if (db) {
+                  if (db && authUser) {
                     const q = query(collection(db, 'conversations'), where('zoneId', '==', zoneId), limit(1));
-                    getDocs(q).then(snapshot => {
+                    getDocs(q).then(async snapshot => {
                       if (!snapshot.empty) {
-                        navigate(`/inbox?tab=community&chatId=${snapshot.docs[0].id}`);
+                        const chatDoc = snapshot.docs[0];
+                        const chatData = chatDoc.data();
+                        if (!chatData.participants?.includes(authUser.uid)) {
+                          await updateDoc(doc(db, 'conversations', chatDoc.id), {
+                            participants: arrayUnion(authUser.uid)
+                          });
+                        }
+                        navigate(`/inbox?tab=community&chatId=${chatDoc.id}`);
                       } else {
-                        navigate('/inbox?tab=community');
+                        // Auto-create fallback
+                        const newChatRef = await addDoc(collection(db, 'conversations'), {
+                          name: zone?.title || "Community Chat",
+                          avatar: zone?.image || "",
+                          type: 'community',
+                          zoneId: zoneId,
+                          participants: [zone?.createdBy || zone?.tutorId, authUser.uid].filter(Boolean),
+                          lastMessage: 'Community Chat created!',
+                          lastMessageTime: serverTimestamp(),
+                          createdAt: serverTimestamp()
+                        });
+                        navigate(`/inbox?tab=community&chatId=${newChatRef.id}`);
                       }
+                    }).catch(e => {
+                      console.error("Error finding or creating chat:", e);
+                      navigate('/inbox?tab=community');
                     });
                   } else {
-                    console.warn("Database not initialized");
+                    console.warn("Database or User not initialized");
                   }
                 }}
-                className="w-full py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.25em] shadow-2xl shadow-indigo-900/20 hover:bg-[#1A1A4E] transition-all active:scale-95"
+                className="w-full py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.25em] shadow-2xl shadow-indigo-900/20 hover:bg-nunma-forest transition-all active:scale-95"
               >
                 Open Zone Chat
               </button>
@@ -1224,7 +1431,7 @@ const StudentZoneView: React.FC = () => {
       </div>
 
       {showCertModal && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[300] flex items-center justify-center bg-[#040457]/80 backdrop-blur-2xl p-6 animate-in fade-in duration-500 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[300] flex items-center justify-center bg-nunma-forest/80 backdrop-blur-2xl p-6 animate-in fade-in duration-500 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-500">
             <div className="w-full md:w-1/2 bg-indigo-900 p-12 text-white flex flex-col justify-between relative overflow-hidden">
               <div className="relative z-10">
@@ -1285,7 +1492,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {isGeneratingCert && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[310] bg-[#040457]/90 backdrop-blur-sm flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[310] bg-nunma-forest/90 backdrop-blur-sm flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300 transition-all`}>
           <div className="w-24 h-24 border-8 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
           <div className="text-center">
             <h2 className="text-white text-3xl font-black tracking-tighter mb-2">Compiling Verifiable Proof</h2>
@@ -1295,13 +1502,13 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {showExamRules && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[400] flex items-center justify-center bg-[#040457]/90 backdrop-blur-xl p-6 animate-in fade-in duration-500 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[400] flex items-center justify-center bg-nunma-forest/90 backdrop-blur-xl p-6 animate-in fade-in duration-500 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 space-y-10 animate-in zoom-in-95 duration-500">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mx-auto shadow-sm">
                 <GraduationCap size={40} />
               </div>
-              <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tight">Proctoring Requirements</h3>
+              <h3 className="text-3xl font-black text-nunma-forest tracking-tight">Proctoring Requirements</h3>
               <p className="text-gray-400 font-medium">Please verify your environment before starting the assessment.</p>
             </div>
             <div className="space-y-6">
@@ -1318,10 +1525,28 @@ const StudentZoneView: React.FC = () => {
               <button onClick={() => setShowExamRules(false)} className="flex-1 py-5 bg-gray-50 text-gray-300 rounded-3xl font-black uppercase text-[10px] tracking-widest">Decline</button>
               <button
                 onClick={() => {
-                  setHasExplicitConsent(true); // Internal state bypass once modal is done
-                  handleStartExam(activeExam); // activeExam should be set
+                  setShowExamRules(false);
+                  setHasExplicitConsent(true);
+                  // Call handleStartExam directly with activeExam, bypassing the consent check
+                  // since the user just acknowledged via this modal
+                  if (!activeExam) return;
+                  const exam = activeExam;
+                  setExamCurrentQuestion(0);
+                  if (exam.type === 'online-test') setCameraStatus('on');
+                  const now = new Date();
+                  const durationMins = exam.duration || 30;
+                  const endTime = new Date(now.getTime() + durationMins * 60000);
+                  setExamEndTime(endTime);
+                  if (zoneId && studentData) {
+                    updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
+                      activeExamId: exam.id,
+                      currentExamWarnings: 0,
+                      examStartedAt: now.toISOString(),
+                      examEndsAt: endTime.toISOString()
+                    }).catch(e => console.error('Failed to sync exam start', e));
+                  }
                 }}
-                className="flex-[2] py-5 bg-[#1A1A4E] text-white rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-2xl"
+                className="flex-[2] py-5 bg-nunma-forest text-white rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-2xl"
               >
                 Acknowledge & Start
               </button>
@@ -1331,13 +1556,13 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {showConsentModal && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex items-center justify-center bg-[#040457]/95 backdrop-blur-2xl p-6 animate-in fade-in duration-500 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex items-center justify-center bg-nunma-forest/95 backdrop-blur-2xl p-6 animate-in fade-in duration-500 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 space-y-10 animate-in zoom-in-95 duration-500">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-[#c2f575]/20 rounded-[2rem] flex items-center justify-center text-indigo-900 mx-auto shadow-sm">
                 <ShieldCheck size={40} className="text-indigo-900" />
               </div>
-              <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tight">AI & Proctoring Consent</h3>
+              <h3 className="text-3xl font-black text-nunma-forest tracking-tight">AI & Proctoring Consent</h3>
               <p className="text-gray-400 font-medium">To maintain assessment integrity, we require your explicit consent for the following:</p>
             </div>
             <div className="space-y-6">
@@ -1378,12 +1603,12 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {showCheatWarningModal && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex items-center justify-center bg-[#040457]/95 backdrop-blur-2xl p-6 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex items-center justify-center bg-nunma-forest/95 backdrop-blur-2xl p-6 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 text-center space-y-8 animate-in zoom-in-95 duration-300">
             <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto animate-pulse">
               <AlertTriangle size={48} />
             </div>
-            <h3 className="text-3xl font-black text-[#1A1A4E]">Tab Switching Detected</h3>
+            <h3 className="text-3xl font-black text-nunma-forest">Tab Switching Detected</h3>
             <p className="text-gray-500 font-medium text-lg leading-relaxed">
               You have {3 - cheatViolations} warning(s) left before your exam is automatically terminated.
             </p>
@@ -1418,11 +1643,11 @@ const StudentZoneView: React.FC = () => {
         >
           <div className="flex justify-between items-center mb-12">
             <div className="flex items-center gap-6">
-              <div className="w-16 h-16 bg-[#1A1A4E] rounded-2xl flex items-center justify-center text-white shadow-xl">
+              <div className="w-16 h-16 bg-nunma-forest rounded-2xl flex items-center justify-center text-white shadow-xl">
                 <Radio size={32} className="animate-pulse" />
               </div>
               <div>
-                <h2 className="text-3xl font-black text-[#1A1A4E] tracking-tight uppercase">{activeExam.title}</h2>
+                <h2 className="text-3xl font-black text-nunma-forest tracking-tight uppercase">{activeExam.title}</h2>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Proctored Assessment Session</p>
               </div>
             </div>
@@ -1446,8 +1671,8 @@ const StudentZoneView: React.FC = () => {
             <div className="flex-1 bg-gray-50 rounded-[4rem] border border-gray-100 p-16 flex flex-col overflow-y-auto custom-scrollbar">
               <div className="max-w-3xl mx-auto w-full space-y-12">
                 <div className="space-y-4">
-                  <span className="text-[10px] font-black bg-[#1A1A4E] text-white px-4 py-1.5 rounded-full uppercase tracking-widest">Question {examCurrentQuestion + 1} of {activeExam.questions.length}</span>
-                  <h3 className="text-4xl font-black text-[#1A1A4E] tracking-tight leading-tight">{activeExam.questions[examCurrentQuestion].question}</h3>
+                  <span className="text-[10px] font-black bg-nunma-forest text-white px-4 py-1.5 rounded-full uppercase tracking-widest">Question {examCurrentQuestion + 1} of {activeExam.questions.length}</span>
+                  <h3 className="text-4xl font-black text-nunma-forest tracking-tight leading-tight">{activeExam.questions[examCurrentQuestion].question}</h3>
                 </div>
 
                 <div className="grid grid-cols-1 gap-6">
@@ -1455,7 +1680,7 @@ const StudentZoneView: React.FC = () => {
                     <button
                       key={idx}
                       onClick={() => setExamAnswers({ ...examAnswers, [activeExam.questions[examCurrentQuestion].id]: idx })}
-                      className={`w-full p-8 rounded-[2.5rem] border-2 text-left transition-all flex items-center justify-between group ${examAnswers[activeExam.questions[examCurrentQuestion].id] === idx ? 'bg-[#1A1A4E] border-[#1A1A4E] text-white shadow-2xl scale-[1.02]' : 'bg-white border-transparent hover:border-indigo-100 text-gray-500'}`}
+                      className={`w-full p-8 rounded-[2.5rem] border-2 text-left transition-all flex items-center justify-between group ${examAnswers[activeExam.questions[examCurrentQuestion].id] === idx ? 'bg-nunma-forest border-nunma-forest text-white shadow-2xl scale-[1.02]' : 'bg-white border-transparent hover:border-indigo-100 text-gray-500'}`}
                     >
                       <div className="flex items-center gap-6">
                         <span className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${examAnswers[activeExam.questions[examCurrentQuestion].id] === idx ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-300'}`}>
@@ -1479,7 +1704,7 @@ const StudentZoneView: React.FC = () => {
                   {examCurrentQuestion === activeExam.questions.length - 1 ? (
                     <button onClick={handleSubmitExam} className="px-14 py-5 bg-[#c2f575] text-indigo-900 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-[#c2f575]/20 hover:brightness-110 active:scale-95 transition-all">Submit Assessment</button>
                   ) : (
-                    <button onClick={() => setExamCurrentQuestion(prev => prev + 1)} className="px-14 py-5 bg-[#1A1A4E] text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all">Next Question</button>
+                    <button onClick={() => setExamCurrentQuestion(prev => prev + 1)} className="px-14 py-5 bg-nunma-forest text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all">Next Question</button>
                   )}
                 </div>
               </div>
@@ -1519,8 +1744,8 @@ const StudentZoneView: React.FC = () => {
                   <Clock size={32} />
                 </div>
                 <div>
-                  <h4 className="text-xl font-black text-[#1A1A4E] mb-2 uppercase tracking-tight">Time Remaining</h4>
-                  <p className="text-4xl font-black text-[#1A1A4E] tabular-nums">{formatTime(examTimeRemaining)}</p>
+                  <h4 className="text-xl font-black text-nunma-forest mb-2 uppercase tracking-tight">Time Remaining</h4>
+                  <p className="text-4xl font-black text-nunma-forest tabular-nums">{formatTime(examTimeRemaining)}</p>
                 </div>
                 <div className="pt-8 border-t border-gray-50 text-[10px] font-black text-gray-300 uppercase tracking-widest leading-relaxed">
                   Your session will auto-submit <br /> when the timer reaches zero.
@@ -1564,7 +1789,7 @@ const StudentZoneView: React.FC = () => {
             <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8 ${postExamTimer > 0 && postExamTimer < 300 ? 'bg-red-500 text-white animate-pulse' : 'bg-red-100 text-red-600'}`}>
               <Clock size={48} />
             </div>
-            <h3 className="text-3xl font-black text-[#1A1A4E] tracking-tight mb-4">Exam Concluded</h3>
+            <h3 className="text-3xl font-black text-nunma-forest tracking-tight mb-4">Exam Concluded</h3>
             <p className="text-gray-500 font-medium mb-8">Scan your answer sheets and upload them as a single PDF. You have strictly 10 minutes before submissions are locked.</p>
             
             <div className={`p-6 rounded-3xl mb-10 transition-colors duration-1000 flex flex-col items-center ${postExamTimer > 0 && postExamTimer < 300 ? 'bg-red-500 animate-pulse text-white shadow-xl shadow-red-500/30' : 'bg-gray-100/50 text-indigo-900'}`}>
@@ -1583,7 +1808,7 @@ const StudentZoneView: React.FC = () => {
             <button
               disabled={!uploadedAnswerFiles || postExamTimer === 0 || isUploading}
               onClick={handleUploadAnswerSheet}
-              className="w-full py-6 bg-[#1A1A4E] text-white rounded-[2rem] font-black uppercase text-[11px] tracking-[0.2em] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
+              className="w-full py-6 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-[11px] tracking-[0.2em] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
             >
               {isUploading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"/> : null}
               {isUploading ? 'Uploading...' : 'Submit Answers'}

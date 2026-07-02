@@ -198,13 +198,13 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
     const selectedSubmission = submissions.find(s => s.studentId === selectedStudentId);
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/90 backdrop-blur-2xl animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-nunma-forest/90 backdrop-blur-2xl animate-in fade-in duration-300">
             <div className="bg-white rounded-[4rem] w-full max-w-7xl shadow-3xl overflow-hidden p-8 max-h-[95vh] flex flex-col animate-in zoom-in-95 duration-500 relative">
 
                 {/* Header */}
                 <div className="flex justify-between items-center mb-8 px-4">
                     <div>
-                        <h3 className="text-4xl font-black text-[#040457] tracking-tight">{exam.title} <span className="text-gray-300">/ Grading</span></h3>
+                        <h3 className="text-4xl font-black text-nunma-forest tracking-tight">{exam.title} <span className="text-gray-300">/ Grading</span></h3>
                         <p className="text-sm text-gray-400 mt-2 font-medium">Review submissions, enter marks manually, or bulk upload scores.</p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -217,7 +217,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                         />
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="px-6 py-4 bg-[#c2f575]/20 text-[#6ea812] border-2 border-[#c2f575] hover:bg-[#c2f575] hover:text-[#040457] rounded-2xl font-black uppercase text-[12px] tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2"
+                            className="px-6 py-4 bg-[#c2f575]/20 text-[#6ea812] border-2 border-[#c2f575] hover:bg-[#c2f575] hover:text-nunma-forest rounded-2xl font-black uppercase text-[12px] tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2"
                         >
                             <FileSpreadsheet size={18} /> Bulk Upload CSV
                         </button>
@@ -233,7 +233,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                     {/* Left Sidebar: Student List */}
                     <div className="w-1/3 flex flex-col bg-gray-50 rounded-[3rem] overflow-hidden border border-gray-100 relative">
                         <div className="p-6 border-b border-gray-200/50 bg-white/50 sticky top-0 backdrop-blur-md z-10 flex flex-col gap-4">
-                            <h4 className="font-black text-[#040457] text-lg">Enrolled Students</h4>
+                            <h4 className="font-black text-nunma-forest text-lg">Enrolled Students</h4>
                             <div className="relative">
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
@@ -241,7 +241,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                                     placeholder="Search by name or email..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-white border-2 border-transparent focus:border-[#c2f575] rounded-xl pl-12 pr-4 py-3 text-sm font-bold text-[#040457] outline-none transition-colors shadow-sm"
+                                    className="w-full bg-white border-2 border-transparent focus:border-[#c2f575] rounded-xl pl-12 pr-4 py-3 text-sm font-bold text-nunma-forest outline-none transition-colors shadow-sm"
                                 />
                             </div>
                         </div>
@@ -260,7 +260,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                                             className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all border-2 text-left ${isSelected ? 'bg-white border-[#c2f575] shadow-sm scale-[1.02]' : 'bg-transparent border-transparent hover:bg-white hover:shadow-sm'}`}
                                         >
                                             <div className="flex flex-col overflow-hidden">
-                                                <span className={`font-bold truncate ${isSelected ? 'text-[#040457]' : 'text-gray-600'}`}>{student.name || student.email}</span>
+                                                <span className={`font-bold truncate ${isSelected ? 'text-nunma-forest' : 'text-gray-600'}`}>{student.name || student.email}</span>
                                                 <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mt-1">
                                                     {sub?.answerSheetUrl ? 'Script Uploaded' : 'No Script'}
                                                 </span>
@@ -292,7 +292,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
 
                                 <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-100">
                                     <div>
-                                        <h2 className="text-3xl font-black text-[#040457]">{selectedStudent.name || selectedStudent.email}</h2>
+                                        <h2 className="text-3xl font-black text-nunma-forest">{selectedStudent.name || selectedStudent.email}</h2>
                                         <div className="flex items-center gap-3 mt-3">
                                             <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${selectedSubmission?.status === 'graded' || gradingState[selectedStudent.id]?.marks !== '' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
                                                 {selectedSubmission?.status === 'graded' || gradingState[selectedStudent.id]?.marks !== '' ? 'Graded' : 'Pending Review'}
@@ -347,7 +347,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                                                     ...prev,
                                                     [selectedStudent.id]: { ...prev[selectedStudent.id], marks: e.target.value }
                                                 }))}
-                                                className="w-32 bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-4 text-3xl font-black text-[#040457] outline-none transition-all"
+                                                className="w-32 bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-4 text-3xl font-black text-nunma-forest outline-none transition-all"
                                             />
                                             <span className="text-2xl font-black text-gray-300">/ {exam.maxMark}</span>
                                         </div>
@@ -362,7 +362,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                                                 ...prev,
                                                 [selectedStudent.id]: { ...prev[selectedStudent.id], feedback: e.target.value }
                                             }))}
-                                            className="w-full bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-5 text-sm font-bold text-[#040457] outline-none resize-none h-40 custom-scrollbar transition-all"
+                                            className="w-full bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-5 text-sm font-bold text-nunma-forest outline-none resize-none h-40 custom-scrollbar transition-all"
                                         />
                                     </div>
                                 </div>
@@ -370,7 +370,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                                 <div className="pt-6 mt-auto">
                                     <button
                                         onClick={() => handleGradeSubmit(selectedStudent.id)}
-                                        className="w-full py-5 bg-[#040457] text-[#c2f575] rounded-2xl font-black uppercase text-[13px] tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                        className="w-full py-5 bg-nunma-forest text-[#c2f575] rounded-2xl font-black uppercase text-[13px] tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3"
                                     >
                                         <Check size={20} /> Save Score & Notify Student
                                     </button>

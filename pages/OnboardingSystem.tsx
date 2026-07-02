@@ -246,16 +246,16 @@ const OnboardingSystem: React.FC = () => {
     if (!user) return null;
 
     return (
-        <div className="relative min-h-[100dvh] bg-[#fbfbfb] flex flex-col items-center justify-center p-4 selection:bg-[#c2f575] selection:text-[#040457]">
+        <div className="relative min-h-[100dvh] bg-[#fbfbfb] flex flex-col items-center justify-center p-4 selection:bg-[#c2f575] selection:text-nunma-forest">
             <Toaster position="top-center" />
             {showConfetti && <Confetti recycle={false} numberOfPieces={500} />}
 
             {/* Top Left Branding */}
             <div className="absolute top-8 left-8 flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#040457] rounded-xl flex items-center justify-center shadow-lg">
+                <div className="w-10 h-10 bg-nunma-forest rounded-xl flex items-center justify-center shadow-lg">
                     <img src="/assets/logo-icon.png" alt="Logo" className="w-6 h-6 object-contain filter brightness-0 invert" />
                 </div>
-                <span className="text-xl font-black tracking-tighter text-[#040457]">nunma</span>
+                <span className="text-xl font-black tracking-tighter text-nunma-forest">nunma</span>
             </div>
 
             <div className="w-full max-w-2xl bg-white border border-gray-100 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] p-8 md:p-12 animate-in fade-in zoom-in-95 duration-700">
@@ -264,11 +264,11 @@ const OnboardingSystem: React.FC = () => {
                 {step === 1 && (
                     <div className="space-y-10 animate-in slide-in-from-bottom-8 duration-500">
                         <div className="text-center space-y-4">
-                            <div className="inline-flex items-center gap-2 bg-[#c2f575]/20 text-[#040457] text-xs font-black uppercase tracking-widest px-4 py-2 rounded-full mb-2">
-                                <span className="w-2 h-2 rounded-full bg-[#040457] animate-pulse"></span>
+                            <div className="inline-flex items-center gap-2 bg-[#c2f575]/20 text-nunma-forest text-xs font-black uppercase tracking-widest px-4 py-2 rounded-full mb-2">
+                                <span className="w-2 h-2 rounded-full bg-nunma-forest animate-pulse"></span>
                                 Ecosystem Initialization
                             </div>
-                            <h1 className="text-4xl md:text-5xl font-black text-[#040457] tracking-tight">Choose your path.</h1>
+                            <h1 className="text-4xl md:text-5xl font-black text-nunma-forest tracking-tight">Choose your path.</h1>
                             <p className="text-gray-500 text-lg">Select how you want to interact within the Nunma network today.</p>
                         </div>
 
@@ -278,22 +278,22 @@ const OnboardingSystem: React.FC = () => {
                                 className="group relative flex flex-col items-start p-8 rounded-[2rem] border-2 border-transparent bg-gray-50 hover:bg-white hover:border-[#c2f575] hover:shadow-2xl hover:shadow-[#c2f575]/20 hover:-translate-y-1 transition-all text-left overflow-hidden z-10"
                             >
                                 <div className="absolute -right-10 -top-10 w-32 h-32 bg-[#c2f575]/30 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700 -z-10"></div>
-                                <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 text-[#040457]">
+                                <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 text-nunma-forest">
                                     <BookOpen strokeWidth={2.5} size={32} />
                                 </div>
-                                <h3 className="text-2xl font-black text-[#040457] mb-2 tracking-tight group-hover:text-[#040457] transition-colors">I want to Learn</h3>
-                                <p className="text-gray-500 font-medium">Join as a <span className="text-[#040457] font-black">Mana</span> and connect with world-class experts.</p>
-                                <div className="mt-8 flex items-center gap-2 text-[#040457] font-bold text-sm tracking-widest uppercase opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
+                                <h3 className="text-2xl font-black text-nunma-forest mb-2 tracking-tight group-hover:text-nunma-forest transition-colors">I want to Learn</h3>
+                                <p className="text-gray-500 font-medium">Join as a <span className="text-nunma-forest font-black">Mana</span> and connect with world-class experts.</p>
+                                <div className="mt-8 flex items-center gap-2 text-nunma-forest font-bold text-sm tracking-widest uppercase opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
                                     Select Mana <ArrowRight size={16} />
                                 </div>
                             </button>
 
                             <button
                                 onClick={() => onSelectRole(UserRole.THALA)}
-                                className="group relative flex flex-col items-start p-8 rounded-[2rem] border-2 border-transparent bg-[#040457] hover:-translate-y-1 hover:shadow-2xl hover:shadow-[#040457]/40 transition-all text-left overflow-hidden z-10"
+                                className="group relative flex flex-col items-start p-8 rounded-[2rem] border-2 border-transparent bg-nunma-forest hover:-translate-y-1 hover:shadow-2xl hover:shadow-nunma-forest/40 transition-all text-left overflow-hidden z-10"
                             >
                                 <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700 -z-10"></div>
-                                <div className="w-16 h-16 bg-[#c2f575] rounded-2xl shadow-sm flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 text-[#040457]">
+                                <div className="w-16 h-16 bg-[#c2f575] rounded-2xl shadow-sm flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 text-nunma-forest">
                                     <GraduationCap strokeWidth={2.5} size={32} />
                                 </div>
                                 <h3 className="text-2xl font-black text-white mb-2 tracking-tight group-hover:text-[#c2f575] transition-colors">I want to Teach</h3>
@@ -311,10 +311,10 @@ const OnboardingSystem: React.FC = () => {
                     <div className="animate-in slide-in-from-right-8 duration-500">
                         <div className="mb-10 flex items-start justify-between">
                             <div>
-                                <h2 className="text-3xl font-black text-[#040457] tracking-tight mb-2">Mana Profile</h2>
+                                <h2 className="text-3xl font-black text-nunma-forest tracking-tight mb-2">Mana Profile</h2>
                                 <p className="text-gray-500">Complete your profile to discover personalized content.</p>
                             </div>
-                            <div className="w-12 h-12 bg-[#c2f575]/20 rounded-xl flex items-center justify-center text-[#040457]">
+                            <div className="w-12 h-12 bg-[#c2f575]/20 rounded-xl flex items-center justify-center text-nunma-forest">
                                 <BookOpen size={24} />
                             </div>
                         </div>
@@ -332,7 +332,7 @@ const OnboardingSystem: React.FC = () => {
                                         e.target.value = digitsOnly;
                                         studentForm.setValue('phoneNumber', digitsOnly);
                                     }}
-                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${studentForm.formState.errors.phoneNumber ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${studentForm.formState.errors.phoneNumber ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                 />
                                 {studentForm.formState.errors.phoneNumber && (
                                     <p className="text-red-500 text-xs font-bold pl-2">{studentForm.formState.errors.phoneNumber.message}</p>
@@ -343,7 +343,7 @@ const OnboardingSystem: React.FC = () => {
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Education Level</label>
                                 <select
                                     {...studentForm.register('educationLevel')}
-                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all appearance-none cursor-pointer ${studentForm.formState.errors.educationLevel ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all appearance-none cursor-pointer ${studentForm.formState.errors.educationLevel ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                 >
                                     <option value="" disabled>Select your level</option>
                                     <option value="K-12">K-12 Schooling</option>
@@ -367,7 +367,7 @@ const OnboardingSystem: React.FC = () => {
                                                 className="peer sr-only"
                                                 {...studentForm.register('primaryInterests')}
                                             />
-                                            <div className="py-3 px-4 text-center rounded-xl border-2 border-gray-100 bg-gray-50 text-gray-500 font-bold text-sm transition-all peer-checked:bg-[#c2f575] peer-checked:border-[#c2f575] peer-checked:text-[#040457]">
+                                            <div className="py-3 px-4 text-center rounded-xl border-2 border-gray-100 bg-gray-50 text-gray-500 font-bold text-sm transition-all peer-checked:bg-[#c2f575] peer-checked:border-[#c2f575] peer-checked:text-nunma-forest">
                                                 {interest}
                                             </div>
                                         </label>
@@ -389,7 +389,7 @@ const OnboardingSystem: React.FC = () => {
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    className="flex-1 py-4 bg-[#040457] text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#040457]/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-[#040457]/40 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:filter-none disabled:transform-none"
+                                    className="flex-1 py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-nunma-forest/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-nunma-forest/40 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:filter-none disabled:transform-none"
                                 >
                                     {isSubmitting ? 'Finalizing Profile...' : 'Complete Profile'} <CheckCircle2 size={20} className="text-[#c2f575]" />
                                 </button>
@@ -403,22 +403,22 @@ const OnboardingSystem: React.FC = () => {
                     <div className="animate-in slide-in-from-right-8 duration-500">
                         <div className="mb-8 flex items-start justify-between">
                             <div>
-                                <h2 className="text-3xl font-black text-[#040457] tracking-tight mb-2">Thala Profile</h2>
+                                <h2 className="text-3xl font-black text-nunma-forest tracking-tight mb-2">Thala Profile</h2>
                                 <p className="text-gray-500 mb-3">Set up your profile and payout details to get started.</p>
-                                <button type="button" onClick={() => onSelectRole(UserRole.STUDENT)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-[#040457] rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-2">
+                                <button type="button" onClick={() => onSelectRole(UserRole.STUDENT)} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-nunma-forest rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-2">
                                     <BookOpen size={14} /> Switch to Student Mode
                                 </button>
                             </div>
-                            <div className="w-12 h-12 bg-[#040457] rounded-xl flex items-center justify-center text-[#c2f575]">
+                            <div className="w-12 h-12 bg-nunma-forest rounded-xl flex items-center justify-center text-[#c2f575]">
                                 <GraduationCap size={24} />
                             </div>
                         </div>
 
                         <form onSubmit={tutorForm.handleSubmit(onSubmitTutor)} className="space-y-6">
-                            <div className="bg-[#040457]/5 border-2 border-[#040457]/10 p-4 rounded-[1.5rem] flex gap-4 items-start shadow-sm">
-                                <div className="text-[#040457] mt-1 shrink-0"><ShieldCheck size={20} className="w-6 h-6" /></div>
+                            <div className="bg-nunma-forest/5 border-2 border-nunma-forest/10 p-4 rounded-[1.5rem] flex gap-4 items-start shadow-sm">
+                                <div className="text-nunma-forest mt-1 shrink-0"><ShieldCheck size={20} className="w-6 h-6" /></div>
                                 <div>
-                                    <h5 className="font-black text-[#040457] text-sm mb-1 uppercase tracking-widest">RBI Compliance Message</h5>
+                                    <h5 className="font-black text-nunma-forest text-sm mb-1 uppercase tracking-widest">RBI Compliance Message</h5>
                                     <p className="text-gray-600 text-xs font-medium leading-relaxed">
                                         Data is securely sent to Razorpay for RBI compliance and marketplace payout verification. We do not store your PAN or full Bank Account details in our database.
                                     </p>
@@ -429,12 +429,12 @@ const OnboardingSystem: React.FC = () => {
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Business Type</label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <label className={`cursor-pointer border-2 rounded-2xl p-4 flex items-center gap-3 transition-all ${tutorForm.watch("businessType") === "individual" ? "border-[#c2f575] bg-[#c2f575]/10" : "border-gray-100 bg-white hover:border-gray-200"}`}>
-                                        <input type="radio" value="individual" {...tutorForm.register("businessType")} className="w-5 h-5 text-[#040457] border-gray-300 focus:ring-[#c2f575]" />
-                                        <span className="font-bold text-[#040457] text-sm">Individual Tutor (PAN)</span>
+                                        <input type="radio" value="individual" {...tutorForm.register("businessType")} className="w-5 h-5 text-nunma-forest border-gray-300 focus:ring-[#c2f575]" />
+                                        <span className="font-bold text-nunma-forest text-sm">Individual Tutor (PAN)</span>
                                     </label>
                                     <label className={`cursor-pointer border-2 rounded-2xl p-4 flex items-center gap-3 transition-all ${tutorForm.watch("businessType") === "registered" ? "border-[#c2f575] bg-[#c2f575]/10" : "border-gray-100 bg-white hover:border-gray-200"}`}>
-                                        <input type="radio" value="registered" {...tutorForm.register("businessType")} className="w-5 h-5 text-[#040457] border-gray-300 focus:ring-[#c2f575]" />
-                                        <span className="font-bold text-[#040457] text-sm">Registered Academy (GST)</span>
+                                        <input type="radio" value="registered" {...tutorForm.register("businessType")} className="w-5 h-5 text-nunma-forest border-gray-300 focus:ring-[#c2f575]" />
+                                        <span className="font-bold text-nunma-forest text-sm">Registered Academy (GST)</span>
                                     </label>
                                 </div>
                             </div>
@@ -447,7 +447,7 @@ const OnboardingSystem: React.FC = () => {
                                     type="text"
                                     placeholder="Legal Name"
                                     {...tutorForm.register('legalName')}
-                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.legalName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${tutorForm.formState.errors.legalName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                 />
                                 {tutorForm.formState.errors.legalName && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.legalName.message}</p>}
                             </div>
@@ -464,7 +464,7 @@ const OnboardingSystem: React.FC = () => {
                                         e.target.value = digitsOnly;
                                         tutorForm.setValue('phone', digitsOnly);
                                     }}
-                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.phone ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${tutorForm.formState.errors.phone ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                 />
                                 {tutorForm.formState.errors.phone && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.phone.message}</p>}
                             </div>
@@ -539,14 +539,14 @@ const OnboardingSystem: React.FC = () => {
                             </div>
                             
                             <div className="space-y-4">
-                                <h4 className="text-[#040457] font-black text-xs uppercase tracking-widest px-2">Residential Address</h4>
+                                <h4 className="text-nunma-forest font-black text-xs uppercase tracking-widest px-2">Residential Address</h4>
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Street Address</label>
                                     <input
                                         type="text"
                                         placeholder="Apartment, Studio, or Floor"
                                         {...tutorForm.register('street')}
-                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.street ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${tutorForm.formState.errors.street ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                     />
                                     {tutorForm.formState.errors.street && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.street.message}</p>}
                                 </div>
@@ -556,7 +556,7 @@ const OnboardingSystem: React.FC = () => {
                                         type="text"
                                         placeholder="Area, Locality, or Landmark"
                                         {...tutorForm.register('street2')}
-                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.street2 ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                        className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${tutorForm.formState.errors.street2 ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                     />
                                     {tutorForm.formState.errors.street2 && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.street2.message}</p>}
                                 </div>
@@ -567,7 +567,7 @@ const OnboardingSystem: React.FC = () => {
                                             type="text"
                                             placeholder="City"
                                             {...tutorForm.register('city')}
-                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.city ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${tutorForm.formState.errors.city ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                         />
                                         {tutorForm.formState.errors.city && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.city.message}</p>}
                                     </div>
@@ -575,7 +575,7 @@ const OnboardingSystem: React.FC = () => {
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">State</label>
                                         <select
                                             {...tutorForm.register('state')}
-                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all appearance-none cursor-pointer ${tutorForm.formState.errors.state ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all appearance-none cursor-pointer ${tutorForm.formState.errors.state ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                         >
                                             <option value="" disabled>Select State</option>
                                             <option value="Andhra Pradesh">Andhra Pradesh</option>
@@ -627,7 +627,7 @@ const OnboardingSystem: React.FC = () => {
                                                     tutorForm.setValue('pinCode', digitsOnly);
                                                 }
                                             })}
-                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-[#040457] outline-none transition-all ${tutorForm.formState.errors.pinCode ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                            className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${tutorForm.formState.errors.pinCode ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                         />
                                         {tutorForm.formState.errors.pinCode && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.pinCode.message}</p>}
                                     </div>
@@ -638,7 +638,7 @@ const OnboardingSystem: React.FC = () => {
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Areas of Expertise (Max 3)</label>
                                 <div className={`flex flex-wrap items-center gap-2 w-full bg-gray-50 border-2 focus-within:bg-white rounded-[1.25rem] px-4 py-3 min-h-[60px] transition-all ${tutorForm.formState.errors.expertise ? 'border-red-400' : 'border-transparent focus-within:border-[#c2f575]'}`}>
                                     {(tutorForm.watch("expertise") || []).map((tag, i) => (
-                                        <div key={i} className="flex items-center gap-1 bg-[#040457] text-white px-3 py-1.5 rounded-full text-xs font-bold">
+                                        <div key={i} className="flex items-center gap-1 bg-nunma-forest text-white px-3 py-1.5 rounded-full text-xs font-bold">
                                             {tag}
                                             <button type="button" onClick={() => {
                                                 const current = tutorForm.getValues("expertise") || [];
@@ -664,7 +664,7 @@ const OnboardingSystem: React.FC = () => {
                                                 }
                                             }}
                                             placeholder={(tutorForm.watch("expertise") || []).length === 0 ? "Type and press Enter (e.g. Calculus)" : "Add another..."}
-                                            className="flex-1 bg-transparent min-w-[150px] outline-none text-[#040457] font-bold text-sm"
+                                            className="flex-1 bg-transparent min-w-[150px] outline-none text-nunma-forest font-bold text-sm"
                                         />
                                     )}
                                 </div>
@@ -684,7 +684,7 @@ const OnboardingSystem: React.FC = () => {
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    className="flex-1 py-4 bg-[#c2f575] text-[#040457] border-2 border-transparent focus:border-[#040457] rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#c2f575]/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-[#c2f575]/40 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:transform-none"
+                                    className="flex-1 py-4 bg-[#c2f575] text-nunma-forest border-2 border-transparent focus:border-nunma-forest rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-[#c2f575]/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-[#c2f575]/40 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:transform-none"
                                 >
                                     {isSubmitting ? 'Creating Profile...' : 'Launch Profile'} <ChevronRight size={20} strokeWidth={3} />
                                 </button>

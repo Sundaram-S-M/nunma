@@ -57,6 +57,7 @@ import {
 
 import PhotoAdjustModal from '../components/PhotoAdjustModal';
 import { UserRole } from '../types';
+import { formatDate } from '../utils/dateUtils';
 
 
 // Sub-components moved outside to fix focus bug
@@ -72,7 +73,7 @@ const ProfileHeader = ({
 }: any) => (
   <div className="flex flex-col w-full relative">
     {/* Dark Banner Section */}
-    <div className="bg-[#1A1A4E] relative h-[260px] md:h-[320px] flex flex-col justify-end pb-8">
+    <div className="bg-nunma-forest relative h-[260px] md:h-[320px] flex flex-col justify-end pb-8">
       <div className="absolute inset-0 opacity-40">
         {profileUser.banner ? (
           <img src={profileUser.banner} className="w-full h-full object-cover" alt="Banner" />
@@ -86,7 +87,7 @@ const ProfileHeader = ({
         <div className="absolute top-6 right-6 z-30">
           <button
             onClick={() => bannerInputRef.current?.click()}
-            className="px-6 py-2.5 bg-black/30 backdrop-blur-md border border-white/20 rounded-lg text-white hover:bg-white hover:text-[#1A1A4E] transition-all shadow-lg flex items-center gap-2"
+            className="px-6 py-2.5 bg-black/30 backdrop-blur-md border border-white/20 rounded-lg text-white hover:bg-white hover:text-nunma-forest transition-all shadow-lg flex items-center gap-2"
           >
             <Camera size={16} />
             <span className="text-xs font-bold uppercase tracking-widest">Update Banner</span>
@@ -118,7 +119,7 @@ const ProfileHeader = ({
                     {isMe && (
                       <button 
                         onClick={() => setIsEditing(true)}
-                        className="p-2 bg-white/10 backdrop-blur-md rounded-lg opacity-0 group-hover/name:opacity-100 transition-all hover:bg-white hover:text-[#1A1A4E]"
+                        className="p-2 bg-white/10 backdrop-blur-md rounded-lg opacity-0 group-hover/name:opacity-100 transition-all hover:bg-white hover:text-nunma-forest"
                       >
                         <Edit2 size={20} />
                       </button>
@@ -143,26 +144,26 @@ const ProfileHeader = ({
               {isMe ? (
                 <>
                   {isEditing ? (
-                    <button onClick={handleSaveProfile} className="px-8 py-3 bg-white text-[#1A1A4E] rounded-xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
+                    <button onClick={handleSaveProfile} className="px-8 py-3 bg-white text-nunma-forest rounded-xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
                       Save Profile
                     </button>
                   ) : (
-                    <button onClick={() => setIsEditing(true)} className="px-8 py-3 bg-[#403e6a]/60 border border-white/10 backdrop-blur-md text-white rounded-xl font-black uppercase text-[11px] tracking-widest hover:bg-white hover:text-[#1A1A4E] transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
+                    <button onClick={() => setIsEditing(true)} className="px-8 py-3 bg-[#403e6a]/60 border border-white/10 backdrop-blur-md text-white rounded-xl font-black uppercase text-[11px] tracking-widest hover:bg-white hover:text-nunma-forest transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
                       Edit Profile
                     </button>
                   )}
                   {role === UserRole.THALA && (
-                    <button onClick={() => setShowProductModal(true)} className="px-8 py-3 bg-[#c2f575] text-[#1A1A4E] rounded-xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
+                    <button onClick={() => setShowProductModal(true)} className="px-8 py-3 bg-[#c2f575] text-nunma-forest rounded-xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
                       <ShoppingBag size={14} /> List Product
                     </button>
                   )}
                 </>
               ) : (
                 <>
-                  <button onClick={() => navigate(`/inbox?userId=${profileUser.uid}`)} className="px-8 py-3 bg-[#403e6a]/60 border border-white/10 backdrop-blur-md text-white rounded-xl font-black uppercase text-[11px] tracking-widest hover:bg-white hover:text-[#1A1A4E] transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
+                  <button onClick={() => navigate(`/inbox?userId=${profileUser.uid}`)} className="px-8 py-3 bg-[#403e6a]/60 border border-white/10 backdrop-blur-md text-white rounded-xl font-black uppercase text-[11px] tracking-widest hover:bg-white hover:text-nunma-forest transition-all shadow-xl flex items-center gap-2 whitespace-nowrap">
                     <MessageSquare size={14} /> Message
                   </button>
-                  <button onClick={handleFollow} className={`px-10 py-3 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all flex items-center gap-2 shadow-xl whitespace-nowrap ${isFollowing ? 'bg-white/10 text-white border border-white/20 hover:bg-red-500/80 hover:border-red-500' : 'bg-[#c2f575] text-[#1A1A4E] hover:brightness-110'}`}>
+                  <button onClick={handleFollow} className={`px-10 py-3 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all flex items-center gap-2 shadow-xl whitespace-nowrap ${isFollowing ? 'bg-white/10 text-white border border-white/20 hover:bg-red-500/80 hover:border-red-500' : 'bg-[#c2f575] text-nunma-forest hover:brightness-110'}`}>
                     {isFollowing ? <><UserCheck size={14} /> Following</> : <><UserPlus size={14} /> Follow</>}
                   </button>
                 </>
@@ -181,8 +182,8 @@ const ProfileHeader = ({
 
           {/* Avatar - Negative Margin makes it overlap perfectly */}
           <div className="relative group shrink-0 -mt-[80px] md:-mt-[110px] mb-6 md:mb-0 md:mr-8 z-30">
-            <div className={`w-36 h-36 md:w-44 md:h-44 rounded-3xl md:rounded-[2.2rem] p-[5px] bg-gradient-to-tr from-[#c2f575] via-[#4d56c8] to-[#1A1A4E] shadow-2xl overflow-hidden`}>
-              <div className="w-full h-full bg-[#1A1A4E] rounded-[1.8rem] overflow-hidden border-2 border-[#1A1A4E] relative group">
+            <div className={`w-36 h-36 md:w-44 md:h-44 rounded-3xl md:rounded-[2.2rem] p-[5px] bg-gradient-to-tr from-[#c2f575] via-[#4d56c8] to-nunma-forest shadow-2xl overflow-hidden`}>
+              <div className="w-full h-full bg-nunma-forest rounded-[1.8rem] overflow-hidden border-2 border-nunma-forest relative group">
                 {uploadingAvatar ? (
                   <div className="w-full h-full flex items-center justify-center bg-navy/50 backdrop-blur-md">
                     <div className="w-10 h-10 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
@@ -347,14 +348,20 @@ const StudentProfile = ({
                   <input value={exp.company} onChange={(e) => updateExp(idx, 'company', e.target.value)} placeholder="Company" className="text-sm font-bold text-gray-600 bg-transparent outline-none w-full border-b border-gray-200 focus:border-indigo-900" />
                   <div className="flex gap-4">
                     <input type="text" onFocus={(e) => e.target.type = 'date'} onBlur={(e) => e.target.type = e.target.value ? 'date' : 'text'} value={exp.startDate} onChange={(e) => updateExp(idx, 'startDate', e.target.value)} placeholder="Start Date" className="text-xs font-bold text-black placeholder-gray-400 bg-transparent outline-none w-1/2 border-b border-gray-200" />
-                    <input type="text" onFocus={(e) => e.target.type = 'date'} onBlur={(e) => e.target.type = e.target.value ? 'date' : 'text'} value={exp.endDate} onChange={(e) => updateExp(idx, 'endDate', e.target.value)} placeholder="End Date" className="text-xs font-bold text-black placeholder-gray-400 bg-transparent outline-none w-1/2 border-b border-gray-200" />
+                    <div className="w-1/2 flex flex-col gap-2">
+                      <input type="text" onFocus={(e) => { if (exp.endDate !== 'Present') e.target.type = 'date' }} onBlur={(e) => e.target.type = (e.target.value && e.target.value !== 'Present') ? 'date' : 'text'} value={exp.endDate === 'Present' ? '' : exp.endDate} disabled={exp.endDate === 'Present'} onChange={(e) => updateExp(idx, 'endDate', e.target.value)} placeholder="End Date" className="text-xs font-bold text-black placeholder-gray-400 bg-transparent outline-none w-full border-b border-gray-200 disabled:opacity-30 disabled:cursor-not-allowed" />
+                      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-400 cursor-pointer mt-1">
+                        <input type="checkbox" checked={exp.endDate === 'Present'} onChange={(e) => updateExp(idx, 'endDate', e.target.checked ? 'Present' : '')} className="accent-[#0077b5] w-3 h-3" />
+                        Present
+                      </label>
+                    </div>
                   </div>
                   <textarea value={exp.description} onChange={(e) => updateExp(idx, 'description', e.target.value)} placeholder="Description" className="text-sm text-gray-500 bg-transparent outline-none w-full resize-none border-b border-gray-200 h-24" />
                 </div>
               ) : (
                 <>
                   <h4 className="text-xl font-black text-indigo-900 leading-tight">{exp.title}</h4>
-                  <p className="text-sm font-bold text-gray-400 mt-1 uppercase tracking-widest">{exp.company} • {exp.startDate} — {exp.endDate}</p>
+                  <p className="text-sm font-bold text-gray-400 mt-1 uppercase tracking-widest">{exp.company} • {formatDate(exp.startDate)} — {formatDate(exp.endDate)}</p>
                   <p className="text-gray-500 mt-4 leading-relaxed line-clamp-3">{exp.description}</p>
                 </>
               )}
@@ -398,7 +405,7 @@ const StudentProfile = ({
                   <>
                     <h4 className="text-xl font-black text-indigo-900 leading-tight">{edu.school}</h4>
                     <p className="text-sm font-bold text-gray-400 mt-1 uppercase tracking-widest">{edu.degree}</p>
-                    <p className="text-[10px] font-black text-indigo-300 mt-1">{edu.startDate} — {edu.endDate}</p>
+                    <p className="text-[10px] font-black text-indigo-300 mt-1">{formatDate(edu.startDate)} — {formatDate(edu.endDate)}</p>
                   </>
                 )}
               </div>
@@ -450,7 +457,6 @@ const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, n
       {[
         { id: 'zones', label: 'Zones', icon: <Globe size={20} /> },
         { id: 'mentorship', label: 'Mentorship', icon: <Video size={20} /> },
-        { id: 'services', label: 'Services', icon: <ShoppingBag size={20} /> },
         { id: 'materials', label: 'Materials', icon: <FileText size={20} /> }
       ].map(tab => (
         <button
@@ -513,12 +519,12 @@ const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, n
         </div>
       )}
 
-      {['services', 'materials'].includes(activeTab) && (
+      {['materials'].includes(activeTab) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
           {products.filter((p: any) => p.type === activeTab.slice(0, -1)).length > 0 ? products.filter((p: any) => p.type === activeTab.slice(0, -1)).map((prod: any) => (
             <div key={prod.id} className="bg-white border border-gray-100 p-12 rounded-[3.5rem] hover:shadow-2xl transition-all group flex flex-col relative overflow-hidden">
               <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mb-10 group-hover:bg-[#c2f575] transition-all">
-                {activeTab === 'services' ? <ShoppingBag size={40} /> : <FileText size={40} />}
+                {activeTab === 'materials' ? <FileText size={40} /> : null}
               </div>
               <h4 className="text-3xl font-black text-indigo-900 mb-3 tracking-tighter leading-tight">{prod.title}</h4>
               <div className="mt-auto flex justify-between items-center pt-10 border-t border-gray-50">
@@ -568,7 +574,7 @@ const ProfileView: React.FC = () => {
   // Product/Zone Listing State (for Tutor Self-View)
   const [showProductModal, setShowProductModal] = useState(false);
   const [productTitle, setProductTitle] = useState('');
-  const [productType, setProductType] = useState<'material' | 'service' | 'mentorship'>('service');
+  const [productType, setProductType] = useState<'material' | 'mentorship'>('material');
   const [productPrice, setProductPrice] = useState('');
   const [productCurrency, setProductCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
   const [isListingProduct, setIsListingProduct] = useState(false);
@@ -1070,25 +1076,25 @@ const ProfileView: React.FC = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
             <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center">
-              <h3 className="text-3xl font-black text-[#040457] tracking-tight">List Digital Product</h3>
+              <h3 className="text-3xl font-black text-nunma-forest tracking-tight">List Digital Product</h3>
               <button onClick={() => setShowProductModal(false)} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"><X size={24} /></button>
             </div>
             <div className="p-12 space-y-10">
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRODUCT NAME</label>
-                <input type="text" placeholder="e.g. Masterclass Assets" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
+                <input type="text" placeholder="e.g. Masterclass Assets" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
               </div>
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">TYPE</label>
-                <div className="grid grid-cols-3 gap-4">
-                  {(['material', 'service', 'mentorship'] as const).map(t => (
+                <div className="grid grid-cols-2 gap-4">
+                  {(['material', 'mentorship'] as const).map(t => (
                     <button key={t} onClick={() => setProductType(t)} className={`py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${productType === t ? 'bg-indigo-900 text-white shadow-xl' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{t}</button>
                   ))}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none" /></div>
-                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label>                  <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none">
+                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none" /></div>
+                <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label>                  <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none">
                   <option value="INR">INR (₹)</option>
                   <option value="USD" disabled>USD ($) - Coming Soon</option>
                   <option value="EUR" disabled>EUR (€) - Coming Soon</option>

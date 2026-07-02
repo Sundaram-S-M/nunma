@@ -28,7 +28,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
               <a href="/#/auth" className="text-slate-600 hover:text-brand-blue font-medium transition-colors">Sign In</a>
               <a 
                 href="#demo"
-                className="bg-[#c2f575] text-[#040457] px-6 py-2.5 rounded-full font-bold transition-all shadow-sm hover:shadow-[0_0_15px_#c2f575]"
+                className="bg-[#c2f575] text-nunma-forest px-6 py-2.5 rounded-full font-bold transition-all shadow-sm hover:shadow-[0_0_15px_#c2f575]"
               >
                 Book Demo
               </a>

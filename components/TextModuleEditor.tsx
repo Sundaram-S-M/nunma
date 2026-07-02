@@ -15,7 +15,7 @@ interface TextModuleEditorProps {
 const TextModuleEditor: React.FC<TextModuleEditorProps> = ({ courseId, chapterId, onClose, onSuccess }) => {
     if (!courseId || !chapterId) {
         return (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl">
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-nunma-forest/80 backdrop-blur-xl">
                 <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold flex items-center gap-3">
                     <AlertCircle size={16} /> Error: Missing Chapter Data
                 </div>
@@ -59,11 +59,11 @@ const TextModuleEditor: React.FC<TextModuleEditorProps> = ({ courseId, chapterId
     };
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-nunma-forest/80 backdrop-blur-xl animate-in fade-in duration-300">
             <div className="bg-white rounded-[3rem] w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
                 <div className="p-8 border-b border-gray-100 flex items-center justify-between shrink-0">
                     <div>
-                        <h3 className="text-3xl font-black text-[#040457] tracking-tighter mb-1">Add Reading Module</h3>
+                        <h3 className="text-3xl font-black text-nunma-forest tracking-tighter mb-1">Add Reading Module</h3>
                         <p className="text-sm text-gray-400 font-medium">Create a rich text reading section for this chapter.</p>
                     </div>
                     <button
@@ -89,13 +89,13 @@ const TextModuleEditor: React.FC<TextModuleEditorProps> = ({ courseId, chapterId
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             placeholder="e.g., Introduction to Neural Networks"
-                            className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-[#040457] outline-none transition-all"
+                            className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all"
                         />
                     </div>
 
                     <div className="flex-1 min-h-[300px] flex flex-col">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1 mb-2">Content</label>
-                        <div className="[&_.ql-toolbar]:rounded-t-2xl [&_.ql-toolbar]:border-gray-200 [&_.ql-container]:rounded-b-2xl [&_.ql-container]:border-gray-200 [&_.ql-editor]:min-h-[220px] [&_.ql-editor]:text-base [&_.ql-editor]:font-medium [&_.ql-editor]:text-[#040457]">
+                        <div className="[&_.ql-toolbar]:rounded-t-2xl [&_.ql-toolbar]:border-gray-200 [&_.ql-container]:rounded-b-2xl [&_.ql-container]:border-gray-200 [&_.ql-editor]:min-h-[220px] [&_.ql-editor]:text-base [&_.ql-editor]:font-medium [&_.ql-editor]:text-nunma-forest">
                             <ReactQuill
                                 theme="snow"
                                 value={content}
@@ -119,7 +119,7 @@ const TextModuleEditor: React.FC<TextModuleEditorProps> = ({ courseId, chapterId
                     <button
                         onClick={handleSave}
                         disabled={isSaving || !title.trim() || !content.trim() || content === '<p><br></p>'}
-                        className="flex-1 py-5 bg-[#040457] text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl shadow-[#040457]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 disabled:hover:scale-100 flex items-center justify-center"
+                        className="flex-1 py-5 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl shadow-nunma-forest/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 disabled:hover:scale-100 flex items-center justify-center"
                     >
                         {isSaving ? (
                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

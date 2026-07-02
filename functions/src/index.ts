@@ -650,7 +650,8 @@ export const createTutorLinkedAccount = onCall(
                             account_number: bankAccount,
                             ifsc_code: ifsc,
                             beneficiary_name: legalName
-                        }
+                        },
+                        tnc_accepted: true
                     };
 
                     await axios.patch(
@@ -2982,5 +2983,37 @@ export const sendEnrollmentEmail = onCall(
         }
 
         return { success: true };
+    }
+);
+
+export const deleteBunnyVideo = onCall(
+    { secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true },
+    async (request) => {
+        if (!request.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+        }
+
+        const videoId = request.data.videoId;
+        if (!videoId) {
+            throw new functions.https.HttpsError('invalid-argument', 'Missing videoId');
+        }
+
+        const libraryId = process.env.BUNNY_LIBRARY_ID ? process.env.BUNNY_LIBRARY_ID.trim() : null;
+        const apiKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
+
+        if (!libraryId || !apiKey) {
+            throw new functions.https.HttpsError('internal', 'Server configuration missing for BunnyCDN.');
+        }
+
+        try {
+            await axios.delete(
+                `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`,
+                { headers: { 'AccessKey': apiKey } }
+            );
+            return { success: true };
+        } catch (error: any) {
+            console.error(`Failed to delete Bunny video ${videoId}:`, error.message);
+            throw new functions.https.HttpsError('internal', 'Failed to delete video from BunnyCDN');
+        }
     }
 );

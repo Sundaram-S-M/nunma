@@ -49,7 +49,7 @@ class ErrorBoundary extends React.Component<Props, State> {
             🛰️
           </div>
           <h2 style={{
-            color: '#040457',
+            color: '#052E16',
             fontFamily: 'unset',
             fontSize: '2rem',
             fontWeight: 900,
@@ -72,7 +72,7 @@ class ErrorBoundary extends React.Component<Props, State> {
             onClick={() => window.location.reload()}
             style={{
               padding: '1rem 2rem',
-              background: '#040457',
+              background: '#052E16',
               color: '#c2f575',
               border: 'none',
               borderRadius: '1.5rem',

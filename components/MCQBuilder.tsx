@@ -120,7 +120,7 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
                     <Brain size={48} className="text-indigo-600" />
                 </div>
                 
-                <h3 className="text-4xl font-black text-[#040457] mb-4 z-10 tracking-tight">AI Question Generator</h3>
+                <h3 className="text-4xl font-black text-nunma-forest mb-4 z-10 tracking-tight">AI Question Generator</h3>
                 <p className="text-gray-500 font-bold max-w-lg z-10 mb-10 leading-relaxed text-sm">
                     Upload your syllabus or study material PDF. Our AI model will automatically extract key concepts and generate ready-to-use exact mock questions.
                 </p>
@@ -158,7 +158,7 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
                         disabled={isGenerating}
                         className={`w-full py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-2xl transition-all z-10 flex items-center justify-center gap-4 border ${isGenerating
                             ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
-                            : 'bg-[#040457] text-white border-[#040457] hover:scale-[1.02] active:scale-95'
+                            : 'bg-nunma-forest text-white border-nunma-forest hover:scale-[1.02] active:scale-95'
                             }`}
                     >
                         {isGenerating ? (
@@ -178,12 +178,12 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
 
             <div className="flex items-center justify-between mt-6">
                 <div>
-                    <h4 className="text-2xl font-black text-[#040457] tracking-tight">Question Bank</h4>
+                    <h4 className="text-2xl font-black text-nunma-forest tracking-tight">Question Bank</h4>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Currently Contains {questions.length} Questions</p>
                 </div>
                 <button
                     onClick={handleAddQuestion}
-                    className="px-8 py-4 bg-white text-[#040457] border-2 border-gray-100 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:border-[#c2f575] hover:shadow-lg transition-all flex items-center gap-3 active:scale-95"
+                    className="px-8 py-4 bg-white text-nunma-forest border-2 border-gray-100 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:border-[#c2f575] hover:shadow-lg transition-all flex items-center gap-3 active:scale-95"
                 >
                     <Plus size={18} /> Add Empty Question
                 </button>
@@ -202,7 +202,7 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
                                 <div key={q.id} className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-gray-50 relative group hover:shadow-xl transition-all duration-500">
                                     <div className="flex justify-between items-start mb-8">
                                         <div className="flex items-center gap-6 w-full">
-                                            <div className="w-14 h-14 rounded-2xl bg-[#040457] text-[#c2f575] flex flex-shrink-0 items-center justify-center text-xl font-black shadow-lg">
+                                            <div className="w-14 h-14 rounded-2xl bg-nunma-forest text-[#c2f575] flex flex-shrink-0 items-center justify-center text-xl font-black shadow-lg">
                                                 {index + 1}
                                             </div>
                                             <input
@@ -210,7 +210,7 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
                                                 value={q.question}
                                                 onChange={(e) => handleUpdateQuestion(q.id, 'question', e.target.value)}
                                                 placeholder="Enter Question Statement..."
-                                                className="w-full text-xl font-black text-[#040457] outline-none border-b-4 border-transparent focus:border-[#c2f575]/20 pb-2 transition-all placeholder-gray-200 tracking-tight"
+                                                className="w-full text-xl font-black text-nunma-forest outline-none border-b-4 border-transparent focus:border-[#c2f575]/20 pb-2 transition-all placeholder-gray-200 tracking-tight"
                                             />
                                         </div>
                                         <button
@@ -229,7 +229,7 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
                                                     className={`w-8 h-8 rounded-xl border-4 flex items-center justify-center flex-shrink-0 transition-all ${q.correctAnswer === optIdx ? 'bg-[#c2f575] border-[#c2f575] rotate-45' : 'border-gray-100 hover:border-[#c2f575]/50 hover:bg-gray-50'
                                                         }`}
                                                 >
-                                                    {q.correctAnswer === optIdx && <div className="w-3 h-3 bg-[#040457] -rotate-45 rounded-sm" />}
+                                                    {q.correctAnswer === optIdx && <div className="w-3 h-3 bg-nunma-forest -rotate-45 rounded-sm" />}
                                                 </button>
                                                 <input
                                                     type="text"
@@ -237,7 +237,7 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
                                                     onChange={(e) => handleUpdateOption(q.id, optIdx, e.target.value)}
                                                     placeholder={`Enter Option ${optIdx + 1}`}
                                                     className={`w-full py-5 px-6 rounded-2xl border-2 outline-none font-bold text-sm transition-all ${q.correctAnswer === optIdx
-                                                        ? 'bg-[#c2f575]/5 border-[#c2f575]/30 text-[#040457]'
+                                                        ? 'bg-[#c2f575]/5 border-[#c2f575]/30 text-nunma-forest'
                                                         : 'bg-gray-50 border-transparent focus:bg-white focus:border-indigo-100 text-gray-500'
                                                         }`}
                                                 />
@@ -253,7 +253,7 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
                                                 min="10"
                                                 value={q.timerSeconds || 60}
                                                 onChange={(e) => handleUpdateQuestion(q.id, 'timerSeconds', parseInt(e.target.value) || 0)}
-                                                className="w-20 bg-transparent outline-none font-black text-[#040457] text-lg text-center"
+                                                className="w-20 bg-transparent outline-none font-black text-nunma-forest text-lg text-center"
                                             />
                                             <span className="text-[10px] uppercase font-black tracking-widest text-gray-400">Seconds</span>
                                         </div>
@@ -266,7 +266,7 @@ const MCQBuilder: React.FC<MCQBuilderProps> = ({ questions, setQuestions }) => {
                                                 min="1"
                                                 value={q.marks || 5}
                                                 onChange={(e) => handleUpdateQuestion(q.id, 'marks', parseInt(e.target.value) || 0)}
-                                                className="w-16 bg-transparent outline-none font-black text-[#040457] text-lg text-center"
+                                                className="w-16 bg-transparent outline-none font-black text-nunma-forest text-lg text-center"
                                             />
                                         </div>
                                     </div>

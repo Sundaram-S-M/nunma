@@ -13,7 +13,7 @@ import {
 } from '@livekit/components-react';
 import { Track, ConnectionQuality, RoomEvent, VideoPresets, ConnectionState } from 'livekit-client';
 import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
@@ -106,6 +106,73 @@ const ClassroomContent = ({
   const [isConnectionPoor, setIsConnectionPoor] = useState(false);
   const [showPoorConnToast, setShowPoorConnToast] = useState(false);
 
+  // Duration limit state
+  const [sessionEndTime, setSessionEndTime] = useState<Date | null>(null);
+  const [timeLeft, setTimeLeft] = useState<string>('');
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+
+  // Fetch active session to enforce time limits
+  useEffect(() => {
+    if (!zoneId) return;
+    const fetchActiveSession = async () => {
+      try {
+        const q = query(collection(db, 'zones', zoneId, 'sessions'), where('status', '==', 'live'));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const session = snap.docs[0].data();
+          setActiveSessionId(snap.docs[0].id);
+          if (session.duration && session.createdAt) {
+            const start = new Date(session.createdAt);
+            const end = new Date(start.getTime() + session.duration * 60000);
+            setSessionEndTime(end);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch active session for duration limit:', err);
+      }
+    };
+    fetchActiveSession();
+  }, [zoneId]);
+
+  // Countdown timer logic
+  useEffect(() => {
+    if (!sessionEndTime) return;
+
+    const interval = setInterval(async () => {
+      const now = new Date();
+      const diff = sessionEndTime.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        clearInterval(interval);
+        setTimeLeft('00:00');
+        
+        // Time is up, end session if tutor
+        if (!isStudent && activeSessionId) {
+          try {
+            await updateDoc(doc(db, 'zones', zoneId!, 'sessions', activeSessionId), {
+              status: 'ended',
+              endedAt: serverTimestamp()
+            });
+          } catch (e) {
+            console.error('Error ending session on timeout:', e);
+          }
+        }
+        
+        // Force disconnect and redirect
+        if (localParticipant?.room) {
+          localParticipant.room.disconnect();
+        }
+        navigate(`/zone/${zoneId}`); // Redirect everyone back to zone detail
+      } else {
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        setTimeLeft(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [sessionEndTime, localParticipant, isStudent, activeSessionId, navigate, zoneId]);
+
   // All tracks except local participant tracks
   const allTracks = useTracks(
     [Track.Source.Camera, Track.Source.ScreenShare],
@@ -171,6 +238,12 @@ const ClassroomContent = ({
             {isHD ? <Zap size={14} /> : <ZapOff size={14} />}
             <span>{isHD ? 'HD' : 'SD'}</span>
           </button>
+          {timeLeft && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/50 border border-white/10 text-white font-black text-[11px] uppercase tracking-widest ml-4">
+              <Clock size={14} className="text-red-500" />
+              <span className={timeLeft.startsWith('00') ? 'text-red-500' : ''}>{timeLeft}</span>
+            </div>
+          )}
         </div>
         <ConnectionStatus />
       </header>
@@ -541,7 +614,7 @@ class ErrorBoundary extends React.Component<
           <button
             onClick={() => window.location.reload()}
             style={{
-              marginTop: 8, background: '#c2f575', color: '#1a1a4e',
+              marginTop: 8, background: '#c2f575', color: '#052E16',
               border: 'none', padding: '14px 28px', borderRadius: 12,
               fontWeight: 800, cursor: 'pointer', textTransform: 'uppercase',
               letterSpacing: '0.05em',
@@ -678,7 +751,7 @@ const ClassroomPage: React.FC = () => {
         <button
           onClick={() => window.location.reload()}
           style={{
-            marginTop: 12, background: '#c2f575', color: '#1a1a4e',
+            marginTop: 12, background: '#c2f575', color: '#052E16',
             border: 'none', padding: '16px 32px', borderRadius: 12,
             fontWeight: 800, cursor: 'pointer', textTransform: 'uppercase',
             letterSpacing: '0.05em', fontSize: '0.8rem',

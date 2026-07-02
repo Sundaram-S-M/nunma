@@ -104,7 +104,7 @@ const AdminDisputeRow: React.FC<AdminDisputeRowProps> = ({ dispute, onUpdate }) 
                 <div className="flex-1 space-y-3">
                     <div className="flex items-center gap-3">
                         <ShieldAlert size={20} className="text-orange-500" />
-                        <h4 className="font-black text-[#040457] text-lg">{dispute.reason}</h4>
+                        <h4 className="font-black text-nunma-forest text-lg">{dispute.reason}</h4>
                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${dispute.status === 'Under Review' ? 'bg-orange-100 text-orange-600' :
                                 dispute.status === 'Resolved - Refunded' ? 'bg-green-100 text-green-600' :
                                     'bg-red-100 text-red-600'
@@ -116,7 +116,7 @@ const AdminDisputeRow: React.FC<AdminDisputeRowProps> = ({ dispute, onUpdate }) 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-3">
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Transaction</p>
-                            <p className="font-mono font-bold text-[#040457]">{dispute.transactionId}</p>
+                            <p className="font-mono font-bold text-nunma-forest">{dispute.transactionId}</p>
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Amount</p>

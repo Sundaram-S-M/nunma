@@ -23,11 +23,11 @@ const StudentMicToggle = () => {
             <div className="bg-[#c2f575] p-1 rounded-2xl shadow-2xl flex items-center gap-3 pr-6 border border-white/20">
                 <TrackToggle 
                     source={Track.Source.Microphone} 
-                    className="!bg-[#1A1A4E] !text-[#c2f575] !rounded-xl !p-3 hover:!scale-105 transition-transform"
+                    className="!bg-nunma-forest !text-[#c2f575] !rounded-xl !p-3 hover:!scale-105 transition-transform"
                 />
                 <div className="flex flex-col">
-                    <span className="text-[#1A1A4E] text-[10px] font-black uppercase tracking-widest leading-none">Microphone</span>
-                    <span className="text-[#1A1A4E]/60 text-[8px] font-bold uppercase tracking-wider">Tutor unmuted you</span>
+                    <span className="text-nunma-forest text-[10px] font-black uppercase tracking-widest leading-none">Microphone</span>
+                    <span className="text-nunma-forest/60 text-[8px] font-bold uppercase tracking-wider">Tutor unmuted you</span>
                 </div>
             </div>
         </div>

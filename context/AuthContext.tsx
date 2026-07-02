@@ -274,7 +274,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         icon: newRole === UserRole.THALA ? '🎓' : '📚',
         style: {
           borderRadius: '12px',
-          background: '#040457',
+          background: '#052E16',
           color: '#c2f575',
           fontWeight: 'bold'
         }

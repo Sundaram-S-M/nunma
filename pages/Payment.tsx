@@ -1,9 +1,10 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CreditCard, ShieldCheck, Zap, Check, Globe, Video, Clock } from 'lucide-react';
 import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { loadStripe } from '@stripe/stripe-js';
+import { formatDate } from '../utils/dateUtils';
 import { db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -137,7 +138,7 @@ const Payment: React.FC = () => {
                     email: user.email || '',
                 },
                 theme: {
-                    color: '#040457'
+                    color: '#052E16'
                 },
                 modal: {
                     ondismiss: function () {
@@ -194,7 +195,7 @@ const Payment: React.FC = () => {
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Scheduled For</p>
-                                        <p className="text-lg font-bold">{new Date(bookingDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                        <p className="text-lg font-bold">{formatDate(new Date(bookingDate))}</p>
                                     </div>
                                 </div>
                             )}
@@ -238,7 +239,7 @@ const Payment: React.FC = () => {
                                     <p className="text-sm text-indigo-100 font-medium">
                                         Refunds available until:<br />
                                         <span className="text-white font-bold text-base bg-red-500/20 px-3 py-1 rounded-lg inline-block mt-2">
-                                            {refundDeadline.toLocaleDateString()} {refundDeadline.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            {formatDate(refundDeadline)} {refundDeadline.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                     </p>
                                 </div>
@@ -255,7 +256,7 @@ const Payment: React.FC = () => {
                         <p className="text-gray-400 font-medium text-sm">Select your preferred way to pay securely.</p>
                     </div>
 
-                    <div className="p-8 border-2 border-[#1A1A4E] rounded-3xl flex items-center justify-between bg-indigo-50/30">
+                    <div className="p-8 border-2 border-nunma-forest rounded-3xl flex items-center justify-between bg-indigo-50/30">
                         <div className="flex items-center gap-6">
                             <ShieldCheck size={32} className="text-indigo-900" />
                             <div>
@@ -305,7 +306,7 @@ const Payment: React.FC = () => {
                             </div>
                             <div className="flex-1">
                                 <p className="text-sm font-bold text-indigo-900">I agree to the Terms of Service & Refund Policy.</p>
-                                <p className="text-xs text-gray-500 mt-1">I acknowledge that if I dispute or request a refund after the deadline ({refundDeadline?.toLocaleDateString()}), it may be denied.</p>
+                                <p className="text-xs text-gray-500 mt-1">I acknowledge that if I dispute or request a refund after the deadline ({formatDate(refundDeadline)}), it may be denied.</p>
                             </div>
                         </label>
                     </div>

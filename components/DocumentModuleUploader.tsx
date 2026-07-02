@@ -138,13 +138,13 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
     };
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-xl animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-nunma-forest/80 backdrop-blur-xl animate-in fade-in duration-300">
             <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden p-10 relative">
                 <button onClick={onClose} disabled={isUploading} className="absolute top-8 right-8 p-3 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all disabled:opacity-50">
                     <X size={20} />
                 </button>
                 <div className="mb-8">
-                    <h3 className="text-3xl font-black text-[#040457] tracking-tighter mb-2">Upload Document</h3>
+                    <h3 className="text-3xl font-black text-nunma-forest tracking-tighter mb-2">Upload Document</h3>
                     <p className="text-sm text-gray-400 font-medium">Add a PDF, DOC, or ZIP resource to this chapter.</p>
                 </div>
                 {error && <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold flex items-center gap-3"><AlertCircle size={16} /> {error}</div>}
@@ -155,13 +155,13 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
                         {file ? (
                             <>
                                 <FileIcon size={48} className="text-[#658525] mb-4" />
-                                <p className="font-black text-[#040457] text-lg">{file.name}</p>
+                                <p className="font-black text-nunma-forest text-lg">{file.name}</p>
                                 <p className="text-sm font-bold text-gray-400 mt-2">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
                             </>
                         ) : (
                             <>
                                 <Upload size={48} className="text-gray-300 mb-4" />
-                                <p className="font-black text-[#040457] text-lg">Click or drag a file here</p>
+                                <p className="font-black text-nunma-forest text-lg">Click or drag a file here</p>
                                 <p className="text-sm font-bold text-gray-400 mt-2">PDF, DOC, DOCX, ZIP</p>
                             </>
                         )}
@@ -171,7 +171,7 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
                         <div className="w-full bg-gray-100 rounded-full h-4 mb-6 overflow-hidden">
                             <div className="bg-[#c2f575] h-4 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
                         </div>
-                        <p className="font-black text-[#040457] text-xl">Uploading... {Math.round(progress)}%</p>
+                        <p className="font-black text-nunma-forest text-xl">Uploading... {Math.round(progress)}%</p>
                     </div>
                 )}
 
@@ -183,7 +183,7 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
                             placeholder="e.g. Introduction to Architecture"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-[#040457] outline-none transition-all"
+                            className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-[1.5rem] px-8 py-5 font-bold text-nunma-forest outline-none transition-all"
                         />
                     </div>
                 )}
@@ -191,7 +191,7 @@ const DocumentModuleUploader: React.FC<DocumentModuleUploaderProps> = ({ courseI
                     <button onClick={handleCancel} className="flex-1 px-4 py-5 bg-gray-50 text-gray-400 rounded-[2rem] font-black uppercase text-[10px] sm:text-xs tracking-widest hover:bg-gray-100 transition-all whitespace-nowrap">
                         {isUploading ? 'Cancel Upload' : 'Cancel'}
                     </button>
-                    <button onClick={processUpload} disabled={!file || isUploading} className="flex-1 px-4 py-5 bg-[#040457] text-white rounded-[2rem] font-black uppercase text-[10px] sm:text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 whitespace-nowrap">
+                    <button onClick={processUpload} disabled={!file || isUploading} className="flex-1 px-4 py-5 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-[10px] sm:text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 whitespace-nowrap">
                         {isUploading ? 'Uploading...' : 'Save Document'}
                     </button>
                 </div>

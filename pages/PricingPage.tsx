@@ -67,7 +67,7 @@ const PricingPage: React.FC = () => {
                     console.log('Razorpay Success Response:', response);
                 },
                 prefill: { name: '', email: '', contact: '' },
-                theme: { color: '#040457' },
+                theme: { color: '#052E16' },
                 modal: {
                     ondismiss: function () {
                         setCheckoutLoading(null);
@@ -174,7 +174,7 @@ const PricingPage: React.FC = () => {
                         </div>
                     )}
                     <h2 className="text-[#c2f575] font-black tracking-widest uppercase text-sm mb-4">Pricing Plans</h2>
-                    <h1 className="text-4xl md:text-6xl font-black text-[#040457] tracking-tighter mb-6">
+                    <h1 className="text-4xl md:text-6xl font-black text-nunma-forest tracking-tighter mb-6">
                         Scale Your Teaching Empire
                     </h1>
                     <p className="text-xl text-gray-500 font-medium">
@@ -194,7 +194,7 @@ const PricingPage: React.FC = () => {
                         >
                             {tier.popular && (
                                 <div className="absolute top-0 right-10 -translate-y-1/2">
-                                    <span className="bg-[#c2f575] text-[#040457] text-xs font-black uppercase tracking-widest py-2 px-4 rounded-full shadow-lg">
+                                    <span className="bg-[#c2f575] text-nunma-forest text-xs font-black uppercase tracking-widest py-2 px-4 rounded-full shadow-lg">
                                         Most Popular
                                     </span>
                                 </div>
@@ -202,7 +202,7 @@ const PricingPage: React.FC = () => {
 
                             <div className="mb-8">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-2xl font-black text-[#040457]">{tier.name}</h3>
+                                    <h3 className="text-2xl font-black text-nunma-forest">{tier.name}</h3>
                                     <div className={`
                     w-12 h-12 rounded-2xl flex items-center justify-center
                     ${tier.color === 'lime' ? 'bg-[#c2f575]/20' :
@@ -215,7 +215,7 @@ const PricingPage: React.FC = () => {
                                     "{tier.badge}"
                                 </div>
                                 <div className="flex items-baseline gap-2 mb-4">
-                                    <span className="text-5xl font-black text-[#040457] tracking-tight">{tier.price}</span>
+                                    <span className="text-5xl font-black text-nunma-forest tracking-tight">{tier.price}</span>
                                     <span className="text-gray-400 font-medium">{tier.period}</span>
                                 </div>
                                 <p className="text-sm text-gray-500 font-medium min-h-[40px]">
@@ -229,7 +229,7 @@ const PricingPage: React.FC = () => {
                                         <div className={`mt-1 shrink-0 ${feature.included ? 'text-green-500' : 'text-gray-300'}`}>
                                             {feature.included ? <Check size={18} strokeWidth={3} /> : <X size={18} strokeWidth={3} />}
                                         </div>
-                                        <span className={`text-sm ${feature.included ? 'text-gray-700 font-medium' : 'text-gray-400 line-through'} ${feature.highlight ? 'font-black text-[#040457]' : ''}`}>
+                                        <span className={`text-sm ${feature.included ? 'text-gray-700 font-medium' : 'text-gray-400 line-through'} ${feature.highlight ? 'font-black text-nunma-forest' : ''}`}>
                                             {feature.name}
                                         </span>
                                     </div>
@@ -241,8 +241,8 @@ const PricingPage: React.FC = () => {
                                 onClick={tier.buttonAction}
                                 className={`
                   w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all
-                  ${tier.buttonVariant === 'primary' ? 'bg-[#c2f575] text-[#040457] hover:bg-[#b0eb54] shadow-xl hover:shadow-[#c2f575]/40 hover:-translate-y-1' :
-                                        tier.buttonVariant === 'dark' ? 'bg-[#040457] text-white hover:bg-black shadow-xl hover:shadow-[#040457]/40 hover:-translate-y-1' :
+                  ${tier.buttonVariant === 'primary' ? 'bg-[#c2f575] text-nunma-forest hover:bg-[#b0eb54] shadow-xl hover:shadow-[#c2f575]/40 hover:-translate-y-1' :
+                                        tier.buttonVariant === 'dark' ? 'bg-nunma-forest text-white hover:bg-black shadow-xl hover:shadow-nunma-forest/40 hover:-translate-y-1' :
                                             'bg-white border-2 border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'}
                 `}
                             >
@@ -254,18 +254,18 @@ const PricingPage: React.FC = () => {
                 </div>
 
                 <div className="mt-20 max-w-4xl mx-auto bg-indigo-50/50 rounded-[3rem] p-10 text-center border border-indigo-100">
-                    <h3 className="text-2xl font-black text-[#040457] mb-4">Need more resources?</h3>
+                    <h3 className="text-2xl font-black text-nunma-forest mb-4">Need more resources?</h3>
                     <p className="text-gray-600 font-medium mb-8 max-w-2xl mx-auto">
                         Standard and Premium users can easily purchase add-ons at any time to expand their limits without jumping to the next tier.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-6 justify-center">
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex-1">
-                            <h4 className="font-black text-[#040457] mb-2">Extra Storage Block</h4>
+                            <h4 className="font-black text-nunma-forest mb-2">Extra Storage Block</h4>
                             <p className="text-lg font-bold text-[#c2f575] mb-2">₹499 <span className="text-xs text-gray-400 font-normal">/ month</span></p>
                             <p className="text-sm text-gray-500">+50 GB Persistent Storage</p>
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex-1">
-                            <h4 className="font-black text-[#040457] mb-2">Extra Student Block</h4>
+                            <h4 className="font-black text-nunma-forest mb-2">Extra Student Block</h4>
                             <p className="text-lg font-bold text-[#c2f575] mb-2">₹999 <span className="text-xs text-gray-400 font-normal">/ month</span></p>
                             <p className="text-sm text-gray-500">+50 Student Slots</p>
                         </div>

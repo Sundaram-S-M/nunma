@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendEnrollmentEmail = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
+exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
@@ -549,7 +549,8 @@ exports.createTutorLinkedAccount = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY
                         account_number: bankAccount,
                         ifsc_code: ifsc,
                         beneficiary_name: legalName
-                    }
+                    },
+                    tnc_accepted: true
                 };
                 await axios_1.default.patch(`https://api.razorpay.com/v2/accounts/${accountId}/products/${productId}`, updatePayload, { headers });
                 functions.logger.info(`Razorpay Route Product Bank Details Updated for ${accountId}`);
@@ -2516,5 +2517,27 @@ exports.sendEnrollmentEmail = (0, https_1.onCall)({ secrets: [resendApiKey] }, a
         throw new https_1.HttpsError('internal', 'Failed to send email.');
     }
     return { success: true };
+});
+exports.deleteBunnyVideo = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true }, async (request) => {
+    if (!request.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const videoId = request.data.videoId;
+    if (!videoId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing videoId');
+    }
+    const libraryId = process.env.BUNNY_LIBRARY_ID ? process.env.BUNNY_LIBRARY_ID.trim() : null;
+    const apiKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
+    if (!libraryId || !apiKey) {
+        throw new functions.https.HttpsError('internal', 'Server configuration missing for BunnyCDN.');
+    }
+    try {
+        await axios_1.default.delete(`https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`, { headers: { 'AccessKey': apiKey } });
+        return { success: true };
+    }
+    catch (error) {
+        console.error(`Failed to delete Bunny video ${videoId}:`, error.message);
+        throw new functions.https.HttpsError('internal', 'Failed to delete video from BunnyCDN');
+    }
 });
 //# sourceMappingURL=index.js.map

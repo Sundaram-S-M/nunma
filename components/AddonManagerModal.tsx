@@ -116,7 +116,7 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                     name: user?.name || '',
                     email: user?.email || '',
                 },
-                theme: { color: '#040457' }
+                theme: { color: '#052E16' }
             };
 
             const rzp = new (window as any).Razorpay(options);
@@ -153,10 +153,10 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
 
                 {/* Header & Close Button */}
                 <div className="px-8 pt-8 pb-4 relative z-10 shrink-0 bg-white">
-                    <button onClick={onClose} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-[#040457] transition-colors rounded-full hover:bg-gray-100">
+                    <button onClick={onClose} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-nunma-forest transition-colors rounded-full hover:bg-gray-100">
                         <X size={20} />
                     </button>
-                    <h3 className="text-2xl font-black text-[#040457]">Manage Add-ons</h3>
+                    <h3 className="text-2xl font-black text-nunma-forest">Manage Add-ons</h3>
                     <p className="text-gray-500 text-sm font-medium mt-1">
                         Instantly expand your platform limits.
                     </p>
@@ -168,7 +168,7 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                         <button
                             onClick={() => handleTabChange('student')}
                             className={`flex-1 py-3 px-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all ${activeTab === 'student'
-                                    ? 'bg-white text-[#040457] shadow-sm ring-1 ring-gray-200'
+                                    ? 'bg-white text-nunma-forest shadow-sm ring-1 ring-gray-200'
                                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                                 }`}
                         >
@@ -177,7 +177,7 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                         <button
                             onClick={() => handleTabChange('storage')}
                             className={`flex-1 py-3 px-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all ${activeTab === 'storage'
-                                    ? 'bg-white text-[#040457] shadow-sm ring-1 ring-gray-200'
+                                    ? 'bg-white text-nunma-forest shadow-sm ring-1 ring-gray-200'
                                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                                 }`}
                         >
@@ -208,7 +208,7 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
 
                         <div className="flex justify-between items-start mb-6">
                             <div>
-                                <h4 className="text-lg font-black text-[#040457]">{addonTitle}</h4>
+                                <h4 className="text-lg font-black text-nunma-forest">{addonTitle}</h4>
                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">1 Block = {unitsPerBlock} {unitLabel}</div>
                             </div>
 
@@ -216,17 +216,17 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                                 <button
                                     onClick={handleDecrement}
                                     disabled={isStarter || blockCount <= 1}
-                                    className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-gray-500 hover:bg-white hover:text-[#040457] hover:shadow disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:shadow-none transition-all"
+                                    className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-gray-500 hover:bg-white hover:text-nunma-forest hover:shadow disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:shadow-none transition-all"
                                 >
                                     -
                                 </button>
-                                <span className="w-6 text-center font-black text-[#040457] select-none text-lg">
+                                <span className="w-6 text-center font-black text-nunma-forest select-none text-lg">
                                     {blockCount}
                                 </span>
                                 <button
                                     onClick={handleIncrement}
                                     disabled={isStarter}
-                                    className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-gray-500 hover:bg-white hover:text-[#040457] hover:shadow disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:shadow-none transition-all"
+                                    className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-gray-500 hover:bg-white hover:text-nunma-forest hover:shadow disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:shadow-none transition-all"
                                 >
                                     +
                                 </button>
@@ -234,7 +234,7 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                         </div>
 
                         <div className="bg-[#c2f575]/10 border border-[#c2f575]/30 rounded-2xl p-4 flex items-center justify-center">
-                            <span className="text-2xl font-black text-[#040457]">+ {totalUnitsGained} <span className="text-lg text-[#040457]/70 ml-1">{unitLabel}</span></span>
+                            <span className="text-2xl font-black text-nunma-forest">+ {totalUnitsGained} <span className="text-lg text-nunma-forest/70 ml-1">{unitLabel}</span></span>
                         </div>
                     </div>
 
@@ -245,7 +245,7 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                         <div className="space-y-3 mb-4">
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-500 font-medium">Quantity</span>
-                                <span className="font-bold text-[#040457]">{blockCount} {blockCount === 1 ? 'Block' : 'Blocks'}</span>
+                                <span className="font-bold text-nunma-forest">{blockCount} {blockCount === 1 ? 'Block' : 'Blocks'}</span>
                             </div>
 
                             {pricing.isDiscounted && (
@@ -260,13 +260,13 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                             <div>
                                 <span className="block text-gray-500 text-xs font-medium mb-1">Total Due Today</span>
                                 {pricing.isDiscounted && (
-                                    <span className="inline-block bg-[#c2f575] text-[#040457] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full mb-1">
+                                    <span className="inline-block bg-[#c2f575] text-nunma-forest text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full mb-1">
                                         Tiered Discount Applied!
                                     </span>
                                 )}
                             </div>
                             <div className="text-right">
-                                <span className={`text-3xl font-black tracking-tight ${pricing.isDiscounted ? 'text-green-600' : 'text-[#040457]'}`}>
+                                <span className={`text-3xl font-black tracking-tight ${pricing.isDiscounted ? 'text-green-600' : 'text-nunma-forest'}`}>
                                     ₹{pricing.total}
                                 </span>
                                 <span className="block text-gray-400 text-xs font-medium mt-1">/ month</span>
@@ -280,14 +280,14 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                     {isStarter ? (
                         <button
                             onClick={handleUpgrade}
-                            className="w-full py-4 bg-[#040457] text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-[#1A1A4E] shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+                            className="w-full py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-nunma-forest shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
                         >
                             Upgrade to Standard to Unlock Add-ons
                         </button>
                     ) : (
                         <button
                             onClick={handleCheckout}
-                            className="w-full py-4 bg-[#c2f575] text-[#040457] rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-[#b0eb54] shadow-xl hover:shadow-[#c2f575]/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+                            className="w-full py-4 bg-[#c2f575] text-nunma-forest rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-[#b0eb54] shadow-xl hover:shadow-[#c2f575]/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
                         >
                             <ShoppingCart size={18} />
                             Proceed to Payment

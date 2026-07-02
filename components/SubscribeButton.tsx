@@ -90,7 +90,7 @@ export default function SubscribeButton({
                     contact: ''
                 },
                 theme: {
-                    color: '#040457'
+                    color: '#052E16'
                 }
             };
 
@@ -118,7 +118,7 @@ export default function SubscribeButton({
             <button
                 onClick={handleSubscribe}
                 disabled={isLoading}
-                className={className || "bg-[#1a1a4e] hover:shadow-[0_0_15px_#c2f575] text-white font-semibold py-2 px-6 rounded-lg transition-all disabled:opacity-50"}
+                className={className || "bg-nunma-forest hover:shadow-[0_0_15px_#c2f575] text-white font-semibold py-2 px-6 rounded-lg transition-all disabled:opacity-50"}
             >
                 {isLoading ? 'Processing...' : label}
             </button>

@@ -36,6 +36,13 @@ const TutorGradingHub: React.FC<TutorGradingHubProps> = ({ zoneId, exam, student
                 const arrayBuffer = await response.arrayBuffer();
                 
                 const pdfDoc = await PDFDocument.load(arrayBuffer);
+                
+                // Embed Nunma logo
+                const logoRes = await fetch(`${window.location.origin}/assets/logo-full.png`);
+                const logoBuffer = await logoRes.arrayBuffer();
+                const logoImage = await pdfDoc.embedPng(logoBuffer);
+                const logoDims = logoImage.scale(0.25); // Scale down
+
                 const pages = pdfDoc.getPages();
 
                 Object.entries(drawingPaths).forEach(([pageNumStr, paths]) => {
@@ -56,6 +63,16 @@ const TutorGradingHub: React.FC<TutorGradingHubProps> = ({ zoneId, exam, student
                             });
                         });
                     }
+                });
+
+                // Stamp logo on every page
+                pages.forEach(page => {
+                    page.drawImage(logoImage, {
+                        x: 20,
+                        y: 20,
+                        width: logoDims.width,
+                        height: logoDims.height,
+                    });
                 });
 
                 mergedPdfBase64 = await pdfDoc.saveAsBase64();
@@ -82,7 +99,7 @@ const TutorGradingHub: React.FC<TutorGradingHubProps> = ({ zoneId, exam, student
     };
 
     return (
-        <div className="fixed inset-0 z-[300] bg-[#040457]/90 backdrop-blur-3xl flex items-center justify-center p-8 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[300] bg-nunma-forest/90 backdrop-blur-3xl flex items-center justify-center p-8 animate-in fade-in duration-300">
             <div className="bg-white rounded-[4rem] w-full max-w-[1400px] shadow-3xl overflow-hidden h-full max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-500">
                 <button onClick={onClose} className="absolute top-8 right-8 p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all z-10 shadow-sm">
                     <X size={24} />
@@ -91,7 +108,7 @@ const TutorGradingHub: React.FC<TutorGradingHubProps> = ({ zoneId, exam, student
                 <div className="flex-1 flex overflow-hidden">
                     <div className="w-[70%] bg-gray-50 p-6 flex flex-col relative">
                         <div className="mb-4">
-                            <h2 className="text-3xl font-black text-[#1A1A4E]">{studentName}</h2>
+                            <h2 className="text-3xl font-black text-nunma-forest">{studentName}</h2>
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Active Valuation Interface</p>
                         </div>
                         <div className="flex-1 overflow-hidden">
@@ -108,7 +125,7 @@ const TutorGradingHub: React.FC<TutorGradingHubProps> = ({ zoneId, exam, student
                     <div className="w-[30%] bg-white p-10 flex flex-col border-l border-gray-100">
                         <div className="flex-1 space-y-10">
                             <div className="space-y-4">
-                                <label className="text-[11px] font-black text-[#1A1A4E] uppercase tracking-widest">Total Valuation Score</label>
+                                <label className="text-[11px] font-black text-nunma-forest uppercase tracking-widest">Total Valuation Score</label>
                                 <div className="flex items-center gap-4">
                                     <input
                                         type="number"
@@ -117,19 +134,19 @@ const TutorGradingHub: React.FC<TutorGradingHubProps> = ({ zoneId, exam, student
                                         placeholder="0"
                                         value={marks}
                                         onChange={e => setMarks(Number(e.target.value))}
-                                        className="w-full bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-5 text-4xl font-black text-[#040457] outline-none transition-all shadow-inner"
+                                        className="w-full bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-5 text-4xl font-black text-nunma-forest outline-none transition-all shadow-inner"
                                     />
                                     <span className="text-2xl font-black text-gray-300 shrink-0">/ {exam.maxMark}</span>
                                 </div>
                             </div>
                             
                             <div className="space-y-4">
-                                <label className="text-[11px] font-black text-[#1A1A4E] uppercase tracking-widest">Instructor Feedback (Burned on DB)</label>
+                                <label className="text-[11px] font-black text-nunma-forest uppercase tracking-widest">Instructor Feedback (Burned on DB)</label>
                                 <textarea
                                     placeholder="Provide detailed feedback on the student's methodology..."
                                     value={feedback}
                                     onChange={e => setFeedback(e.target.value)}
-                                    className="w-full bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-5 text-sm font-bold text-[#040457] outline-none resize-none h-64 custom-scrollbar transition-all shadow-inner"
+                                    className="w-full bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-5 text-sm font-bold text-nunma-forest outline-none resize-none h-64 custom-scrollbar transition-all shadow-inner"
                                 />
                             </div>
                         </div>

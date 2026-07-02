@@ -46,7 +46,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             setIsCopying(true);
             toast.success('Invite link copied!', {
                 style: {
-                    background: '#040457',
+                    background: '#052E16',
                     color: '#c2f575',
                     fontWeight: 'bold',
                     borderRadius: '1rem',
@@ -85,18 +85,18 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-[#040457]/80 backdrop-blur-2xl animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-nunma-forest/80 backdrop-blur-2xl animate-in fade-in duration-300">
             <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl overflow-hidden p-12 animate-in zoom-in-95 duration-500 relative">
                 {/* Header */}
                 <div className="flex justify-between items-start mb-10">
                     <div>
                         <div className="flex items-center gap-4 mb-3">
-                            <div className="w-12 h-12 bg-[#040457] text-[#c2f575] rounded-2xl flex items-center justify-center shadow-lg">
+                            <div className="w-12 h-12 bg-nunma-forest text-[#c2f575] rounded-2xl flex items-center justify-center shadow-lg">
                                 <Share2 size={24} />
                             </div>
-                            <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Share Zone</h3>
+                            <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Share Zone</h3>
                         </div>
-                        <p className="text-sm text-gray-400 font-medium ml-1">Invite students to <span className="text-[#040457] font-black">{zoneTitle}</span></p>
+                        <p className="text-sm text-gray-400 font-medium ml-1">Invite students to <span className="text-nunma-forest font-black">{zoneTitle}</span></p>
                     </div>
                     <button onClick={onClose} className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all">
                         <X size={24} />
@@ -109,13 +109,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                             <LinkIcon size={40} />
                         </div>
                         <div className="space-y-3">
-                            <p className="text-xl font-bold text-[#040457]">No Active Invite Token</p>
+                            <p className="text-xl font-bold text-nunma-forest">No Active Invite Token</p>
                             <p className="text-sm text-gray-400 max-w-xs mx-auto">Generate a new 48-hour secure link to start inviting students directly.</p>
                         </div>
                         <button 
                             onClick={onGenerate}
                             disabled={isGenerating}
-                            className="px-12 py-6 bg-[#040457] text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-12 py-6 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <RefreshCw size={20} className={`text-[#c2f575] ${isGenerating ? 'animate-spin' : ''}`} /> 
                             {isGenerating ? 'Generating...' : 'Generate Link'}
@@ -125,14 +125,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     <div className="space-y-10 animate-in slide-in-from-bottom-8 duration-700">
                         {/* QR Code Section */}
                         <div className="flex flex-col items-center justify-center space-y-6">
-                            <div className="bg-[#040457] p-8 rounded-[3.5rem] shadow-2xl transform hover:scale-[1.02] transition-transform cursor-pointer group relative">
+                            <div className="bg-nunma-forest p-8 rounded-[3.5rem] shadow-2xl transform hover:scale-[1.02] transition-transform cursor-pointer group relative">
                                 <div className="bg-white p-6 rounded-[2.5rem]">
-                                    <QRCodeSVG value={inviteUrl} size={180} fgColor="#040457" level="H" includeMargin />
+                                    <QRCodeSVG value={inviteUrl} size={180} fgColor="#052E16" level="H" includeMargin />
                                 </div>
-                                <div className="absolute inset-0 bg-[#040457] opacity-0 group-hover:opacity-10 transition-opacity rounded-[3.5rem]"></div>
+                                <div className="absolute inset-0 bg-nunma-forest opacity-0 group-hover:opacity-10 transition-opacity rounded-[3.5rem]"></div>
                             </div>
                             <div className="text-center">
-                                <span className="px-5 py-2 bg-[#c2f575]/20 text-[#040457] rounded-full text-[10px] font-black uppercase tracking-widest border border-[#c2f575]">
+                                <span className="px-5 py-2 bg-[#c2f575]/20 text-nunma-forest rounded-full text-[10px] font-black uppercase tracking-widest border border-[#c2f575]">
                                     {getTimeRemaining(activeInvite.expiresAt)}
                                 </span>
                             </div>
@@ -141,13 +141,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                         {/* Link & Actions */}
                         <div className="space-y-6">
                             <div className="relative group">
-                                <div className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#040457]">
+                                <div className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-nunma-forest">
                                     <LinkIcon size={18} />
                                 </div>
                                 <input 
                                     readOnly 
                                     value={inviteUrl} 
-                                    className="w-full bg-gray-50 border-2 border-transparent rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-[#040457] text-sm outline-none shadow-inner"
+                                    className="w-full bg-gray-50 border-2 border-transparent rounded-[1.75rem] pl-16 pr-8 py-5 font-bold text-nunma-forest text-sm outline-none shadow-inner"
                                 />
                             </div>
 
@@ -155,7 +155,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                                 <button 
                                     onClick={handleCopy}
                                     className={`py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center gap-3 shadow-xl ${
-                                        isCopying ? 'bg-[#c2f575] text-[#040457]' : 'bg-[#040457] text-white hover:scale-[1.02]'
+                                        isCopying ? 'bg-[#c2f575] text-nunma-forest' : 'bg-nunma-forest text-white hover:scale-[1.02]'
                                     }`}
                                 >
                                     {isCopying ? <Check size={16} /> : <Copy size={16} className="text-[#c2f575]" />}

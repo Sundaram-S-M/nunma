@@ -46,7 +46,7 @@ const Workplace: React.FC = () => {
   const { isSidebarOpen } = useSidebar();
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'zones' | 'products' | 'students' | 'payments'>('zones');
-  const [productSubTab, setProductSubTab] = useState<'material' | 'service' | 'mentorship'>('material');
+  const [productSubTab, setProductSubTab] = useState<'material' | 'mentorship'>('material');
   const [showProductModal, setShowProductModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [isDeployingKyc, setIsDeployingKyc] = useState(false);
@@ -70,7 +70,7 @@ const Workplace: React.FC = () => {
 
   // List Product State
   const [productTitle, setProductTitle] = useState('');
-  const [productType, setProductType] = useState<'material' | 'service' | 'mentorship'>('service');
+  const [productType, setProductType] = useState<'material' | 'mentorship'>('material');
   const [productPrice, setProductPrice] = useState('');
   const [productCurrency, setProductCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
   const [isListingProduct, setIsListingProduct] = useState(false);
@@ -80,6 +80,7 @@ const Workplace: React.FC = () => {
   const [liveTitle, setLiveTitle] = useState('');
   const [liveDate, setLiveDate] = useState('');
   const [liveTime, setLiveTime] = useState('');
+  const [liveDuration, setLiveDuration] = useState('60');
   const [isSchedulingLive, setIsSchedulingLive] = useState(false);
 
   // Streaming State
@@ -91,11 +92,12 @@ const Workplace: React.FC = () => {
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
   const [allStudents, setAllStudents] = useState<any[]>([]);
 
-  // Static transactions for Payments tab (inbound earnings)
+  // Static transactions for Payments tab
   const transactions = [
-    { id: 'T-8392', date: 'Oct 12, 2025', amount: '+$150.00', status: 'Completed', service: 'Earnings: Mentorship (Sachin S)', type: 'inbound' },
-    { id: 'T-8341', date: 'Sep 28, 2025', amount: '+$49.00', status: 'Completed', service: 'Earnings: Zone Access (User Alpha)', type: 'inbound' },
-    { id: 'T-8220', date: 'Sep 10, 2025', amount: '+$199.00', status: 'Completed', service: 'Earnings: Pro Course Bundle', type: 'inbound' },
+    { id: 'T-8401', date: 'Oct 15, 2025', amount: '-$29.00', status: 'Completed', service: 'Platform Subscription', type: 'outbound' },
+    { id: 'T-8392', date: 'Oct 12, 2025', amount: '+$150.00', status: 'Completed', service: 'Mentorship (Sachin S)', type: 'inbound' },
+    { id: 'T-8341', date: 'Sep 28, 2025', amount: '+$49.00', status: 'Completed', service: 'Zone Access (User Alpha)', type: 'inbound' },
+    { id: 'T-8220', date: 'Sep 10, 2025', amount: '+$199.00', status: 'Completed', service: 'Pro Course Bundle', type: 'inbound' },
   ];
 
   const handleExportStatement = () => {
@@ -132,12 +134,39 @@ const Workplace: React.FC = () => {
         </xml>
         <![endif]-->
         <style>
-          .header { background-color: #22c55e; color: #ffffff; font-weight: bold; text-align: left; padding: 5px; }
+          .header { background-color: #C2F575; color: #052E16; font-weight: bold; text-align: left; padding: 5px; }
           td { padding: 5px; white-space: nowrap; }
         </style>
       </head>
       <body>
         <table border="1">
+          <tr>
+            <td rowspan="4" colspan="3" style="border:none; text-align:left; vertical-align:top;">
+              <img src="${window.location.origin}/assets/logo-full.png" alt="Nunma" height="60" />
+            </td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
+          <tr>
+            <td style="border:none; font-weight:bold; color:#052E16;">Zone Name</td>
+            <td style="border:none;">Global Platform</td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
+          <tr>
+            <td style="border:none; font-weight:bold; color:#052E16;">User Name</td>
+            <td style="border:none;">${user?.tutorProfile?.legalName || user?.displayName || 'Tutor'}</td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
+          <tr>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+            <td style="border:none;"></td>
+          </tr>
           <tr>
             ${headers.map(h => `<th class="header">${h}</th>`).join('')}
           </tr>
@@ -168,13 +197,13 @@ const Workplace: React.FC = () => {
         <div className="w-24 h-24 bg-red-50 text-red-500 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-xl shadow-red-500/10">
           <X size={48} strokeWidth={3} />
         </div>
-        <h1 className="text-4xl font-black text-[#040457] mb-4 tracking-tighter">Access Restricted</h1>
+        <h1 className="text-4xl font-black text-nunma-forest mb-4 tracking-tighter">Access Restricted</h1>
         <p className="text-gray-400 font-medium max-w-md mx-auto mb-10 text-lg">
           You do not have permission to view this content. Only verified Thalas can access the professional workplace.
         </p>
         <button
           onClick={() => navigate('/dashboard')}
-          className="px-12 py-5 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+          className="px-12 py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
         >
           Return to Dashboard
         </button>
@@ -337,7 +366,7 @@ const Workplace: React.FC = () => {
         title: liveTitle,
         date: goLiveNow ? new Date().toISOString().split('T')[0] : liveDate,
         time: goLiveNow ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : liveTime,
-        duration: 60,
+        duration: parseInt(liveDuration, 10) || 60,
         status: goLiveNow ? 'live' : 'scheduled',
         createdAt: new Date().toISOString()
       };
@@ -350,6 +379,7 @@ const Workplace: React.FC = () => {
       setLiveZoneId('');
       setLiveDate('');
       setLiveTime('');
+      setLiveDuration('60');
 
       if (goLiveNow) {
         setActiveSession({ id: docRef.id, ...sessionData, zoneId: liveZoneId });
@@ -433,8 +463,8 @@ const Workplace: React.FC = () => {
       {/* Stream Room Overlay Removed (Using Sandbox) */}
 
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-4xl font-extrabold text-[#040457] mb-2 tracking-tighter text-balance">My Workplace</h1>
+        <div className="hidden md:block">
+          <h1 className="text-4xl font-extrabold text-nunma-forest mb-2 tracking-tighter text-balance">My Workplace</h1>
           <p className="text-gray-400 font-medium text-sm">Design, manage, and scale your professional offerings.</p>
         </div>
 
@@ -444,16 +474,16 @@ const Workplace: React.FC = () => {
             {isKycVerified ? (
               <div className="bg-[#c2f575]/10 border border-[#c2f575]/30 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
+                  <div className="w-12 h-12 bg-[#c2f575] rounded-xl flex items-center justify-center text-nunma-forest shadow-lg">
                     <Check size={24} strokeWidth={3} />
                   </div>
                   <div>
-                    <h4 className="text-lg font-black text-[#040457] tracking-tight">{(user.isDevBypass || user.isWhitelisted) && user.kycStatus !== 'VERIFIED' ? 'Bypass Active' : 'Ready to Sell'}</h4>
-                    <p className="text-xs font-bold text-[#040457]/60 uppercase tracking-widest">{(user.isDevBypass || user.isWhitelisted) && user.kycStatus !== 'VERIFIED' ? 'KYC Gating Overridden' : 'KYC VERIFIED & RAZORPAY ACTIVE'}</p>
+                    <h4 className="text-lg font-black text-nunma-forest tracking-tight">{(user.isDevBypass || user.isWhitelisted) && user.kycStatus !== 'VERIFIED' ? 'Bypass Active' : 'Ready to Sell'}</h4>
+                    <p className="text-xs font-bold text-nunma-forest/60 uppercase tracking-widest">{(user.isDevBypass || user.isWhitelisted) && user.kycStatus !== 'VERIFIED' ? 'KYC Gating Overridden' : 'KYC VERIFIED & RAZORPAY ACTIVE'}</p>
                   </div>
                 </div>
                 <div className="hidden md:block">
-                  <span className="text-[10px] font-black text-[#040457] uppercase tracking-[0.2em] bg-[#c2f575] px-4 py-2 rounded-full">LIVE ON PLATFORM</span>
+                  <span className="text-[10px] font-black text-nunma-forest uppercase tracking-[0.2em] bg-[#c2f575] px-4 py-2 rounded-full">LIVE ON PLATFORM</span>
                 </div>
               </div>
             ) : user.kycStatus === 'PENDING' ? (
@@ -497,130 +527,229 @@ const Workplace: React.FC = () => {
           </div>
         )}
 
-        <div className="flex items-center gap-4 overflow-x-auto pb-4 w-full flex-nowrap [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        {/* ── Mobile-only Workspace Action Panel ── */}
+        <div className="md:hidden flex flex-col gap-4 w-full">
+
+          {/* PRIMARY CTA: Launch New Zone */}
+          <button
+            onClick={() => navigate('/workplace/launch')}
+            disabled={!isKycVerified}
+            title={!isKycVerified ? "Verification required to launch a zone" : ""}
+            className="w-full group relative overflow-hidden bg-[#c2f575] text-nunma-forest rounded-2xl p-4 flex items-center gap-4 shadow-lg shadow-[#c2f575]/25 hover:shadow-xl hover:shadow-[#c2f575]/30 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed disabled:hover:scale-100"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out pointer-events-none" />
+            <div className="w-11 h-11 bg-nunma-forest text-[#c2f575] rounded-xl flex items-center justify-center shrink-0 shadow-md group-hover:rotate-90 transition-transform duration-500">
+              <Plus size={20} strokeWidth={3} />
+            </div>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-sm font-extrabold uppercase tracking-widest leading-none">Launch New Zone</span>
+              <span className="text-[11px] font-medium opacity-70 mt-0.5">Create professional learning stream</span>
+            </div>
+            <div className="ml-auto shrink-0 opacity-40 group-hover:opacity-70 transition-opacity">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </div>
+          </button>
+
+          {/* STATS ROW: 2-column grid */}
+          <div className="grid grid-cols-2 gap-3">
+            {(() => {
+              const uniqueStudents = allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length;
+              const studentLimit = user?.subscription_entitlements?.studentLimit || (
+                (currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : currentTier === 'PREMIUM' ? 1000 : 100)
+                + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+              );
+              const studentPct = Math.min(100, Math.round((uniqueStudents / studentLimit) * 100));
+              const isNearLimit = studentPct >= 80;
+              return (
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col gap-3 animate-in zoom-in duration-500">
+                  <div className="flex items-center justify-between">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center liquid-glass ${isNearLimit ? 'liquid-glass-red' : 'liquid-glass-blue'}`}>
+                      <Users size={18} />
+                    </div>
+                    <span className={`text-xs font-black ${isNearLimit ? 'text-red-500' : 'text-gray-400'}`}>{uniqueStudents}<span className="text-gray-300 font-medium">/{studentLimit}</span></span>
+                  </div>
+                  <div>
+                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                      <div className={`h-full rounded-full transition-all duration-1000 ${isNearLimit ? 'bg-red-400' : 'bg-[#c2f575]'}`} style={{ width: `${studentPct}%` }} />
+                    </div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Students</p>
+                  </div>
+                </div>
+              );
+            })()}
+            {(() => {
+              const isAtLimit = streamsPercent >= 100;
+              return (
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col gap-3 animate-in zoom-in duration-500 delay-75">
+                  <div className="flex items-center justify-between">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center liquid-glass liquid-glass-red">
+                      <Radio size={18} className={!isAtLimit ? 'animate-pulse' : ''} />
+                    </div>
+                    <span className={`text-xs font-black ${isAtLimit ? 'text-red-500' : 'text-gray-400'}`}>{streamsUsed}<span className="text-gray-300 font-medium">/{streamLimit}</span></span>
+                  </div>
+                  <div>
+                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                      <div className={`h-full rounded-full transition-all duration-1000 ${isAtLimit ? 'bg-red-500' : 'bg-[#c2f575]'}`} style={{ width: `${streamsPercent}%` }} />
+                    </div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Live Streams</p>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* KEY ACTIONS */}
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowScheduleModal(true)}
+                disabled={!isKycVerified}
+                title={!isKycVerified ? "Verification required" : ""}
+                className="group relative bg-white border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md hover:border-red-100 hover:-translate-y-0.5 active:scale-95 transition-all duration-200 disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed min-h-[90px]"
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center liquid-glass liquid-glass-red transition-all duration-300 group-hover:scale-110">
+                  <Radio size={20} className={isKycVerified && streamsUsed < streamLimit ? 'animate-pulse' : ''} />
+                </div>
+                <span className="text-[10px] font-black text-nunma-forest uppercase tracking-wide text-center leading-tight">Schedule Live Class</span>
+              </button>
+              <button
+                onClick={() => navigate('/certificate-engine')}
+                disabled={!isKycVerified}
+                title={!isKycVerified ? "Verification required" : ""}
+                className="group relative bg-white border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-md hover:border-[#c2f575]/40 hover:-translate-y-0.5 active:scale-95 transition-all duration-200 disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed min-h-[90px]"
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center liquid-glass liquid-glass-green transition-all duration-300 group-hover:scale-110">
+                  <Award size={20} />
+                </div>
+                <span className="text-[10px] font-black text-nunma-forest uppercase tracking-wide text-center leading-tight">Issue Certificates</span>
+              </button>
+              <button
+                onClick={() => navigate('/list-product/flow')}
+                disabled={!isKycVerified}
+                title={!isKycVerified ? "Verification required" : ""}
+                className="group col-span-2 relative bg-nunma-forest rounded-2xl p-4 flex items-center justify-center gap-3 shadow-lg shadow-nunma-forest/20 hover:shadow-xl hover:bg-nunma-forest/90 hover:-translate-y-0.5 active:scale-[0.99] transition-all duration-200 disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed min-h-[68px]"
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center liquid-glass liquid-glass-green transition-all duration-300 group-hover:scale-110 shrink-0">
+                  <ShoppingBag size={18} />
+                </div>
+                <span className="text-[11px] font-black text-white uppercase tracking-widest">List Digital Product</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── Desktop-only Workspace Action Panel (original design) ── */}
+        <div className="hidden md:flex items-center gap-4 overflow-x-auto pb-4 w-full flex-nowrap [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {/* Cumulative Students Meter */}
-          <div className="flex shrink-0 bg-white border border-gray-100 p-4 h-[80px] rounded-2xl shadow-sm items-center gap-5 animate-in zoom-in duration-500 delay-100">
-            <div className="w-12 h-12 bg-indigo-50 text-[#040457] rounded-xl flex items-center justify-center shrink-0">
+          <div className="flex shrink-0 w-[250px] bg-white border border-gray-100 p-4 h-[80px] rounded-2xl shadow-sm items-center gap-4 animate-in zoom-in duration-500 delay-100">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 liquid-glass liquid-glass-blue">
               <Users size={24} />
             </div>
             <div className="flex-1 min-w-[160px]">
               <div className="flex justify-between items-end mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#040457]">Cumulative Students</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-nunma-forest">Cumulative Students</span>
                 <span className="text-xs font-bold text-gray-400">
                   {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} / {user?.subscription_entitlements?.studentLimit || (
-                    (
-                      currentTier === 'STARTER' ? 100 :
-                        currentTier === 'STANDARD' ? 250 :
-                          currentTier === 'PREMIUM' ? 1000 : 100
-                    ) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
+                    (currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : currentTier === 'PREMIUM' ? 1000 : 100)
+                    + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
                   )}
                 </span>
               </div>
               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-1000 ${(allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
-                    (user?.subscription_entitlements?.studentLimit || (
-                      (
-                        currentTier === 'STARTER' ? 100 :
-                          currentTier === 'STANDARD' ? 250 :
-                            currentTier === 'PREMIUM' ? 1000 : 100
-                      ) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
-                    ))) >= 1 ? 'bg-red-500' : 'bg-nunma-lime'
-                    }`}
-                  style={{
-                    width: `${Math.min(100, (allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length /
-                      (user?.subscription_entitlements?.studentLimit || (
-                        (
-                          currentTier === 'STARTER' ? 100 :
-                            currentTier === 'STANDARD' ? 250 :
-                              currentTier === 'PREMIUM' ? 1000 : 100
-                        ) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
-                      ))) * 100)}%`
-                  }}
-                ></div>
+                  className={`h-full rounded-full transition-all duration-1000 ${(allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length / (user?.subscription_entitlements?.studentLimit || ((currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : currentTier === 'PREMIUM' ? 1000 : 100) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)))) >= 1 ? 'bg-red-500' : 'bg-nunma-lime'}`}
+                  style={{ width: `${Math.min(100, (allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length / (user?.subscription_entitlements?.studentLimit || ((currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : currentTier === 'PREMIUM' ? 1000 : 100) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)))) * 100)}%` }}
+                />
               </div>
             </div>
           </div>
 
           {/* Monthly Stream Meter */}
-          <div className="flex shrink-0 bg-white border border-gray-100 p-4 h-[80px] rounded-2xl shadow-sm items-center gap-5 animate-in zoom-in duration-500">
-            <div className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0">
+          <div className="flex shrink-0 w-[250px] bg-white border border-gray-100 p-4 h-[80px] rounded-2xl shadow-sm items-center gap-4 animate-in zoom-in duration-500">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 liquid-glass liquid-glass-red">
               <Radio size={24} className={streamsUsed >= streamLimit ? "" : "animate-pulse"} />
             </div>
             <div className="flex-1 min-w-[160px]">
               <div className="flex justify-between items-end mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#040457]">Live Streams Used</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-nunma-forest">Live Streams Used</span>
                 <span className="text-xs font-bold text-gray-400">{streamsUsed} / {streamLimit}</span>
               </div>
               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-1000 ${streamsPercent >= 100 ? 'bg-red-500' : 'bg-nunma-lime'}`}
                   style={{ width: `${streamsPercent}%` }}
-                ></div>
+                />
               </div>
             </div>
           </div>
-          {/* Feature: Live Classes (Gated by KYC) */}
+
+          {/* Feature: Live Classes */}
           <button
             onClick={() => setShowScheduleModal(true)}
             disabled={!isKycVerified}
             title={!isKycVerified ? "Verification required" : ""}
-            className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+            className="shrink-0 w-[250px] bg-white border border-gray-100 text-nunma-forest font-bold px-4 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
-            <Radio size={18} className={`text-red-500 ${isKycVerified && streamsUsed < streamLimit ? "animate-pulse" : ""}`} />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center liquid-glass liquid-glass-red transition-all duration-300 group-hover:scale-110">
+              <Radio size={18} className={isKycVerified && streamsUsed < streamLimit ? "animate-pulse" : ""} />
+            </div>
             Schedule Live Class
           </button>
 
-          {/* Feature: Certificate Issuance (Gated by KYC) */}
+          {/* Feature: Certificate Issuance */}
           <button
             onClick={() => navigate('/certificate-engine')}
             disabled={!isKycVerified}
             title={!isKycVerified ? "Verification required" : ""}
-            className="shrink-0 bg-white border border-gray-100 text-[#040457] font-bold px-6 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+            className="shrink-0 w-[250px] bg-white border border-gray-100 text-nunma-forest font-bold px-4 h-[80px] rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
-            <Award size={18} className="text-[#c2f575] group-hover:scale-110 transition-transform" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center liquid-glass liquid-glass-green transition-all duration-300 group-hover:scale-110">
+              <Award size={18} />
+            </div>
             Issue Certificates
           </button>
 
-          {/* Feature: Digital Products (Gated by KYC) */}
+          {/* Feature: Digital Products */}
           <button
             onClick={() => navigate('/list-product/flow')}
             disabled={!isKycVerified}
             title={!isKycVerified ? "Verification required" : ""}
-            className="shrink-0 bg-[#040457] text-white font-bold px-6 h-[80px] rounded-2xl shadow-xl hover:bg-black transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+            className="shrink-0 w-[250px] bg-nunma-forest text-white font-bold px-4 h-[80px] rounded-2xl shadow-xl hover:bg-black transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
-            <ShoppingBag size={18} className="text-[#c2f575] group-hover:scale-110 transition-transform" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center liquid-glass liquid-glass-green transition-all duration-300 group-hover:scale-110">
+              <ShoppingBag size={18} />
+            </div>
             List Digital Product
           </button>
 
-          {/* CRITICAL: Launch New Zone Trigger (Strict KYC Gating) */}
+          {/* CRITICAL: Launch New Zone */}
           <button
             onClick={() => navigate('/workplace/launch')}
             disabled={!isKycVerified}
             title={!isKycVerified ? "Verification required" : ""}
-            className="shrink-0 bg-[#c2f575] text-[#040457] font-black p-2 pr-6 h-[80px] rounded-[1.25rem] shadow-xl shadow-[#c2f575]/20 hover:scale-[1.03] active:scale-95 transition-all flex items-center gap-4 whitespace-nowrap group disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed disabled:hover:scale-100"
+            className="shrink-0 w-[250px] bg-[#c2f575] text-nunma-forest font-bold px-4 h-[80px] rounded-2xl shadow-xl hover:shadow-[#c2f575]/40 transition-all flex items-center gap-3 group whitespace-nowrap disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
-            <div className="w-16 h-full bg-[#040457] text-[#c2f575] rounded-xl flex items-center justify-center shrink-0 shadow-lg group-hover:rotate-90 transition-transform duration-500">
-              <Plus size={20} strokeWidth={3} />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-nunma-forest text-[#c2f575] transition-transform duration-300 group-hover:rotate-90 shadow-md">
+              <Plus size={18} strokeWidth={3} />
             </div>
-            <div className="flex flex-col items-start leading-none justify-center h-full">
-              <span className="uppercase text-[11px] font-bold tracking-widest mb-1.5">Launch New Zone</span>
-              <span className="text-[9px] font-bold opacity-60 normal-case tracking-normal">Create professional learning stream</span>
-            </div>
+            Launch New Zone
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-[0_10px_50px_rgba(0,0,0,0.03)] flex flex-col min-h-[600px]">
-        <div className="flex p-3 bg-gray-50/50 gap-2 border-b border-gray-100">
+
+
+      <div className="bg-white max-md:bg-transparent rounded-[3rem] max-md:rounded-none border max-md:border-0 border-gray-100 overflow-hidden shadow-[0_10px_50px_rgba(0,0,0,0.03)] max-md:shadow-none flex flex-col min-h-[600px]">
+        <div className="flex p-3 max-md:p-1 bg-gray-50/50 max-md:bg-transparent gap-2 max-md:gap-1 border-b max-md:border-b-0 border-gray-100 max-md:justify-between w-full">
           {(['zones', 'products', 'students', 'payments'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-4 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all
+              className={`flex-1 py-4 px-6 max-md:py-2 max-md:px-1 rounded-2xl max-md:rounded-full text-[10px] max-md:text-[9px] font-black uppercase tracking-widest max-md:tracking-wide transition-all text-center
                 ${activeTab === tab
-                  ? 'bg-white text-[#040457] shadow-sm border border-gray-100'
-                  : 'text-gray-400 hover:text-[#040457] hover:bg-white/50'
+                  ? 'bg-white max-md:bg-nunma-forest text-nunma-forest max-md:text-white shadow-sm max-md:shadow-none border border-gray-100 max-md:border-transparent'
+                  : 'text-gray-400 hover:text-nunma-forest hover:bg-white/50 max-md:border max-md:border-gray-200'
                 }
               `}
             >
@@ -629,7 +758,7 @@ const Workplace: React.FC = () => {
           ))}
         </div>
 
-        <div className="p-10 flex-1">
+        <div className="p-10 max-md:p-4 flex-1">
           {activeTab === 'zones' && (
             <div className="space-y-12 animate-in fade-in duration-300">
               {upcomingLive.length > 0 && (
@@ -692,12 +821,12 @@ const Workplace: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {zonesList.length > 0 ? zonesList.map(zone => (
-                  <div key={zone.id} className="group p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:bg-white hover:shadow-2xl hover:border-[#c2f575] transition-all duration-500 relative overflow-hidden">
-                    <div className="h-40 rounded-[1.5rem] overflow-hidden mb-6 relative shadow-lg">
+                  <div key={zone.id} className="group p-8 max-md:p-5 bg-gray-50 max-md:bg-white rounded-[2.5rem] max-md:rounded-[2rem] border border-gray-100 hover:bg-white hover:shadow-2xl hover:border-[#c2f575] transition-all duration-500 relative overflow-hidden max-md:shadow-sm">
+                    <div className="h-40 max-md:h-32 rounded-[1.5rem] max-md:rounded-[1.25rem] overflow-hidden mb-6 max-md:mb-4 relative shadow-lg max-md:shadow-md">
                       <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                     </div>
-                    <h4 className="text-xl font-black text-[#040457] mb-4 line-clamp-1">{zone.title}</h4>
-                    <button onClick={() => navigate(`/workplace/manage/${zone.id}`)} className="w-full py-4 bg-[#040457] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Manage Zone</button>
+                    <h4 className="text-xl max-md:text-lg font-black text-nunma-forest mb-4 max-md:mb-3 line-clamp-1 max-md:text-center">{zone.title}</h4>
+                    <button onClick={() => navigate(`/workplace/manage/${zone.id}`)} className="w-full py-4 max-md:py-3 bg-nunma-forest text-white rounded-2xl max-md:rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl max-md:shadow-lg">Manage Zone</button>
                   </div>
                 )) : <div className="col-span-full py-20 text-center opacity-20 flex flex-col items-center"><Layers size={48} className="mb-4" /><p className="text-[10px] font-black uppercase tracking-widest">No active zones</p></div>}
               </div>
@@ -710,13 +839,12 @@ const Workplace: React.FC = () => {
               <div className="flex bg-gray-100/50 p-2 rounded-2xl w-fit gap-2 border border-gray-100">
                 {[
                   { id: 'material', label: 'Materials', icon: <FileText size={14} /> },
-                  { id: 'service', label: 'Services', icon: <MousePointer2 size={14} /> },
                   { id: 'mentorship', label: 'Mentorship', icon: <Video size={14} /> }
                 ].map(tab => (
                   <button
                     key={tab.id} onClick={() => setProductSubTab(tab.id as any)}
                     className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2
-                      ${productSubTab === tab.id ? 'bg-white text-[#040457] shadow-sm border border-gray-100' : 'text-gray-400 hover:text-[#040457]'}
+                      ${productSubTab === tab.id ? 'bg-white text-nunma-forest shadow-sm border border-gray-100' : 'text-gray-400 hover:text-nunma-forest'}
                     `}
                   >
                     {tab.icon} {tab.label}
@@ -727,13 +855,13 @@ const Workplace: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {productsList.filter(p => p.type === productSubTab).length > 0 ? productsList.filter(p => p.type === productSubTab).map(product => (
                   <div key={product.id} className="p-8 bg-white border border-gray-100 rounded-[2.5rem] hover:shadow-xl transition-all relative overflow-hidden group">
-                    <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-[#040457] mb-6 group-hover:bg-[#c2f575] transition-colors">
+                    <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-nunma-forest mb-6 group-hover:bg-[#c2f575] transition-colors">
                       {product.type === 'mentorship' ? <Video size={24} /> : product.type === 'material' ? <FileText size={24} /> : <ShoppingBag size={24} />}
                     </div>
-                    <h4 className="text-xl font-black text-[#040457] mb-2">{product.title}</h4>
+                    <h4 className="text-xl font-black text-nunma-forest mb-2">{product.title}</h4>
                     <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest mb-6">{product.type}</p>
                     <div className="flex justify-between items-center py-4 border-t border-gray-100">
-                      <p className="text-2xl font-black text-[#040457]">{product.price} {product.currency}</p>
+                      <p className="text-2xl font-black text-nunma-forest">{product.price} {product.currency}</p>
                       <button onClick={() => {
                         // delete logic
                         // Need deleteDoc
@@ -754,7 +882,7 @@ const Workplace: React.FC = () => {
           {activeTab === 'students' && (
             <div className="space-y-12 animate-in fade-in duration-500">
               <div className="flex justify-between items-center">
-                <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Enrolled Minds</h3>
+                <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Enrolled Minds</h3>
                 <div className="flex items-center gap-4 text-sm font-bold text-gray-400">
                   <Users size={20} /> {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} Students Total
                 </div>
@@ -767,26 +895,26 @@ const Workplace: React.FC = () => {
                       <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
                         <img src={student.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} className="w-full h-full object-cover" alt="" />
                       </div>
-                      <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-[#040457] shadow-lg">
+                      <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-nunma-forest shadow-lg">
                         <Check size={16} strokeWidth={3} />
                       </div>
                     </div>
                     <div>
-                      <h4 className="text-xl font-black text-[#040457] mb-1">{student.name}</h4>
+                      <h4 className="text-xl font-black text-nunma-forest mb-1">{student.name}</h4>
                       <p className="text-xs text-gray-400 font-medium">{student.email}</p>
                     </div>
                     <div className="pt-4 border-t border-gray-50 w-full flex justify-around">
                       <div className="text-center">
                         <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Score</p>
-                        <p className="font-bold text-[#040457]">{student.engagementScore || 100}%</p>
+                        <p className="font-bold text-nunma-forest">{student.engagementScore || 100}%</p>
                       </div>
                       <div className="text-center">
                         <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Attendance</p>
-                        <p className="font-bold text-[#040457]">{student.attendanceRate || 100}%</p>
+                        <p className="font-bold text-nunma-forest">{student.attendanceRate || 100}%</p>
                       </div>
                       <div className="text-center">
                         <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Time</p>
-                        <p className="font-bold text-[#040457]">{student.durationInSession || 60}m</p>
+                        <p className="font-bold text-nunma-forest">{student.durationInSession || 60}m</p>
                       </div>
                     </div>
                   </div>
@@ -799,12 +927,12 @@ const Workplace: React.FC = () => {
             <div className="space-y-12 animate-in fade-in duration-500">
               <div className="flex justify-between items-center">
                 <div>
-                  <h3 className="text-4xl font-black text-[#040457] tracking-tighter">Transaction Registry</h3>
+                  <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Transaction Registry</h3>
                   <p className="text-sm text-gray-400 mt-1 font-medium">Inclusive ledger of earnings.</p>
                 </div>
                 <button 
                   onClick={handleExportStatement}
-                  className="text-[10px] font-black text-[#040457] uppercase tracking-widest flex items-center gap-2 px-6 py-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white transition-all shadow-sm active:scale-95"
+                  className="text-[10px] font-black text-nunma-forest uppercase tracking-widest flex items-center gap-2 px-6 py-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white transition-all shadow-sm active:scale-95"
                 >
                   <Download size={14} className="text-[#c2f575]" /> EXPORT STATEMENT
                 </button>
@@ -813,17 +941,17 @@ const Workplace: React.FC = () => {
                 {transactions.map((t) => (
                   <div key={t.id} className="flex items-center justify-between p-8 bg-white rounded-[2.5rem] border border-gray-100 group hover:shadow-xl transition-all hover:-translate-y-1">
                     <div className="flex items-center gap-6">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm bg-[#c2f575]/20 text-[#7cc142]`}>
-                        <TrendingUp size={24} />
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${t.type === 'inbound' ? 'bg-[#c2f575]/20 text-[#7cc142]' : 'bg-red-50 text-red-500'}`}>
+                        <TrendingUp size={24} className={t.type === 'outbound' ? 'rotate-180' : ''} />
                       </div>
                       <div>
-                        <p className="text-lg font-black text-[#040457]">{t.service}</p>
+                        <p className="text-lg font-black text-nunma-forest">{t.service}</p>
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{t.id} • {t.date}</p>
                       </div>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
                       <div>
-                        <p className={`text-2xl font-black text-[#7cc142]`}>{t.amount}</p>
+                        <p className={`text-2xl font-black ${t.type === 'inbound' ? 'text-[#7cc142]' : 'text-red-500'}`}>{t.amount}</p>
                         <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{t.status}</p>
                       </div>
                     </div>
@@ -840,7 +968,7 @@ const Workplace: React.FC = () => {
         <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300 transition-all`}>
           <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
             <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center bg-white">
-              <h3 className="text-3xl font-black text-[#040457] tracking-tight">Schedule Live Class</h3>
+              <h3 className="text-3xl font-black text-nunma-forest tracking-tight">Schedule Live Class</h3>
               <button onClick={() => setShowScheduleModal(false)} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"><X size={24} /></button>
             </div>
 
@@ -851,7 +979,7 @@ const Workplace: React.FC = () => {
                   <select
                     value={liveZoneId}
                     onChange={(e) => setLiveZoneId(e.target.value)}
-                    className="w-full bg-white border-[2px] border-[#c2f575] rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none appearance-none cursor-pointer focus:ring-4 focus:ring-[#c2f575]/10 transition-all shadow-sm"
+                    className="w-full bg-white border-[2px] border-[#c2f575] rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none appearance-none cursor-pointer focus:ring-4 focus:ring-[#c2f575]/10 transition-all shadow-sm"
                   >
                     <option value="" disabled>Choose a Learning Zone...</option>
                     {zonesList.map(z => (<option key={z.id} value={z.id}>{z.title}</option>))}
@@ -862,22 +990,35 @@ const Workplace: React.FC = () => {
 
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">SESSION TITLE</label>
-                <input type="text" placeholder="e.g. Q&A and Strategy Review" value={liveTitle} onChange={(e) => setLiveTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
+                <input type="text" placeholder="e.g. Q&A and Strategy Review" value={liveTitle} onChange={(e) => setLiveTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-3 gap-6">
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">DATE</label>
-                  <input type="date" value={liveDate} onChange={(e) => setLiveDate(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white" />
+                  <input type="date" value={liveDate} onChange={(e) => setLiveDate(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-6 py-5 font-bold text-nunma-forest outline-none focus:bg-white transition-all" />
                 </div>
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">TIME</label>
-                  <input type="time" value={liveTime} onChange={(e) => setLiveTime(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-[#040457] outline-none focus:bg-white" />
+                  <input type="time" value={liveTime} onChange={(e) => setLiveTime(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-6 py-5 font-bold text-nunma-forest outline-none focus:bg-white transition-all" />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">DURATION (MINS)</label>
+                  <div className="relative">
+                    <select value={liveDuration} onChange={(e) => setLiveDuration(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-6 py-5 font-bold text-nunma-forest outline-none appearance-none cursor-pointer focus:bg-white transition-all">
+                      <option value="15">15 mins</option>
+                      <option value="30">30 mins</option>
+                      <option value="45">45 mins</option>
+                      <option value="60">60 mins</option>
+                      <option value="90">90 mins</option>
+                      <option value="120">120 mins</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
               <div className="pt-6 flex gap-4">
-                <button onClick={() => handleScheduleLive(false)} disabled={isSchedulingLive} className="flex-1 py-7 bg-white border border-gray-100 text-[#040457] rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.2em] shadow-sm hover:shadow-lg transition-all flex items-center justify-center gap-3">Schedule Later</button>
+                <button onClick={() => handleScheduleLive(false)} disabled={isSchedulingLive} className="flex-1 py-7 bg-white border border-gray-100 text-nunma-forest rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.2em] shadow-sm hover:shadow-lg transition-all flex items-center justify-center gap-3">Schedule Later</button>
                 <button onClick={() => handleScheduleLive(true)} disabled={isSchedulingLive} className="flex-[1.5] py-7 bg-red-500 text-white rounded-[1.75rem] font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl hover:bg-red-600 transition-all flex items-center justify-center gap-4">GO LIVE NOW <Radio size={20} /></button>
               </div>
             </div>
