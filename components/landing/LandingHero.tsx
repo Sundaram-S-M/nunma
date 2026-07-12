@@ -1,74 +1,124 @@
 import React from 'react';
-import { ArrowRight, PlayCircle, ShieldCheck, Zap } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
 const LandingHero: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="relative overflow-hidden min-h-[90vh] flex flex-col justify-center py-20">
-      {/* Background Decor */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-slate-50 rounded-full blur-3xl opacity-60 -z-10 pointer-events-none"></div>
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col items-center text-center">
-        
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 border border-slate-200 text-brand-blue font-medium text-sm mb-8">
-          <Zap className="w-4 h-4 text-brand-blue fill-brand-blue" />
-          <span>The Next Generation OS for Educators</span>
-        </div>
-        
-        {/* Main Headline */}
-        <h1 className="text-5xl md:text-7xl font-black text-brand-slate tracking-tight leading-[1.1] mb-8 max-w-5xl">
-          Build your teaching empire with a <span className="text-brand-blue">premium platform.</span>
-        </h1>
-        
-        {/* Subheadline */}
-        <p className="text-xl md:text-2xl text-slate-600 mb-12 max-w-3xl leading-relaxed">
-          We've moved beyond the traditional LMS. Deliver high-performance learning, leverage AI co-hosts, and issue cryptographically secure credentials.
-        </p>
-        
-        {/* Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 items-center">
-          <button 
-            onClick={() => navigate('/auth?mode=signup')}
-            className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 bg-[#c2f575] text-nunma-forest rounded-full font-semibold text-lg hover:shadow-[0_0_15px_#c2f575] transition-all shadow-sm overflow-hidden w-full sm:w-auto animate-float"
-          >
-            <span className="relative z-10">Start for Free</span>
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform relative z-10" />
-          </button>
-          
-          <a 
-            href="#demo"
-            className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-white text-slate-700 rounded-full font-semibold text-lg border-2 border-slate-100 hover:bg-slate-50 transition-colors w-full sm:w-auto"
-          >
-            <PlayCircle className="w-5 h-5 text-brand-blue" />
-            <span>Watch Demo</span>
-          </a>
-        </div>
+    <section
+      id="home"
+      className="bg-gradient-to-b from-[#eef9f2] to-[#fcfcfc] pt-20 pb-24 px-6 text-center relative overflow-hidden"
+    >
+      {/* Decorative background blobs */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
+        <div className="absolute top-10 left-10 w-64 h-64 bg-[#c2f575]/20 rounded-full blur-3xl" />
+        <div className="absolute top-40 right-20 w-80 h-80 bg-[#c2f575]/20 rounded-full blur-3xl" />
+      </div>
 
-        {/* Social Proof metrics */}
-        <div className="mt-20 pt-10 border-t border-slate-200 w-full max-w-4xl grid grid-cols-2 md:grid-cols-4 gap-8">
-          <div className="flex flex-col items-center">
-            <span className="text-3xl font-black text-slate-900">2x</span>
-            <span className="text-sm text-slate-500 font-medium">Faster Video Load</span>
+      <div className="max-w-5xl mx-auto relative z-10">
+        {/* Badge */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-[#c2f575]/50 text-sm font-bold text-[#052e16] mb-8 shadow-sm"
+        >
+          <span className="text-[#aee85e]">✨</span> Your All In One E-Learning Platform
+        </motion.div>
+
+        {/* Headline */}
+        <motion.h1
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="text-5xl md:text-7xl font-extrabold mb-8 text-[#000000] tracking-tight leading-[1.1]"
+        >
+          Own Your Audience.{' '}
+          <br className="hidden md:block" />
+          Scale Your Teaching Empire.
+        </motion.h1>
+
+        {/* Subtext */}
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="text-lg md:text-xl max-w-2xl mx-auto mb-10 text-gray-600 leading-relaxed font-medium"
+        >
+          The all-in-one virtual classroom and marketplace built for independent educators.
+          Host high-performance live streams and scale your empire effortlessly.
+        </motion.p>
+
+        {/* CTAs */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
+        >
+          <button
+            onClick={() => navigate('/auth?mode=signup')}
+            className="bg-[#c2f575] text-[#052e16] px-8 py-3.5 rounded-full font-bold hover:bg-[#aee85e] transition-all shadow-lg w-full sm:w-auto text-base"
+          >
+            Start For Free
+          </button>
+          <button
+            onClick={() => {
+              const el = document.getElementById('features');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+            className="bg-gray-200/50 border border-gray-200 text-[#000000] px-8 py-3.5 rounded-full font-bold hover:bg-[#c2f575] hover:border-[#c2f575] transition-all shadow-sm w-full sm:w-auto flex items-center justify-center gap-2 text-base"
+          >
+            Explore Features <ArrowRight className="w-4 h-4" />
+          </button>
+        </motion.div>
+
+        {/* Browser mockup frame */}
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7, delay: 0.4 }}
+          className="w-full max-w-5xl mx-auto h-[400px] md:h-[500px] bg-white rounded-[2rem] border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-4 relative flex flex-col mb-24"
+        >
+          {/* Traffic lights */}
+          <div className="flex items-center gap-2 mb-4 px-2 border-b border-gray-100 pb-4">
+            <div className="w-3 h-3 rounded-full bg-red-400" />
+            <div className="w-3 h-3 rounded-full bg-yellow-400" />
+            <div className="w-3 h-3 rounded-full bg-green-400" />
           </div>
-          <div className="flex flex-col items-center">
-            <span className="text-3xl font-black text-slate-900">W3C</span>
-            <span className="text-sm text-slate-500 font-medium">Verified Credentials</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="flex text-3xl font-black text-slate-900">
-              <ShieldCheck className="w-8 h-8 text-emerald-500 mr-1" />
-              100%
+          {/* Mockup content */}
+          <div className="flex-1 rounded-xl bg-gray-50 border border-gray-100 flex overflow-hidden">
+            {/* Sidebar fake */}
+            <div className="w-1/5 bg-[#052e16] p-4 space-y-4 hidden sm:block">
+              <div className="h-5 w-16 bg-[#c2f575]/80 rounded-md mb-6" />
+              <div className="h-3 w-full bg-white/20 rounded" />
+              <div className="h-3 w-full bg-white/10 rounded" />
+              <div className="h-3 w-full bg-white/10 rounded" />
+              <div className="h-3 w-3/4 bg-white/10 rounded" />
             </div>
-            <span className="text-sm text-slate-500 font-medium">DRM Protected</span>
+            {/* Main area */}
+            <div className="flex-1 p-6 space-y-4">
+              <div className="flex gap-3 mb-6">
+                <div className="h-16 w-1/3 bg-[#eef9f2] rounded-xl border border-gray-100 flex items-center justify-center">
+                  <div className="h-4 w-16 bg-[#c2f575]/60 rounded" />
+                </div>
+                <div className="h-16 w-1/3 bg-white rounded-xl border border-gray-100" />
+                <div className="h-16 w-1/3 bg-white rounded-xl border border-gray-100" />
+              </div>
+              <div className="h-4 w-1/2 bg-gray-200 rounded" />
+              <div className="h-4 w-full bg-gray-100 rounded" />
+              <div className="h-4 w-4/5 bg-gray-100 rounded" />
+              <div className="h-32 w-full bg-[#eef9f2]/50 rounded-xl border border-gray-100 mt-4" />
+            </div>
           </div>
-          <div className="flex flex-col items-center">
-            <span className="text-3xl font-black text-slate-900">Global</span>
-            <span className="text-sm text-slate-500 font-medium">Standard Pricing</span>
-          </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

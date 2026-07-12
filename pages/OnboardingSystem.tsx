@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import LandingLogo from '../components/landing/LandingLogo';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -251,12 +252,9 @@ const OnboardingSystem: React.FC = () => {
             {showConfetti && <Confetti recycle={false} numberOfPieces={500} />}
 
             {/* Top Left Branding */}
-            <div className="absolute top-8 left-8 flex items-center gap-3">
-                <div className="w-10 h-10 bg-nunma-forest rounded-xl flex items-center justify-center shadow-lg">
-                    <img src="/assets/logo-icon.png" alt="Logo" className="w-6 h-6 object-contain filter brightness-0 invert" />
-                </div>
-                <span className="text-xl font-black tracking-tighter text-nunma-forest">nunma</span>
-            </div>
+            <Link to="/" className="absolute top-8 left-8 flex items-center gap-2 hover:opacity-90 transition-opacity">
+                <LandingLogo className="h-8 text-nunma-forest" />
+            </Link>
 
             <div className="w-full max-w-2xl bg-white border border-gray-100 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] p-8 md:p-12 animate-in fade-in zoom-in-95 duration-700">
 

@@ -1,102 +1,77 @@
 import React from 'react';
-import { ArrowRight, BookOpen, Clock } from 'lucide-react';
-
-const blogPosts = [
-  {
-    id: 1,
-    title: 'The Future of Verifiable Education',
-    excerpt: 'How Zero-Knowledge Proofs and W3C credentials are fundamentally changing how we prove our skills.',
-    category: 'Engineering',
-    date: 'Mar 15, 2026',
-    readTime: '5 min read',
-    imageUrl: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800',
-  },
-  {
-    id: 2,
-    title: 'Monetizing Your Knowledge Base with AI',
-    excerpt: 'Leveraging AI co-hosts and streamlined monetization to scale your educational business globally.',
-    category: 'Growth',
-    date: 'Mar 12, 2026',
-    readTime: '4 min read',
-    imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=800',
-  },
-  {
-    id: 3,
-    title: 'Building High-Performance Learning Zones',
-    excerpt: 'The technical architecture behind our DRM-protected, ultra-fast video streaming infrastructure.',
-    category: 'Product',
-    date: 'Mar 10, 2026',
-    readTime: '7 min read',
-    imageUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800',
-  }
-];
+import { ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { blogPosts } from '../../utils/blogData';
 
 const BlogSection: React.FC = () => {
+  const navigate = useNavigate();
+
   return (
-    <section id="blog" className="py-24 bg-white border-t border-slate-100 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-[800px] h-[400px] bg-slate-50 rounded-full blur-3xl opacity-50 -z-10 translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-8">
-          <div className="max-w-2xl">
-            <h2 className="text-3xl md:text-5xl font-black text-brand-slate mb-6">
-              Insights from the <span className="text-brand-blue">Frontier.</span>
-            </h2>
-            <p className="text-xl text-slate-600">
-              Thoughts on product, engineering, and the future of verifiable education from the Nunma team.
-            </p>
+    <section id="blogs" className="bg-[#fcfcfc] py-24">
+      <div className="max-w-7xl mx-auto px-6">
+
+        {/* Header */}
+        <div className="flex flex-col items-center mb-16 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-gray-100 text-sm font-bold text-gray-600 mb-6 shadow-sm">
+            <span>✨</span> Blogs
           </div>
-          <button className="group inline-flex items-center gap-2 px-6 py-3 bg-slate-100 text-brand-slate rounded-full font-semibold hover:bg-slate-200 transition-colors shrink-0">
-            <span>View All Posts</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          <h2 className="text-4xl md:text-5xl font-extrabold text-[#000000] mb-6 tracking-tight">
+            Explore Our Latest Blogs &amp; Insights
+          </h2>
+          <p className="text-gray-500 font-medium max-w-2xl mx-auto leading-relaxed">
+            Stay ahead in digital education — discover trends, teaching strategies, and product
+            updates designed to help educators and students thrive.
+          </p>
+        </div>
+
+        {/* Sub-header row */}
+        <div className="flex justify-between items-end mb-8">
+          <h3 className="font-extrabold text-lg text-[#000000]">Featured Blogs</h3>
+          <button
+            onClick={() => navigate('/blog')}
+            className="flex items-center gap-2 text-[#052e16] font-bold text-sm hover:text-[#c2f575] transition-colors focus:outline-none"
+          >
+            View all blogs <ArrowRight className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {blogPosts.map((post) => (
-            <article 
+        {/* Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {blogPosts.slice(0, 4).map((post) => (
+            <div
               key={post.id}
-              className="group flex flex-col bg-white rounded-3xl overflow-hidden border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer"
+              onClick={() => navigate(`/blog/${post.id}`)}
+              className="bg-[#f8fcf9] border border-gray-100 rounded-3xl p-4 hover:shadow-lg transition-all duration-300 group cursor-pointer"
             >
-              <div className="h-48 overflow-hidden relative">
-                <img 
-                  src={post.imageUrl} 
+              <div className="aspect-[4/3] rounded-2xl overflow-hidden mb-6 relative">
+                <img
+                  src={post.image}
                   alt={post.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
-                <div className="absolute top-4 left-4">
-                  <span className="px-3 py-1 bg-white/90 backdrop-blur-sm shadow-sm rounded-full text-xs font-bold text-brand-blue tracking-wide uppercase">
-                    {post.category}
-                  </span>
-                </div>
               </div>
-              
-              <div className="p-8 flex flex-col flex-1">
-                <div className="flex items-center gap-4 text-xs font-medium text-slate-500 mb-4">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>{post.readTime}</span>
-                  </div>
-                  <span>•</span>
-                  <span>{post.date}</span>
-                </div>
-                
-                <h3 className="text-xl font-bold text-brand-slate mb-3 group-hover:text-brand-blue transition-colors line-clamp-2">
+              <div className="px-2 pb-2">
+                <div className="text-xs font-bold text-gray-400 mb-3">{post.date}</div>
+                <h4 className="font-extrabold text-[#1a1a4e] text-[15px] leading-snug mb-4 line-clamp-2 min-h-[40px]">
                   {post.title}
-                </h3>
-                
-                <p className="text-slate-600 line-clamp-3 mb-6 flex-1">
+                </h4>
+                <p className="text-xs text-gray-500 leading-relaxed mb-4 line-clamp-2">
                   {post.excerpt}
                 </p>
-                
-                <div className="flex items-center text-brand-blue font-semibold text-sm mt-auto group-hover:text-[#c2f575] transition-colors">
-                  <span className="mr-2">Read Article</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/blog/${post.id}`);
+                  }}
+                  className="text-xs font-bold text-[#052e16] hover:text-[#c2f575] underline underline-offset-4 decoration-2 decoration-[#c2f575]/50 transition-colors focus:outline-none"
+                >
+                  Read Article
+                </button>
               </div>
-            </article>
+            </div>
           ))}
         </div>
+
       </div>
     </section>
   );

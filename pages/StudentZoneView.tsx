@@ -235,7 +235,15 @@ const StudentZoneView: React.FC = () => {
     // 2. Live & Scheduled Sessions
     const sessionsQ = query(collection(db, 'zones', zoneId, 'sessions'), where('status', 'in', ['live', 'scheduled']));
     const sessionsUnsub = onSnapshot(sessionsQ, (snapshot) => {
-      const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      
+      // Batch filtering logic
+      if (studentData?.batchId) {
+        sessions = sessions.filter(s => !s.batchId || s.batchId === studentData.batchId);
+      } else {
+        sessions = sessions.filter(s => !s.batchId);
+      }
+      
       setLiveSessions(sessions);
 
       // Auto-join if param present
@@ -318,7 +326,16 @@ const StudentZoneView: React.FC = () => {
     // 7. All Students (for Student List tab)
     const allStudentsQ = query(collection(db, 'zones', zoneId, 'students'));
     const allStudentsUnsub = onSnapshot(allStudentsQ, (snapshot) => {
-      setAllStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      let studentsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      
+      // Strict batch isolation for peers
+      if (studentData?.batchId) {
+        studentsList = studentsList.filter(s => s.batchId === studentData.batchId);
+      } else {
+        studentsList = studentsList.filter(s => !s.batchId);
+      }
+      
+      setAllStudents(studentsList);
     }, (error) => {
       console.warn("Error loading students list:", error);
     });
@@ -1370,7 +1387,7 @@ const StudentZoneView: React.FC = () => {
                       </div>
                       <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
                       <div>
-                        {session.date} @ {session.time}
+                        {formatDate(session.date)} @ {session.time}
                       </div>
                     </div>
                   </div>
@@ -1387,7 +1404,8 @@ const StudentZoneView: React.FC = () => {
               <button
                 onClick={() => {
                   if (db && authUser) {
-                    const q = query(collection(db, 'conversations'), where('zoneId', '==', zoneId), limit(1));
+                    const batchIdQuery = studentData?.batchId ? where('batchId', '==', studentData.batchId) : where('batchId', '==', null);
+                    const q = query(collection(db, 'conversations'), where('zoneId', '==', zoneId), batchIdQuery, limit(1));
                     getDocs(q).then(async snapshot => {
                       if (!snapshot.empty) {
                         const chatDoc = snapshot.docs[0];
@@ -1400,11 +1418,15 @@ const StudentZoneView: React.FC = () => {
                         navigate(`/inbox?tab=community&chatId=${chatDoc.id}`);
                       } else {
                         // Auto-create fallback
+                        const currentBatch = studentData?.batchId ? zone?.batches?.find((b: any) => b.id === studentData.batchId) : null;
+                        const chatName = currentBatch ? `${zone?.title || "Community Chat"} - ${currentBatch.name}` : (zone?.title || "Community Chat");
+                        
                         const newChatRef = await addDoc(collection(db, 'conversations'), {
-                          name: zone?.title || "Community Chat",
+                          name: chatName,
                           avatar: zone?.image || "",
                           type: 'community',
                           zoneId: zoneId,
+                          ...(studentData?.batchId ? { batchId: studentData.batchId } : { batchId: null }),
                           participants: [zone?.createdBy || zone?.tutorId, authUser.uid].filter(Boolean),
                           lastMessage: 'Community Chat created!',
                           lastMessageTime: serverTimestamp(),

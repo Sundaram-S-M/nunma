@@ -13,15 +13,95 @@ import {
 } from '@livekit/components-react';
 import { Track, ConnectionQuality, RoomEvent, VideoPresets, ConnectionState } from 'livekit-client';
 import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, collection, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, LogOut,
   Loader2, AlertCircle, Signal, SignalHigh, SignalMedium, SignalLow,
-  Zap, ZapOff, X, MessageSquare,
+  Zap, ZapOff, X, MessageSquare, Clock, Presentation, Wrench, Timer, Plus
 } from 'lucide-react';
+import { Tldraw, getSnapshot, loadSnapshot } from '@tldraw/tldraw';
+import '@tldraw/tldraw/tldraw.css';
+import EngagementSidebar from '../components/EngagementSidebar';
+
+// ─── Live Collaborative Whiteboard ────────────────────────────────────────────
+const LiveWhiteboard: React.FC<{ zoneId: string; isTutor: boolean }> = ({ zoneId, isTutor }) => {
+  const editorRef = useRef<any>(null);
+  const isSyncingRef = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMount = (editor: any) => {
+    editorRef.current = editor;
+
+    if (!isTutor) {
+      // Students: read-only — lock editing
+      editor.updateInstanceState({ isReadonly: true });
+    }
+
+    // Listen to Firestore for whiteboard updates
+    const wbRef = doc(db!, 'whiteboards', zoneId);
+    const unsub = onSnapshot(wbRef, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      if (!data?.snapshot) return;
+      // Don't overwrite our own changes on the tutor's side
+      if (isTutor && isSyncingRef.current) return;
+      try {
+        editor.store.mergeRemoteChanges(() => {
+          loadSnapshot(editor.store, data.snapshot);
+        });
+      } catch (e) {
+        console.warn('Whiteboard load error:', e);
+      }
+    });
+
+    if (isTutor) {
+      // Tutor: push store changes to Firestore (debounced 300ms)
+      editor.store.listen(() => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          isSyncingRef.current = true;
+          try {
+            const snapshot = getSnapshot(editor.store);
+            setDoc(doc(db!, 'whiteboards', zoneId), {
+              snapshot,
+              updatedAt: new Date().toISOString(),
+            });
+          } catch (e) {
+            console.error('Whiteboard sync error:', e);
+          } finally {
+            setTimeout(() => { isSyncingRef.current = false; }, 500);
+          }
+        }, 300);
+      }, { scope: 'document', source: 'user' });
+    }
+
+    return () => { unsub(); };
+  };
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <Tldraw
+        hideUi={!isTutor}
+        onMount={handleMount}
+      />
+      {!isTutor && (
+        <div style={{
+          position: 'absolute', top: 12, right: 12, zIndex: 1000,
+          background: 'rgba(194,245,117,0.1)', border: '1px solid rgba(194,245,117,0.3)',
+          borderRadius: 10, padding: '6px 14px',
+          color: '#c2f575', fontSize: '11px', fontWeight: 900,
+          textTransform: 'uppercase', letterSpacing: '0.1em',
+          backdropFilter: 'blur(10px)',
+        }}>
+          👁 Viewing Live
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── Network Quality Indicator ────────────────────────────────────────────────
 const NetworkQualityIndicator = () => {
@@ -111,6 +191,70 @@ const ClassroomContent = ({
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
+  // Stage Privacy Guard & Student Controls
+  const [studentStageStatus, setStudentStageStatus] = useState<string | null>(null);
+  const [permissionError, setPermissionError] = useState<boolean>(false);
+
+  const [showToolsModal, setShowToolsModal] = useState(false);
+  const [timerState, setTimerState] = useState<{ timerEndsAt: number, timerRemaining: number, timerStatus: string } | null>(null);
+  const [timerMins, setTimerMins] = useState('5');
+  const [timerSecs, setTimerSecs] = useState('0');
+
+  // Poll Creation State
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+
+  useEffect(() => {
+    if (!zoneId || !activeSessionId) return;
+    const unsub = onSnapshot(doc(db, 'zones', zoneId, 'liveSessions', activeSessionId), (snap) => {
+      if (snap.exists() && snap.data().timer) {
+        setTimerState(snap.data().timer);
+      } else {
+        setTimerState(null);
+      }
+    });
+    return () => unsub();
+  }, [zoneId, activeSessionId]);
+
+  const handleTimerAction = async (action: 'start' | 'pause' | 'resume' | 'cancel') => {
+    try {
+      const duration = (parseInt(timerMins || '0') * 60) + parseInt(timerSecs || '0');
+      const manageTimerFunc = httpsCallable(functions, 'manageLiveTimer');
+      await manageTimerFunc({ zoneId, sessionId: activeSessionId, action, duration });
+      if (action === 'start') setShowToolsModal(false);
+    } catch (e) {
+      console.error('Timer action failed:', e);
+      alert('Failed to update timer.');
+    }
+  };
+
+  const handleCreatePoll = async () => {
+    if (!pollQuestion.trim() || pollOptions.some(o => !o.trim()) || !zoneId || !activeSessionId || !user) return;
+    try {
+      const messagesRef = collection(db, 'zones', zoneId, 'liveSessions', activeSessionId, 'messages');
+      await addDoc(messagesRef, {
+        type: 'poll',
+        text: pollQuestion,
+        status: 'open',
+        senderId: user.uid,
+        senderName: user.name || 'Tutor',
+        createdAt: serverTimestamp(),
+        pollData: {
+          question: pollQuestion,
+          options: pollOptions,
+          votes: {}
+        }
+      });
+      setPollQuestion('');
+      setPollOptions(['', '']);
+      setShowToolsModal(false);
+      setShowChat(true);
+    } catch (error) {
+      console.error('Failed to create poll:', error);
+      alert('Failed to create poll.');
+    }
+  };
+
   // Fetch active session to enforce time limits
   useEffect(() => {
     if (!zoneId) return;
@@ -121,9 +265,9 @@ const ClassroomContent = ({
         if (!snap.empty) {
           const session = snap.docs[0].data();
           setActiveSessionId(snap.docs[0].id);
-          if (session.duration && session.createdAt) {
-            const start = new Date(session.createdAt);
-            const end = new Date(start.getTime() + session.duration * 60000);
+          if (session.duration && (session.startTime || session.createdAt)) {
+            const start = new Date(session.startTime || session.createdAt);
+            const end = new Date(start.getTime() + Number(session.duration) * 60000);
             setSessionEndTime(end);
           }
         }
@@ -173,6 +317,70 @@ const ClassroomContent = ({
     return () => clearInterval(interval);
   }, [sessionEndTime, localParticipant, isStudent, activeSessionId, navigate, zoneId]);
 
+  // Listen to student hand status
+  useEffect(() => {
+    if (!isStudent || !zoneId || !activeSessionId || !user?.uid) return;
+    const handRef = doc(db, 'zones', zoneId, 'liveSessions', activeSessionId, 'raisedHands', user.uid);
+    const unsub = onSnapshot(handRef, async (snap) => {
+      if (snap.exists()) {
+        const status = snap.data().status;
+        setStudentStageStatus(status);
+        
+        if (status === 'speaking' || status === 'speaking-video') {
+            try {
+                if (localParticipant) {
+                    await localParticipant.setMicrophoneEnabled(true);
+                    if (status === 'speaking-video') {
+                        await localParticipant.setCameraEnabled(true);
+                    } else {
+                        await localParticipant.setCameraEnabled(false);
+                    }
+                }
+                setPermissionError(false);
+            } catch (e) {
+                console.warn('Browser permission denied:', e);
+                setPermissionError(true);
+            }
+        }
+      } else {
+        setStudentStageStatus(null);
+        setPermissionError(false);
+        // Force unpublish if not on stage
+        if (localParticipant) {
+            localParticipant.setMicrophoneEnabled(false);
+            localParticipant.setCameraEnabled(false);
+        }
+      }
+    });
+    return () => unsub();
+  }, [isStudent, zoneId, activeSessionId, user?.uid, localParticipant]);
+
+  // Privacy Guard: Auto-unpublish if tutor disconnects
+  useEffect(() => {
+      if (!isStudent || !localParticipant?.room || !zoneId || !activeSessionId || !user?.uid) return;
+      const room = localParticipant.room;
+      
+      const checkTutorPresence = async () => {
+          // If room is completely empty of remote participants or no tutor is found
+          // (Wait, checking role via server metadata is safer, but we can assume if there are participants publishing, one is tutor.
+          // Better: simply assume if remoteParticipants size is 0, tutor is gone).
+          if (room.remoteParticipants.size === 0 && studentStageStatus) {
+              // Auto-lower hand and mute
+              localParticipant.setMicrophoneEnabled(false);
+              localParticipant.setCameraEnabled(false);
+              try {
+                  const handRef = doc(db, 'zones', zoneId, 'liveSessions', activeSessionId, 'raisedHands', user.uid);
+                  await deleteDoc(handRef);
+              } catch (e) {
+                  // Ignore
+              }
+          }
+      };
+
+      room.on(RoomEvent.ParticipantDisconnected, checkTutorPresence);
+      return () => { room.off(RoomEvent.ParticipantDisconnected, checkTutorPresence); };
+  }, [localParticipant, isStudent, studentStageStatus, zoneId, activeSessionId, user?.uid]);
+
   // All tracks except local participant tracks
   const allTracks = useTracks(
     [Track.Source.Camera, Track.Source.ScreenShare],
@@ -220,6 +428,7 @@ const ClassroomContent = ({
 
   const moreCount = remoteTracks.length - finalTracks.length;
   const [showChat, setShowChat] = useState(false);
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
 
   return (
     <div className="classroom-layout">
@@ -249,59 +458,238 @@ const ClassroomContent = ({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Main Video Grid */}
-        <main className="classroom-grid custom-scrollbar flex-1">
-          {remoteTracks.length === 0 ? (
-            <div className="classroom-empty-state">
-              <div
-                style={{
-                  width: 56, height: 56, borderRadius: '50%',
-                  border: '2px solid rgba(194,245,117,0.3)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  marginBottom: 16,
-                }}
-              >
-                <Video size={24} color="#c2f575" />
-              </div>
-              <p className="text-[11px] uppercase tracking-widest font-black text-gray-500">
-                Waiting for participants...
-              </p>
-            </div>
-          ) : (
-            <div className="participants-grid">
-              {finalTracks.map(track => (
-                <RemoteParticipantTile
-                  key={`${track.participant.sid}-${track.source}`}
-                  trackRef={track}
-                />
-              ))}
-              {isMobile && moreCount > 0 && (
-                <div className="more-pill">
-                  <span className="font-black text-2xl">+{moreCount}</span>
-                  <span className="text-[10px] uppercase tracking-tighter opacity-70">
-                    More Nodes
-                  </span>
+        {showWhiteboard ? (
+          <main className="flex-1 relative bg-white">
+            <LiveWhiteboard
+              zoneId={zoneId!}
+              isTutor={!isStudent}
+            />
+          </main>
+        ) : (
+          <main className="classroom-grid custom-scrollbar flex-1">
+            {remoteTracks.length === 0 ? (
+              <div className="classroom-empty-state">
+                <div
+                  style={{
+                    width: 56, height: 56, borderRadius: '50%',
+                    border: '2px solid rgba(194,245,117,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    marginBottom: 16,
+                  }}
+                >
+                  <Video size={24} color="#c2f575" />
                 </div>
-              )}
-            </div>
-          )}
-        </main>
+                <p className="text-[11px] uppercase tracking-widest font-black text-gray-500">
+                  Waiting for participants...
+                </p>
+              </div>
+            ) : (
+              <div className="participants-grid">
+                {finalTracks.map(track => (
+                  <RemoteParticipantTile
+                    key={`${track.participant.sid}-${track.source}`}
+                    trackRef={track}
+                  />
+                ))}
+                {isMobile && moreCount > 0 && (
+                  <div className="more-pill">
+                    <span className="font-black text-2xl">+{moreCount}</span>
+                    <span className="text-[10px] uppercase tracking-tighter opacity-70">
+                      More Nodes
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+        )}
 
-        {/* Chat Sidebar */}
-        {showChat && (
+        {/* Engagement Sidebar */}
+        {showChat && activeSessionId && (
           <aside className="chat-sidebar">
             <div className="chat-header">
-              <h3 className="text-sm font-black text-[#c2f575] uppercase tracking-widest">Stream Chat</h3>
+              <h3 className="text-sm font-black text-[#c2f575] uppercase tracking-widest">Classroom Panel</h3>
               <button onClick={() => setShowChat(false)} className="text-white/50 hover:text-white">
                 <X size={18} />
               </button>
             </div>
-            <div className="chat-container">
-              <Chat />
+            <div className="chat-container relative">
+              <EngagementSidebar sessionId={activeSessionId} />
             </div>
           </aside>
         )}
       </div>
+
+      {/* Student Stage Status Overlay */}
+      {isStudent && studentStageStatus?.startsWith('calling') && (
+        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 animate-in fade-in">
+          <div className="w-20 h-20 bg-[#c2f575]/20 rounded-full flex items-center justify-center mb-6 animate-pulse border border-[#c2f575]/50">
+            {studentStageStatus === 'calling-video' ? <Video size={40} className="text-[#c2f575]" /> : <Mic size={40} className="text-[#c2f575]" />}
+          </div>
+          <h2 className="text-3xl font-black text-white mb-4 tracking-tight">
+            {studentStageStatus === 'calling-video' ? "You're being called to video stage..." : "You're being called to speak..."}
+          </h2>
+          <p className="text-gray-400 max-w-md mx-auto">
+            Please wait while we set up your connection. You will be prompted to allow browser permissions shortly.
+          </p>
+        </div>
+      )}
+
+      {/* Permission Error Overlay */}
+      {isStudent && permissionError && (
+        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6">
+          <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mb-6 border border-red-500/50">
+            <AlertCircle size={40} className="text-red-500" />
+          </div>
+          <h2 className="text-3xl font-black text-white mb-4 tracking-tight">
+            Browser Permission Required
+          </h2>
+          <p className="text-gray-300 max-w-md mx-auto mb-8">
+            The tutor has invited you to the stage, but your browser blocked access to your microphone or camera. Please click allow when prompted.
+          </p>
+          <div className="flex gap-4">
+            <button 
+              onClick={async () => {
+                 try {
+                     if (localParticipant) {
+                         await localParticipant.setMicrophoneEnabled(true);
+                         if (studentStageStatus === 'speaking-video') {
+                             await localParticipant.setCameraEnabled(true);
+                         } else {
+                             await localParticipant.setCameraEnabled(false);
+                         }
+                     }
+                     setPermissionError(false);
+                 } catch (e) {
+                     console.warn('Still denied:', e);
+                 }
+              }}
+              className="bg-[#c2f575] text-[#0a0a0a] px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-transform"
+            >
+              Try Again
+            </button>
+            <button 
+              onClick={async () => {
+                 setPermissionError(false);
+                 try {
+                     if (activeSessionId && zoneId && user?.uid) {
+                         const handRef = doc(db, 'zones', zoneId, 'liveSessions', activeSessionId, 'raisedHands', user.uid);
+                         await deleteDoc(handRef);
+                     }
+                 } catch (e) {}
+              }}
+              className="bg-white/10 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-white/20 transition-colors border border-white/20"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tools Modal (Tutor Only) */}
+      {!isStudent && showToolsModal && (
+        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-[2rem] w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-black text-white flex items-center gap-2"><Wrench size={24} className="text-[#c2f575]" /> Instructor Tools</h2>
+              <button onClick={() => setShowToolsModal(false)} className="text-gray-400 hover:text-white"><X size={24} /></button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Timer Control */}
+              <div className="bg-white/5 rounded-2xl p-5 border border-white/5">
+                <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2 mb-4"><Timer size={16} className="text-purple-400" /> Session Timer</h3>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Everyone can see and control the timer (Tutor only)</p>
+                
+                {timerState && timerState.timerStatus !== 'stopped' ? (
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => handleTimerAction(timerState.timerStatus === 'paused' ? 'resume' : 'pause')}
+                      className="flex-1 py-3 bg-purple-500 text-white font-black uppercase text-xs rounded-xl hover:bg-purple-600 transition-colors"
+                    >
+                      {timerState.timerStatus === 'paused' ? 'Resume' : 'Pause'}
+                    </button>
+                    <button 
+                      onClick={() => handleTimerAction('cancel')}
+                      className="flex-1 py-3 bg-white/10 text-white font-black uppercase text-xs rounded-xl hover:bg-red-500/20 hover:text-red-400 transition-colors border border-white/10"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-4 mb-4">
+                      <div className="flex-1">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Minutes</label>
+                        <input type="number" value={timerMins} onChange={e => setTimerMins(e.target.value)} min="0" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-purple-500" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Seconds</label>
+                        <input type="number" value={timerSecs} onChange={e => setTimerSecs(e.target.value)} min="0" max="59" className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-purple-500" />
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleTimerAction('start')}
+                      className="w-full py-3 bg-purple-500 text-white font-black uppercase text-xs rounded-xl hover:bg-purple-600 transition-colors"
+                    >
+                      Start Timer
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Poll Creation */}
+              <div className="bg-white/5 rounded-2xl p-5 border border-white/5">
+                <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2 mb-4"><MessageSquare size={16} className="text-[#c2f575]" /> Create Poll</h3>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Polls appear directly in the chat feed</p>
+                
+                <div className="space-y-3 mb-4">
+                  <input 
+                    type="text" 
+                    placeholder="Ask a question..."
+                    value={pollQuestion}
+                    onChange={e => setPollQuestion(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-[#c2f575]" 
+                  />
+                  {pollOptions.map((opt, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder={`Option ${idx + 1}`}
+                        value={opt}
+                        onChange={e => {
+                          const newOpts = [...pollOptions];
+                          newOpts[idx] = e.target.value;
+                          setPollOptions(newOpts);
+                        }}
+                        className="flex-1 bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-[#c2f575]" 
+                      />
+                      {idx > 1 && (
+                        <button onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))} className="px-3 bg-red-500/20 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-colors">
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {pollOptions.length < 5 && (
+                    <button onClick={() => setPollOptions([...pollOptions, ''])} className="text-xs font-bold text-[#c2f575] flex items-center gap-1 hover:underline">
+                      <Plus size={14} /> Add Option
+                    </button>
+                  )}
+                </div>
+                
+                <button 
+                  onClick={handleCreatePoll}
+                  disabled={!pollQuestion.trim() || pollOptions.some(o => !o.trim())}
+                  className="w-full py-3 bg-[#c2f575] text-[#0a0a0a] font-black uppercase text-xs rounded-xl hover:bg-[#aee65c] transition-colors disabled:opacity-50"
+                >
+                  Create Poll
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Local PiP */}
       <LocalVideoPiP />
@@ -321,6 +709,24 @@ const ClassroomContent = ({
             <TrackToggle source={Track.Source.ScreenShare} className="control-btn">
               {({ enabled }) => <Monitor size={20} style={{ color: enabled ? '#c2f575' : 'white' }} />}
             </TrackToggle>
+          )}
+
+          <button
+            className={`control-btn ${showWhiteboard ? 'lk-button-active' : ''}`}
+            onClick={() => setShowWhiteboard(!showWhiteboard)}
+            title="Toggle Whiteboard"
+          >
+            <Presentation size={20} />
+          </button>
+
+          {!isStudent && (
+             <button
+               className={`control-btn ${showToolsModal ? 'lk-button-active' : ''}`}
+               onClick={() => setShowToolsModal(true)}
+               title="Instructor Tools"
+             >
+               <Wrench size={20} />
+             </button>
           )}
 
           <button 
@@ -572,6 +978,69 @@ const ClassroomContent = ({
   );
 };
 
+// ─── Global Timer Display Subcomponent ─────────────────────────────────────────
+const GlobalTimerDisplay = ({ timerState, isTutor, onOpenTools }: { timerState: any, isTutor: boolean, onOpenTools: () => void }) => {
+  const [display, setDisplay] = useState('');
+  const [isZero, setIsZero] = useState(false);
+
+  useEffect(() => {
+    if (!timerState || timerState.timerStatus === 'stopped') {
+      setDisplay('');
+      return;
+    }
+
+    const interval = setInterval(() => {
+      let remaining = 0;
+      if (timerState.timerStatus === 'paused') {
+        remaining = timerState.timerRemaining;
+      } else if (timerState.timerStatus === 'running') {
+        remaining = Math.max(0, timerState.timerEndsAt - Date.now());
+      }
+      
+      if (remaining <= 0) {
+        setDisplay('00:00');
+        setIsZero(true);
+      } else {
+        setIsZero(false);
+        const totalSecs = Math.floor(remaining / 1000);
+        const m = Math.floor(totalSecs / 60);
+        const s = totalSecs % 60;
+        setDisplay(`${m}:${s.toString().padStart(2, '0')}`);
+      }
+    }, 500);
+
+    // Run once immediately
+    let r = 0;
+    if (timerState.timerStatus === 'paused') r = timerState.timerRemaining;
+    else if (timerState.timerStatus === 'running') r = Math.max(0, timerState.timerEndsAt - Date.now());
+    if (r <= 0) { setDisplay('00:00'); setIsZero(true); }
+    else {
+        const totalSecs = Math.floor(r / 1000);
+        const m = Math.floor(totalSecs / 60);
+        const s = totalSecs % 60;
+        setDisplay(`${m}:${s.toString().padStart(2, '0')}`);
+        setIsZero(false);
+    }
+
+    return () => clearInterval(interval);
+  }, [timerState]);
+
+  if (!display) return null;
+
+  return (
+    <div 
+      onClick={() => isTutor && onOpenTools()}
+      className={`flex items-center gap-2 px-4 py-2 rounded-full font-black text-sm transition-all ${isTutor ? 'cursor-pointer hover:scale-105' : ''} ${
+        isZero ? 'bg-red-500 text-white animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.5)]' : 'bg-purple-500/20 text-purple-300 border border-purple-500/50'
+      }`}
+      title={isTutor ? "Timer Controls" : "Time Remaining"}
+    >
+      <Timer size={16} />
+      <span className="min-w-[40px] text-center">{display}</span>
+    </div>
+  );
+};
+
 // ─── Error Boundary ───────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -647,14 +1116,24 @@ const ClassroomPage: React.FC = () => {
 
   const handleDisconnect = (reason?: any) => {
     const reasonStr = typeof reason === 'string' ? reason : String(reason ?? '');
-    if (reasonStr !== 'leave' && reconnectAttempts.current < 3) {
+    
+    if (reasonStr === 'leave') {
+      if (user?.role === 'THALA' || user?.role === 'TUTOR') {
+        navigate('/workplace');
+      } else {
+        navigate(`/classroom/zone/${zoneId}`);
+      }
+      return;
+    }
+
+    if (reconnectAttempts.current < 3) {
       setIsReconnecting(true);
       reconnectAttempts.current += 1;
       setTimeout(() => {
         setRoomKey(prev => prev + 1);
         setIsReconnecting(false);
       }, 2000);
-    } else if (reconnectAttempts.current >= 3) {
+    } else {
       setError('Connection lost after multiple attempts. Please check your network.');
     }
   };
@@ -671,9 +1150,8 @@ const ClassroomPage: React.FC = () => {
         ]);
         const data = tokenResult.data as any;
         setToken(data.token);
-        // Always use the frontend env URL — the Firebase LIVEKIT_URL secret may point
-        // to a different LiveKit project than the API key is valid for.
-        setServerUrl(import.meta.env.VITE_LIVEKIT_URL);
+        // Use the backend provided serverUrl to ensure token signature matches
+        setServerUrl(data.serverUrl || import.meta.env.VITE_LIVEKIT_URL);
         if (zoneSnap.exists()) setZoneTitle(zoneSnap.data().title);
       } catch (err: any) {
         console.error('Initialization failed:', err);

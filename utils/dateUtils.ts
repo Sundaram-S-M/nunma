@@ -18,5 +18,5 @@ export const formatDate = (dateValue: any): string => {
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const yyyy = date.getFullYear();
     
-    return `${dd} ${mm} ${yyyy}`;
+    return `${dd}-${mm}-${yyyy}`;
 };

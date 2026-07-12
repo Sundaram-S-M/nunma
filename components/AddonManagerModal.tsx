@@ -99,7 +99,7 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                 quantity: blockCount
             });
             const orderData = result.data as any;
-            if (!orderData?.id) throw new Error('Invalid order response');
+            if (!orderData?.orderId) throw new Error('Invalid order response');
 
             const options = {
                 key: import.meta.env.VITE_RAZORPAY_KEY_ID,
@@ -107,7 +107,7 @@ export const AddonManagerModal: React.FC<AddonManagerModalProps> = ({ isOpen, on
                 currency: orderData.currency || 'INR',
                 name: 'Nunma Academy',
                 description: `Add-on: ${totalUnitsGained} ${unitLabel}`,
-                order_id: orderData.id,
+                order_id: orderData.orderId,
                 handler: (response: any) => {
                     alert(`Add-on purchased! Payment ID: ${response.razorpay_payment_id}`);
                     onClose();

@@ -76,10 +76,11 @@ import ExamAnalytics from '../components/ExamAnalytics';
 import MCQBuilder from '../components/MCQBuilder';
 import { QRCodeSVG } from 'qrcode.react';
 import ZoneCapacityMeter from '../components/ZoneCapacityMeter';
+import { formatDate } from '../utils/dateUtils';
 
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
-import { Student, AttendanceHistory, UserRole } from '../types';
+import { Student, AttendanceHistory, UserRole, Batch, MAX_BATCHES_PER_ZONE } from '../types';
 
 export interface MCQ {
   id: string;
@@ -156,6 +157,7 @@ interface AttendanceSession {
   date: string;
   time: string;
   className?: string;
+  batchId?: string;
 }
 
 const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type and press Enter", required = false }: any) => {
@@ -168,6 +170,25 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
         setItems([...items, inputVal.trim()]);
         setInputVal('');
       }
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text');
+    const newItems = pastedData
+      .split(/\r?\n/)
+      .map(item => item.trim())
+      .filter(item => item !== '');
+
+    if (newItems.length > 0) {
+      let combinedItems = [...items];
+      for (const item of newItems) {
+        if (combinedItems.length < maxItems && !combinedItems.includes(item)) {
+          combinedItems.push(item);
+        }
+      }
+      setItems(combinedItems);
     }
   };
 
@@ -196,6 +217,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={items.length === 0 ? placeholder : "Add another..."}
             className="flex-1 min-w-[150px] bg-transparent border-none outline-none font-bold text-indigo-900 px-4 py-2"
           />
@@ -268,6 +290,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const [editLearningOutcomes, setEditLearningOutcomes] = useState<string[]>([]);
   const [editSkillsGained, setEditSkillsGained] = useState<string[]>([]);
   const [editSubjects, setEditSubjects] = useState<string[]>([]);
+  const [editBatches, setEditBatches] = useState<string[]>([]);
   const [editZoneLevel, setEditZoneLevel] = useState('Beginner');
   const [editZonePrice, setEditZonePrice] = useState('');
   const [editZoneCurrency, setEditZoneCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
@@ -293,6 +316,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     setEditLearningOutcomes(zone.learningOutcomes || []);
     setEditSkillsGained(zone.skillsGained || []);
     setEditSubjects(zone.subjects || []);
+    setEditBatches(zone.batches?.map((b: any) => b.name) || []);
     setEditZoneLevel(zone.level || 'Beginner');
     setEditZonePrice(zone.price || '');
     setEditZoneCurrency(zone.currency || 'INR');
@@ -307,6 +331,19 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       return;
     }
     try {
+      const existingBatches = zone?.batches || [];
+      const finalBatches = existingBatches.filter((b: any) => editBatches.includes(b.name));
+      const existingNames = finalBatches.map((b: any) => b.name);
+      const batchesToAdd = editBatches.filter(name => !existingNames.includes(name));
+      
+      batchesToAdd.forEach((name, i) => {
+        finalBatches.push({
+          id: Date.now().toString() + '-' + i,
+          name: name,
+          color: ['#A78BFA', '#FBBF24', '#F87171', '#34D399', '#60A5FA', '#F472B6', '#c2f575'][Math.floor(Math.random() * 7)]
+        });
+      });
+
       await updateDoc(doc(db, 'zones', zoneId), {
         title: editZoneTitle,
         subtitle: editZoneSubtitle,
@@ -314,6 +351,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         learningOutcomes: editLearningOutcomes,
         skillsGained: editSkillsGained,
         subjects: editSubjects,
+        batches: finalBatches,
         level: editZoneLevel,
         price: editZonePrice,
         currency: editZoneCurrency,
@@ -329,7 +367,6 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
   // Landing Page State
   const [lpPaid, setLpPaid] = useState(false);
-  const [lpPaymentLink, setLpPaymentLink] = useState('');
   const [lpCalendar, setLpCalendar] = useState(false);
   const [lpEmailSubject, setLpEmailSubject] = useState('Your Workshop Confirmation');
   const [lpEmailBody, setLpEmailBody] = useState('We are excited to see you at the workshop!');
@@ -351,6 +388,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
   // Modals
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [selectedBatchForInvite, setSelectedBatchForInvite] = useState<string>('all');
   const [showShareAccessModal, setShowShareAccessModal] = useState(false);
   const [showAddExamModal, setShowAddExamModal] = useState(false);
   const [showMarkEntryModal, setShowMarkEntryModal] = useState(false);
@@ -476,7 +514,32 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const [downloadEndDate, setDownloadEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [manualAttendanceState, setManualAttendanceState] = useState<Record<string, 'Present' | 'Absent' | 'Late' | 'Pending'>>({});
 
-  // Schedule Modal State
+  // Batch System State
+  const [activeBatchFilter, setActiveBatchFilter] = useState<string>('all'); // 'all' | batchId | 'unassigned'
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [newBatchName, setNewBatchName] = useState('');
+  const [newBatchColor, setNewBatchColor] = useState('#4F46E5');
+  const [showBatchAssignDropdown, setShowBatchAssignDropdown] = useState<string | null>(null); // studentId
+
+  // Batch color palette for selection
+  const batchColorPalette = ['#4F46E5', '#DC2626', '#059669', '#D97706', '#7C3AED', '#DB2777', '#0891B2'];
+
+  // Computed: Batches from zone document
+  const zoneBatches: Batch[] = zone?.batches || [];
+
+  // Computed: Filter students by active batch
+  const filteredStudents = activeBatchFilter === 'all'
+    ? students
+    : activeBatchFilter === 'unassigned'
+      ? students.filter(s => !s.batchId)
+      : students.filter(s => s.batchId === activeBatchFilter);
+
+  // Computed: Filter attendance sessions by active batch
+  const filteredAttendanceSessions = activeBatchFilter === 'all'
+    ? attendanceSessions
+    : attendanceSessions.filter(s => s.batchId === activeBatchFilter || !s.batchId);
+
+
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [editingSession, setEditingSession] = useState<any>(null);
   const [scheduleTitle, setScheduleTitle] = useState('');
@@ -515,12 +578,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     toast.success("Public Zone Link copied to clipboard!");
   };
 
-  const handleGenerateInvite = async () => {
+  const handleGenerateInvite = async (batchId: string | null) => {
     if (!zoneId) return;
     try {
       setIsGeneratingInvite(true);
       const genFunc = httpsCallable(functions, 'generateZoneInvite');
-      const result = await genFunc({ zoneId });
+      const result = await genFunc({ zoneId, batchId });
       const { inviteToken, expiresAt } = result.data as any;
       setActiveInvite({ inviteToken, expiresAt });
     } catch (err: any) {
@@ -904,7 +967,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           const zData = zoneData as any;
           if (zData.landingPageConfig) {
             setLpPaid(zData.landingPageConfig.paid || false);
-            setLpPaymentLink(zData.landingPageConfig.paymentLink || '');
+
             setLpCalendar(zData.landingPageConfig.enableCalendar || false);
             setLpEmailSubject(zData.landingPageConfig.emailSubject || 'Your Workshop Confirmation');
             setLpEmailBody(zData.landingPageConfig.emailBody || 'We are excited to see you at the workshop!');
@@ -1613,21 +1676,57 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     if (!zone || !zoneId) return;
 
     const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const currentBatchId = activeBatchFilter !== 'all' ? activeBatchFilter : null;
+
     const newSession = {
       zoneId: zoneId,
       title: zone.title,
       status: 'live',
-      date: now.toISOString().split('T')[0],
-      time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      date: dateStr,
+      time: timeStr,
       startTime: now.toISOString(),
-      tutorName: 'Tutor' // Should get from AuthContext
+      tutorName: user?.name || 'Tutor',
+      ...(currentBatchId ? { batchId: currentBatchId } : {})
     };
 
     try {
-      // We use addDoc so ID is auto-generated, or can specify custom ID if needed
+      // 1. Create Live Session
       const docRef = await addDoc(collection(db, 'zones', zoneId, 'sessions'), newSession);
-      // Optimistic update or wait for onSnapshot
-      setActiveSession({ id: docRef.id, ...newSession });
+      const activeSessionId = docRef.id;
+
+      // 2. Create Attendance Session automatically
+      const newAttendanceSession = {
+        date: dateStr,
+        time: timeStr,
+        className: `Live: ${zone.title}`,
+        liveSessionId: activeSessionId,
+        ...(currentBatchId ? { batchId: currentBatchId } : {})
+      };
+      const attDocRef = await addDoc(collection(db, 'zones', zoneId, 'attendance_sessions'), newAttendanceSession);
+      const attendanceSessionId = attDocRef.id;
+
+      // Update the live session with the linked attendance session ID
+      await updateDoc(docRef, { attendanceSessionId });
+
+      // 3. Mark all students as 'Absent' initially
+      const updatePromises = filteredStudents.map(student => {
+        const history = student.attendanceHistory || [];
+        const newHistory = [...history, { 
+          sessionId: attendanceSessionId, 
+          status: 'Absent', 
+          date: dateStr, 
+          className: newAttendanceSession.className,
+          ...(currentBatchId ? { batchId: currentBatchId } : {})
+        }];
+        return updateDoc(doc(db, 'zones', zoneId, 'students', student.id), { attendanceHistory: newHistory });
+      });
+      await Promise.all(updatePromises);
+
+      setActiveSession({ id: activeSessionId, attendanceSessionId, ...newSession });
+      nunmaAlert("Live session and attendance tracker started successfully!", "success");
     } catch (e) {
       console.error("Failed to launch session", e);
       nunmaAlert("Failed to go live. Check connection.", "error");
@@ -1709,17 +1808,20 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   };
 
   const handleTakeAttendance = async () => {
-    if (students.length === 0) {
-      nunmaAlert("No students enrolled to take attendance.");
+    if (filteredStudents.length === 0) {
+      nunmaAlert("No students found for this batch to take attendance.");
       return;
     }
     if (!zoneId) return;
+
+    const currentBatchId = activeBatchFilter !== 'all' ? activeBatchFilter : null;
 
     const newSession: Omit<AttendanceSession, 'id'> = {
       // Don't set id here, let Firestore generate it
       date: attendanceDate,
       time: attendanceTime,
-      className: newAttendanceClassName
+      className: newAttendanceClassName,
+      ...(currentBatchId ? { batchId: currentBatchId } : {})
     };
 
     try {
@@ -1727,12 +1829,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       const docRef = await addDoc(collection(db, 'zones', zoneId, 'attendance_sessions'), newSession);
       const sessionId = docRef.id;
 
-      // Update Students history
-      const updatePromises = students.map(student => {
+      // Update Students history (only for filtered batch students)
+      const updatePromises = filteredStudents.map(student => {
         // Change default to Present
         const status = manualAttendanceState[student.id] || 'Present';
         const history = student.attendanceHistory || [];
-        const newHistory = [...history, { sessionId: sessionId, status, date: attendanceDate, className: newAttendanceClassName || '' }];
+        const newHistory = [...history, { sessionId: sessionId, status, date: attendanceDate, className: newAttendanceClassName || '', ...(currentBatchId ? { batchId: currentBatchId } : {}) }];
 
         // Only update if changed or new record (simplified: just update all)
         return updateDoc(doc(db, 'zones', zoneId, 'students', student.id), {
@@ -1777,6 +1879,81 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     navigator.clipboard.writeText(link);
     setIsCopying(true);
     setTimeout(() => setIsCopying(false), 2000);
+  };
+
+  // === BATCH CRUD OPERATIONS ===
+  const handleAddBatch = async () => {
+    if (!zoneId || !newBatchName.trim()) {
+      nunmaAlert("Please enter a batch name.", "error");
+      return;
+    }
+    if (zoneBatches.length >= MAX_BATCHES_PER_ZONE) {
+      nunmaAlert(`Maximum of ${MAX_BATCHES_PER_ZONE} batches allowed per zone.`, "error");
+      return;
+    }
+    if (zoneBatches.some(b => b.name.toLowerCase() === newBatchName.trim().toLowerCase())) {
+      nunmaAlert("A batch with this name already exists.", "error");
+      return;
+    }
+    try {
+      const newBatch: Batch = {
+        id: `batch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: newBatchName.trim(),
+        color: newBatchColor,
+        createdAt: new Date().toISOString()
+      };
+      const updatedBatches = [...zoneBatches, newBatch];
+      await updateDoc(doc(db, 'zones', zoneId), { batches: updatedBatches });
+      setNewBatchName('');
+      setNewBatchColor(batchColorPalette[(updatedBatches.length) % batchColorPalette.length]);
+      nunmaAlert(`Batch "${newBatch.name}" created!`);
+    } catch (e: any) {
+      console.error("Error creating batch:", e);
+      nunmaAlert("Failed to create batch.", "error");
+    }
+  };
+
+  const handleDeleteBatch = async (batchId: string) => {
+    if (!zoneId) return;
+    const batch = zoneBatches.find(b => b.id === batchId);
+    if (!batch) return;
+
+    const confirmed = await asyncConfirm(`Delete batch "${batch.name}"? Students will be moved to Unassigned.`);
+    if (!confirmed) return;
+
+    try {
+      // 1. Remove batch from zone document
+      const updatedBatches = zoneBatches.filter(b => b.id !== batchId);
+      await updateDoc(doc(db, 'zones', zoneId), { batches: updatedBatches });
+
+      // 2. Unassign students from this batch
+      const studentsInBatch = students.filter(s => s.batchId === batchId);
+      await Promise.all(studentsInBatch.map(s =>
+        updateDoc(doc(db, 'zones', zoneId, 'students', s.id), { batchId: null })
+      ));
+
+      // Reset filter if we were viewing the deleted batch
+      if (activeBatchFilter === batchId) {
+        setActiveBatchFilter('all');
+      }
+      nunmaAlert(`Batch "${batch.name}" deleted. ${studentsInBatch.length} students moved to Unassigned.`);
+    } catch (e: any) {
+      console.error("Error deleting batch:", e);
+      nunmaAlert("Failed to delete batch.", "error");
+    }
+  };
+
+  const handleAssignStudentBatch = async (studentId: string, batchId: string | null) => {
+    if (!zoneId) return;
+    try {
+      await updateDoc(doc(db, 'zones', zoneId, 'students', studentId), { batchId: batchId });
+      setShowBatchAssignDropdown(null);
+      const batchName = batchId ? zoneBatches.find(b => b.id === batchId)?.name || 'batch' : 'Unassigned';
+      toast.success(`Student moved to ${batchName}`);
+    } catch (e: any) {
+      console.error("Error assigning batch:", e);
+      toast.error("Failed to assign batch.");
+    }
   };
 
   if (!zone) {
@@ -1888,6 +2065,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       <TagInput label="Learning Outcomes" items={editLearningOutcomes} setItems={setEditLearningOutcomes} placeholder="Type outcome & press Enter" />
                       <TagInput label="Skills Gained" items={editSkillsGained} setItems={setEditSkillsGained} placeholder="Type skill & press Enter" />
                       <TagInput label="Subjects (Max 7)" items={editSubjects} setItems={setEditSubjects} maxItems={7} placeholder="Type subject & press Enter" />
+                      <TagInput label="Batches (Max 7)" items={editBatches} setItems={setEditBatches} maxItems={7} placeholder="E.g. Morning Batch & press Enter" />
                     </div>
                   </div>
 
@@ -2676,7 +2854,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         {/* WHITELIST MODAL */}
         {showAddStudentModal && (
           <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[120] flex items-center justify-center p-6 bg-nunma-forest/80 max-md:bg-black/40 backdrop-blur-xl max-md:backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
-            <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-2xl overflow-hidden p-12 animate-in zoom-in-95 duration-500 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-2xl p-12 animate-in zoom-in-95 duration-500 max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <div className="flex justify-between items-start mb-10">
                 <div>
                   <h3 className="text-4xl font-black text-nunma-forest tracking-tighter">Add Student</h3>
@@ -2711,6 +2889,19 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       </div>
                     </div>
                   </div>
+                </div>
+                <div className="space-y-4">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Assign to Batch (Optional)</label>
+                  <select
+                    value={selectedBatchForInvite}
+                    onChange={(e) => setSelectedBatchForInvite(e.target.value)}
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all cursor-pointer"
+                  >
+                    <option value="all">No Batch (Default)</option>
+                    {zoneBatches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-4">
                   <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Individual Invite</label>
@@ -2765,7 +2956,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         setIsWhitelisting(true);
                         try {
                           const processWhitelistFn = httpsCallable(functions, 'processWhitelist');
-                          const result: any = await processWhitelistFn({ zoneId, email: newStudentEmail });
+                          const result: any = await processWhitelistFn({ zoneId, email: newStudentEmail, batchId: selectedBatchForInvite === 'all' ? null : selectedBatchForInvite });
                           const data = result.data;
 
                           if (data.enrolled > 0) {
@@ -2870,7 +3061,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                             
                             await Promise.all(emailsToProcess.map(async (email) => {
                                 try {
-                                  const result: any = await processWhitelistFn({ zoneId, email });
+                                  const result: any = await processWhitelistFn({ zoneId, email, batchId: selectedBatchForInvite === 'all' ? null : selectedBatchForInvite });
                                   const data = result.data;
                                   if (data.enrolled) res.enrolled++;
                                   if (data.pending) res.pending++;
@@ -2904,11 +3095,114 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           </div>
         )}
 
+        {/* BATCH MANAGEMENT MODAL */}
+        {showBatchModal && (
+          <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[140] flex items-center justify-center p-6 bg-nunma-forest/80 max-md:bg-black/40 backdrop-blur-xl max-md:backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
+            <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-visible p-10 animate-in zoom-in-95 duration-500 max-h-[90vh] flex flex-col">
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h3 className="text-3xl font-black text-nunma-forest">Manage Batches</h3>
+                  <p className="text-xs text-gray-400 font-bold mt-1">{zoneBatches.length}/{MAX_BATCHES_PER_ZONE} batches created</p>
+                </div>
+                <button onClick={() => setShowBatchModal(false)} className="p-3 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all"><X size={20} /></button>
+              </div>
+
+              {/* Existing Batches */}
+              {zoneBatches.length > 0 && (
+                <div className="space-y-3 mb-8 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                  {zoneBatches.map(batch => {
+                    const count = students.filter(s => s.batchId === batch.id).length;
+                    return (
+                      <div key={batch.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:shadow-md transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg" style={{ backgroundColor: batch.color }}>
+                            {batch.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-black text-nunma-forest">{batch.name}</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{count} student{count !== 1 ? 's' : ''}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteBatch(batch.id)}
+                          className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {/* Unassigned group */}
+                  {(() => {
+                    const unassigned = students.filter(s => !s.batchId).length;
+                    return unassigned > 0 ? (
+                      <div className="flex items-center gap-4 p-4 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200 text-gray-500 font-black text-sm">?</div>
+                        <div>
+                          <p className="font-bold text-gray-400">Unassigned</p>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{unassigned} student{unassigned !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+
+              {/* Create New Batch */}
+              {zoneBatches.length < MAX_BATCHES_PER_ZONE ? (
+                <div className="space-y-4 pt-6 border-t border-gray-100">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Create New Batch</h4>
+                  <input
+                    type="text"
+                    placeholder="e.g. Morning Batch, Section A, Evening..."
+                    value={newBatchName}
+                    onChange={e => setNewBatchName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAddBatch()}
+                    className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all"
+                    maxLength={40}
+                  />
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Color</span>
+                    <div className="flex gap-2">
+                      {batchColorPalette.map(color => (
+                        <button
+                          key={color}
+                          onClick={() => setNewBatchColor(color)}
+                          className={`w-8 h-8 rounded-xl transition-all ${newBatchColor === color ? 'scale-125 ring-2 ring-offset-2 ring-gray-300' : 'hover:scale-110'}`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleAddBatch}
+                    disabled={!newBatchName.trim()}
+                    className="w-full py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Create Batch
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center p-4 bg-amber-50 text-amber-600 rounded-2xl text-xs font-bold">
+                  Maximum of {MAX_BATCHES_PER_ZONE} batches reached.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* TAKE ATTENDANCE MODAL */}
         {showTakeAttendanceModal && (
           <div className={`fixed top-0 right-0 bottom-0 max-md:left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[140] flex items-center justify-center p-6 bg-nunma-forest/80 max-md:bg-black/40 backdrop-blur-xl max-md:backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
             <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-visible p-10 animate-in zoom-in-95 duration-500 max-h-[90vh] flex flex-col">
-              <h3 className="text-3xl font-black text-nunma-forest mb-4">Take Attendance</h3>
+              <h3 className="text-3xl font-black text-nunma-forest mb-4">
+                Take Attendance
+                {activeBatchFilter !== 'all' && (
+                  <span className="ml-3 text-lg font-bold text-gray-400">
+                    — {activeBatchFilter === 'unassigned' ? 'Unassigned' : zoneBatches.find(b => b.id === activeBatchFilter)?.name || ''}
+                  </span>
+                )}
+              </h3>
 
               <div className="space-y-6 mb-8">
                 <div className="grid grid-cols-2 gap-4">
@@ -3018,7 +3312,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {students.map(student => (
+                    {filteredStudents.map(student => (
                       <tr key={student.id}>
                         <td className="py-4 font-bold text-nunma-forest">{student.name}</td>
                         <td className="py-4">
@@ -3179,6 +3473,61 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               </div>
             </div>
 
+            {/* 🏷️ BATCH FILTER BAR (shown when batches exist on people-related tabs) 🏷️ */}
+            {zoneBatches.length > 0 && (activeTab === 'attendance' || activeTab === 'exams' || activeTab === 'students' || activeTab === 'schedule') && (
+              <div className="px-16 max-md:px-4 pt-6 pb-2 flex items-center gap-3 overflow-x-auto no-scrollbar border-b border-gray-50">
+                <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest flex-shrink-0 mr-1">Batch</span>
+                <button
+                  onClick={() => setActiveBatchFilter('all')}
+                  className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex-shrink-0 ${
+                    activeBatchFilter === 'all'
+                      ? 'bg-nunma-forest text-white shadow-lg'
+                      : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                  }`}
+                >
+                  All ({students.length})
+                </button>
+                {zoneBatches.map(batch => {
+                  const count = students.filter(s => s.batchId === batch.id).length;
+                  return (
+                    <button
+                      key={batch.id}
+                      onClick={() => setActiveBatchFilter(batch.id)}
+                      className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex-shrink-0 flex items-center gap-2 ${
+                        activeBatchFilter === batch.id
+                          ? 'text-white shadow-lg'
+                          : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                      }`}
+                      style={activeBatchFilter === batch.id ? { backgroundColor: batch.color } : {}}
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: batch.color }} />
+                      {batch.name} ({count})
+                    </button>
+                  );
+                })}
+                {students.some(s => !s.batchId) && (
+                  <button
+                    onClick={() => setActiveBatchFilter('unassigned')}
+                    className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex-shrink-0 ${
+                      activeBatchFilter === 'unassigned'
+                        ? 'bg-gray-400 text-white shadow-lg'
+                        : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                    }`}
+                  >
+                    Unassigned ({students.filter(s => !s.batchId).length})
+                  </button>
+                )}
+                {isCreator && (
+                  <button
+                    onClick={() => setShowBatchModal(true)}
+                    className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-[#c2f575]/20 text-nunma-forest hover:bg-[#c2f575] transition-all flex-shrink-0 flex items-center gap-2"
+                  >
+                    <Settings size={12} /> Manage
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="p-16 max-md:p-4 flex-1">
               {activeTab === 'attendance' && (
                 <div className="space-y-10 max-md:space-y-8 animate-in fade-in duration-500">
@@ -3254,7 +3603,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               // Headers (Date & Time)
                               const header2 = ['', '', ''];
                               filteredSessions.forEach(session => {
-                                header2.push(`${session.date}\n${session.time || ''}`);
+                                header2.push(`${formatDate(session.date)}\n${session.time || ''}`);
                               });
                               const headerRow2 = worksheet.addRow(header2);
 
@@ -3336,7 +3685,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
                   {/* ── MOBILE: Beautiful Student Cards (name + attendance % only) ── */}
                   <div className="md:hidden space-y-3">
-                    {(students || []).filter(s =>
+                    {(filteredStudents || []).filter(s =>
                       (s?.name || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) ||
                       (s?.email || '').toLowerCase().includes((attendanceSearchQuery || "").toLowerCase())
                     ).length === 0 ? (
@@ -3347,7 +3696,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         <p className="text-sm font-black text-gray-300 uppercase tracking-widest">No students found</p>
                       </div>
                     ) : (
-                      (students || []).filter(s =>
+                      (filteredStudents || []).filter(s =>
                         (s?.name || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) ||
                         (s?.email || '').toLowerCase().includes((attendanceSearchQuery || "").toLowerCase())
                       ).map(student => {
@@ -3411,7 +3760,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                             .reverse()
                             .map(session => (
                               <th key={session.id} className="px-6 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
-                                {session.date}<br />
+                                {formatDate(session.date)}<br />
                                 <span className="text-[9px] opacity-70">{session.time}</span>
                               </th>
                             ))
@@ -3419,7 +3768,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {(students || []).filter(s => (s?.name || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) || (s?.email || '').toLowerCase().includes((attendanceSearchQuery || "").toLowerCase())).map(student => (
+                        {(filteredStudents || []).filter(s => (s?.name || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) || (s?.email || '').toLowerCase().includes((attendanceSearchQuery || "").toLowerCase())).map(student => (
                           <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
                             <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50/30">
                               <div className="flex items-center gap-4">
@@ -3489,6 +3838,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         zoneTitle={zone?.title || 'this Zone'}
                         activeInvite={activeInvite}
                         isGenerating={isGeneratingInvite}
+                        batches={zoneBatches}
                         onRevoke={() => setActiveInvite(null)}
                         onGenerate={handleGenerateInvite}
                       />
@@ -3680,7 +4030,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                    {[...students]
+                    {[...filteredStudents]
                       .sort((a, b) => (b.engagementScore || 0) - (a.engagementScore || 0))
                       .map(student => (
                       <div key={student.id} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
@@ -3710,7 +4060,40 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                             <p className="font-bold text-nunma-forest">{student.engagementScore || 0}</p>
                           </div>
                         </div>
-                        <div className="w-full pt-4">
+                        <div className="w-full pt-4 space-y-2 relative">
+                          {isCreator && zoneBatches.length > 0 && (
+                            <div className="relative">
+                              <button
+                                onClick={() => setShowBatchAssignDropdown(showBatchAssignDropdown === student.id ? null : student.id)}
+                                className="w-full py-3 bg-gray-50 text-gray-500 rounded-2xl font-black uppercase text-[9px] tracking-widest hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
+                              >
+                                <Users size={14} /> 
+                                {student.batchId ? zoneBatches.find(b => b.id === student.batchId)?.name || 'Unknown Batch' : 'Assign Batch'}
+                              </button>
+                              {showBatchAssignDropdown === student.id && (
+                                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-20">
+                                  <div className="max-h-40 overflow-y-auto">
+                                    <button
+                                      onClick={() => handleAssignStudentBatch(student.id, null)}
+                                      className={`w-full p-3 text-left text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 transition-all ${!student.batchId ? 'bg-gray-50 text-nunma-forest' : 'text-gray-400'}`}
+                                    >
+                                      Unassigned
+                                    </button>
+                                    {zoneBatches.map(b => (
+                                      <button
+                                        key={b.id}
+                                        onClick={() => handleAssignStudentBatch(student.id, b.id)}
+                                        className={`w-full p-3 text-left text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 transition-all flex items-center gap-2 ${student.batchId === b.id ? 'bg-gray-50 text-nunma-forest' : 'text-gray-400'}`}
+                                      >
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
+                                        {b.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           {isCreator && (
                             <button
                               onClick={() => handleDismissStudent(student)}
@@ -3728,7 +4111,14 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               {activeTab === 'schedule' && (
                 <div className="space-y-16 animate-in fade-in duration-500">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-5xl font-black text-nunma-forest tracking-tighter">Live Session Control</h3>
+                    <h3 className="text-5xl font-black text-nunma-forest tracking-tighter flex items-center gap-4">
+                      Live Session Control
+                      {activeBatchFilter !== 'all' && (
+                        <span className="text-2xl font-bold text-gray-400 bg-gray-100 px-4 py-2 rounded-xl flex items-center">
+                          Batch: {activeBatchFilter === 'unassigned' ? 'Unassigned' : zoneBatches.find(b => b.id === activeBatchFilter)?.name || ''}
+                        </span>
+                      )}
+                    </h3>
                     {!activeSession ? (
                       <button
                         onClick={handleLaunchLive}
@@ -3848,7 +4238,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                           <div>
                             <h5 className="text-lg font-black text-nunma-forest mb-1">{session.title}</h5>
                             <p className="text-xs text-gray-400 font-medium">
-                              {new Date(session.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}, {session.time} • {session.duration} mins
+                              {formatDate(session.date)}, {session.time} • {session.duration} mins
                             </p>
                           </div>
                         </div>
@@ -4004,7 +4394,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   </div>
 
                   {showExamAnalytics ? (
-                    <ExamAnalytics zoneId={zoneId!} />
+                    <ExamAnalytics zoneId={zoneId!} filteredStudents={filteredStudents} />
                   ) : (
                     <>
                       <div className="flex gap-6 items-center">
@@ -4137,7 +4527,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       try {
                         await updateDoc(doc(db, 'zones', zoneId), {
                           landingPageConfig: {
-                            paid: lpPaid, paymentLink: lpPaymentLink, enableCalendar: lpCalendar,
+                            paid: lpPaid, enableCalendar: lpCalendar,
                             emailSubject: lpEmailSubject, emailBody: lpEmailBody, customFields: lpCustomFields
                           }
                         });
@@ -4163,8 +4553,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
                         {lpPaid && (
                           <div className="space-y-2 animate-in slide-in-from-top-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Zoho Payment Link</label>
-                            <input value={lpPaymentLink} onChange={e => setLpPaymentLink(e.target.value)} placeholder="https://zoho.com/pay..." className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
+                            <p className="text-sm font-medium text-gray-500">Payments are securely handled via Razorpay on the landing page.</p>
                           </div>
                         )}
 

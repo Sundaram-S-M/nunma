@@ -4,6 +4,7 @@ admin.initializeApp();
 import * as functions from "firebase-functions";
 import { onRequest, onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 
 const resendApiKey = defineSecret('RESEND_API_KEY');
@@ -15,7 +16,7 @@ import { AccessToken, RoomServiceClient, TrackSource } from "livekit-server-sdk"
 import axios from "axios";
 import { PDFDocument, rgb } from "pdf-lib";
 // import Razorpay from "razorpay";
-// import { generatePlatformFeeInvoice } from "./zohoUtils";
+
 import { v4 as uuidv4 } from "uuid";
 import { Resend } from "resend";
 import Busboy from 'busboy';
@@ -86,29 +87,75 @@ export const generateLiveToken = onCall(
             const zoneData = zoneDoc.data();
             const isCreator = zoneData?.createdBy === uid;
 
-            const apiKey = process.env.LIVEKIT_API_KEY;
-            const apiSecret = process.env.LIVEKIT_API_SECRET;
-            const liveKitUrl = process.env.LIVEKIT_URL;
+            const apiKey = process.env.LIVEKIT_API_KEY?.trim();
+            const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
+            const liveKitUrl = process.env.LIVEKIT_URL?.trim();
 
             if (!apiKey || !apiSecret || !liveKitUrl) {
                 throw new functions.https.HttpsError("failed-precondition", "LiveKit secrets not configured.");
             }
 
             const at = new AccessToken(apiKey, apiSecret, {
-                identity: userName,
+                identity: uid,
                 name: userName,
             });
 
-            const isTutor = userRole === "TUTOR" || isCreator;
+            const isTutor = userRole === "TUTOR" || userRole === "THALA" || isCreator;
 
             // Add matching grants
             at.addGrant({
                 roomJoin: true,
+                roomCreate: isTutor,
                 room: sessionId,
                 canPublish: isTutor,
                 canSubscribe: true,
                 canPublishData: true,
             });
+
+            // --- ATTENDANCE TRACKING ---
+            if (!isTutor) {
+                try {
+                    const activeSessions = await db.collection("zones").doc(zoneId).collection("sessions")
+                        .where("status", "==", "live").limit(1).get();
+
+                    if (!activeSessions.empty) {
+                        const activeSessionDoc = activeSessions.docs[0];
+                        const attendanceSessionId = activeSessionDoc.data().attendanceSessionId;
+                        
+                        if (attendanceSessionId) {
+                            const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(uid);
+                            const studentDoc = await studentRef.get();
+                            
+                            if (studentDoc.exists) {
+                                const studentData = studentDoc.data() || {};
+                                let history = studentData.attendanceHistory || [];
+                                let updated = false;
+                                
+                                history = history.map((h: any) => {
+                                    if (h.sessionId === attendanceSessionId) {
+                                        h.status = 'Present';
+                                        updated = true;
+                                    }
+                                    return h;
+                                });
+
+                                if (!updated) {
+                                    history.push({
+                                        sessionId: attendanceSessionId,
+                                        status: 'Present',
+                                        date: activeSessionDoc.data().date || new Date().toISOString().split('T')[0],
+                                        className: `Live Session`
+                                    });
+                                }
+                                
+                                await studentRef.update({ attendanceHistory: history });
+                            }
+                        }
+                    }
+                } catch (attError) {
+                    functions.logger.error(`Failed to update attendance for user ${uid} in zone ${zoneId}`, attError);
+                }
+            }
 
             return {
                 token: await at.toJwt(),
@@ -174,8 +221,8 @@ export const getLiveKitToken = onCall(
             }
 
             // 5. Generate and Return Token
-            const apiKey = process.env.LIVEKIT_API_KEY;
-            const apiSecret = process.env.LIVEKIT_API_SECRET;
+            const apiKey = process.env.LIVEKIT_API_KEY?.trim();
+            const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
 
             if (!apiKey || !apiSecret) {
                 throw new HttpsError("failed-precondition", "LiveKit configuration is missing on the server.");
@@ -188,6 +235,7 @@ export const getLiveKitToken = onCall(
 
             at.addGrant({
                 roomJoin: true,
+                roomCreate: isAuthorized,
                 room: roomName
             });
 
@@ -211,7 +259,7 @@ export const toggleStudentAudio = onCall(
                 throw new functions.https.HttpsError("unauthenticated", "Login required.");
             }
 
-            const { zoneId, sessionId, studentIdentity, allowAudio } = request.data;
+            const { zoneId, sessionId, studentIdentity, allowAudio, allowVideo } = request.data;
             if (!zoneId || !sessionId || !studentIdentity) {
                 throw new functions.https.HttpsError("invalid-argument", "Missing required parameters.");
             }
@@ -236,9 +284,9 @@ export const toggleStudentAudio = onCall(
                 throw new functions.https.HttpsError("permission-denied", "Only tutors can manage permissions.");
             }
 
-            const apiKey = process.env.LIVEKIT_API_KEY;
-            const apiSecret = process.env.LIVEKIT_API_SECRET;
-            const liveKitUrl = process.env.LIVEKIT_URL;
+            const apiKey = process.env.LIVEKIT_API_KEY?.trim();
+            const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
+            const liveKitUrl = process.env.LIVEKIT_URL?.trim();
 
             if (!apiKey || !apiSecret || !liveKitUrl) {
                 throw new functions.https.HttpsError("failed-precondition", "LiveKit secrets not configured.");
@@ -246,16 +294,18 @@ export const toggleStudentAudio = onCall(
 
             const roomService = new RoomServiceClient(liveKitUrl, apiKey, apiSecret);
 
+            const publishSources: TrackSource[] = [];
+            if (allowAudio) publishSources.push(TrackSource.MICROPHONE);
+            if (allowVideo) publishSources.push(TrackSource.CAMERA);
+
             // Update participant permissions
-            // canPublish is the key here. We set canPublish: true for microphone.
-            // We keep video publish strictly false for students.
             await roomService.updateParticipant(sessionId, studentIdentity, undefined, {
-                canPublish: allowAudio,
-                canPublishSources: allowAudio ? [TrackSource.MICROPHONE] : [],
+                canPublish: allowAudio || allowVideo,
+                canPublishSources: publishSources,
                 canSubscribe: true,
             });
 
-            return { success: true, message: `Student audio ${allowAudio ? 'enabled' : 'disabled'}` };
+            return { success: true, message: `Student track permissions updated.` };
         } catch (error: any) {
             if (error instanceof functions.https.HttpsError) throw error;
             functions.logger.error("Global crash in toggleStudentAudio:", error);
@@ -893,6 +943,62 @@ export const razorpayWebhook = onRequest(
         try {
             const payload = req.body;
             const event = payload.event;
+            const eventId = req.headers['x-razorpay-event-id'] as string || payload.id;
+
+            // Handle account activation events for KYC
+            if (event === 'account.activated' || event === 'account.instantly_activated') {
+                const accountId = payload.payload?.account?.entity?.id;
+
+                if (!accountId) {
+                    functions.logger.warn("No account_id found in Razorpay account activation payload.", payload);
+                    res.status(200).send({ status: 'ignored', reason: 'no_account_id' });
+                    return;
+                }
+
+                if (eventId) {
+                    const eventRef = db.collection('processed_webhook_events').doc(eventId);
+                    const eventDoc = await eventRef.get();
+                    if (eventDoc.exists) {
+                        functions.logger.info(`Idempotency check: Account event ${eventId} already processed.`);
+                        res.status(200).send({ status: 'ignored', reason: 'already_processed' });
+                        return;
+                    }
+                    await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), type: event, accountId });
+                }
+
+                functions.logger.info(`Processing account activation for Razorpay Account: ${accountId}`);
+
+                // Find user by razorpayAccountId
+                const usersSnapshot = await db.collection('users')
+                    .where('razorpayAccountId', '==', accountId)
+                    .limit(1)
+                    .get();
+                
+                // Fallback to legacy field name just in case
+                const usersSnapshotLegacy = usersSnapshot.empty ? 
+                    await db.collection('users')
+                        .where('razorpay_account_id', '==', accountId)
+                        .limit(1)
+                        .get() : usersSnapshot;
+
+                if (usersSnapshotLegacy.empty) {
+                    functions.logger.error(`Critical Error: User with Razorpay Account ${accountId} not found.`);
+                    res.status(200).send({ status: 'error', message: 'user_not_found' });
+                    return;
+                }
+
+                const userDoc = usersSnapshotLegacy.docs[0];
+                // Check if already verified as an additional idempotency measure
+                if (userDoc.data().kycStatus !== 'VERIFIED') {
+                    await userDoc.ref.update({ kycStatus: 'VERIFIED' });
+                    functions.logger.info(`Successfully updated kycStatus to VERIFIED for user ${userDoc.id}`);
+                } else {
+                    functions.logger.info(`User ${userDoc.id} is already VERIFIED. No update needed.`);
+                }
+                
+                res.status(200).send({ status: 'ok' });
+                return;
+            }
             
             // Only handle payment.captured for core fulfillment
             if (event !== 'payment.captured' && event !== 'order.paid') {
@@ -2473,6 +2579,7 @@ export const processWhitelist = onCall(
                     source: "whitelist",
                     enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
                     joinedAt: admin.firestore.FieldValue.serverTimestamp(), // legacy support
+                    ...(request.data.batchId ? { batchId: request.data.batchId } : {})
                 });
 
                 // 2. Enrollment in user document
@@ -2506,7 +2613,8 @@ export const processWhitelist = onCall(
                     email: normalizedEmail,
                     addedAt: admin.firestore.FieldValue.serverTimestamp(),
                     addedBy: callerUid,
-                    status: "pending"
+                    status: "pending",
+                    ...(request.data.batchId ? { batchId: request.data.batchId } : {})
                 });
                 
                 results.pending = 1;
@@ -2570,7 +2678,7 @@ export const processWhitelist = onCall(
     }
 );
 
-// --- ASYNCHRONOUS INVOICING PIPELINE (V2) ---
+// --- ASYNCHRONOUS INVOICING PIPELINE (V3 — Retry-Safe & Idempotent) ---
 
 export const processInvoicingQueue = onDocumentCreated(
     { 
@@ -2585,23 +2693,80 @@ export const processInvoicingQueue = onDocumentCreated(
         const snapshot = event.data;
         if (!snapshot) return;
 
-        const data = snapshot.data();
         const db = admin.firestore();
+        const docRef = snapshot.ref;
+        const MAX_RETRIES = 5;
 
-        if (data.status !== 'pending') return;
+        // Status progression for step-skipping logic
+        const STATUS_ORDER = ['pending', 'customer_synced', 'invoice_created', 'invoice_paid', 'pdf_fetched', 'email_sent', 'delivered'];
+
+        const isAtOrPast = (current: string, target: string) =>
+            STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(target);
+
+        // Atomically advance status forward via Firestore transaction.
+        // Prevents race conditions if concurrent triggers overlap.
+        const advanceStatus = async (newStatus: string, extraFields: Record<string, any> = {}) => {
+            await db.runTransaction(async (transaction) => {
+                const freshDoc = await transaction.get(docRef);
+                const freshData = freshDoc.data();
+                if (!freshData) throw new Error('mail_queue document vanished during status update.');
+                const currentIdx = STATUS_ORDER.indexOf(freshData.status);
+                const newIdx = STATUS_ORDER.indexOf(newStatus);
+                if (newIdx > currentIdx) {
+                    transaction.update(docRef, {
+                        status: newStatus,
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        ...extraFields
+                    });
+                }
+            });
+        };
 
         try {
+            // Re-read document fresh — critical for retries where the event snapshot is stale
+            const freshSnap = await docRef.get();
+            const data = freshSnap.data();
+            if (!data) return;
+
+            const { status } = data;
+            const retryCount: number = data.retryCount || 0;
+
+            // Terminal states — stop processing
+            if (status === 'delivered' || status === 'failed') return;
+
+            // Retry budget exhausted — mark permanently failed and write to invoicing_failures
+            if (retryCount >= MAX_RETRIES) {
+                await docRef.update({
+                    status: 'failed',
+                    lastError: `Permanently failed after ${MAX_RETRIES} retries`,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                await db.collection('invoicing_failures').add({
+                    mailQueueDocId: docRef.id,
+                    uid: data.uid,
+                    paymentId: data.paymentId,
+                    amount: data.amount,
+                    type: data.type,
+                    lastStatus: status,
+                    lastError: data.lastError || `Permanently failed after ${MAX_RETRIES} retries`,
+                    retryCount,
+                    createdAt: data.createdAt,
+                    flaggedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                functions.logger.error(`[INVOICE ALERT] ${docRef.id} permanently FAILED after ${MAX_RETRIES} retries. Written to invoicing_failures for manual resolution.`, {
+                    uid: data.uid, paymentId: data.paymentId, lastStatus: status
+                });
+                return;
+            }
+
             const { uid, amount, type, paymentId } = data;
             const orgId = process.env.ZOHO_ORG_ID!;
-            const refreshToken = process.env.ZOHO_REFRESH_TOKEN!;
-            const clientId = process.env.ZOHO_CLIENT_ID!;
-            const clientSecret = process.env.ZOHO_CLIENT_SECRET!;
 
-            // 1. Refresh Zoho OAuth Token
+            // Step 1: Refresh Zoho OAuth Token (always — tokens are short-lived)
             const tokenParams = new URLSearchParams();
-            tokenParams.append('refresh_token', refreshToken);
-            tokenParams.append('client_id', clientId);
-            tokenParams.append('client_secret', clientSecret);
+            tokenParams.append('refresh_token', process.env.ZOHO_REFRESH_TOKEN!);
+            tokenParams.append('client_id', process.env.ZOHO_CLIENT_ID!);
+            tokenParams.append('client_secret', process.env.ZOHO_CLIENT_SECRET!);
             tokenParams.append('grant_type', 'refresh_token');
 
             const tokenResponse = await axios.post('https://accounts.zoho.in/oauth/v2/token', tokenParams.toString(), {
@@ -2616,122 +2781,236 @@ export const processInvoicingQueue = onDocumentCreated(
                 'Content-Type': 'application/json'
             };
 
-            // 2. Fetch User Details for Zoho Customer
+            // Fetch user details (cheap Firestore read, needed throughout pipeline)
             const userDoc = await db.collection("users").doc(uid).get();
             const userData = userDoc.data();
             const userName = userData?.name || "Customer";
             const userEmail = userData?.email;
-
             if (!userEmail) throw new Error(`Email not found for user ${uid}`);
 
-            // 3. Ensure Customer exists in Zoho
-            const searchResponse = await axios.get(
-                `https://www.zohoapis.in/books/v3/contacts?organization_id=${orgId}&email=${userEmail}`,
-                { headers: authHeaders }
-            );
-
-            let contactId = "";
-            if (searchResponse.data.contacts && searchResponse.data.contacts.length > 0) {
-                contactId = searchResponse.data.contacts[0].contact_id;
-            } else {
-                const contactResponse = await axios.post(
-                    `https://www.zohoapis.in/books/v3/contacts?organization_id=${orgId}`,
-                    { contact_name: userName, email: userEmail, contact_type: 'customer' },
+            // Step 2: Sync Customer in Zoho (skip if already done)
+            let contactId = data.zohoContactId || '';
+            if (!isAtOrPast(status, 'customer_synced')) {
+                const searchResponse = await axios.get(
+                    `https://www.zohoapis.in/books/v3/contacts?organization_id=${orgId}&email=${userEmail}`,
                     { headers: authHeaders }
                 );
-                contactId = contactResponse.data.contact.contact_id;
+
+                if (searchResponse.data.contacts?.length > 0) {
+                    contactId = searchResponse.data.contacts[0].contact_id;
+                } else {
+                    const contactResponse = await axios.post(
+                        `https://www.zohoapis.in/books/v3/contacts?organization_id=${orgId}`,
+                        { contact_name: userName, email: userEmail, contact_type: 'customer' },
+                        { headers: authHeaders }
+                    );
+                    contactId = contactResponse.data.contact.contact_id;
+                }
+
+                await advanceStatus('customer_synced', { zohoContactId: contactId });
+                functions.logger.info(`[Invoice Pipeline] ${docRef.id}: customer_synced (contact: ${contactId})`);
             }
 
-            // 4. Create Invoice
-            const invoicePayload = {
-                customer_id: contactId,
-                line_items: [{
-                    description: type === 'PLATFORM_FEE' ? 'Nunma Platform Fee' : 'Knowledge Stream Enrollment',
-                    rate: amount,
-                    quantity: 1
-                }],
-                reason: `Payment Received: ${paymentId}`,
-                status: 'sent'
-            };
+            // Step 3: Create Invoice (CRITICAL idempotency guard — skip if zohoInvoiceId already exists)
+            let invoiceId = data.zohoInvoiceId || '';
+            if (!isAtOrPast(status, 'invoice_created')) {
+                const invoiceResponse = await axios.post(
+                    `https://www.zohoapis.in/books/v3/invoices?organization_id=${orgId}`,
+                    {
+                        customer_id: contactId,
+                        line_items: [{
+                            description: type === 'PLATFORM_FEE' ? 'Nunma Platform Fee' : 'Knowledge Stream Enrollment',
+                            rate: amount,
+                            quantity: 1
+                        }],
+                        reason: `Payment Received: ${paymentId}`,
+                        status: 'sent'
+                    },
+                    { headers: authHeaders }
+                );
+                invoiceId = invoiceResponse.data.invoice.invoice_id;
 
-            const invoiceResponse = await axios.post(
-                `https://www.zohoapis.in/books/v3/invoices?organization_id=${orgId}`,
-                invoicePayload,
-                { headers: authHeaders }
-            );
+                // Persist zohoInvoiceId IMMEDIATELY — prevents duplicate invoices on retry
+                await advanceStatus('invoice_created', { zohoInvoiceId: invoiceId });
+                functions.logger.info(`[Invoice Pipeline] ${docRef.id}: invoice_created (invoice: ${invoiceId})`);
+            }
 
-            const invoiceId = invoiceResponse.data.invoice.invoice_id;
+            // Step 4: Mark Invoice as Paid (skip if already done)
+            if (!isAtOrPast(status, 'invoice_paid')) {
+                await axios.post(
+                    `https://www.zohoapis.in/books/v3/customerpayments?organization_id=${orgId}`,
+                    {
+                        customer_id: contactId,
+                        payment_mode: 'online',
+                        amount: amount,
+                        date: new Date().toISOString().split('T')[0],
+                        invoices: [{ invoice_id: invoiceId, amount_applied: amount }]
+                    },
+                    { headers: authHeaders }
+                );
+                await advanceStatus('invoice_paid');
+                functions.logger.info(`[Invoice Pipeline] ${docRef.id}: invoice_paid`);
+            }
 
-            // 5. Mark Invoice as Paid
-            await axios.post(
-                `https://www.zohoapis.in/books/v3/customerpayments?organization_id=${orgId}`,
-                {
-                    customer_id: contactId,
-                    payment_mode: 'online',
-                    amount: amount,
-                    date: new Date().toISOString().split('T')[0],
-                    invoices: [{
-                        invoice_id: invoiceId,
-                        amount_applied: amount
-                    }]
-                },
-                { headers: authHeaders }
-            );
-
-            // 6. Fetch Invoice PDF
+            // Step 5: Fetch Invoice PDF (idempotent — always re-fetch since we don't persist the binary)
             const pdfResponse = await axios.get(
                 `https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=${orgId}&accept=pdf`,
-                { 
-                    headers: authHeaders,
-                    responseType: 'arraybuffer' 
-                }
+                { headers: authHeaders, responseType: 'arraybuffer' }
             );
-
             const pdfBuffer = Buffer.from(pdfResponse.data, 'binary');
 
-            // 7. Dispatch Email via SMTP
-            const mailOptions = {
-                from: `"Nunma Academy" <${process.env.SMTP_USER}>`,
-                to: userEmail,
-                subject: `Invoice for ${type === 'PLATFORM_FEE' ? 'Platform Fee' : 'Course Enrollment'}`,
-                html: `
-                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                        <h1 style="color: #1A1A4E;">Payment Confirmed</h1>
-                        <p>Hi ${userName},</p>
-                        <p>Your payment has been successfully processed. Please find your invoice attached.</p>
-                        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                            <p style="margin: 5px 0;"><b>Payment ID:</b> ${paymentId}</p>
-                            <p style="margin: 5px 0;"><b>Amount:</b> ₹${amount}</p>
+            if (!isAtOrPast(status, 'pdf_fetched')) {
+                await advanceStatus('pdf_fetched');
+                functions.logger.info(`[Invoice Pipeline] ${docRef.id}: pdf_fetched`);
+            }
+
+            // Step 6: Dispatch Email via SMTP
+            // KNOWN & ACCEPTED TRADEOFF: If the function crashes after sendMail() succeeds but
+            // before 'email_sent' is written, a retry will resend the same invoice email. This means
+            // a customer could occasionally receive a duplicate receipt email. This is an accepted
+            // minor annoyance, NOT a financial risk — the Zoho invoice is guarded by zohoInvoiceId
+            // in Step 3 and will not be recreated. This is intentional and documented, not an
+            // overlooked bug.
+            if (!isAtOrPast(status, 'email_sent')) {
+                await getTransporter().sendMail({
+                    from: `"Nunma Academy" <${process.env.SMTP_USER}>`,
+                    to: userEmail,
+                    subject: `Invoice for ${type === 'PLATFORM_FEE' ? 'Platform Fee' : 'Course Enrollment'}`,
+                    html: `
+                        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                            <h1 style="color: #1A1A4E;">Payment Confirmed</h1>
+                            <p>Hi ${userName},</p>
+                            <p>Your payment has been successfully processed. Please find your invoice attached.</p>
+                            <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                                <p style="margin: 5px 0;"><b>Payment ID:</b> ${paymentId}</p>
+                                <p style="margin: 5px 0;"><b>Amount:</b> ₹${amount}</p>
+                            </div>
+                            <p>Happy learning,<br/><b>Nunma Team</b></p>
                         </div>
-                        <p>Happy learning,<br/><b>Nunma Team</b></p>
-                    </div>
-                `,
-                attachments: [{
-                    filename: `Invoice_${paymentId}.pdf`,
-                    content: pdfBuffer
-                }]
-            };
+                    `,
+                    attachments: [{
+                        filename: `Invoice_${paymentId}.pdf`,
+                        content: pdfBuffer
+                    }]
+                });
+                await advanceStatus('email_sent');
+                functions.logger.info(`[Invoice Pipeline] ${docRef.id}: email_sent to ${userEmail}`);
+            }
 
-            await getTransporter().sendMail(mailOptions);
-
-            // 8. Update Queue Status
-            await snapshot.ref.update({
-                status: 'delivered',
-                zohoInvoiceId: invoiceId,
+            // Step 7: Mark as delivered
+            await advanceStatus('delivered', {
                 deliveredAt: admin.firestore.FieldValue.serverTimestamp()
             });
-
-            console.log(`Async Pipeline Success: Invoice ${invoiceId} delivered to ${userEmail}`);
+            functions.logger.info(`[Invoice Pipeline] SUCCESS: ${docRef.id} fully delivered to ${userEmail} (invoice: ${invoiceId})`);
 
         } catch (error: any) {
-            console.error("Async Invoicing Failed:", error.response?.data || error.message);
-            await snapshot.ref.update({
-                status: 'failed',
-                error: error.response?.data || error.message,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            functions.logger.error(`[Invoice Pipeline] FAILED: ${docRef.id}`, {
+                error: error.response?.data || error.message
             });
+
+            // Re-read to get latest retryCount, then increment
+            const latestSnap = await docRef.get();
+            const latestData = latestSnap.data();
+            const currentRetryCount = latestData?.retryCount || 0;
+            const newRetryCount = currentRetryCount + 1;
+
+            if (newRetryCount >= MAX_RETRIES) {
+                // Permanently failed — write to invoicing_failures for manual resolution
+                await docRef.update({
+                    status: 'failed',
+                    lastError: error.response?.data || error.message,
+                    retryCount: newRetryCount,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                await db.collection('invoicing_failures').add({
+                    mailQueueDocId: docRef.id,
+                    uid: latestData?.uid,
+                    paymentId: latestData?.paymentId,
+                    amount: latestData?.amount,
+                    type: latestData?.type,
+                    lastStatus: latestData?.status,
+                    lastError: error.response?.data || error.message,
+                    retryCount: newRetryCount,
+                    createdAt: latestData?.createdAt,
+                    flaggedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                functions.logger.error(
+                    `[INVOICE ALERT] ${docRef.id} permanently FAILED after ${MAX_RETRIES} retries. Written to invoicing_failures for manual resolution.`,
+                    { uid: latestData?.uid, paymentId: latestData?.paymentId }
+                );
+            } else {
+                // Increment retryCount but keep intermediate status for resume-from-failure
+                await docRef.update({
+                    lastError: error.response?.data || error.message,
+                    retryCount: newRetryCount,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
+            // Re-throw to trigger Cloud Functions v2 native retry
             throw error;
         }
+    }
+);
+
+// --- INVOICING MONITOR (Hourly Watchdog) ---
+
+export const monitorStuckInvoices = onSchedule(
+    {
+        schedule: 'every 1 hours',
+        timeZone: 'Asia/Kolkata',
+        retryCount: 0
+    },
+    async () => {
+        const db = admin.firestore();
+        const oneHourAgo = admin.firestore.Timestamp.fromDate(
+            new Date(Date.now() - 60 * 60 * 1000)
+        );
+
+        // Query old documents, then filter non-terminal statuses in code
+        // to avoid composite index requirements
+        const oldDocs = await db.collection('mail_queue')
+            .where('createdAt', '<', oneHourAgo)
+            .get();
+
+        const stuckDocs = oldDocs.docs.filter(doc => {
+            const d = doc.data();
+            return d.status !== 'delivered' && d.status !== 'failed' && !d.monitorFlagged;
+        });
+
+        if (stuckDocs.length === 0) {
+            functions.logger.info('[Invoice Monitor] No stuck invoices found. All clear.');
+            return;
+        }
+
+        functions.logger.error(`[INVOICE MONITOR ALERT] Found ${stuckDocs.length} stuck invoice(s) older than 1 hour.`);
+
+        const batch = db.batch();
+        for (const doc of stuckDocs) {
+            const data = doc.data();
+            const failureRef = db.collection('invoicing_failures').doc();
+            batch.set(failureRef, {
+                mailQueueDocId: doc.id,
+                uid: data.uid,
+                paymentId: data.paymentId,
+                amount: data.amount,
+                type: data.type,
+                lastStatus: data.status,
+                lastError: data.lastError || 'Stuck — exceeded 1 hour without reaching delivered',
+                retryCount: data.retryCount || 0,
+                createdAt: data.createdAt,
+                flaggedAt: admin.firestore.FieldValue.serverTimestamp(),
+                source: 'hourly_monitor'
+            });
+
+            // Mark as flagged to avoid duplicate alerts on next monitor run
+            batch.update(doc.ref, { monitorFlagged: true });
+
+            functions.logger.error(`[INVOICE MONITOR] Stuck: ${doc.id} | status: ${data.status} | uid: ${data.uid} | paymentId: ${data.paymentId}`);
+        }
+
+        await batch.commit();
+        functions.logger.info(`[Invoice Monitor] Wrote ${stuckDocs.length} record(s) to invoicing_failures.`);
     }
 );
 
@@ -3014,6 +3293,82 @@ export const deleteBunnyVideo = onCall(
         } catch (error: any) {
             console.error(`Failed to delete Bunny video ${videoId}:`, error.message);
             throw new functions.https.HttpsError('internal', 'Failed to delete video from BunnyCDN');
+        }
+    }
+);
+
+export const manageLiveTimer = onCall(
+    { cors: true },
+    async (request) => {
+        if (!request.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+        }
+
+        const { zoneId, sessionId, action, duration } = request.data;
+        if (!zoneId || !sessionId || !action) {
+            throw new functions.https.HttpsError('invalid-argument', 'Missing parameters.');
+        }
+
+        const sessionRef = admin.firestore().collection('zones').doc(zoneId).collection('liveSessions').doc(sessionId);
+        
+        try {
+            await admin.firestore().runTransaction(async (transaction: admin.firestore.Transaction) => {
+                const sessionDoc = await transaction.get(sessionRef);
+                if (!sessionDoc.exists) {
+                    throw new functions.https.HttpsError('not-found', 'Session not found.');
+                }
+
+                const currentData = sessionDoc.data() || {};
+                const currentTimer = currentData.timer || {};
+                const now = Date.now();
+
+                let newTimer: any = {};
+
+                if (action === 'start') {
+                    if (typeof duration !== 'number' || duration <= 0) {
+                        throw new functions.https.HttpsError('invalid-argument', 'Valid duration required to start.');
+                    }
+                    newTimer = {
+                        timerEndsAt: now + (duration * 1000),
+                        timerRemaining: duration * 1000,
+                        timerStatus: 'running'
+                    };
+                } else if (action === 'pause') {
+                    if (currentTimer.timerStatus !== 'running') {
+                        throw new functions.https.HttpsError('failed-precondition', 'Timer is not running.');
+                    }
+                    const remaining = Math.max(0, currentTimer.timerEndsAt - now);
+                    newTimer = {
+                        timerEndsAt: currentTimer.timerEndsAt, // keep previous endsAt for history, though unused while paused
+                        timerRemaining: remaining,
+                        timerStatus: 'paused'
+                    };
+                } else if (action === 'resume') {
+                    if (currentTimer.timerStatus !== 'paused') {
+                        throw new functions.https.HttpsError('failed-precondition', 'Timer is not paused.');
+                    }
+                    newTimer = {
+                        timerEndsAt: now + currentTimer.timerRemaining,
+                        timerRemaining: currentTimer.timerRemaining,
+                        timerStatus: 'running'
+                    };
+                } else if (action === 'cancel') {
+                    newTimer = {
+                        timerEndsAt: 0,
+                        timerRemaining: 0,
+                        timerStatus: 'stopped'
+                    };
+                } else {
+                    throw new functions.https.HttpsError('invalid-argument', 'Invalid action.');
+                }
+
+                transaction.update(sessionRef, { timer: newTimer });
+            });
+            return { success: true };
+        } catch (error: any) {
+            console.error('manageLiveTimer error:', error);
+            if (error instanceof functions.https.HttpsError) throw error;
+            throw new functions.https.HttpsError('internal', 'Transaction failed.', error.message);
         }
     }
 );

@@ -8,9 +8,10 @@ import ReactMarkdown from 'react-markdown';
 
 interface ExamAnalyticsProps {
     zoneId: string;
+    filteredStudents?: any[];
 }
 
-const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
+const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId, filteredStudents }) => {
     const [exams, setExams] = useState<any[]>([]);
     const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
     const [examResults, setExamResults] = useState<any[]>([]);
@@ -50,11 +51,16 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
         setLoading(true);
         const subQ = query(collection(db, 'zones', zoneId, 'exams', selectedExamId, 'submissions'));
         const unsub = onSnapshot(subQ, snapshot => {
-            setExamResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            let results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            if (filteredStudents) {
+                const studentIds = new Set(filteredStudents.map(s => s.id));
+                results = results.filter((r: any) => studentIds.has(r.studentId));
+            }
+            setExamResults(results);
             setLoading(false);
         });
         return () => unsub();
-    }, [selectedExamId, zoneId]);
+    }, [selectedExamId, zoneId, filteredStudents]);
 
     const handleDownloadSingleReport = () => {
         if (!selectedExamId || examResults.length === 0) return;
@@ -93,9 +99,12 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId }) => {
                 return;
             }
 
-            // Fetch students to ensure we have a master list
-            const studentsSnap = await getDocs(collection(db, 'zones', zoneId, 'students'));
-            const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+            // Use filteredStudents if provided, otherwise fetch all
+            let students = filteredStudents;
+            if (!students) {
+                const studentsSnap = await getDocs(collection(db, 'zones', zoneId, 'students'));
+                students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+            }
 
             // Fetch submissions for all filtered exams
             const allSubmissions: Record<string, any[]> = {};

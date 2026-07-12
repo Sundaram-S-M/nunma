@@ -350,6 +350,32 @@ const Workplace: React.FC = () => {
     }
   };
 
+  const notifyStudentsOfLiveSession = async (zoneId: string, title: string, isLiveNow: boolean, scheduledDate?: string, scheduledTime?: string) => {
+    try {
+      const studentsSnap = await getDocs(collection(db, 'zones', zoneId, 'students'));
+      const notifyPromises: Promise<any>[] = [];
+      studentsSnap.forEach(studentDoc => {
+        const studentUid = studentDoc.id;
+        notifyPromises.push(
+          addDoc(collection(db, 'users', studentUid, 'notifications'), {
+            type: isLiveNow ? 'LIVE_SESSION_STARTED' : 'LIVE_SCHEDULED',
+            title: isLiveNow ? '🔴 Live Class Started' : '📅 Live Class Scheduled',
+            message: isLiveNow 
+              ? `Live class "${title}" is now live! Join now.`
+              : `A live class "${title}" has been scheduled for ${scheduledDate} @ ${scheduledTime}.`,
+            zoneId,
+            actionUrl: `/classroom/${zoneId}`,
+            read: false,
+            createdAt: serverTimestamp(),
+          })
+        );
+      });
+      await Promise.allSettled(notifyPromises);
+    } catch (notifyErr) {
+      console.warn('Could not send live notifications to students:', notifyErr);
+    }
+  };
+
   const handleScheduleLive = async (goLiveNow = false) => {
     if (!liveZoneId || !liveTitle) return;
     if (!goLiveNow && (!liveDate || !liveTime)) return;
@@ -368,10 +394,14 @@ const Workplace: React.FC = () => {
         time: goLiveNow ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : liveTime,
         duration: parseInt(liveDuration, 10) || 60,
         status: goLiveNow ? 'live' : 'scheduled',
+        startTime: goLiveNow ? new Date().toISOString() : '',
         createdAt: new Date().toISOString()
       };
 
       const docRef = await addDoc(collection(db, 'zones', liveZoneId, 'sessions'), sessionData);
+
+      // Notify all enrolled students
+      await notifyStudentsOfLiveSession(liveZoneId, liveTitle, goLiveNow, sessionData.date, sessionData.time);
 
       setIsSchedulingLive(false);
       setShowScheduleModal(false);
@@ -803,10 +833,59 @@ const Workplace: React.FC = () => {
                           </button>
                         ) : (
                           <button
-                            onClick={() => {
-                              // update to live
-                              setActiveSession({ ...session, status: 'live' });
-                              navigate(`/classroom/${session.zoneId}`);
+                            onClick={async () => {
+                              try {
+                                const now = new Date();
+                                const dateStr = now.toISOString().split('T')[0];
+                                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                                // Create Attendance Session document
+                                const newAttendanceSession = {
+                                  date: dateStr,
+                                  time: timeStr,
+                                  className: `Live: ${session.title}`,
+                                  liveSessionId: session.id,
+                                  ...(session.batchId ? { batchId: session.batchId } : {})
+                                };
+                                const attDocRef = await addDoc(collection(db, 'zones', session.zoneId, 'attendance_sessions'), newAttendanceSession);
+                                const attendanceSessionId = attDocRef.id;
+
+                                // Mark all students as 'Absent' initially
+                                try {
+                                  const studentsSnap = await getDocs(collection(db, 'zones', session.zoneId, 'students'));
+                                  const updatePromises = studentsSnap.docs
+                                    .filter(d => !session.batchId || d.data().batchId === session.batchId)
+                                    .map(studentDoc => {
+                                      const studentData = studentDoc.data() || {};
+                                      const history = studentData.attendanceHistory || [];
+                                      const newHistory = [...history, { 
+                                        sessionId: attendanceSessionId, 
+                                        status: 'Absent', 
+                                        date: dateStr, 
+                                        className: newAttendanceSession.className,
+                                        ...(session.batchId ? { batchId: session.batchId } : {})
+                                      }];
+                                      return updateDoc(doc(db, 'zones', session.zoneId, 'students', studentDoc.id), { attendanceHistory: newHistory });
+                                    });
+                                  await Promise.all(updatePromises);
+                                } catch (attErr) {
+                                  console.error("Failed to initialize student attendance history:", attErr);
+                                }
+
+                                const startTimeIso = now.toISOString();
+                                const updatedSession = { ...session, status: 'live', startTime: startTimeIso, attendanceSessionId };
+                                await updateDoc(doc(db, 'zones', session.zoneId, 'sessions', session.id), {
+                                  status: 'live',
+                                  startTime: startTimeIso,
+                                  attendanceSessionId
+                                });
+                                await notifyStudentsOfLiveSession(session.zoneId, session.title, true);
+                                setActiveSession(updatedSession);
+                                navigate(`/classroom/${session.zoneId}`);
+                              } catch (e) {
+                                console.error("Failed to start stream:", e);
+                                alert("Failed to start stream. Please try again.");
+                              }
                             }}
                             className="w-full mt-8 py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-900/20"
                           >

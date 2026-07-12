@@ -67,7 +67,7 @@ export default function SubscribeButton({
 
             const orderData = result.data as any;
 
-            if (!orderData || !orderData.id) {
+            if (!orderData || !orderData.orderId) {
                 throw new Error('Failed to create Razorpay order. The server returned an invalid response.');
             }
 
@@ -79,7 +79,7 @@ export default function SubscribeButton({
                 name: 'Nunma Academy',
                 description,
                 image: 'https://nunma.app/logo.png',
-                order_id: orderData.id,
+                order_id: orderData.orderId,
                 handler: function (response: any) {
                     alert(`Payment Successful! Payment ID: ${response.razorpay_payment_id}`);
                     console.log('Razorpay Success Response:', response);

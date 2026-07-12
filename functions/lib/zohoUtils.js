@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generatePlatformFeeInvoice = exports.getZohoAccessToken = void 0;
+exports.getZohoAccessToken = void 0;
 const axios_1 = __importDefault(require("axios"));
 let cachedToken = null;
 let tokenExpiryTime = 0;
@@ -31,28 +31,4 @@ async function getZohoAccessToken() {
     return cachedToken;
 }
 exports.getZohoAccessToken = getZohoAccessToken;
-async function generatePlatformFeeInvoice(tutorId, tutorName, platformFeeAmount, paymentId) {
-    const accessToken = await getZohoAccessToken();
-    const orgId = process.env.ZOHO_ORG_ID;
-    if (!orgId) {
-        throw new Error("ZOHO_ORG_ID is missing from environment.");
-    }
-    const response = await axios_1.default.post(`https://books.zoho.in/api/v3/invoices?organization_id=${orgId}&send=true`, {
-        customer_name: tutorName,
-        line_items: [{
-                name: `Nunma Platform Fee for Payment: ${paymentId}`,
-                rate: platformFeeAmount,
-                quantity: 1
-            }],
-        date: new Date().toISOString().split('T')[0],
-        status: "sent"
-    }, {
-        headers: {
-            'Authorization': `Zoho-oauthtoken ${accessToken}`,
-            'Content-Type': 'application/json'
-        }
-    });
-    return response.data;
-}
-exports.generatePlatformFeeInvoice = generatePlatformFeeInvoice;
 //# sourceMappingURL=zohoUtils.js.map

@@ -239,14 +239,22 @@ const Notifications: React.FC = () => {
               </div>
               {notif.zoneId && (
                 <button
-                  onClick={() => navigate(`/zone/${notif.zoneId}?tab=exams`)}
+                  onClick={() => {
+                    if (notif.type === 'LIVE_SESSION_STARTED' || notif.type === 'LIVE_SCHEDULED') {
+                      navigate(`/classroom/${notif.zoneId}`);
+                    } else {
+                      navigate(`/zone/${notif.zoneId}?tab=exams`);
+                    }
+                  }}
                   className={`px-8 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 transition-all relative z-10 whitespace-nowrap
-                    ${isExamLive ? 'bg-[#c2f575] text-nunma-forest hover:scale-105' :
-                      isExamScheduled ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-600 hover:text-white' :
+                    ${(isExamLive || notif.type === 'LIVE_SESSION_STARTED') ? 'bg-[#c2f575] text-nunma-forest hover:scale-105' :
+                      (isExamScheduled || notif.type === 'LIVE_SCHEDULED') ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-600 hover:text-white' :
                       isExamReminder ? 'bg-amber-100 text-amber-700 hover:bg-amber-500 hover:text-white' :
                       'bg-gray-50 text-gray-400 hover:bg-[#c2f575] hover:text-nunma-forest'}`}
                 >
-                  View Exam <ArrowRight size={14} />
+                  {(notif.type === 'LIVE_SESSION_STARTED') ? 'Enter Room' :
+                   (notif.type === 'LIVE_SCHEDULED') ? 'Go to Classroom' :
+                   'View Exam'} <ArrowRight size={14} />
                 </button>
               )}
               {!notif.zoneId && notif.actionUrl && (

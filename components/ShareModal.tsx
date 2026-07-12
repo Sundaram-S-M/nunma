@@ -16,8 +16,9 @@ interface ShareModalProps {
         expiresAt: number;
     } | null;
     isGenerating?: boolean;
+    batches?: any[];
     onRevoke: () => void;
-    onGenerate: () => void;
+    onGenerate: (batchId: string | null) => void;
 }
 
 export const ShareModal: React.FC<ShareModalProps> = ({ 
@@ -27,11 +28,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     zoneTitle,
     activeInvite,
     isGenerating,
+    batches = [],
     onRevoke,
     onGenerate
 }) => {
     const [isCopying, setIsCopying] = useState(false);
     const [isRevoking, setIsRevoking] = useState(false);
+    const [selectedBatchId, setSelectedBatchId] = useState<string>('all');
 
     if (!isOpen) return null;
 
@@ -108,12 +111,28 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                         <div className="w-24 h-24 bg-gray-50 text-gray-300 rounded-[2.5rem] flex items-center justify-center">
                             <LinkIcon size={40} />
                         </div>
-                        <div className="space-y-3">
+                        <div className="space-y-3 w-full">
                             <p className="text-xl font-bold text-nunma-forest">No Active Invite Token</p>
-                            <p className="text-sm text-gray-400 max-w-xs mx-auto">Generate a new 48-hour secure link to start inviting students directly.</p>
+                            <p className="text-sm text-gray-400 max-w-xs mx-auto mb-4">Generate a new 48-hour secure link to start inviting students directly.</p>
+                            
+                            {batches.length > 0 && (
+                                <div className="w-full max-w-xs mx-auto mb-6">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block text-left mb-2 ml-4">Assign to Batch</label>
+                                    <select
+                                        value={selectedBatchId}
+                                        onChange={(e) => setSelectedBatchId(e.target.value)}
+                                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all cursor-pointer"
+                                    >
+                                        <option value="all">Unassigned (Default)</option>
+                                        {batches.map(b => (
+                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                         </div>
                         <button 
-                            onClick={onGenerate}
+                            onClick={() => onGenerate(selectedBatchId === 'all' ? null : selectedBatchId)}
                             disabled={isGenerating}
                             className="px-12 py-6 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
                         >

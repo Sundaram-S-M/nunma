@@ -1,5 +1,6 @@
 import React from 'react';
 import { Radio, Clock, CheckCircle2 } from 'lucide-react';
+import { formatDate } from '../utils/dateUtils';
 
 interface LiveSessionStatusProps {
     status: 'live' | 'scheduled' | 'ended';
@@ -26,12 +27,7 @@ const LiveSessionStatus: React.FC<LiveSessionStatusProps> = ({ status, startTime
                     bgColor: 'bg-indigo-50',
                     borderColor: 'border-indigo-100',
                     icon: <Clock size={14} />,
-                    label: startTime ? new Date(startTime).toLocaleString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    }) : (date && time ? `${date} @ ${time}` : 'Scheduled Session')
+                    label: startTime ? `${formatDate(startTime)} @ ${new Date(startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : (date && time ? `${formatDate(date)} @ ${time}` : 'Scheduled Session')
                 };
             case 'ended':
                 return {

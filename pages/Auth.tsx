@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import LandingLogo from '../components/landing/LandingLogo';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { httpsCallable } from 'firebase/functions';
@@ -185,12 +186,9 @@ const Auth: React.FC = () => {
         {/* Left Side: Branding */}
         <div className="hidden lg:flex bg-nunma-forest p-24 text-white flex-col justify-between relative overflow-hidden">
           <div className="relative z-10">
-            <div className="flex items-center gap-4 mb-24">
-              <div className="w-20 h-20 rounded-[1.5rem] flex items-center justify-center shadow-2xl rotate-3 overflow-hidden bg-nunma-forest">
-                <img src="/assets/logo-icon.png" alt="Nunma Logo" className="w-full h-full object-cover" />
-              </div>
-              <span className="text-4xl font-black tracking-tighter">nunma</span>
-            </div>
+            <Link to="/" className="flex items-center gap-2 mb-24 hover:opacity-90 transition-opacity">
+              <LandingLogo className="h-10 text-[#c2f575]" />
+            </Link>
 
             <div className="animate-in fade-in slide-in-from-left-8 duration-1000">
               <h1 className="text-7xl xl:text-[6rem] font-black tracking-tighter leading-[0.9] mb-12">
@@ -223,12 +221,9 @@ const Auth: React.FC = () => {
         {/* Right Side: Form */}
         <div className="p-10 md:p-16 lg:p-24 flex flex-col justify-center bg-white">
           <div className="max-w-md mx-auto w-full">
-            <div className="lg:hidden flex items-center gap-3 mb-16">
-              <div className="w-10 h-10 bg-nunma-forest rounded-xl flex items-center justify-center overflow-hidden">
-                <img src="/assets/logo-icon.png" alt="Nunma" className="w-6 h-6 object-contain filter brightness-0 invert" />
-              </div>
-              <span className="text-2xl font-black tracking-tighter text-nunma-forest">nunma</span>
-            </div>
+            <Link to="/" className="lg:hidden flex items-center gap-2 mb-16 hover:opacity-90 transition-opacity">
+              <LandingLogo className="h-8 text-nunma-forest" />
+            </Link>
 
             {isLogin ? (
               <div className="animate-in fade-in duration-700">

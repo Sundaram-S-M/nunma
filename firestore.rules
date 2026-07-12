@@ -24,6 +24,15 @@ service cloud.firestore {
       );
     }
 
+    function isZoneStudent(zoneId) {
+      return exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid));
+    }
+
+    function getStudentBatchId(zoneId) {
+      let studentDoc = get(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid));
+      return studentDoc.data.get('batchId', null);
+    }
+
     // --- ZONES Collection ---
     // Zones — authenticated users can read zone metadata (for Discovery/Explore)
     match /zones/{zoneId} {
@@ -39,7 +48,13 @@ service cloud.firestore {
 
     // ZONES/STUDENTS
     match /zones/{zoneId}/students/{studentId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isZoneCreator(zoneId) ||
+        (isZoneStudent(zoneId) && (
+          studentId == request.auth.uid ||
+          resource.data.get('batchId', null) == getStudentBatchId(zoneId)
+        ))
+      );
       allow write: if request.auth != null && (
         studentId == request.auth.uid ||
         isZoneCreator(zoneId)
@@ -95,7 +110,13 @@ service cloud.firestore {
 
     // ZONES/SESSIONS & ATTENDANCE
     match /zones/{zoneId}/sessions/{sessionId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isZoneCreator(zoneId) ||
+        (isZoneStudent(zoneId) && (
+          resource.data.get('batchId', null) == null ||
+          resource.data.get('batchId', null) == getStudentBatchId(zoneId)
+        ))
+      );
       allow write: if isSignedIn() && isZoneCreator(zoneId);
       
       match /attendance/{attendeeId} {
@@ -211,7 +232,9 @@ service cloud.firestore {
         request.auth.uid in resource.data.participants ||
         (resource.data.type == 'community' && resource.data.zoneId != null && (
           isZoneCreator(resource.data.zoneId) ||
-          exists(/databases/$(database)/documents/zones/$(resource.data.zoneId)/students/$(request.auth.uid))
+          (isZoneStudent(resource.data.zoneId) && (
+            resource.data.get('batchId', null) == getStudentBatchId(resource.data.zoneId)
+          ))
         ))
       );
       allow create: if request.auth != null && (
@@ -247,6 +270,16 @@ service cloud.firestore {
       allow write: if request.auth != null && (
         isZoneCreator(zoneId)
       );
+    }
+
+    // --- WHITEBOARDS Collection ---
+    // Tutor (zone creator) can write; enrolled students can read live state.
+    match /whiteboards/{zoneId} {
+      allow read: if isSignedIn() && (
+        isZoneCreator(zoneId) ||
+        exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid))
+      );
+      allow write: if isSignedIn() && isZoneCreator(zoneId);
     }
   }
 }

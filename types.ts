@@ -45,6 +45,15 @@ export interface StatCardData {
 
 export type ZoneType = 'Class Management' | 'Course' | 'Workshop';
 
+export const MAX_BATCHES_PER_ZONE = 7;
+
+export interface Batch {
+  id: string;
+  name: string;          // e.g. "Morning Batch", "Evening Batch"
+  color: string;         // Hex color for visual distinction in tutor UI
+  createdAt: string;
+}
+
 export interface Zone {
   id: string;
   title: string;
@@ -60,6 +69,7 @@ export interface Zone {
   image: string;
   landingPageConfig?: LandingPageConfig;
   postSessionSurvey?: PostSessionSurveyConfig;
+  batches?: Batch[];     // Array of batches within this zone (max 7)
 }
 
 export interface LandingPageConfig {
@@ -99,6 +109,7 @@ export interface LiveSession {
   duration: number; // minutes
   status: 'scheduled' | 'live' | 'ended';
   coHosts?: string[];
+  batchId?: string;  // Which batch this session targets (null/undefined = all batches)
 }
 
 
@@ -152,6 +163,7 @@ export interface AttendanceHistory {
   sessionId: string;
   status: 'Present' | 'Absent' | 'Late' | 'Pending';
   date: string;
+  batchId?: string;  // Which batch this attendance record belongs to
 }
 
 export interface Student {
@@ -165,6 +177,7 @@ export interface Student {
   engagementScore: number;
   email?: string;
   phone?: string;
+  batchId?: string;  // Batch assignment (null/undefined = unassigned/global)
   attendanceHistory?: AttendanceHistory[];
   current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
   storage_used_bytes?: number;

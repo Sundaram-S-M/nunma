@@ -59,6 +59,25 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text');
+    const newItems = pastedData
+      .split(/\r?\n/)
+      .map(item => item.trim())
+      .filter(item => item !== '');
+
+    if (newItems.length > 0) {
+      let combinedItems = [...items];
+      for (const item of newItems) {
+        if (combinedItems.length < maxItems && !combinedItems.includes(item)) {
+          combinedItems.push(item);
+        }
+      }
+      setItems(combinedItems);
+    }
+  };
+
   const removeTag = (index: number) => {
     setItems(items.filter((_: any, i: number) => i !== index));
   };
@@ -84,6 +103,7 @@ const TagInput = ({ label, items, setItems, maxItems = 10, placeholder = "Type a
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={items.length === 0 ? placeholder : "Add another..."}
             className="flex-1 min-w-[150px] bg-transparent border-none outline-none font-bold text-indigo-900 px-4 py-2"
           />
@@ -125,6 +145,7 @@ const LaunchZone: React.FC = () => {
   const [learningOutcomes, setLearningOutcomes] = useState<string[]>([]);
   const [skillsGained, setSkillsGained] = useState<string[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
+  const [batches, setBatches] = useState<string[]>([]);
   const [zoneLevel, setZoneLevel] = useState<'Beginner' | 'Intermediate' | 'Expert'>('Beginner');
   const [zonePrice, setZonePrice] = useState('');
   const [zoneCurrency, setZoneCurrency] = useState<'USD' | 'INR' | 'EUR'>('INR');
@@ -203,7 +224,12 @@ const LaunchZone: React.FC = () => {
         students: 0,
         image: zoneImage,
         isPublic: !isPrivate,
-        zoneType: zoneType
+        zoneType: zoneType,
+        batches: batches.map((b, i) => ({
+          id: Date.now().toString() + '-' + i,
+          name: b,
+          color: ['#A78BFA', '#FBBF24', '#F87171', '#34D399', '#60A5FA', '#F472B6', '#c2f575'][i % 7]
+        }))
       };
 
       if (!db) {
@@ -319,6 +345,14 @@ const LaunchZone: React.FC = () => {
                 setItems={setSubjects} 
                 placeholder="Subject area (Press Enter)..." 
                 maxItems={5} 
+              />
+              
+              <TagInput 
+                label="Batches (Max 7)" 
+                items={batches} 
+                setItems={setBatches} 
+                placeholder="E.g. Morning Batch (Press Enter)..." 
+                maxItems={7} 
               />
 
               <div>
@@ -443,7 +477,7 @@ const LaunchZone: React.FC = () => {
                           <span className="text-sm font-black text-indigo-900 block">Net Tutor Earnings</span>
                           <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Estimated payout after fees</span>
                         </div>
-                        <span className="text-2xl font-black text-[#c2f575]" style={{ textShadow: '0px 1px 2px rgba(0,0,0,0.1)' }}>
+                        <span className="text-2xl font-black text-[#8eb829]">
                           {currencySymbol}{netPayout.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
