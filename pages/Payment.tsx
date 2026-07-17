@@ -3,7 +3,6 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CreditCard, ShieldCheck, Zap, Check, Globe, Video, Clock } from 'lucide-react';
 import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { loadStripe } from '@stripe/stripe-js';
 import { formatDate } from '../utils/dateUtils';
 import { db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';

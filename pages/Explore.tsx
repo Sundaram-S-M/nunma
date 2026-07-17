@@ -159,7 +159,7 @@ const Explore: React.FC = () => {
   return (
     <div className="space-y-10 animate-in fade-in duration-700 pb-20">
       {/* Modern Banner Hero Section */}
-      <div className="relative overflow-hidden w-full bg-nunma-forest rounded-[3.5rem] p-8 md:p-14 lg:p-20 shadow-2xl flex flex-col md:flex-row items-center md:items-start justify-between gap-12 group transition-all duration-700 hover:shadow-indigo-900/40">
+      <div className="relative overflow-hidden w-full bg-nunma-forest rounded-[2rem] md:rounded-[3.5rem] p-8 md:p-14 lg:p-20 shadow-2xl flex flex-col md:flex-row items-center md:items-start justify-between gap-6 md:gap-12 group transition-all duration-700 hover:shadow-indigo-900/40">
 
         {/* Decorative Gradients */}
         <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none transform translate-x-1/3 -translate-y-1/3 mix-blend-screen transition-transform duration-[2s] group-hover:scale-110"></div>
@@ -173,7 +173,7 @@ const Explore: React.FC = () => {
             <span className="text-[11px] font-black text-[#c2f575] uppercase tracking-[0.25em]">Global Discovery</span>
           </div>
 
-          <h1 className="text-5xl md:text-6xl lg:text-7xl xl:text-[5.5rem] font-black text-white tracking-tighter leading-[0.9] flex flex-col gap-2">
+          <h1 className="text-4xl md:text-5xl md:text-6xl lg:text-7xl xl:text-[5.5rem] font-black text-white tracking-tighter leading-[0.9] flex flex-col gap-2">
             <span>Explore</span>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#c2f575] via-teal-300 to-indigo-300 drop-shadow-[0_2px_20px_rgba(194,245,117,0.3)] filter pb-4">
               Knowledge Hub.
@@ -208,7 +208,7 @@ const Explore: React.FC = () => {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-[450px] bg-gray-50 rounded-[3rem] animate-pulse border border-gray-100"></div>
+            <div key={i} className="h-[450px] bg-gray-50 rounded-[1.5rem] md:rounded-[3rem] animate-pulse border border-gray-100"></div>
           ))}
         </div>
       ) : filteredZones.length > 0 ? (
@@ -216,7 +216,7 @@ const Explore: React.FC = () => {
           {filteredZones.map((zone) => (
               <div
                 key={zone.id}
-                className="group bg-white rounded-[3rem] border border-gray-100 p-6 md:p-8 hover:shadow-2xl hover:border-indigo-100 transition-all duration-700 cursor-pointer flex flex-col"
+                className="group bg-white rounded-[1.5rem] md:rounded-[3rem] border border-gray-100 p-6 md:p-8 hover:shadow-2xl hover:border-indigo-100 transition-all duration-700 cursor-pointer flex flex-col"
                 onClick={() => navigate(`/zone/${zone.id}`)}
               >
                 <div className="h-48 md:h-56 rounded-[2rem] overflow-hidden mb-6 md:mb-8 relative shadow-lg">
@@ -266,7 +266,7 @@ const Explore: React.FC = () => {
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-[3rem] p-32 border border-gray-50 shadow-sm text-center">
+        <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] p-32 border border-gray-50 shadow-sm text-center">
           <Layers size={80} className="mx-auto text-gray-100 mb-8" strokeWidth={1} />
           <h3 className="text-3xl font-black text-nunma-forest uppercase tracking-widest mb-4">No Active Streams</h3>
           <p className="text-gray-400 font-medium max-w-sm mx-auto text-lg leading-relaxed italic">

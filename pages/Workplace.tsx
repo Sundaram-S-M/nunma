@@ -157,7 +157,7 @@ const Workplace: React.FC = () => {
           </tr>
           <tr>
             <td style="border:none; font-weight:bold; color:#052E16;">User Name</td>
-            <td style="border:none;">${user?.tutorProfile?.legalName || user?.displayName || 'Tutor'}</td>
+            <td style="border:none;">${user?.taxDetails?.legalName || user?.name || 'Tutor'}</td>
             <td style="border:none;"></td>
             <td style="border:none;"></td>
           </tr>
@@ -203,7 +203,7 @@ const Workplace: React.FC = () => {
         </p>
         <button
           onClick={() => navigate('/dashboard')}
-          className="px-12 py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+          className="px-6 md:px-12 py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
         >
           Return to Dashboard
         </button>
@@ -770,7 +770,7 @@ const Workplace: React.FC = () => {
 
 
 
-      <div className="bg-white max-md:bg-transparent rounded-[3rem] max-md:rounded-none border max-md:border-0 border-gray-100 overflow-hidden shadow-[0_10px_50px_rgba(0,0,0,0.03)] max-md:shadow-none flex flex-col min-h-[600px]">
+      <div className="bg-white max-md:bg-transparent rounded-[1.5rem] md:rounded-[3rem] max-md:rounded-none border max-md:border-0 border-gray-100 overflow-hidden shadow-[0_10px_50px_rgba(0,0,0,0.03)] max-md:shadow-none flex flex-col min-h-[600px]">
         <div className="flex p-3 max-md:p-1 bg-gray-50/50 max-md:bg-transparent gap-2 max-md:gap-1 border-b max-md:border-b-0 border-gray-100 max-md:justify-between w-full">
           {(['zones', 'products', 'students', 'payments'] as const).map(tab => (
             <button
@@ -799,7 +799,7 @@ const Workplace: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {upcomingLive.map(session => (
-                      <div key={session.id} className="bg-white p-8 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-red-100 flex flex-col justify-between group hover:-translate-y-1 transition-all duration-500 relative">
+                      <div key={session.id} className="bg-white p-8 rounded-[1.5rem] md:rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-red-100 flex flex-col justify-between group hover:-translate-y-1 transition-all duration-500 relative">
                         <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={async () => {
@@ -969,7 +969,7 @@ const Workplace: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                 {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).map(student => (
-                  <div key={`${student.id}-${student.zoneId}`} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
+                  <div key={`${student.id}-${student.zoneId}`} className="bg-white border border-gray-100 rounded-[1.5rem] md:rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
                     <div className="relative">
                       <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
                         <img src={student.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} className="w-full h-full object-cover" alt="" />
@@ -1045,13 +1045,13 @@ const Workplace: React.FC = () => {
       {/* Schedule Live Modal remains exactly same as existing file */}
       {showScheduleModal && (
         <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300 transition-all`}>
-          <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
-            <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center bg-white">
+          <div className="bg-white rounded-[2rem] md:rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
+            <div className="px-6 md:px-12 py-10 border-b border-gray-50 flex justify-between items-center bg-white">
               <h3 className="text-3xl font-black text-nunma-forest tracking-tight">Schedule Live Class</h3>
               <button onClick={() => setShowScheduleModal(false)} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"><X size={24} /></button>
             </div>
 
-            <div className="p-12 space-y-10">
+            <div className="p-6 md:p-12 space-y-10">
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">SELECT ZONE</label>
                 <div className="relative">
@@ -1072,7 +1072,7 @@ const Workplace: React.FC = () => {
                 <input type="text" placeholder="e.g. Q&A and Strategy Review" value={liveTitle} onChange={(e) => setLiveTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
               </div>
 
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">DATE</label>
                   <input type="date" value={liveDate} onChange={(e) => setLiveDate(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-6 py-5 font-bold text-nunma-forest outline-none focus:bg-white transition-all" />

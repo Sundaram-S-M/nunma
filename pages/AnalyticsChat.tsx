@@ -144,7 +144,7 @@ const AnalyticsChat: React.FC = () => {
             </tr>
             <tr>
               <td style="border:none; font-weight:bold; color:#052E16;">User Name</td>
-              <td style="border:none;">${user?.displayName || 'Tutor'}</td>
+              <td style="border:none;">${user?.name || 'Tutor'}</td>
             </tr>
             <tr>
               <td style="border:none;"></td>

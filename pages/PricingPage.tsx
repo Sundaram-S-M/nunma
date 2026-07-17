@@ -215,7 +215,7 @@ const PricingPage: React.FC = () => {
                                     "{tier.badge}"
                                 </div>
                                 <div className="flex items-baseline gap-2 mb-4">
-                                    <span className="text-5xl font-black text-nunma-forest tracking-tight">{tier.price}</span>
+                                    <span className="text-4xl md:text-5xl font-black text-nunma-forest tracking-tight">{tier.price}</span>
                                     <span className="text-gray-400 font-medium">{tier.period}</span>
                                 </div>
                                 <p className="text-sm text-gray-500 font-medium min-h-[40px]">
@@ -253,7 +253,7 @@ const PricingPage: React.FC = () => {
                     ))}
                 </div>
 
-                <div className="mt-20 max-w-4xl mx-auto bg-indigo-50/50 rounded-[3rem] p-10 text-center border border-indigo-100">
+                <div className="mt-20 max-w-4xl mx-auto bg-indigo-50/50 rounded-[1.5rem] md:rounded-[3rem] p-10 text-center border border-indigo-100">
                     <h3 className="text-2xl font-black text-nunma-forest mb-4">Need more resources?</h3>
                     <p className="text-gray-600 font-medium mb-8 max-w-2xl mx-auto">
                         Standard and Premium users can easily purchase add-ons at any time to expand their limits without jumping to the next tier.

@@ -287,7 +287,7 @@ const Search: React.FC = () => {
       )}
 
       {!isSearched && (
-        <div className="text-center py-12 text-gray-300">
+        <div className="text-center py-6 md:py-12 text-gray-300">
           <SearchIcon size={120} strokeWidth={1} className="mx-auto mb-8 opacity-10" />
           <h3 className="text-3xl font-black uppercase tracking-widest text-gray-200">Search Discovery</h3>
           <p className="text-xs font-bold text-gray-300 uppercase tracking-widest mt-2">Find experts and learning zones across the platform</p>

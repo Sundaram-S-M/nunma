@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft,
+import { ArrowLeft,
   Users,
   Video,
   CheckCircle2,
@@ -53,8 +52,7 @@ import {
   Star,
   Trophy,
   Loader2, Calendar as CalendarIcon, Settings, MoreVertical, ShieldAlert, Shield, FileSearch, HelpCircle, BarChart3,
-  IndianRupee, DollarSign, Euro, Camera, ChevronRight
-} from 'lucide-react';
+  IndianRupee, DollarSign, Euro, Camera, ChevronRight, Pencil } from 'lucide-react';
 
 
 import { VideoUploadModal } from '../components/VideoUploadModal';
@@ -508,6 +506,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const [scheduledSessions, setScheduledSessions] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
+  const [attendanceModalSearchQuery, setAttendanceModalSearchQuery] = useState('');
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [bulkEmails, setBulkEmails] = useState('');
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [downloadStartDate, setDownloadStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1806,6 +1806,21 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       nunmaAlert("Failed to remove student.", "error");
     }
   };
+
+  useEffect(() => {
+    if (showTakeAttendanceModal && editingSessionId) {
+      const state: Record<string, "Pending" | "Present" | "Absent" | "Late"> = {};
+      filteredStudents.forEach(student => {
+        const history = student.attendanceHistory || [];
+        const record = history.find(h => h.sessionId === editingSessionId);
+        if (record) state[student.id] = record.status;
+      });
+      setManualAttendanceState(state);
+    } else if (!showTakeAttendanceModal) {
+      setEditingSessionId(null);
+      setAttendanceModalSearchQuery('');
+    }
+  }, [showTakeAttendanceModal, editingSessionId, filteredStudents]);
 
   const handleTakeAttendance = async () => {
     if (filteredStudents.length === 0) {
@@ -3304,7 +3319,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               </div>
 
               <div className="flex-1 overflow-y-auto mb-8 pr-2 custom-scrollbar">
-                <table className="w-full text-left">
+                <div className="mb-4">
+                    <input type="text" placeholder="Search students..." value={attendanceModalSearchQuery} onChange={e => setAttendanceModalSearchQuery(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
+                  </div>
+                  <table className="w-full text-left">
                   <thead className="sticky top-0 bg-white z-10">
                     <tr className="border-b border-gray-100">
                       <th className="py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Student</th>
@@ -3312,7 +3330,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filteredStudents.map(student => (
+                    {filteredStudents.filter(s => !attendanceModalSearchQuery || (s.name || '').toLowerCase().includes(attendanceModalSearchQuery.toLowerCase()) || (s.email || '').toLowerCase().includes(attendanceModalSearchQuery.toLowerCase())).map(student => (
                       <tr key={student.id}>
                         <td className="py-4 font-bold text-nunma-forest">{student.name}</td>
                         <td className="py-4">
@@ -3747,8 +3765,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-gray-50/50">
-                          <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest sticky left-0 bg-gray-50/50 z-10">Student</th>
-                          <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Attendance %</th>
+                          <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest sticky left-0 bg-gray-50/50 z-20 whitespace-nowrap min-w-[250px] max-w-[250px]">Student</th>
+                          <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Attendance %</th>
                           {/* Dynamic Session Columns (Last 5 or Searched) */}
                           {attendanceSessions
                             .filter(s =>
@@ -3756,10 +3774,16 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               (s?.className || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) ||
                               (s?.date || "").includes(attendanceSearchQuery || "")
                             )
-                            .slice(-5)
                             .reverse()
                             .map(session => (
-                              <th key={session.id} className="px-6 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
+                              <th key={session.id} className="px-6 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center group relative hover:text-nunma-forest transition-colors cursor-pointer" onClick={() => {
+                                setEditingSessionId(session.id);
+                                setManualAttendanceState({});
+                                setShowTakeAttendanceModal(true);
+                              }}>
+                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Pencil size={12} className="text-[#c2f575]" />
+                                </div>
                                 {formatDate(session.date)}<br />
                                 <span className="text-[9px] opacity-70">{session.time}</span>
                               </th>
@@ -3770,12 +3794,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       <tbody className="divide-y divide-gray-50">
                         {(filteredStudents || []).filter(s => (s?.name || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) || (s?.email || '').toLowerCase().includes((attendanceSearchQuery || "").toLowerCase())).map(student => (
                           <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
-                            <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50/30">
-                              <div className="flex items-center gap-4">
-                                <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" alt="" />
-                                <div className="flex flex-col">
-                                  <span className="font-bold text-nunma-forest">{student.name}</span>
-                                  <span className="text-xs text-gray-400 font-medium">{student.email}</span>
+                            <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50/30 z-10 w-[250px] min-w-[250px] max-w-[250px]">
+                              <div className="flex items-center gap-4 w-full">
+                                <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm shrink-0" alt="" />
+                                <div className="flex flex-col overflow-hidden min-w-0 flex-1">
+                                  <span className="font-bold text-nunma-forest truncate block" title={student.name}>{student.name}</span>
+                                  <span className="text-xs text-gray-400 font-medium truncate block" title={student.email}>{student.email}</span>
                                 </div>
                               </div>
                             </td>
@@ -3789,7 +3813,6 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                 (s?.className || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) ||
                                 (s?.date || "").includes(attendanceSearchQuery || "")
                               )
-                              .slice(-5)
                               .reverse()
                               .map(session => {
                                 const status = (student?.attendanceHistory || []).find(h => h?.sessionId === session?.id || h?.sessionId === (session as any)?.originalId)?.status || 'Pending';

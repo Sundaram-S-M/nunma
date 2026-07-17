@@ -420,7 +420,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
           >
             {({ isActive }) => (
               <div className={`${isActive ? 'text-nunma-forest' : 'text-current'} transition-colors duration-300 flex items-center justify-center`}>
-                {React.cloneElement(link.icon as React.ReactElement, { size: isActive ? 24 : 22, strokeWidth: isActive ? 2.5 : 2 })}
+                {React.cloneElement(link.icon as React.ReactElement<any>, { size: isActive ? 24 : 22, strokeWidth: isActive ? 2.5 : 2 })}
               </div>
             )}
           </NavLink>

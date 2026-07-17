@@ -69,7 +69,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
   const [showMenu, setShowMenu] = useState(false);
   const { user, logout } = useAuth();
   const menuRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
+  const btnRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const [unread, setUnread] = useState(0);
 

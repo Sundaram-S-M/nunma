@@ -271,7 +271,7 @@ const Notifications: React.FC = () => {
         })}
 
         {liveSessions.length === 0 && reminders.length === 0 && recentMessages.length === 0 && generalNotifications.length === 0 && (
-          <div className="bg-white rounded-[3rem] p-24 border border-gray-100 shadow-sm text-center">
+          <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] p-6 md:p-12 lg:p-24 border border-gray-100 shadow-sm text-center">
             <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-10">
               <Bell size={48} className="text-gray-100" />
             </div>

@@ -10,10 +10,11 @@ import {
   TrackToggle,
   ParticipantTile,
   Chat,
+  useRemoteParticipants,
 } from '@livekit/components-react';
 import { Track, ConnectionQuality, RoomEvent, VideoPresets, ConnectionState } from 'livekit-client';
 import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc, setDoc, onSnapshot, collection, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, collection, query, where, getDocs, updateDoc, serverTimestamp, addDoc, deleteDoc } from 'firebase/firestore';
 import { db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
@@ -22,70 +23,57 @@ import {
   Loader2, AlertCircle, Signal, SignalHigh, SignalMedium, SignalLow,
   Zap, ZapOff, X, MessageSquare, Clock, Presentation, Wrench, Timer, Plus
 } from 'lucide-react';
-import { Tldraw, getSnapshot, loadSnapshot } from '@tldraw/tldraw';
-import '@tldraw/tldraw/tldraw.css';
+import { Excalidraw } from '@excalidraw/excalidraw';
 import EngagementSidebar from '../components/EngagementSidebar';
 
 // ─── Live Collaborative Whiteboard ────────────────────────────────────────────
 const LiveWhiteboard: React.FC<{ zoneId: string; isTutor: boolean }> = ({ zoneId, isTutor }) => {
-  const editorRef = useRef<any>(null);
-  const isSyncingRef = useRef(false);
+  const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleMount = (editor: any) => {
-    editorRef.current = editor;
-
-    if (!isTutor) {
-      // Students: read-only — lock editing
-      editor.updateInstanceState({ isReadonly: true });
-    }
+  useEffect(() => {
+    if (!excalidrawAPI) return;
 
     // Listen to Firestore for whiteboard updates
     const wbRef = doc(db!, 'whiteboards', zoneId);
     const unsub = onSnapshot(wbRef, (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      if (!data?.snapshot) return;
+      if (!data?.elements) return;
       // Don't overwrite our own changes on the tutor's side
-      if (isTutor && isSyncingRef.current) return;
+      if (isTutor) return;
       try {
-        editor.store.mergeRemoteChanges(() => {
-          loadSnapshot(editor.store, data.snapshot);
-        });
+        excalidrawAPI.updateScene({ elements: JSON.parse(data.elements) });
       } catch (e) {
         console.warn('Whiteboard load error:', e);
       }
     });
 
-    if (isTutor) {
-      // Tutor: push store changes to Firestore (debounced 300ms)
-      editor.store.listen(() => {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => {
-          isSyncingRef.current = true;
-          try {
-            const snapshot = getSnapshot(editor.store);
-            setDoc(doc(db!, 'whiteboards', zoneId), {
-              snapshot,
-              updatedAt: new Date().toISOString(),
-            });
-          } catch (e) {
-            console.error('Whiteboard sync error:', e);
-          } finally {
-            setTimeout(() => { isSyncingRef.current = false; }, 500);
-          }
-        }, 300);
-      }, { scope: 'document', source: 'user' });
-    }
-
     return () => { unsub(); };
+  }, [excalidrawAPI, zoneId, isTutor]);
+
+  const handleChange = (elements: readonly any[], appState: any) => {
+    if (!isTutor) return;
+    
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      try {
+        setDoc(doc(db!, 'whiteboards', zoneId), {
+          elements: JSON.stringify(elements),
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('Whiteboard sync error:', e);
+      }
+    }, 300);
   };
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <Tldraw
-        hideUi={!isTutor}
-        onMount={handleMount}
+      <Excalidraw
+        excalidrawAPI={(api) => setExcalidrawAPI(api)}
+        onChange={handleChange}
+        viewModeEnabled={!isTutor}
       />
       {!isTutor && (
         <div style={{
@@ -159,7 +147,7 @@ const LocalVideoPiP = () => {
 
 // ─── Remote Participant Tile ──────────────────────────────────────────────────
 const RemoteParticipantTile = ({ trackRef }: { trackRef: any }) => (
-  <div className="remote-tile">
+  <div className={`remote-tile ${trackRef.source === Track.Source.ScreenShare ? 'screen-share-tile' : ''}`}>
     <ParticipantTile trackRef={trackRef} />
   </div>
 );
@@ -176,6 +164,7 @@ const ClassroomContent = ({
   const { localParticipant } = useLocalParticipant();
   const { user } = useAuth();
   const isStudent = user?.role === 'STUDENT';
+  const remoteParticipants = useRemoteParticipants();
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isHD, setIsHD] = useState(() => {
@@ -199,6 +188,7 @@ const ClassroomContent = ({
   const [timerState, setTimerState] = useState<{ timerEndsAt: number, timerRemaining: number, timerStatus: string } | null>(null);
   const [timerMins, setTimerMins] = useState('5');
   const [timerSecs, setTimerSecs] = useState('0');
+  const [raisedHandsCount, setRaisedHandsCount] = useState(0);
 
   // Poll Creation State
   const [pollQuestion, setPollQuestion] = useState('');
@@ -207,14 +197,22 @@ const ClassroomContent = ({
   useEffect(() => {
     if (!zoneId || !activeSessionId) return;
     const unsub = onSnapshot(doc(db, 'zones', zoneId, 'liveSessions', activeSessionId), (snap) => {
-      if (snap.exists() && snap.data().timer) {
-        setTimerState(snap.data().timer);
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.timer) {
+          setTimerState(data.timer);
+        } else {
+          setTimerState(null);
+        }
+        if (isStudent) {
+          setShowWhiteboard(data.currentView === 'whiteboard');
+        }
       } else {
         setTimerState(null);
       }
     });
     return () => unsub();
-  }, [zoneId, activeSessionId]);
+  }, [zoneId, activeSessionId, isStudent]);
 
   const handleTimerAction = async (action: 'start' | 'pause' | 'resume' | 'cancel') => {
     try {
@@ -255,28 +253,42 @@ const ClassroomContent = ({
     }
   };
 
-  // Fetch active session to enforce time limits
+  // Fetch active session to enforce time limits and listen for early endings
   useEffect(() => {
     if (!zoneId) return;
-    const fetchActiveSession = async () => {
-      try {
-        const q = query(collection(db, 'zones', zoneId, 'sessions'), where('status', '==', 'live'));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const session = snap.docs[0].data();
-          setActiveSessionId(snap.docs[0].id);
-          if (session.duration && (session.startTime || session.createdAt)) {
-            const start = new Date(session.startTime || session.createdAt);
-            const end = new Date(start.getTime() + Number(session.duration) * 60000);
-            setSessionEndTime(end);
-          }
+    const q = query(collection(db, 'zones', zoneId, 'sessions'), where('status', '==', 'live'));
+    const unsub = onSnapshot(q, (snap) => {
+      if (!snap.empty) {
+        const sessionDoc = snap.docs[0];
+        const session = sessionDoc.data();
+        setActiveSessionId(sessionDoc.id);
+        
+        // Ensure the liveSessions document exists so timer and polls work properly
+        if (!isStudent && sessionDoc.id) {
+            setDoc(doc(db, 'zones', zoneId, 'liveSessions', sessionDoc.id), {
+                initializedAt: serverTimestamp()
+            }, { merge: true }).catch(console.error);
         }
-      } catch (err) {
-        console.error('Failed to fetch active session for duration limit:', err);
+
+        if (session.duration && (session.startTime || session.createdAt)) {
+          const start = new Date(session.startTime || session.createdAt);
+          const end = new Date(start.getTime() + Number(session.duration) * 60000);
+          setSessionEndTime(end);
+        }
+      } else {
+        // Session ended or not found!
+        if (activeSessionId) {
+            if (localParticipant?.room) {
+              localParticipant.room.disconnect();
+            }
+            navigate(!isStudent ? `/workplace/manage/${zoneId}` : `/classroom/zone/${zoneId}`);
+        }
       }
-    };
-    fetchActiveSession();
-  }, [zoneId]);
+    }, (err) => {
+      console.error('Failed to listen to active session:', err);
+    });
+    return () => unsub();
+  }, [zoneId, activeSessionId, localParticipant, navigate]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -306,7 +318,7 @@ const ClassroomContent = ({
         if (localParticipant?.room) {
           localParticipant.room.disconnect();
         }
-        navigate(`/zone/${zoneId}`); // Redirect everyone back to zone detail
+        navigate(!isStudent ? `/workplace/manage/${zoneId}` : `/classroom/zone/${zoneId}`);
       } else {
         const minutes = Math.floor(diff / 60000);
         const seconds = Math.floor((diff % 60000) / 1000);
@@ -354,6 +366,16 @@ const ClassroomContent = ({
     });
     return () => unsub();
   }, [isStudent, zoneId, activeSessionId, user?.uid, localParticipant]);
+
+  // Tutor: Listen for raised hands to show a badge
+  useEffect(() => {
+    if (isStudent || !zoneId || !activeSessionId) return;
+    const handsRef = collection(db, 'zones', zoneId, 'liveSessions', activeSessionId, 'raisedHands');
+    const unsub = onSnapshot(query(handsRef, where('status', '==', 'waiting')), (snap) => {
+      setRaisedHandsCount(snap.size);
+    });
+    return () => unsub();
+  }, [isStudent, zoneId, activeSessionId]);
 
   // Privacy Guard: Auto-unpublish if tutor disconnects
   useEffect(() => {
@@ -429,6 +451,7 @@ const ClassroomContent = ({
   const moreCount = remoteTracks.length - finalTracks.length;
   const [showChat, setShowChat] = useState(false);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const hasScreenShare = finalTracks.some(t => t.source === Track.Source.ScreenShare);
 
   return (
     <div className="classroom-layout">
@@ -460,14 +483,16 @@ const ClassroomContent = ({
       <div className="flex flex-1 overflow-hidden">
         {showWhiteboard ? (
           <main className="flex-1 relative bg-white">
-            <LiveWhiteboard
-              zoneId={zoneId!}
-              isTutor={!isStudent}
-            />
+            <div className="absolute top-0 left-0 right-0 bottom-[90px] md:bottom-[80px]">
+              <LiveWhiteboard
+                zoneId={zoneId!}
+                isTutor={!isStudent}
+              />
+            </div>
           </main>
         ) : (
-          <main className="classroom-grid custom-scrollbar flex-1">
-            {remoteTracks.length === 0 ? (
+          <main className={`classroom-grid custom-scrollbar flex-1 ${hasScreenShare ? 'has-screen-share' : ''}`}>
+            {remoteParticipants.length === 0 ? (
               <div className="classroom-empty-state">
                 <div
                   style={{
@@ -484,7 +509,7 @@ const ClassroomContent = ({
                 </p>
               </div>
             ) : (
-              <div className="participants-grid">
+              <div className={`participants-grid ${hasScreenShare ? 'has-screen-share' : ''}`}>
                 {finalTracks.map(track => (
                   <RemoteParticipantTile
                     key={`${track.participant.sid}-${track.source}`}
@@ -711,13 +736,27 @@ const ClassroomContent = ({
             </TrackToggle>
           )}
 
-          <button
-            className={`control-btn ${showWhiteboard ? 'lk-button-active' : ''}`}
-            onClick={() => setShowWhiteboard(!showWhiteboard)}
-            title="Toggle Whiteboard"
-          >
-            <Presentation size={20} />
-          </button>
+          {!isStudent && (
+            <button
+              className={`control-btn ${showWhiteboard ? 'lk-button-active' : ''}`}
+              onClick={async () => {
+                const nextState = !showWhiteboard;
+                setShowWhiteboard(nextState);
+                if (activeSessionId && zoneId) {
+                  try {
+                    await setDoc(doc(db, 'zones', zoneId, 'liveSessions', activeSessionId), {
+                      currentView: nextState ? 'whiteboard' : 'video'
+                    }, { merge: true });
+                  } catch (e) {
+                    console.error('Failed to sync view state', e);
+                  }
+                }
+              }}
+              title="Toggle Whiteboard"
+            >
+              <Presentation size={20} />
+            </button>
+          )}
 
           {!isStudent && (
              <button
@@ -730,16 +769,38 @@ const ClassroomContent = ({
           )}
 
           <button 
-            className={`control-btn ${showChat ? 'lk-button-active' : ''}`}
+            className={`control-btn ${showChat ? 'lk-button-active' : ''} relative`}
             onClick={() => setShowChat(!showChat)}
-            title="Toggle Chat"
+            title="Toggle Sidebar"
           >
             <MessageSquare size={20} />
+            {raisedHandsCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold animate-bounce">
+                    {raisedHandsCount}
+                </span>
+            )}
           </button>
 
           <button
             className="control-btn leave-btn"
-            onClick={() => navigate(`/zones/${zoneId}`)}
+            onClick={async () => {
+              if (!isStudent && activeSessionId) {
+                const confirm = window.confirm("Are you sure you want to finish the live session for everyone?");
+                if (!confirm) return;
+                try {
+                  await updateDoc(doc(db, 'zones', zoneId!, 'sessions', activeSessionId), {
+                    status: 'ended',
+                    endedAt: serverTimestamp()
+                  });
+                } catch (e) {
+                  console.error('Failed to end session:', e);
+                }
+              }
+              if (localParticipant?.room) {
+                localParticipant.room.disconnect();
+              }
+              navigate(!isStudent ? `/workplace/manage/${zoneId}` : `/classroom/zone/${zoneId}`);
+            }}
           >
             <LogOut size={20} />
           </button>
@@ -820,18 +881,45 @@ const ClassroomContent = ({
           align-items: center;
           justify-content: center;
         }
+        .classroom-grid.has-screen-share {
+          padding: 0;
+        }
         .participants-grid {
           display: grid;
           gap: 16px;
           width: 100%;
           max-width: 1400px;
-          grid-template-columns: repeat(1, 1fr);
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
         }
-        @media (min-width: 768px) {
-          .participants-grid { grid-template-columns: repeat(2, 1fr); }
+        .participants-grid.has-screen-share {
+          max-width: 100%;
+          height: 100%;
+          gap: 0;
+          display: flex;
         }
-        @media (min-width: 1024px) {
-          .participants-grid { grid-template-columns: repeat(3, 1fr); }
+        .remote-tile.screen-share-tile {
+          grid-column: 1 / -1;
+          aspect-ratio: auto;
+          min-height: 60vh;
+        }
+        .participants-grid.has-screen-share .remote-tile.screen-share-tile {
+          flex: 1;
+          width: 100%;
+          height: 100%;
+          min-height: unset;
+          border-radius: 0;
+          border: none;
+        }
+        .participants-grid.has-screen-share .remote-tile:not(.screen-share-tile) {
+          position: fixed;
+          bottom: 100px;
+          right: 24px;
+          width: 240px;
+          aspect-ratio: 16 / 9;
+          z-index: 50;
+          border-radius: 12px;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+          border: 2px solid rgba(255,255,255,0.1);
         }
         .remote-tile {
           position: relative;

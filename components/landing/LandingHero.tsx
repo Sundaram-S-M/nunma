@@ -94,29 +94,13 @@ const LandingHero: React.FC = () => {
             <div className="w-3 h-3 rounded-full bg-green-400" />
           </div>
           {/* Mockup content */}
-          <div className="flex-1 rounded-xl bg-gray-50 border border-gray-100 flex overflow-hidden">
-            {/* Sidebar fake */}
-            <div className="w-1/5 bg-[#052e16] p-4 space-y-4 hidden sm:block">
-              <div className="h-5 w-16 bg-[#c2f575]/80 rounded-md mb-6" />
-              <div className="h-3 w-full bg-white/20 rounded" />
-              <div className="h-3 w-full bg-white/10 rounded" />
-              <div className="h-3 w-full bg-white/10 rounded" />
-              <div className="h-3 w-3/4 bg-white/10 rounded" />
-            </div>
-            {/* Main area */}
-            <div className="flex-1 p-6 space-y-4">
-              <div className="flex gap-3 mb-6">
-                <div className="h-16 w-1/3 bg-[#eef9f2] rounded-xl border border-gray-100 flex items-center justify-center">
-                  <div className="h-4 w-16 bg-[#c2f575]/60 rounded" />
-                </div>
-                <div className="h-16 w-1/3 bg-white rounded-xl border border-gray-100" />
-                <div className="h-16 w-1/3 bg-white rounded-xl border border-gray-100" />
-              </div>
-              <div className="h-4 w-1/2 bg-gray-200 rounded" />
-              <div className="h-4 w-full bg-gray-100 rounded" />
-              <div className="h-4 w-4/5 bg-gray-100 rounded" />
-              <div className="h-32 w-full bg-[#eef9f2]/50 rounded-xl border border-gray-100 mt-4" />
-            </div>
+          <div className="flex-1 rounded-xl bg-gray-900 border border-gray-100 flex overflow-hidden relative group">
+            <img 
+              src="/dashboard-mockup.png" 
+              alt="Dashboard Mockup" 
+              className="w-full h-full object-cover object-left-top transition-transform duration-700 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
           </div>
         </motion.div>
       </div>

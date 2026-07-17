@@ -94,3 +94,17 @@ export const downloadVCAsJSON = (vc: OpenBadgeVC) => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 };
+
+export const getLinkedInShareUrl = (certId: string, certName: string, issueDate: string) => {
+    const baseUrl = "https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME";
+    const params = new URLSearchParams({
+        name: certName,
+        organizationName: "Nunma Academy",
+        issueYear: new Date(issueDate).getFullYear().toString(),
+        issueMonth: (new Date(issueDate).getMonth() + 1).toString(),
+        certId: certId,
+        certUrl: `${window.location.origin}/#/verify/${certId}`
+    });
+    return `${baseUrl}&${params.toString()}`;
+};
+

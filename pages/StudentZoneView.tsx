@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, onSnapshot, addDoc, orderBy, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { formatDate } from '../utils/dateUtils';
 import { db, functions } from '../utils/firebase';
@@ -16,6 +17,7 @@ import {
   Award,
   Video,
   Layout,
+  Layers,
   Zap,
   Globe,
   ChevronDown,
@@ -34,13 +36,15 @@ import {
   LogOut,
   ArrowRight,
   Upload,
-  Calendar
+  Calendar,
+  Trophy
 } from 'lucide-react';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 import { generateOpenBadgeVC, downloadVCAsJSON } from '../utils/vcUtils';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import { BunnyVideoPlayer } from '../components/BunnyVideoPlayer';
+import ExamInsights from '../components/ExamInsights';
 
 const formatJoinedDate = (joinedAt: any) => {
   if (!joinedAt) return '';
@@ -66,6 +70,9 @@ const StudentZoneView: React.FC = () => {
   const [expandedChapters, setExpandedChapters] = useState<string[]>(['c1']);
   const [activeLiveRoom, setActiveLiveRoom] = useState<any>(null);
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
+  const [showExamInsightsModal, setShowExamInsightsModal] = useState(false);
+  const [selectedExamForInsights, setSelectedExamForInsights] = useState<any>(null);
+  const [selectedExamGroup, setSelectedExamGroup] = useState<{name: string, exams: any[]} | null>(null);
   const [showFullAttendance, setShowFullAttendance] = useState(false);
   const [activeTab, setActiveTab] = useState<'content' | 'exams' | 'students' | 'attendance' | 'marks'>('content');
   const [exams, setExams] = useState<any[]>([]);
@@ -88,6 +95,7 @@ const StudentZoneView: React.FC = () => {
   const [hasExplicitConsent, setHasExplicitConsent] = useState(false);
   const [postExamTimer, setPostExamTimer] = useState<number | null>(null);
   const [uploadedAnswerFiles, setUploadedAnswerFiles] = useState<Record<string, File>>({});
+  const [postExamAnswerFile, setPostExamAnswerFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [curriculum, setCurriculum] = useState<any[]>([]);
   const [studentData, setStudentData] = useState<any>(null);
@@ -146,7 +154,10 @@ const StudentZoneView: React.FC = () => {
   useEffect(() => {
     if (!authUser?.uid || !zoneId || exams.length === 0) return;
 
-    exams.forEach(exam => {
+    // Filter exams applicable to this student's batch
+    const applicableExams = exams.filter((exam: any) => !exam.batchId || exam.batchId === studentData?.batchId);
+
+    applicableExams.forEach(exam => {
       let isLive = false;
       if (exam.scheduledAt?.toDate) {
         isLive = exam.scheduledAt.toDate() <= new Date();
@@ -271,7 +282,11 @@ const StudentZoneView: React.FC = () => {
     const studentDocRef = doc(db, 'zones', zoneId, 'students', authUser.uid);
     const studentUnsub = onSnapshot(studentDocRef, (docSnap) => {
       if (docSnap.exists()) {
-        setStudentData({ id: docSnap.id, ...docSnap.data() });
+        const sData = { id: docSnap.id, ...docSnap.data() } as any;
+        setStudentData(sData);
+        if (sData.activeExamId && sData.examEndsAt) {
+          setExamEndTime(new Date(sData.examEndsAt));
+        }
       } else {
         setStudentData(null);
       }
@@ -416,6 +431,9 @@ const StudentZoneView: React.FC = () => {
       if (foundExam) {
         setActiveExam(foundExam);
         setCheatViolations(studentData.currentExamWarnings || 0);
+        if (studentData.examEndsAt) {
+          setExamEndTime(new Date(studentData.examEndsAt));
+        }
         // Continue but maybe show a message
         console.log("Resuming active exam session...");
       }
@@ -839,184 +857,9 @@ const StudentZoneView: React.FC = () => {
 
   const currentZoneLive = liveSessions.find(s => s.zoneId === zoneId && s.status === 'live');
 
-  const handleClaimCertificate = () => {
-    setIsGeneratingCert(true);
-    setTimeout(() => {
-      const vc = generateOpenBadgeVC(authUser?.email || 'anon-id', authUser?.name || 'Anonymous Student', zone, 85);
-      setGeneratedVC(vc);
-      setIsGeneratingCert(false);
-      setShowCertModal(true);
-    }, 1500);
-  };
-
-  const handleLeaveZone = async () => {
-    if (!zoneId || !authUser) return;
-
-    if (confirm('Are you sure you want to leave this zone? All your progress and attendance data will be lost.')) {
-      try {
-        // Assuming student ID is stored in studentData.id which should be same as students doc ID
-        if (studentData && studentData.id) {
-          await deleteDoc(doc(db, 'zones', zoneId, 'students', studentData.id));
-        } else {
-          // If we don't have studentData loaded but we want to leave, we try authUser.uid?
-          // But 'Grant Access' used random IDs initially.
-          // If we are migrating, we should rely on studentData being loaded.
-          // If manual grant, ID was random. We found it via query.
-          if (studentData?.id) {
-            await deleteDoc(doc(db, 'zones', zoneId, 'students', studentData.id));
-          }
-        }
-        navigate('/workplace');
-      } catch (e) {
-        console.error("Failed to leave zone", e);
-        alert("Failed to leave zone.");
-      }
-    }
-  };
-
-  if (!zone) return <div>Loading Zone...</div>;
-
-  return (
-    <div className="max-w-[1600px] mx-auto space-y-12 animate-in fade-in duration-500 pb-20 pr-10">
-      {/* ClassroomStream overlay removed */}
-
-      <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-        <div className="flex items-center gap-6 w-full">
-          <button onClick={() => navigate('/classroom')} className="hidden md:block p-4 bg-white border border-gray-100 rounded-2xl text-indigo-900 hover:shadow-xl transition-all shadow-sm active:scale-90">
-            <ArrowLeft size={24} />
-          </button>
-          <div>
-            <h1 className="text-5xl font-black text-nunma-forest tracking-tighter leading-tight mb-2">{zone.title}</h1>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-black bg-[#c2f575] text-indigo-900 px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm">
-                {zone.level} Level
-              </span>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{zone.domain}</span>
-            </div>
-          </div>
-        </div>
-        <div className="shrink-0 flex items-center gap-4">
-          {currentZoneLive && (
-            <div className="flex flex-col items-center gap-4 bg-white/5 backdrop-blur-md p-6 rounded-[2.5rem] border border-white/10 shadow-2xl animate-in zoom-in">
-              <LiveSessionStatus
-                status="live"
-                className="bg-[#c2f575]/10 border-[#c2f575]/20 text-[#c2f575]"
-              />
-              <button
-                onClick={() => navigate(`/classroom/${zoneId}`)}
-                className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-[1.75rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
-              >
-                Join Live Classroom <ArrowRight size={16} />
-              </button>
-            </div>
-          )}
-          {zone.provideCertificate && (
-            <div
-              onClick={() => isCourseComplete ? handleClaimCertificate() : alert(`Complete all modules to unlock certification. Progress: ${completedSegmentsCount}/${totalSegmentsCount}`)}
-              className={`px-8 py-4 rounded-[1.75rem] border flex flex-col items-center gap-1 shadow-2xl transition-all ${isCourseComplete ? 'bg-nunma-forest border-white/10 shadow-indigo-900/20 cursor-pointer hover:brightness-110 active:scale-95' : 'bg-gray-100 border-gray-200 cursor-not-allowed grayscale'}`}
-            >
-              <div className="flex items-center gap-4">
-                <Award size={24} className={isCourseComplete ? "text-[#c2f575]" : "text-gray-400"} />
-                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isCourseComplete ? 'text-white' : 'text-gray-400'}`}>Certification Zone</span>
-              </div>
-              <div className="w-full h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
-                <div
-                  className="h-full bg-[#c2f575] transition-all duration-500"
-                  style={{ width: `${progressPercentage}%` }}
-                />
-              </div>
-            </div>
-          )}
-          <div className="flex gap-4">
-            <button className="flex-1 bg-white/10 backdrop-blur-md p-4 rounded-3xl flex items-center justify-center gap-2 font-bold hover:bg-white/20 transition-all border border-white/10">
-              <Share2 size={20} /> Share Zone
-            </button>
-            <button onClick={handleLeaveZone} className="flex-1 bg-red-600 p-4 rounded-3xl flex items-center justify-center gap-2 font-bold text-white hover:bg-red-700 transition-all border border-red-600">
-              <LogOut size={20} /> Leave Zone
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-12 items-start">
-        <div className="xl:col-span-8 space-y-8">
-          <div className="flex bg-white/50 p-2 rounded-3xl border border-gray-100 gap-2 mb-4 overflow-x-auto no-scrollbar">
-            {(!zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course') && (
-              <button onClick={() => setActiveTab('content')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'content' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Learning Content</button>
-            )}
-            {(!zone?.zoneType || zone.zoneType === 'Class Management') && (
-              <button onClick={() => setActiveTab('exams')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'exams' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Exam Portal</button>
-            )}
-            <button onClick={() => setActiveTab('students')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'students' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Student List</button>
-            <button onClick={() => setActiveTab('attendance')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'attendance' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Attendance</button>
-            <button onClick={() => setActiveTab('marks')} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab === 'marks' ? 'bg-nunma-forest text-white shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Marks</button>
-          </div>
-
-          {activeTab === 'content' ? (
-            activeContent ? (
-              <div
-                className="bg-white rounded-[4rem] p-6 lg:p-10 border border-gray-100 shadow-2xl min-h-[600px] flex flex-col items-center justify-center text-center relative overflow-hidden group"
-                onContextMenu={(e) => e.preventDefault()}
-                style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-              >
-                {activeContent.type === 'video' && activeContent.videoId ? (
-                  <BunnyVideoPlayer
-                    videoId={activeContent.videoId}
-                    title={activeContent.title}
-                    onComplete={() => handleMarkAsCompleted(activeContent.id)}
-                  />
-                ) : (activeContent.type === 'pdf' || activeContent.type === 'document' || activeContent.url || activeContent.fileUrl) ? (
-                  <div className="w-full h-full min-h-[600px] rounded-[3rem] overflow-hidden bg-gray-50 shadow-inner relative flex flex-col items-center justify-center">
-                    <iframe
-                      src={`${activeContent.url || activeContent.fileUrl || activeContent.documentUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                      className="w-full h-full min-h-[600px] border-none"
-                      title={activeContent.title}
-                    />
-                    <div className="absolute top-0 w-full h-14 bg-transparent z-10" title="Protected Content" />
-                  </div>
-                ) : (
-                  <>
-                    <div className="w-32 h-32 bg-gray-50 rounded-[3rem] flex items-center justify-center text-indigo-900 mb-10 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-700">
-                      <FileText size={64} strokeWidth={1.5} />
-                    </div>
-                    <h2 className="text-4xl font-black text-indigo-900 mb-6 tracking-tight">{activeContent.title}</h2>
-                    <p className="text-gray-400 max-w-md mx-auto leading-relaxed text-lg font-medium italic">
-                      {activeContent.type === 'video' ? 'Video ID missing. Please re-upload.' : 'Content loaded successfully.'}
-                    </p>
-                  </>
-                )}
-                <div className="mt-14 flex gap-6">
-                  <button onClick={() => setActiveContent(null)} className="px-12 py-5 bg-gray-50 text-gray-400 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-white hover:shadow-md transition-all">Close Player</button>
-                  {studentData?.completedSegments?.includes(activeContent.id) ? (
-                    <button
-                      onClick={() => autoAdvance(activeContent.id)}
-                      className="px-14 py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center gap-3"
-                    >
-                      Continue to Next Module <ArrowRight size={16} />
-                    </button>
-                  ) : activeContent.type !== 'video' && (
-                    <button
-                      onClick={() => handleMarkAsCompleted(activeContent.id)}
-                      className="px-14 py-5 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all bg-[#c2f575] text-indigo-900 shadow-[#c2f575]/30 hover:brightness-110 active:scale-95 flex items-center gap-3"
-                    >
-                      Mark as Completed
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-indigo-900 rounded-[4rem] p-16 text-white relative overflow-hidden h-[450px] flex flex-col justify-center shadow-2xl border border-white/5">
-                <div className="relative z-10 max-w-xl">
-                  <h2 className="text-6xl font-black tracking-tighter mb-6 leading-[1.1]">Welcome to your <br /><span className="text-[#c2f575]">Learning Journey</span></h2>
-                  <p className="text-indigo-100/70 text-xl font-medium leading-relaxed">Select a professional module from the curriculum sidebar to begin your knowledge stream. </p>
-                </div>
-                <div className="absolute -bottom-20 -right-20 w-[450px] h-[450px] bg-[#c2f575]/5 rounded-full blur-[120px] animate-pulse"></div>
-              </div>
-            )
-          ) : activeTab === 'exams' ? (
-            <div className="space-y-8 animate-in fade-in duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {exams.map(exam => {
+  
+  const renderExamCard = (exam: any) => {
+    
                   let isLive = false;
                   if (exam.scheduledAt?.toDate) {
                     isLive = exam.scheduledAt.toDate() <= new Date();
@@ -1090,6 +933,12 @@ const StudentZoneView: React.FC = () => {
                               <FileText size={14} /> View your evaluated answer script
                             </button>
                           )}
+                          <button
+                            onClick={() => { setSelectedExamForInsights(exam); setShowExamInsightsModal(true); }}
+                            className="w-full py-4 bg-gray-50 text-gray-700 border border-gray-200 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Trophy size={14} /> View Class Rank List & Insights
+                          </button>
                         </div>
                       ) : (
                         computedStatus === 'UPCOMING' ? (
@@ -1143,8 +992,243 @@ const StudentZoneView: React.FC = () => {
                       )}
                     </div>
                   );
-                })}
+                
+  };
+
+  const handleClaimCertificate = () => {
+    setIsGeneratingCert(true);
+    setTimeout(() => {
+      const vc = generateOpenBadgeVC(authUser?.email || 'anon-id', authUser?.name || 'Anonymous Student', zone, 85);
+      setGeneratedVC(vc);
+      setIsGeneratingCert(false);
+      setShowCertModal(true);
+    }, 1500);
+  };
+
+  const handleLeaveZone = async () => {
+    if (!zoneId || !authUser) return;
+
+    if (confirm('Are you sure you want to leave this zone? All your progress and attendance data will be lost.')) {
+      try {
+        // Assuming student ID is stored in studentData.id which should be same as students doc ID
+        if (studentData && studentData.id) {
+          await deleteDoc(doc(db, 'zones', zoneId, 'students', studentData.id));
+        } else {
+          // If we don't have studentData loaded but we want to leave, we try authUser.uid?
+          // But 'Grant Access' used random IDs initially.
+          // If we are migrating, we should rely on studentData being loaded.
+          // If manual grant, ID was random. We found it via query.
+          if (studentData?.id) {
+            await deleteDoc(doc(db, 'zones', zoneId, 'students', studentData.id));
+          }
+        }
+        navigate('/workplace');
+      } catch (e) {
+        console.error("Failed to leave zone", e);
+        alert("Failed to leave zone.");
+      }
+    }
+  };
+
+  if (!zone) return <div>Loading Zone...</div>;
+
+  return (
+    <div className="max-w-[1600px] mx-auto space-y-8 md:space-y-12 animate-in fade-in duration-500 pb-20 px-4 md:px-0 md:pr-10">
+      {/* ClassroomStream overlay removed */}
+
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8">
+        <div className="flex items-center gap-4 md:gap-6 w-full">
+          <button onClick={() => navigate('/classroom')} className="hidden md:block p-4 bg-white border border-gray-100 rounded-2xl text-indigo-900 hover:shadow-xl transition-all shadow-sm active:scale-90">
+            <ArrowLeft size={24} />
+          </button>
+          <div>
+            <h1 className="text-3xl md:text-5xl font-black text-nunma-forest tracking-tighter leading-tight mb-2">{zone.title}</h1>
+            <div className="flex items-center gap-2 md:gap-3">
+              <span className="text-[8px] md:text-[10px] font-black bg-[#c2f575] text-indigo-900 px-3 md:px-4 py-1 md:py-1.5 rounded-full uppercase tracking-widest shadow-sm">
+                {zone.level} Level
+              </span>
+              <span className="text-[8px] md:text-[10px] font-bold text-gray-400 uppercase tracking-widest">{zone.domain}</span>
+            </div>
+          </div>
+        </div>
+        <div className="shrink-0 flex flex-col md:flex-row items-stretch md:items-center w-full md:w-auto gap-4">
+          {currentZoneLive && (
+            <div className="flex flex-col items-center gap-4 bg-white/5 backdrop-blur-md p-6 rounded-[2.5rem] border border-white/10 shadow-2xl animate-in zoom-in">
+              <LiveSessionStatus
+                status="live"
+                className="bg-[#c2f575]/10 border-[#c2f575]/20 text-[#c2f575]"
+              />
+              <button
+                onClick={() => navigate(`/classroom/${zoneId}`)}
+                className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-[1.75rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
+              >
+                Join Live Classroom <ArrowRight size={16} />
+              </button>
+            </div>
+          )}
+          {zone.provideCertificate && (
+            <div
+              onClick={() => isCourseComplete ? handleClaimCertificate() : alert(`Complete all modules to unlock certification. Progress: ${completedSegmentsCount}/${totalSegmentsCount}`)}
+              className={`px-6 py-4 md:px-8 md:py-4 rounded-[1.5rem] md:rounded-[1.75rem] border flex flex-col items-center gap-1 shadow-xl md:shadow-2xl transition-all ${isCourseComplete ? 'bg-nunma-forest border-white/10 shadow-indigo-900/20 cursor-pointer hover:brightness-110 active:scale-95' : 'bg-gray-100 border-gray-200 cursor-not-allowed grayscale'}`}
+            >
+              <div className="flex items-center gap-4">
+                <Award size={24} className={isCourseComplete ? "text-[#c2f575]" : "text-gray-400"} />
+                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isCourseComplete ? 'text-white' : 'text-gray-400'}`}>Certification Zone</span>
               </div>
+              <div className="w-full h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
+                <div
+                  className="h-full bg-[#c2f575] transition-all duration-500"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex flex-row gap-2 md:gap-4 w-full">
+            <button className="flex-1 bg-white/10 backdrop-blur-md p-3 md:p-4 rounded-2xl md:rounded-3xl flex items-center justify-center gap-1 md:gap-2 text-[10px] md:text-sm font-bold hover:bg-white/20 transition-all border border-white/10">
+              <Share2 size={16} className="md:w-5 md:h-5" /> Share Zone
+            </button>
+            <button onClick={handleLeaveZone} className="flex-1 bg-red-600 p-3 md:p-4 rounded-2xl md:rounded-3xl flex items-center justify-center gap-1 md:gap-2 text-[10px] md:text-sm font-bold text-white hover:bg-red-700 transition-all border border-red-600">
+              <LogOut size={16} className="md:w-5 md:h-5" /> Leave Zone
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-12 items-start">
+        <div className="xl:col-span-8 space-y-8">
+          <div className="flex bg-white/50 p-1 md:p-2 rounded-2xl md:rounded-3xl border border-gray-100 gap-1 md:gap-2 mb-4 overflow-x-auto no-scrollbar snap-x snap-mandatory w-full">
+            {(!zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course') && (
+              <button onClick={() => setActiveTab('content')} className={`snap-start min-w-fit px-4 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all whitespace-nowrap md:flex-1 md:min-w-[120px] md:px-0 md:py-4 md:rounded-2xl md:text-[10px] ${activeTab === 'content' ? 'bg-nunma-forest text-white shadow-md md:shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Learning Content</button>
+            )}
+            {(!zone?.zoneType || zone.zoneType === 'Class Management') && (
+              <button onClick={() => setActiveTab('exams')} className={`snap-start min-w-fit px-4 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all whitespace-nowrap md:flex-1 md:min-w-[120px] md:px-0 md:py-4 md:rounded-2xl md:text-[10px] ${activeTab === 'exams' ? 'bg-nunma-forest text-white shadow-md md:shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Exam Portal</button>
+            )}
+            <button onClick={() => setActiveTab('students')} className={`snap-start min-w-fit px-4 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all whitespace-nowrap md:flex-1 md:min-w-[120px] md:px-0 md:py-4 md:rounded-2xl md:text-[10px] ${activeTab === 'students' ? 'bg-nunma-forest text-white shadow-md md:shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Student List</button>
+            <button onClick={() => setActiveTab('attendance')} className={`snap-start min-w-fit px-4 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all whitespace-nowrap md:flex-1 md:min-w-[120px] md:px-0 md:py-4 md:rounded-2xl md:text-[10px] ${activeTab === 'attendance' ? 'bg-nunma-forest text-white shadow-md md:shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Attendance</button>
+            <button onClick={() => setActiveTab('marks')} className={`snap-start min-w-fit px-4 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all whitespace-nowrap md:flex-1 md:min-w-[120px] md:px-0 md:py-4 md:rounded-2xl md:text-[10px] ${activeTab === 'marks' ? 'bg-nunma-forest text-white shadow-md md:shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Marks</button>
+          </div>
+
+          {activeTab === 'content' ? (
+            activeContent ? (
+              <div
+                className="bg-white rounded-[1.5rem] md:rounded-[4rem] p-4 md:p-6 lg:p-10 border border-gray-100 shadow-xl md:shadow-2xl min-h-[500px] md:min-h-[600px] flex flex-col items-center justify-center text-center relative overflow-hidden group"
+                onContextMenu={(e) => e.preventDefault()}
+                style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+              >
+                {activeContent.type === 'video' && activeContent.videoId ? (
+                  <BunnyVideoPlayer
+                    videoId={activeContent.videoId}
+                    title={activeContent.title}
+                    onComplete={() => handleMarkAsCompleted(activeContent.id)}
+                  />
+                ) : (activeContent.type === 'pdf' || activeContent.type === 'document' || activeContent.url || activeContent.fileUrl) ? (
+                  <div className="w-full h-full min-h-[600px] rounded-[3rem] overflow-hidden bg-gray-50 shadow-inner relative flex flex-col items-center justify-center">
+                    <iframe
+                      src={`${activeContent.url || activeContent.fileUrl || activeContent.documentUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                      className="w-full h-full min-h-[600px] border-none"
+                      title={activeContent.title}
+                    />
+                    <div className="absolute top-0 w-full h-14 bg-transparent z-10" title="Protected Content" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-32 h-32 bg-gray-50 rounded-[3rem] flex items-center justify-center text-indigo-900 mb-10 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-700">
+                      <FileText size={64} strokeWidth={1.5} />
+                    </div>
+                    <h2 className="text-4xl font-black text-indigo-900 mb-6 tracking-tight">{activeContent.title}</h2>
+                    <p className="text-gray-400 max-w-md mx-auto leading-relaxed text-lg font-medium italic">
+                      {activeContent.type === 'video' ? 'Video ID missing. Please re-upload.' : 'Content loaded successfully.'}
+                    </p>
+                  </>
+                )}
+                <div className="mt-14 flex gap-6">
+                  <button onClick={() => setActiveContent(null)} className="px-12 py-5 bg-gray-50 text-gray-400 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-white hover:shadow-md transition-all">Close Player</button>
+                  {studentData?.completedSegments?.includes(activeContent.id) ? (
+                    <button
+                      onClick={() => autoAdvance(activeContent.id)}
+                      className="px-14 py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center gap-3"
+                    >
+                      Continue to Next Module <ArrowRight size={16} />
+                    </button>
+                  ) : activeContent.type !== 'video' && (
+                    <button
+                      onClick={() => handleMarkAsCompleted(activeContent.id)}
+                      className="px-14 py-5 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all bg-[#c2f575] text-indigo-900 shadow-[#c2f575]/30 hover:brightness-110 active:scale-95 flex items-center gap-3"
+                    >
+                      Mark as Completed
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-indigo-900 rounded-[4rem] p-16 text-white relative overflow-hidden h-[450px] flex flex-col justify-center shadow-2xl border border-white/5">
+                <div className="relative z-10 max-w-xl">
+                  <h2 className="text-6xl font-black tracking-tighter mb-6 leading-[1.1]">Welcome to your <br /><span className="text-[#c2f575]">Learning Journey</span></h2>
+                  <p className="text-indigo-100/70 text-xl font-medium leading-relaxed">Select a professional module from the curriculum sidebar to begin your knowledge stream. </p>
+                </div>
+                <div className="absolute -bottom-20 -right-20 w-[450px] h-[450px] bg-[#c2f575]/5 rounded-full blur-[120px] animate-pulse"></div>
+              </div>
+            )
+          ) : activeTab === 'exams' ? (
+            <div className="space-y-8 animate-in fade-in duration-500">
+              {selectedExamGroup ? (
+                <div className="space-y-8">
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => setSelectedExamGroup(null)} className="p-3 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
+                      <ArrowLeft size={20} className="text-gray-600" />
+                    </button>
+                    <div>
+                      <h3 className="text-3xl font-black text-indigo-900 tracking-tighter">{selectedExamGroup.name}</h3>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Select a subject to begin</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {selectedExamGroup.exams.map(renderExamCard)}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {(() => {
+                    const applicableExams = exams.filter((exam: any) => !exam.batchId || exam.batchId === studentData?.batchId);
+                    
+                    const groupedExams = applicableExams.reduce((acc: any, exam: any) => {
+                      const groupName = exam.examGroupName || exam.title; 
+                      if (!acc[groupName]) {
+                        acc[groupName] = [];
+                      }
+                      acc[groupName].push(exam);
+                      return acc;
+                    }, {});
+
+                    return Object.entries(groupedExams).map(([groupName, groupExams]: [string, any]) => {
+                      if (groupExams.length === 1) {
+                        return renderExamCard(groupExams[0]);
+                      } else {
+                        // Render group card
+                        return (
+                          <div key={groupName} onClick={() => setSelectedExamGroup({ name: groupName, exams: groupExams })} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-8 shadow-sm hover:shadow-2xl transition-all group cursor-pointer flex flex-col justify-between">
+                            <div className="flex justify-between items-start">
+                              <div className="p-5 rounded-3xl bg-indigo-50 text-indigo-600 shadow-sm">
+                                <Layers size={32} />
+                              </div>
+                              <span className="px-4 py-2 bg-indigo-100 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                                {groupExams.length} Subjects
+                              </span>
+                            </div>
+                            <div>
+                              <h4 className="text-2xl font-black text-nunma-forest tracking-tight truncate">{groupName}</h4>
+                              <p className="text-gray-400 text-sm mt-2 font-bold leading-relaxed">Multiple Subject Assessment</p>
+                            </div>
+                            <button className="w-full py-5 bg-gray-50 text-gray-700 border border-gray-200 rounded-2xl font-black uppercase text-[10px] tracking-widest group-hover:bg-[#c2f575] group-hover:text-indigo-900 group-hover:border-[#c2f575] transition-all flex items-center justify-center gap-2 shadow-sm">
+                              View Subjects <ChevronRight size={14} />
+                            </button>
+                          </div>
+                        );
+                      }
+                    });
+                  })()}
+                </div>
+              )}
             </div>
           ) : activeTab === 'students' ? (
             <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
@@ -1624,7 +1708,7 @@ const StudentZoneView: React.FC = () => {
         </div>
       )}
 
-      {showCheatWarningModal && (
+      {showCheatWarningModal && createPortal(
         <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex items-center justify-center bg-nunma-forest/95 backdrop-blur-2xl p-6 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 text-center space-y-8 animate-in zoom-in-95 duration-300">
             <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto animate-pulse">
@@ -1641,10 +1725,11 @@ const StudentZoneView: React.FC = () => {
               I Understand
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {terminatedByCheat && (
+      {terminatedByCheat && createPortal(
          <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex flex-col items-center justify-center bg-red-900/95 backdrop-blur-3xl p-6 text-white text-center animate-in fade-in duration-500 transition-all`}>
             <AlertTriangle size={80} className="mb-8" />
             <h2 className="text-5xl font-black mb-4">Test Terminated</h2>
@@ -1653,10 +1738,11 @@ const StudentZoneView: React.FC = () => {
                 setTerminatedByCheat(false);
                 setActiveExam(null);
             }} className="px-10 py-4 bg-white text-red-900 rounded-3xl font-black uppercase text-sm tracking-widest hover:scale-105 transition-all">Return to Dashboard</button>
-         </div>
+         </div>,
+         document.body
       )}
 
-      {activeExam && !terminatedByCheat && postExamTimer === null && (
+      {activeExam && !terminatedByCheat && postExamTimer === null && createPortal(
         <div
           className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[500] bg-white flex flex-col p-10 animate-in slide-in-from-bottom-10 duration-700 transition-all`}
           onContextMenu={(e) => e.preventDefault()}
@@ -1691,45 +1777,82 @@ const StudentZoneView: React.FC = () => {
 
           <div className="flex-1 flex gap-12 overflow-hidden">
             <div className="flex-1 bg-gray-50 rounded-[4rem] border border-gray-100 p-16 flex flex-col overflow-y-auto custom-scrollbar">
-              <div className="max-w-3xl mx-auto w-full space-y-12">
-                <div className="space-y-4">
-                  <span className="text-[10px] font-black bg-nunma-forest text-white px-4 py-1.5 rounded-full uppercase tracking-widest">Question {examCurrentQuestion + 1} of {activeExam.questions.length}</span>
-                  <h3 className="text-4xl font-black text-nunma-forest tracking-tight leading-tight">{activeExam.questions[examCurrentQuestion].question}</h3>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6">
-                  {activeExam.questions[examCurrentQuestion].options.map((opt: string, idx: number) => (
-                    <button
-                      key={idx}
-                      onClick={() => setExamAnswers({ ...examAnswers, [activeExam.questions[examCurrentQuestion].id]: idx })}
-                      className={`w-full p-8 rounded-[2.5rem] border-2 text-left transition-all flex items-center justify-between group ${examAnswers[activeExam.questions[examCurrentQuestion].id] === idx ? 'bg-nunma-forest border-nunma-forest text-white shadow-2xl scale-[1.02]' : 'bg-white border-transparent hover:border-indigo-100 text-gray-500'}`}
+              {activeExam.type === 'online-test' ? (
+                /* ── Written Exam (online-test): show question paper PDF download ── */
+                <div className="max-w-3xl mx-auto w-full flex flex-col items-center justify-center flex-1 space-y-12 text-center">
+                  <div className="w-24 h-24 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-600 shadow-sm">
+                    <FileText size={48} />
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-4xl font-black text-nunma-forest tracking-tight leading-tight">Written Assessment</h3>
+                    <p className="text-gray-400 font-medium text-lg max-w-md mx-auto leading-relaxed">
+                      Download the question paper below, write your answers on paper, and upload your scanned answer sheet when you are finished.
+                    </p>
+                  </div>
+                  {activeExam.pdfUrl ? (
+                    <a
+                      href={activeExam.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-3 px-14 py-5 bg-nunma-forest text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all"
                     >
-                      <div className="flex items-center gap-6">
-                        <span className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${examAnswers[activeExam.questions[examCurrentQuestion].id] === idx ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-300'}`}>
-                          {String.fromCharCode(65 + idx)}
-                        </span>
-                        <span className="text-xl font-bold tracking-tight">{opt}</span>
-                      </div>
-                      {examAnswers[activeExam.questions[examCurrentQuestion].id] === idx && <CheckCircle size={28} className="text-[#c2f575]" />}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="pt-12 flex justify-between items-center">
-                  <button
-                    disabled={examCurrentQuestion === 0}
-                    onClick={() => setExamCurrentQuestion(prev => prev - 1)}
-                    className="px-10 py-5 bg-gray-100 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest disabled:opacity-30 transition-all hover:bg-white hover:shadow-md"
-                  >
-                    Previous
-                  </button>
-                  {examCurrentQuestion === activeExam.questions.length - 1 ? (
-                    <button onClick={handleSubmitExam} className="px-14 py-5 bg-[#c2f575] text-indigo-900 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-[#c2f575]/20 hover:brightness-110 active:scale-95 transition-all">Submit Assessment</button>
+                      <FileDown size={20} />
+                      Download Question Paper
+                    </a>
                   ) : (
-                    <button onClick={() => setExamCurrentQuestion(prev => prev + 1)} className="px-14 py-5 bg-nunma-forest text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all">Next Question</button>
+                    <div className="px-10 py-5 bg-gray-100 text-gray-400 rounded-3xl font-black uppercase text-[10px] tracking-widest">
+                      Question paper not uploaded by tutor yet
+                    </div>
                   )}
+                  <div className="pt-8 border-t border-gray-200 w-full max-w-md">
+                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest leading-relaxed">
+                      When the timer expires you will get a 15-minute window to scan and upload your answer sheet as a PDF.
+                    </p>
+                  </div>
+                  <button onClick={handleSubmitExam} className="px-14 py-5 bg-red-500 text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all">End Exam &amp; Upload Answers</button>
                 </div>
-              </div>
+              ) : (
+                /* ── MCQ Exam (online-mcq): show questions one-by-one ── */
+                <div className="max-w-3xl mx-auto w-full space-y-12">
+                  <div className="space-y-4">
+                    <span className="text-[10px] font-black bg-nunma-forest text-white px-4 py-1.5 rounded-full uppercase tracking-widest">Question {examCurrentQuestion + 1} of {activeExam.questions?.length ?? 0}</span>
+                    <h3 className="text-4xl font-black text-nunma-forest tracking-tight leading-tight">{activeExam.questions?.[examCurrentQuestion]?.question}</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6">
+                    {(activeExam.questions?.[examCurrentQuestion]?.options ?? []).map((opt: string, idx: number) => (
+                      <button
+                        key={idx}
+                        onClick={() => setExamAnswers({ ...examAnswers, [activeExam.questions[examCurrentQuestion].id]: idx })}
+                        className={`w-full p-8 rounded-[2.5rem] border-2 text-left transition-all flex items-center justify-between group ${examAnswers[activeExam.questions[examCurrentQuestion].id] === idx ? 'bg-nunma-forest border-nunma-forest text-white shadow-2xl scale-[1.02]' : 'bg-white border-transparent hover:border-indigo-100 text-gray-500'}`}
+                      >
+                        <div className="flex items-center gap-6">
+                          <span className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${examAnswers[activeExam.questions[examCurrentQuestion].id] === idx ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-300'}`}>
+                            {String.fromCharCode(65 + idx)}
+                          </span>
+                          <span className="text-xl font-bold tracking-tight">{opt}</span>
+                        </div>
+                        {examAnswers[activeExam.questions[examCurrentQuestion].id] === idx && <CheckCircle size={28} className="text-[#c2f575]" />}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="pt-12 flex justify-between items-center">
+                    <button
+                      disabled={examCurrentQuestion === 0}
+                      onClick={() => setExamCurrentQuestion(prev => prev - 1)}
+                      className="px-10 py-5 bg-gray-100 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest disabled:opacity-30 transition-all hover:bg-white hover:shadow-md"
+                    >
+                      Previous
+                    </button>
+                    {examCurrentQuestion === (activeExam.questions?.length ?? 1) - 1 ? (
+                      <button onClick={handleSubmitExam} className="px-14 py-5 bg-[#c2f575] text-indigo-900 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-[#c2f575]/20 hover:brightness-110 active:scale-95 transition-all">Submit Assessment</button>
+                    ) : (
+                      <button onClick={() => setExamCurrentQuestion(prev => prev + 1)} className="px-14 py-5 bg-nunma-forest text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all">Next Question</button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="w-[350px] space-y-8 flex flex-col">
@@ -1780,7 +1903,8 @@ const StudentZoneView: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Post Exam Timer Modal for Online Test */}
@@ -1791,7 +1915,7 @@ const StudentZoneView: React.FC = () => {
               <div className="absolute inset-0 bg-red-900/95 flex flex-col items-center justify-center z-50 p-8 backdrop-blur-md animate-in fade-in duration-500">
                 <AlertTriangle size={64} className="text-white mb-6" />
                 <h2 className="text-4xl font-black text-white mb-4">Submission Window Closed</h2>
-                <p className="text-red-200 text-center font-bold">You failed to submit your answer sheet within the 10-minute buffer.</p>
+                <p className="text-red-200 text-center font-bold">You failed to submit your answer sheet within the 15-minute buffer.</p>
                 <button 
                   onClick={() => { 
                     setPostExamTimer(null); 
@@ -1812,7 +1936,7 @@ const StudentZoneView: React.FC = () => {
               <Clock size={48} />
             </div>
             <h3 className="text-3xl font-black text-nunma-forest tracking-tight mb-4">Exam Concluded</h3>
-            <p className="text-gray-500 font-medium mb-8">Scan your answer sheets and upload them as a single PDF. You have strictly 10 minutes before submissions are locked.</p>
+            <p className="text-gray-500 font-medium mb-8">Scan your answer sheets and upload them as a single PDF. You have strictly 15 minutes before submissions are locked.</p>
             
             <div className={`p-6 rounded-3xl mb-10 transition-colors duration-1000 flex flex-col items-center ${postExamTimer > 0 && postExamTimer < 300 ? 'bg-red-500 animate-pulse text-white shadow-xl shadow-red-500/30' : 'bg-gray-100/50 text-indigo-900'}`}>
               <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${postExamTimer > 0 && postExamTimer < 300 ? 'text-red-100' : 'text-gray-400'}`}>Submission Window Closes In:</p>
@@ -1823,13 +1947,20 @@ const StudentZoneView: React.FC = () => {
 
             <label className={`w-full py-6 border-2 border-dashed rounded-[2rem] font-black uppercase text-[11px] tracking-widest flex flex-col items-center justify-center gap-3 mb-6 h-32 transition-all ${postExamTimer === 0 || isUploading ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white border-gray-300 text-indigo-900 hover:border-[#c2f575] hover:bg-gray-50 cursor-pointer shadow-sm hover:shadow-md'}`}>
               <Upload size={24} className={postExamTimer === 0 || isUploading ? 'text-gray-300' : 'text-indigo-400'} />
-              {uploadedAnswerFiles ? uploadedAnswerFiles.name : 'Select PDF Answer Sheet'}
-              <input type="file" accept=".pdf" className="hidden" disabled={postExamTimer === 0 || isUploading} onChange={(e) => e.target.files && setUploadedAnswerFiles(e.target.files[0])} />
+              {postExamAnswerFile ? postExamAnswerFile.name : 'Select PDF Answer Sheet'}
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={postExamTimer === 0 || isUploading} onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setPostExamAnswerFile(file);
+              }} />
             </label>
             <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mb-4 text-center">Max limit: 5MB</p>
             <button
-              disabled={!uploadedAnswerFiles || postExamTimer === 0 || isUploading}
-              onClick={handleUploadAnswerSheet}
+              disabled={!postExamAnswerFile || postExamTimer === 0 || isUploading}
+              onClick={() => {
+                if (activeExam && postExamAnswerFile) {
+                  handleUploadAnswerSheet(activeExam, postExamAnswerFile).then(() => setPostExamAnswerFile(null));
+                }
+              }}
               className="w-full py-6 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-[11px] tracking-[0.2em] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
             >
               {isUploading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"/> : null}
@@ -1837,6 +1968,18 @@ const StudentZoneView: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* EXAM INSIGHTS MODAL */}
+      {showExamInsightsModal && selectedExamForInsights && zoneId && (
+        <ExamInsights
+          zoneId={zoneId}
+          exam={selectedExamForInsights}
+          onClose={() => {
+            setShowExamInsightsModal(false);
+            setSelectedExamForInsights(null);
+          }}
+        />
       )}
     </div>
   );

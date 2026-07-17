@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { Send, MessageCircle, Hand, Mic, MicOff, Video, VideoOff, Check, X as CloseIcon, BarChart2, Lock } from 'lucide-react';
 
-type Tab = 'chat' | 'hands' | 'qa' | 'polls';
+type Tab = 'chat' | 'hands' | 'polls';
 
 interface Message {
     id: string;
@@ -188,7 +188,7 @@ const EngagementSidebar: React.FC<EngagementSidebarProps> = ({ sessionId }) => {
         <div className="flex flex-col h-full bg-[#0a0a2e] text-white overflow-hidden shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
             {/* Header / Tabs */}
             <div className="flex border-b border-white/10 shrink-0">
-                {(['chat', 'hands', 'qa', 'polls'] as Tab[]).map((tab) => (
+                {(['chat', 'hands', 'polls'] as Tab[]).map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -200,9 +200,8 @@ const EngagementSidebar: React.FC<EngagementSidebarProps> = ({ sessionId }) => {
                     >
                         {tab === 'chat' && <MessageCircle size={14} />}
                         {tab === 'hands' && <Hand size={14} />}
-                        {tab === 'qa' && <span className="text-[10px]">Q&A</span>}
                         {tab === 'polls' && <span className="text-[10px]">POLL</span>}
-                        <span className="scale-90">{tab === 'qa' ? '' : tab === 'hands' ? 'Hands' : tab === 'polls' ? '' : tab}</span>
+                        <span className="scale-90">{tab === 'hands' ? 'Hands' : tab === 'polls' ? 'Polls' : tab}</span>
                     </button>
                 ))}
             </div>
@@ -442,12 +441,6 @@ const EngagementSidebar: React.FC<EngagementSidebarProps> = ({ sessionId }) => {
                                 ))
                             )}
                         </div>
-                    </div>
-                )}
-
-                {activeTab === 'qa' && (
-                    <div className="h-full flex items-center justify-center p-6 text-center text-gray-500 text-sm">
-                        Q&A feature coming soon.
                     </div>
                 )}
 

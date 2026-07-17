@@ -20,6 +20,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 import { formatDate } from '../utils/dateUtils';
+import { getLinkedInShareUrl } from '../utils/vcUtils';
+
 
 import {
    collection,
@@ -473,7 +475,7 @@ const Classroom: React.FC = () => {
 
          <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
             <div className="xl:col-span-8 space-y-10">
-               <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl relative overflow-hidden">
+               <div className="bg-transparent md:bg-white rounded-none md:rounded-[4rem] p-4 md:p-14 border-0 md:border border-gray-100 shadow-none md:shadow-2xl relative overflow-hidden">
                   <div className="flex justify-between items-center mb-14">
                      <h3 className="text-3xl font-black text-nunma-forest tracking-tighter flex items-center gap-5">
                         <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-900">
@@ -494,7 +496,7 @@ const Classroom: React.FC = () => {
                               onClick={() => navigate(`/classroom/zone/${zone.id}`)}
                               className="group bg-gray-50/50 rounded-[3rem] border border-gray-100 p-8 hover:bg-white hover:shadow-2xl hover:border-[#c2f575] transition-all duration-700 cursor-pointer"
                            >
-                              <div className="h-48 rounded-[2rem] overflow-hidden mb-8 relative shadow-lg">
+                              <div className="h-auto aspect-[1.7] md:aspect-auto md:h-48 rounded-[2rem] overflow-hidden mb-8 relative shadow-lg">
                                  <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
                               </div>
                               <div>
@@ -563,10 +565,16 @@ const Classroom: React.FC = () => {
                               <p className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest">Issued: {formatDate(cert.date)}</p>
                            </div>
                            <div className="flex gap-4">
-                              <button className="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
+                              <button 
+                                 onClick={() => navigate(`/verify/${cert.id}`)}
+                                 className="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+                              >
                                  <Download size={16} /> Save
                               </button>
-                              <button className="flex-1 py-4 bg-[#c2f575] text-indigo-900 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg">
+                              <button 
+                                 onClick={() => window.open(getLinkedInShareUrl(cert.id, cert.zoneName, cert.date), '_blank')}
+                                 className="flex-1 py-4 bg-[#c2f575] text-indigo-900 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg"
+                              >
                                  <Share2 size={16} /> Profile
                               </button>
                            </div>
@@ -600,7 +608,7 @@ const Classroom: React.FC = () => {
                   </div>
                </div>
 
-               <div className="bg-white rounded-[3.5rem] p-10 border border-gray-100 shadow-xl relative overflow-hidden group">
+               <div className="bg-transparent md:bg-white rounded-none md:rounded-[3.5rem] p-4 md:p-10 border-0 md:border border-gray-100 shadow-none md:shadow-xl relative overflow-hidden group">
                   <div className="flex items-center gap-5 mb-10">
                      <div className="w-14 h-14 bg-indigo-50 text-indigo-900 rounded-[1.5rem] flex items-center justify-center shadow-inner">
                         <Calendar size={28} />

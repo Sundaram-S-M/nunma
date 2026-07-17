@@ -304,7 +304,7 @@ const ListProductFlow: React.FC = () => {
     );
 
     return (
-        <div className="min-h-screen bg-[#fbfbfb] py-12 px-6">
+        <div className="min-h-screen bg-[#fbfbfb] py-6 md:py-12 px-6">
             <div className="max-w-4xl mx-auto">
                 <div className="flex items-center gap-4 mb-12">
                     <button onClick={() => navigate('/workplace')} className="p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-nunma-forest transition-all">
@@ -320,11 +320,11 @@ const ListProductFlow: React.FC = () => {
                     {step === 1 && (
                         <div className="space-y-12">
                             <div className="text-center space-y-4">
-                                <h1 className="text-5xl font-black text-nunma-forest tracking-tighter">Hello there!</h1>
+                                <h1 className="text-4xl md:text-5xl font-black text-nunma-forest tracking-tighter">Hello there!</h1>
                                 <p className="text-gray-400 font-medium">In a few moments you will be ready to share your expertise & time</p>
                             </div>
 
-                            <div className="bg-white p-12 rounded-[3.5rem] border border-gray-100 shadow-[0_40px_100px_rgba(0,0,0,0.02)] space-y-10">
+                            <div className="bg-white p-6 md:p-12 rounded-[2rem] md:rounded-[3.5rem] border border-gray-100 shadow-[0_40px_100px_rgba(0,0,0,0.02)] space-y-10">
 
 
                                 <div className="space-y-4">
@@ -421,7 +421,7 @@ const ListProductFlow: React.FC = () => {
                             <div className="flex justify-end pt-8">
                                 <button
                                     onClick={handleNext}
-                                    className="bg-nunma-forest text-white font-black uppercase text-[12px] tracking-widest px-12 py-5 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4"
+                                    className="bg-nunma-forest text-white font-black uppercase text-[12px] tracking-widest px-6 md:px-12 py-5 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4"
                                 >
                                     Next step <ChevronRight size={20} />
                                 </button>
@@ -432,11 +432,11 @@ const ListProductFlow: React.FC = () => {
                     {step === 2 && (
                         <div className="space-y-12">
                             <div className="text-center space-y-4">
-                                <h1 className="text-5xl font-black text-nunma-forest tracking-tighter">Set your availability</h1>
+                                <h1 className="text-4xl md:text-5xl font-black text-nunma-forest tracking-tighter">Set your availability</h1>
                                 <p className="text-gray-400 font-medium">Let your audience know when you're available. You can edit this later.</p>
                             </div>
 
-                            <div className="bg-white p-12 rounded-[3.5rem] border border-gray-100 shadow-[0_40px_100px_rgba(0,0,0,0.02)] space-y-6">
+                            <div className="bg-white p-6 md:p-12 rounded-[2rem] md:rounded-[3.5rem] border border-gray-100 shadow-[0_40px_100px_rgba(0,0,0,0.02)] space-y-6">
                                 {schedule.map((day, dIdx) => (
                                     <div key={day.day} className={`p-8 rounded-[2rem] border transition-all ${day.active ? 'bg-gray-50/50 border-[#c2f575]/20' : 'bg-transparent border-transparent'}`}>
                                         <div className="flex flex-col gap-6">
@@ -509,7 +509,7 @@ const ListProductFlow: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={handleNext}
-                                    className="bg-nunma-forest text-white font-black uppercase text-[12px] tracking-widest px-12 py-5 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4"
+                                    className="bg-nunma-forest text-white font-black uppercase text-[12px] tracking-widest px-6 md:px-12 py-5 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4"
                                 >
                                     Next step <ChevronRight size={20} />
                                 </button>
@@ -520,11 +520,11 @@ const ListProductFlow: React.FC = () => {
                     {step === 3 && (
                         <div className="space-y-12">
                             <div className="text-center space-y-4">
-                                <h1 className="text-5xl font-black text-nunma-forest tracking-tighter">Create your product</h1>
+                                <h1 className="text-4xl md:text-5xl font-black text-nunma-forest tracking-tighter">Create your product</h1>
                                 <p className="text-gray-400 font-medium">Describe what you are offering to your audience</p>
                             </div>
 
-                            <div className="bg-white p-12 rounded-[3.5rem] border border-gray-100 shadow-[0_40px_100px_rgba(0,0,0,0.02)] space-y-10">
+                            <div className="bg-white p-6 md:p-12 rounded-[2rem] md:rounded-[3.5rem] border border-gray-100 shadow-[0_40px_100px_rgba(0,0,0,0.02)] space-y-10">
                                 {/* Type Selector */}
                                 <div>
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 block ml-2">What are you offering?</label>
@@ -582,7 +582,7 @@ const ListProductFlow: React.FC = () => {
                                 )}
 
                                 {/* Price and Currency */}
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                     <div>
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 block ml-2">Access Fee</label>
                                         <div className="relative">
@@ -753,7 +753,7 @@ const ListProductFlow: React.FC = () => {
                                 <button
                                     onClick={handleLaunch}
                                     disabled={isLoading}
-                                    className="bg-[#c2f575] text-nunma-forest font-black uppercase text-[12px] tracking-widest px-12 py-5 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4 shadow-[#c2f575]/40"
+                                    className="bg-[#c2f575] text-nunma-forest font-black uppercase text-[12px] tracking-widest px-6 md:px-12 py-5 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4 shadow-[#c2f575]/40"
                                 >
                                     {isLoading ? (productType === 'material' ? 'Uploading...' : 'Saving...') : <>Complete Setup <Rocket size={20} /></>}
                                 </button>

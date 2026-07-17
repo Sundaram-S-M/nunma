@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, onSnapshot, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../utils/firebase';
+import { db, auth } from '../utils/firebase';
 import { X, Check, Eye, AlertTriangle, Search, Upload, FileSpreadsheet } from 'lucide-react';
 import PDFViewer from './PDFViewer';
 import TutorGradingHub from './TutorGradingHub';
@@ -47,7 +47,7 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
             setLoadingSubmissions(false);
 
             // Initialize grading state
-            setGradingState(prev => {
+            setGradingState((prev: Record<string, { marks: number | '', feedback: string }>) => {
                 const newState = { ...prev };
                 subs.forEach(sub => {
                     newState[sub.studentId] = {
@@ -86,7 +86,8 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                 gradedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 // Keep answer sheet if exists
-                ...(submission ? {} : { answerSheetUrl: null })
+                ...(submission ? {} : { answerSheetUrl: null }),
+                gradedBy: auth.currentUser?.uid || null
             }, { merge: true });
 
             // Send Notification
@@ -99,9 +100,13 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
             });
 
             alert('Graded successfully!');
-        } catch (e) {
+        } catch (e: any) {
             console.error('Failed to submit grade', e);
-            alert('Failed to submit grade.');
+            if (e.code === 'permission-denied') {
+                alert('Access Denied: Your co-tutor permissions may have been revoked or you are trying to grade outside your assigned subject. Please contact the zone creator.');
+            } else {
+                alert('Failed to submit grade.');
+            }
         }
     };
 
@@ -151,21 +156,22 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                     const studentId = matchedStudent.id;
                     const submission = submissions.find(s => s.studentId === studentId);
                     const subId = submission ? submission.id : studentId;
-
-                    await setDoc(doc(db, 'zones', zoneId, 'exams', exam.id, 'submissions', subId), {
-                        studentId,
-                        studentName: matchedStudent.name,
+                    // Ensure we don't wipe out answer sheets when importing
+                    await setDoc(doc(db, 'zones', zoneId, 'exams', exam.id, 'submissions', matchedStudent.id), {
+                        studentId: matchedStudent.id,
+                        studentName: matchedStudent.name || 'Unknown Student',
                         marks: markNum,
-                        feedback: 'Bulk uploaded',
+                        feedback: 'Imported from Excel',
                         status: 'graded',
                         gradedAt: serverTimestamp(),
                         updatedAt: serverTimestamp(),
+                        gradedBy: auth.currentUser?.uid || null
                     }, { merge: true });
 
                     // Update local state optimistic
                     setGradingState(prev => ({
                         ...prev,
-                        [studentId]: { marks: markNum, feedback: 'Bulk uploaded' }
+                        [studentId]: { marks: markNum, feedback: 'Imported from Excel' }
                     }));
 
                     // Notification
@@ -183,9 +189,13 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
 
             alert(`Successfully imported marks for ${importCount} students!`);
             if (fileInputRef.current) fileInputRef.current.value = '';
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error parsing Excel:", error);
-            alert("Failed to parse Excel file. Please ensure it's a valid format.");
+            if (error?.code === 'permission-denied') {
+                alert('Access Denied: You do not have permission to import marks for this subject.');
+            } else {
+                alert("Failed to parse Excel file. Please ensure it's a valid format.");
+            }
         }
     };
 
@@ -205,22 +215,30 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                 <div className="flex justify-between items-center mb-8 px-4">
                     <div>
                         <h3 className="text-4xl font-black text-nunma-forest tracking-tight">{exam.title} <span className="text-gray-300">/ Grading</span></h3>
-                        <p className="text-sm text-gray-400 mt-2 font-medium">Review submissions, enter marks manually, or bulk upload scores.</p>
+                        <p className="text-sm text-gray-400 mt-2 font-medium">
+                            {exam.type === 'offline'
+                                ? 'Review submissions, enter marks manually, or bulk upload scores.'
+                                : 'View automatically graded results and student submissions.'}
+                        </p>
                     </div>
                     <div className="flex items-center gap-4">
-                        <input
-                            type="file"
-                            accept=".xlsx, .xls, .csv"
-                            className="hidden"
-                            ref={fileInputRef}
-                            onChange={handleExcelUpload}
-                        />
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            className="px-6 py-4 bg-[#c2f575]/20 text-[#6ea812] border-2 border-[#c2f575] hover:bg-[#c2f575] hover:text-nunma-forest rounded-2xl font-black uppercase text-[12px] tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2"
-                        >
-                            <FileSpreadsheet size={18} /> Bulk Upload CSV
-                        </button>
+                        {exam.type === 'offline' && (
+                            <>
+                                <input
+                                    type="file"
+                                    accept=".xlsx, .xls, .csv"
+                                    className="hidden"
+                                    ref={fileInputRef}
+                                    onChange={handleExcelUpload}
+                                />
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="px-6 py-4 bg-[#c2f575]/20 text-[#6ea812] border-2 border-[#c2f575] hover:bg-[#c2f575] hover:text-nunma-forest rounded-2xl font-black uppercase text-[12px] tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2"
+                                >
+                                    <FileSpreadsheet size={18} /> Bulk Upload CSV
+                                </button>
+                            </>
+                        )}
                         <button onClick={onClose} className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all">
                             <X size={24} />
                         </button>
@@ -333,48 +351,87 @@ const GradingHub: React.FC<GradingHubProps> = ({ zoneId, exam, onClose, onValuat
                                     </div>
                                 )}
 
-                                <div className="flex-1 space-y-8">
-                                    <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Marks Awarded</label>
-                                        <div className="flex items-center gap-4">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max={exam.maxMark}
-                                                placeholder="0"
-                                                value={gradingState[selectedStudent.id]?.marks ?? ''}
-                                                onChange={e => setGradingState(prev => ({
-                                                    ...prev,
-                                                    [selectedStudent.id]: { ...prev[selectedStudent.id], marks: e.target.value }
-                                                }))}
-                                                className="w-32 bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-4 text-3xl font-black text-nunma-forest outline-none transition-all"
-                                            />
-                                            <span className="text-2xl font-black text-gray-300">/ {exam.maxMark}</span>
+                                {exam.type === 'offline' ? (
+                                    <>
+                                        <div className="flex-1 space-y-8">
+                                            <div className="space-y-4">
+                                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Marks Awarded</label>
+                                                <div className="flex items-center gap-4">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max={exam.maxMark}
+                                                        placeholder="0"
+                                                        value={gradingState[selectedStudent.id]?.marks ?? ''}
+                                                        onChange={e => {
+                                                            const val = e.target.value === '' ? '' : Number(e.target.value);
+                                                            setGradingState(prev => ({
+                                                                ...prev,
+                                                                [selectedStudent.id]: {
+                                                                    marks: val,
+                                                                    feedback: prev[selectedStudent.id]?.feedback ?? ''
+                                                                }
+                                                            }));
+                                                        }}
+                                                        className="w-32 bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-4 text-3xl font-black text-nunma-forest outline-none transition-all"
+                                                    />
+                                                    <span className="text-2xl font-black text-gray-300">/ {exam.maxMark}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Tutor Feedback</label>
+                                                <textarea
+                                                    placeholder="Great job! You demonstrated clear understanding..."
+                                                    value={gradingState[selectedStudent.id]?.feedback ?? ''}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        setGradingState(prev => ({
+                                                            ...prev,
+                                                            [selectedStudent.id]: {
+                                                                marks: prev[selectedStudent.id]?.marks ?? '',
+                                                                feedback: val
+                                                            }
+                                                        }));
+                                                    }}
+                                                    className="w-full bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-5 text-sm font-bold text-nunma-forest outline-none resize-none h-40 custom-scrollbar transition-all"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-6 mt-auto">
+                                            <button
+                                                onClick={() => handleGradeSubmit(selectedStudent.id)}
+                                                className="w-full py-5 bg-nunma-forest text-[#c2f575] rounded-2xl font-black uppercase text-[13px] tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                            >
+                                                <Check size={20} /> Save Score & Notify Student
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="flex-1 space-y-8">
+                                        <div className="space-y-4">
+                                            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Marks Obtained</label>
+                                            <div className="flex items-baseline gap-4">
+                                                <span className="text-6xl font-black text-nunma-forest">
+                                                    {selectedSubmission?.status === 'graded' || selectedSubmission?.marks !== undefined
+                                                        ? selectedSubmission.marks 
+                                                        : 'Pending'}
+                                                </span>
+                                                <span className="text-2xl font-black text-gray-300">/ {exam.maxMark}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Feedback / Remarks</label>
+                                            <div className="w-full bg-gray-50 rounded-3xl px-6 py-5 text-sm font-bold text-nunma-forest min-h-[10rem]">
+                                                {selectedSubmission?.feedback || (
+                                                    <span className="text-gray-400 italic">No feedback provided for this automated grading session.</span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-
-                                    <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Tutor Feedback</label>
-                                        <textarea
-                                            placeholder="Great job! You demonstrated clear understanding..."
-                                            value={gradingState[selectedStudent.id]?.feedback ?? ''}
-                                            onChange={e => setGradingState(prev => ({
-                                                ...prev,
-                                                [selectedStudent.id]: { ...prev[selectedStudent.id], feedback: e.target.value }
-                                            }))}
-                                            className="w-full bg-gray-50 border-2 border-gray-200 focus:border-[#c2f575] focus:bg-white rounded-2xl px-6 py-5 text-sm font-bold text-nunma-forest outline-none resize-none h-40 custom-scrollbar transition-all"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="pt-6 mt-auto">
-                                    <button
-                                        onClick={() => handleGradeSubmit(selectedStudent.id)}
-                                        className="w-full py-5 bg-nunma-forest text-[#c2f575] rounded-2xl font-black uppercase text-[13px] tracking-widest shadow-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3"
-                                    >
-                                        <Check size={20} /> Save Score & Notify Student
-                                    </button>
-                                </div>
+                                )}
 
                             </div>
                         )}

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { Tldraw } from '@tldraw/tldraw';
-import '@tldraw/tldraw/tldraw.css';
+import { Excalidraw } from '@excalidraw/excalidraw';
 import { ArrowLeft, Monitor } from 'lucide-react';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -96,15 +95,7 @@ const WhiteboardPage: React.FC = () => {
 
   const isThala = user?.uid === zone?.createdBy;
 
-  const handleMount = (editor: any) => {
-    // Requirement Step 2: If !isThala && isMobile, force isReadonly
-    if (!isThala && isMobile) {
-      editor.updateInstanceState({ isReadonly: true });
-    } else if (!isThala) {
-      // Keep existing non-creator restriction
-      editor.updateInstanceState({ isReadonly: true });
-    }
-  };
+
 
   const handleBack = () => {
     if (isThala) {
@@ -139,10 +130,8 @@ const WhiteboardPage: React.FC = () => {
       </header>
 
       <main className="whiteboard-main">
-        <Tldraw 
-          persistenceKey={zoneId} 
-          onMount={handleMount} 
-          hideUi={(!isThala && isMobile) || !isThala}
+        <Excalidraw 
+          viewModeEnabled={(!isThala && isMobile) || !isThala}
         />
       </main>
 
@@ -274,9 +263,9 @@ const WhiteboardPage: React.FC = () => {
           }
         }
 
-        /* Hide full tldraw UI for non-creators on mobile or generally for non-creators */
-        .tl-ui-container {
-          display: (!isThala && isMobile) || !isThala ? 'none !important' : 'block';
+        /* Hide full Excalidraw UI for non-creators on mobile or generally for non-creators */
+        .excalidraw .layer-ui__wrapper {
+          display: (!isThala && isMobile) || !isThala ? 'none !important' : 'flex';
         }
       `}</style>
     </div>

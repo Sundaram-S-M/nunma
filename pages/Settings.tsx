@@ -283,7 +283,7 @@ const Security = () => {
 
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-nunma-forest/90 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden p-12 text-center relative">
+          <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden p-6 md:p-12 text-center relative">
             <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center text-red-600 mx-auto mb-8">
               <ShieldCheck size={40} />
             </div>
@@ -439,7 +439,7 @@ const PricingPlans = () => {
                 "{tier.badge}"
               </div>
               <div className="flex items-baseline gap-2 mb-4">
-                <span className="text-5xl font-black text-nunma-forest tracking-tight">{tier.price}</span>
+                <span className="text-4xl md:text-5xl font-black text-nunma-forest tracking-tight">{tier.price}</span>
                 <span className="text-gray-400 font-medium">{tier.period}</span>
               </div>
               <p className="text-sm text-gray-500 font-medium min-h-[40px]">
@@ -478,7 +478,7 @@ const PricingPlans = () => {
         ))}
       </div>
 
-      <div className="mt-20 max-w-4xl mx-auto bg-indigo-50/50 rounded-[3rem] p-10 text-center border border-indigo-100">
+      <div className="mt-20 max-w-4xl mx-auto bg-indigo-50/50 rounded-[1.5rem] md:rounded-[3rem] p-10 text-center border border-indigo-100">
         <h3 className="text-2xl font-black text-nunma-forest mb-4">Need more resources?</h3>
         <p className="text-gray-600 font-medium mb-8 max-w-2xl mx-auto">
           Standard and Premium users can easily purchase add-ons at any time to expand their limits without jumping to the next tier.
@@ -659,7 +659,7 @@ const Billings = () => {
           </tr>
           <tr>
             <td style="border:none; font-weight:bold; color:#052E16;">User Name</td>
-            <td style="border:none;">${user?.tutorProfile?.legalName || user?.displayName || 'Tutor'}</td>
+            <td style="border:none;">${user?.taxDetails?.legalName || user?.name || 'Tutor'}</td>
             <td style="border:none;"></td>
             <td style="border:none;"></td>
           </tr>
@@ -725,12 +725,12 @@ const Billings = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-nunma-forest rounded-[2.5rem] p-10 text-white shadow-xl relative overflow-hidden flex flex-col justify-center min-h-[160px]">
             <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">TOTAL EARNINGS</p>
-            <p className="text-5xl font-black text-[#c1e60d] tracking-tighter">$1,240.50</p>
+            <p className="text-4xl md:text-5xl font-black text-[#c1e60d] tracking-tighter">$1,240.50</p>
             <Wallet className="absolute -bottom-4 -right-4 w-24 h-24 opacity-5" />
           </div>
           <div className="bg-gray-100 rounded-[2.5rem] p-10 border border-gray-200/50 shadow-sm flex flex-col justify-center min-h-[160px]">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">PENDING PAYOUT</p>
-            <p className="text-5xl font-black text-indigo-900 tracking-tighter">$320.00</p>
+            <p className="text-4xl md:text-5xl font-black text-indigo-900 tracking-tighter">$320.00</p>
           </div>
           <div className="bg-gray-100 rounded-[2.5rem] p-10 border border-gray-200/50 shadow-sm relative group flex flex-col justify-center min-h-[160px]">
             <div className="flex justify-between items-start mb-2">
@@ -749,7 +749,7 @@ const Billings = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-nunma-forest rounded-[2.5rem] p-10 text-white shadow-xl relative overflow-hidden flex flex-col justify-center min-h-[160px]">
             <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">TOTAL PAID</p>
-            <p className="text-5xl font-black text-[#c1e60d] tracking-tighter">$150.00</p>
+            <p className="text-4xl md:text-5xl font-black text-[#c1e60d] tracking-tighter">$150.00</p>
             <Wallet className="absolute -bottom-4 -right-4 w-24 h-24 opacity-5" />
           </div>
         </div>
@@ -757,7 +757,7 @@ const Billings = () => {
 
       {/* Revenue Payout Section - Only for Tutors */}
       {user?.role === UserRole.THALA && (
-        <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] p-12">
+        <div className="bg-white rounded-[2rem] md:rounded-[3.5rem] border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] p-6 md:p-12">
           <div className="flex items-center gap-6 mb-12">
             <div className="w-16 h-16 bg-[#eef2ff] rounded-[2rem] flex items-center justify-center text-nunma-forest shadow-sm">
               <Building2 size={32} />
@@ -865,12 +865,12 @@ const Billings = () => {
 
       {/* Subscription Billing Details - Only for Tutors */}
       {user?.role === UserRole.THALA && (
-        <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-sm p-12 space-y-12">
+        <div className="bg-white rounded-[2rem] md:rounded-[3.5rem] border border-gray-100 shadow-sm p-6 md:p-12 space-y-12">
           <div>
             <h3 className="text-2xl font-black text-indigo-900 tracking-tighter">Subscription Billing</h3>
             <p className="text-sm text-gray-400 mt-1 font-medium">Manage how you pay for your Nunma Pro subscription.</p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16">
             <div className="space-y-6">
               <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex items-center justify-between shadow-sm group hover:border-indigo-100 transition-all">
                 <div className="flex items-center gap-6">
@@ -888,7 +888,7 @@ const Billings = () => {
                 <Plus size={16} /> ADD BACKUP PAYMENT METHOD
               </button>
             </div>
-            <div className="bg-indigo-50/50 p-10 rounded-[3rem] border border-indigo-100 flex flex-col justify-center relative overflow-hidden">
+            <div className="bg-indigo-50/50 p-10 rounded-[1.5rem] md:rounded-[3rem] border border-indigo-100 flex flex-col justify-center relative overflow-hidden">
               <div className="flex items-center gap-4 mb-4 relative z-10">
                 <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-900 shadow-sm">
                   <Receipt size={20} />
@@ -905,7 +905,7 @@ const Billings = () => {
       )}
 
       {/* Transaction Registry */}
-      <div className="bg-white rounded-[3.5rem] p-12 border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-[2rem] md:rounded-[3.5rem] p-6 md:p-12 border border-gray-100 shadow-sm">
         <div className="flex justify-between items-center mb-10">
           <div>
             <h3 className="text-2xl font-black text-indigo-900 tracking-tighter">Transaction Registry</h3>
@@ -974,7 +974,7 @@ const Settings: React.FC = () => {
       <div className="space-y-12">
         <div className="flex flex-col md:flex-row justify-between items-start gap-8">
           <div className="space-y-2">
-            <h1 className="text-6xl font-black text-nunma-forest tracking-tighter flex items-center gap-6">
+            <h1 className="text-4xl md:text-6xl font-black text-nunma-forest tracking-tighter flex items-center gap-6">
               <button onClick={() => navigate('/dashboard')} className="p-4 bg-white border border-gray-100 rounded-2xl text-indigo-900 hover:shadow-xl transition-all shadow-sm active:scale-90">
                 <ChevronLeft size={28} />
               </button>

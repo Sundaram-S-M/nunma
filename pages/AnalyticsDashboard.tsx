@@ -595,8 +595,35 @@ const AnalyticsDashboard: React.FC = () => {
            .back-btn { display: none; }
            .header-text h1 { font-size: 2rem; flex-wrap: wrap; }
            .chart-wrapper { padding: 2rem; }
-           .metric-card { padding: 1.5rem; gap: 1rem; }
-           .metric-value { font-size: 1.4rem; }
+           
+           .metrics-grid { 
+             display: grid;
+             grid-template-columns: repeat(2, 1fr);
+             gap: 1rem; 
+           }
+           .metric-card { 
+             padding: 1.25rem; 
+             gap: 1rem; 
+             flex-direction: column;
+             align-items: flex-start;
+             border-radius: 1.5rem;
+           }
+           .metric-card:last-child:nth-child(odd) {
+             grid-column: span 2;
+             flex-direction: row;
+             align-items: center;
+           }
+           .metric-icon {
+             width: 44px;
+             height: 44px;
+             border-radius: 1.25rem;
+           }
+           .metric-icon svg {
+             width: 20px;
+             height: 20px;
+           }
+           .metric-content .metric-label { font-size: 0.65rem; }
+           .metric-value { font-size: 1.3rem; }
         }
       `}</style>
     </div>

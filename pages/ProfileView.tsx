@@ -102,7 +102,7 @@ const ProfileHeader = ({
           {/* Avatar Space Offset - to push name/headline away from left edge where avatar sits */}
           <div className="hidden md:block w-40 md:w-44 shrink-0 md:mr-8"></div>
 
-          <div className="flex-1 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 text-white">
+          <div className="hidden md:flex flex-1 flex-col md:flex-row justify-between items-start md:items-end gap-6 text-white">
             {/* User Details */}
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-4 mb-2">
@@ -201,6 +201,38 @@ const ProfileHeader = ({
             </div>
           </div>
 
+          {/* Mobile-only Name, Headline, and Buttons (WhatsApp/Insta DM style alignment) */}
+          <div className="flex md:hidden flex-col items-center text-center w-full px-4 mb-6 relative z-30">
+            <h1 className="text-3xl font-black text-nunma-forest tracking-tighter mb-1">{profileUser.name}</h1>
+            {profileUser.headline && <p className="text-gray-500 text-sm italic mb-4 max-w-sm">{profileUser.headline}</p>}
+            
+            {/* Mobile Action Buttons */}
+            <div className="flex items-center gap-3 w-full justify-center">
+              {isMe ? (
+                <>
+                  {isEditing ? (
+                    <button onClick={handleSaveProfile} className="flex-1 max-w-[150px] py-2.5 bg-nunma-forest text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md">
+                      Save
+                    </button>
+                  ) : (
+                    <button onClick={() => setIsEditing(true)} className="flex-1 max-w-[150px] py-2.5 bg-[#403e6a]/60 text-white border border-white/10 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-sm">
+                      Edit
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button onClick={() => navigate(`/inbox?userId=${profileUser.uid}`)} className="flex-1 max-w-[150px] py-2.5 bg-[#403e6a]/60 text-white border border-white/10 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md flex items-center justify-center gap-1">
+                    <MessageSquare size={12} /> Message
+                  </button>
+                  <button onClick={handleFollow} className={`flex-1 max-w-[150px] py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md flex items-center justify-center gap-1 ${isFollowing ? 'bg-white/10 text-white border border-white/20' : 'bg-[#c2f575] text-nunma-forest'}`}>
+                    {isFollowing ? <><UserCheck size={12} /> Following</> : <><UserPlus size={12} /> Follow</>}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
           {/* User Stats on the White Part */}
           <div className="flex-1 flex flex-wrap items-center justify-center md:justify-start gap-10 mt-4 md:mt-6">
             <div className="flex items-center gap-2.5">
@@ -249,7 +281,7 @@ const ProfileHeader = ({
 );
 
 const AboutSection = ({ isEditing, editBio, setEditBio, profileUser }: any) => (
-  <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm mb-12">
+  <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] p-6 md:p-12 border border-gray-100 shadow-sm mb-12">
     <div className="flex justify-between items-center mb-8">
       <h3 className="text-2xl font-black text-indigo-900 flex items-center gap-3">
         <Sparkles size={24} className="text-[#c2f575]" /> About
@@ -299,7 +331,7 @@ const StudentProfile = ({
 
   return (
     <div className="space-y-12">
-      <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] p-6 md:p-12 border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
           <Globe size={24} className="text-[#c2f575]" /> Learnings
         </h3>
@@ -324,7 +356,7 @@ const StudentProfile = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] p-6 md:p-12 border border-gray-100 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <h3 className="text-2xl font-black text-indigo-900 flex items-center gap-3">
             <ShieldCheck size={24} className="text-[#0077b5]" /> Experience
@@ -373,7 +405,7 @@ const StudentProfile = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] p-6 md:p-12 border border-gray-100 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <h3 className="text-2xl font-black text-indigo-900 flex items-center gap-3">
             <Award size={24} className="text-[#c2f575]" /> Education
@@ -417,7 +449,7 @@ const StudentProfile = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] p-6 md:p-12 border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-3">
           <Star size={24} className="text-yellow-400" /> Skills
         </h3>
@@ -452,25 +484,25 @@ const StudentProfile = ({
 };
 
 const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, navigate }: any) => (
-  <div className="bg-white rounded-[4rem] shadow-[0_60px_120px_rgba(26,26,78,0.12)] border border-gray-100 overflow-hidden">
-    <div className="flex bg-gray-50/50 p-5 border-b border-gray-100 gap-2 overflow-x-auto no-scrollbar">
+  <div className="bg-white max-md:bg-transparent rounded-[2rem] md:rounded-[4rem] shadow-[0_60px_120px_rgba(26,26,78,0.12)] max-md:shadow-none border border-gray-100 max-md:border-none overflow-hidden max-md:overflow-visible">
+    <div className="flex bg-gray-50/50 max-md:bg-transparent p-5 max-md:p-0 max-md:mb-4 border-b border-gray-100 max-md:border-none gap-2 max-md:gap-1 overflow-x-auto no-scrollbar">
       {[
-        { id: 'zones', label: 'Zones', icon: <Globe size={20} /> },
-        { id: 'mentorship', label: 'Mentorship', icon: <Video size={20} /> },
-        { id: 'materials', label: 'Materials', icon: <FileText size={20} /> }
+        { id: 'zones', label: 'Zones', icon: <Globe size={20} className="max-md:w-4 max-md:h-4" /> },
+        { id: 'mentorship', label: 'Mentorship', icon: <Video size={20} className="max-md:w-4 max-md:h-4" /> },
+        { id: 'materials', label: 'Materials', icon: <FileText size={20} className="max-md:w-4 max-md:h-4" /> }
       ].map(tab => (
         <button
           key={tab.id} onClick={() => setActiveTab(tab.id)}
-          className={`flex-1 min-w-[150px] flex items-center justify-center gap-5 py-7 rounded-[3rem] text-xs font-black uppercase tracking-[0.25em] transition-all
-            ${activeTab === tab.id ? 'bg-white text-indigo-900 shadow-2xl scale-[1.02] border border-gray-100' : 'text-gray-400 hover:text-indigo-900 hover:bg-white/50'}
+          className={`flex-1 min-w-[150px] max-md:min-w-0 flex items-center justify-center gap-5 max-md:gap-1.5 py-7 max-md:py-3 max-md:px-1 rounded-[1.5rem] md:rounded-[3rem] text-xs max-md:text-[9px] font-black uppercase tracking-[0.25em] max-md:tracking-wider transition-all
+            ${activeTab === tab.id ? 'bg-white text-indigo-900 shadow-2xl max-md:shadow-sm scale-[1.02] max-md:scale-100 border border-gray-100 max-md:border-transparent' : 'text-gray-400 hover:text-indigo-900 hover:bg-white/50 max-md:hover:bg-transparent'}
           `}
         >
-          {tab.icon} {tab.label}
+          {tab.icon} <span className="max-md:truncate">{tab.label}</span>
         </button>
       ))}
     </div>
 
-    <div className="p-16">
+    <div className="p-6 md:p-10 lg:p-16">
       {activeTab === 'zones' && (
         <div className="space-y-12 animate-in fade-in duration-500">
           <div className="flex justify-between items-end mb-10">
@@ -481,7 +513,7 @@ const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, n
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
             {zones.length > 0 ? zones.map((zone: any) => (
-              <div key={zone.id} className="bg-white border border-gray-100 rounded-[3.5rem] overflow-hidden group hover:shadow-2xl transition-all duration-700 flex flex-col">
+              <div key={zone.id} className="bg-white border border-gray-100 rounded-[2rem] md:rounded-[3.5rem] overflow-hidden group hover:shadow-2xl transition-all duration-700 flex flex-col">
                 <div className="h-60 overflow-hidden relative">
                   <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                   <div className="absolute top-6 right-6 bg-white/95 backdrop-blur-md text-indigo-900 px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase shadow-xl tracking-widest">${zone.price}</div>
@@ -491,7 +523,16 @@ const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, n
                   <button onClick={() => navigate(`/classroom/zone/${zone.id}`)} className="w-full py-6 bg-indigo-900 text-white rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] flex items-center justify-center gap-4 hover:brightness-110 transition-all shadow-xl">Join Zone <ArrowRight size={18} className="text-[#c2f575]" /></button>
                 </div>
               </div>
-            )) : <div className="col-span-full py-20 text-center opacity-20"><Globe size={64} className="mx-auto mb-6" /><p className="text-xl font-black uppercase tracking-widest">No active learning zones</p></div>}
+            )) : (
+              <div className="col-span-full py-20 max-md:py-16 text-center opacity-20 max-md:opacity-100 max-md:bg-gradient-to-b max-md:from-gray-50/40 max-md:to-transparent max-md:border-2 max-md:border-dashed max-md:border-gray-200 max-md:rounded-[3rem] flex flex-col items-center justify-center transition-all relative overflow-hidden group">
+                <div className="hidden max-md:block absolute inset-0 bg-[#c2f575]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[3rem]"></div>
+                <div className="max-md:bg-white max-md:w-24 max-md:h-24 max-md:rounded-[2.5rem] max-md:shadow-2xl max-md:shadow-indigo-900/5 max-md:flex max-md:items-center max-md:justify-center mb-6 relative z-10 transition-transform duration-500 max-md:group-hover:scale-110 max-md:group-hover:-rotate-3">
+                  <Globe size={64} className="mx-auto max-md:w-10 max-md:h-10 max-md:text-indigo-400 max-md:m-0" />
+                </div>
+                <p className="text-xl max-md:text-sm font-black uppercase tracking-widest max-md:tracking-wider max-md:text-indigo-900 relative z-10">No active learning zones</p>
+                <p className="hidden max-md:block text-xs text-gray-400 mt-4 font-medium px-10 leading-relaxed relative z-10">The tutor is currently not hosting any active learning zones. Check back soon!</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -500,7 +541,7 @@ const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, n
         <div className="space-y-20 animate-in fade-in duration-500">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
             {products.filter((p: any) => p.type === 'mentorship').length > 0 ? products.filter((p: any) => p.type === 'mentorship').map((mentorship: any) => (
-              <div key={mentorship.id} className="bg-indigo-900 p-12 rounded-[4rem] text-white shadow-2xl relative overflow-hidden group">
+              <div key={mentorship.id} className="bg-indigo-900 p-6 md:p-12 rounded-[2rem] md:rounded-[4rem] text-white shadow-2xl relative overflow-hidden group">
                 <div className="relative z-10">
                   <div className="flex justify-between items-start mb-8">
                     <div className="inline-flex items-center gap-3 bg-[#c2f575] text-indigo-900 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">
@@ -513,16 +554,23 @@ const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, n
                 </div>
               </div>
             )) : (
-              <div className="col-span-full py-20 text-center opacity-20"><Video size={64} className="mx-auto mb-6" /><p className="text-xl font-black uppercase tracking-widest">No listings available</p></div>
+              <div className="col-span-full py-20 max-md:py-16 text-center opacity-20 max-md:opacity-100 max-md:bg-gradient-to-b max-md:from-gray-50/40 max-md:to-transparent max-md:border-2 max-md:border-dashed max-md:border-gray-200 max-md:rounded-[3rem] flex flex-col items-center justify-center transition-all relative overflow-hidden group">
+                <div className="hidden max-md:block absolute inset-0 bg-[#c2f575]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[3rem]"></div>
+                <div className="max-md:bg-white max-md:w-24 max-md:h-24 max-md:rounded-[2.5rem] max-md:shadow-2xl max-md:shadow-indigo-900/5 max-md:flex max-md:items-center max-md:justify-center mb-6 relative z-10 transition-transform duration-500 max-md:group-hover:scale-110 max-md:group-hover:-rotate-3">
+                  <Video size={64} className="mx-auto max-md:w-10 max-md:h-10 max-md:text-indigo-400 max-md:m-0" />
+                </div>
+                <p className="text-xl max-md:text-sm font-black uppercase tracking-widest max-md:tracking-wider max-md:text-indigo-900 relative z-10">No listings available</p>
+                <p className="hidden max-md:block text-xs text-gray-400 mt-4 font-medium px-10 leading-relaxed relative z-10">The tutor hasn't added any mentorship sessions yet. Check back later!</p>
+              </div>
             )}
           </div>
         </div>
       )}
 
       {['materials'].includes(activeTab) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-12">
           {products.filter((p: any) => p.type === activeTab.slice(0, -1)).length > 0 ? products.filter((p: any) => p.type === activeTab.slice(0, -1)).map((prod: any) => (
-            <div key={prod.id} className="bg-white border border-gray-100 p-12 rounded-[3.5rem] hover:shadow-2xl transition-all group flex flex-col relative overflow-hidden">
+            <div key={prod.id} className="bg-white border border-gray-100 p-6 md:p-12 rounded-[2rem] md:rounded-[3.5rem] hover:shadow-2xl transition-all group flex flex-col relative overflow-hidden">
               <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mb-10 group-hover:bg-[#c2f575] transition-all">
                 {activeTab === 'materials' ? <FileText size={40} /> : null}
               </div>
@@ -532,7 +580,16 @@ const TutorProfile = ({ profileUser, zones, products, activeTab, setActiveTab, n
                 <button className="w-14 h-14 bg-gray-50 text-indigo-900 rounded-2xl hover:bg-indigo-900 hover:text-white transition-all flex items-center justify-center"><ArrowRight size={24} /></button>
               </div>
             </div>
-          )) : <div className="col-span-full py-32 text-center opacity-20"><ShoppingBag size={64} className="mx-auto mb-6" /><p className="text-xl font-black uppercase tracking-widest">No listings available</p></div>}
+          )) : (
+              <div className="col-span-full py-32 max-md:py-16 text-center opacity-20 max-md:opacity-100 max-md:bg-gradient-to-b max-md:from-gray-50/40 max-md:to-transparent max-md:border-2 max-md:border-dashed max-md:border-gray-200 max-md:rounded-[3rem] flex flex-col items-center justify-center transition-all relative overflow-hidden group">
+                <div className="hidden max-md:block absolute inset-0 bg-[#c2f575]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[3rem]"></div>
+                <div className="max-md:bg-white max-md:w-24 max-md:h-24 max-md:rounded-[2.5rem] max-md:shadow-2xl max-md:shadow-indigo-900/5 max-md:flex max-md:items-center max-md:justify-center mb-6 relative z-10 transition-transform duration-500 max-md:group-hover:scale-110 max-md:group-hover:-rotate-3">
+                  <ShoppingBag size={64} className="mx-auto max-md:w-10 max-md:h-10 max-md:text-indigo-400 max-md:m-0" />
+                </div>
+                <p className="text-xl max-md:text-sm font-black uppercase tracking-widest max-md:tracking-wider max-md:text-indigo-900 relative z-10">No listings available</p>
+                <p className="hidden max-md:block text-xs text-gray-400 mt-4 font-medium px-10 leading-relaxed relative z-10">No study materials or digital products are available right now.</p>
+              </div>
+            )}
         </div>
       )}
     </div>
@@ -1074,25 +1131,25 @@ const ProfileView: React.FC = () => {
       {/* Product Listing Modal (for Tutor) */}
       {showProductModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
-            <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center">
+          <div className="bg-white rounded-[2rem] md:rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
+            <div className="px-6 md:px-12 py-10 border-b border-gray-50 flex justify-between items-center">
               <h3 className="text-3xl font-black text-nunma-forest tracking-tight">List Digital Product</h3>
               <button onClick={() => setShowProductModal(false)} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"><X size={24} /></button>
             </div>
-            <div className="p-12 space-y-10">
+            <div className="p-6 md:p-12 space-y-10">
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRODUCT NAME</label>
                 <input type="text" placeholder="e.g. Masterclass Assets" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
               </div>
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">TYPE</label>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {(['material', 'mentorship'] as const).map(t => (
                     <button key={t} onClick={() => setProductType(t)} className={`py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${productType === t ? 'bg-indigo-900 text-white shadow-xl' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{t}</button>
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none" /></div>
                 <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label>                  <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none">
                   <option value="INR">INR (₹)</option>
@@ -1111,7 +1168,7 @@ const ProfileView: React.FC = () => {
       {/* Followers Modal (Instagram Style) */}
       {showFollowersModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 flex flex-col max-h-[80vh]">
+          <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 flex flex-col max-h-[80vh]">
             <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30 shrink-0">
               <div>
                 <h3 className="text-2xl font-black text-indigo-900">Followers</h3>

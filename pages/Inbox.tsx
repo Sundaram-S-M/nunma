@@ -13,7 +13,7 @@ import {
   Send,
   MessageCircle, Users, Zap, X, Search, MoreVertical,
   ImageIcon, Smile, Mic, Phone, Video, CheckCheck,
-  FileText, Camera, Mail, ArrowRight, UserPlus, Image as LucideImage
+  FileText, Camera, Mail, ArrowRight, UserPlus, Image as LucideImage, ArrowLeft
 } from 'lucide-react';
 
 import PhotoAdjustModal from '../components/PhotoAdjustModal';
@@ -370,7 +370,7 @@ const Inbox: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-140px)] flex bg-[#fbfbfb] rounded-[4rem] border border-gray-100 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-700 relative">
+    <div className="h-[calc(100vh-140px)] flex bg-[#fbfbfb] rounded-[2rem] md:rounded-[4rem] border border-gray-100 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-700 relative">
 
       {adjustingImage && (
         <PhotoAdjustModal
@@ -386,7 +386,7 @@ const Inbox: React.FC = () => {
 
       {showGroupProfile && activeChat && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 relative flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 relative flex flex-col max-h-[90vh]">
             <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30 shrink-0">
               <div>
                 <h3 className="text-2xl font-black text-nunma-forest">Group Profile</h3>
@@ -477,7 +477,7 @@ const Inbox: React.FC = () => {
 
       {showCreateGroup && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
+          <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
             <div className="p-10 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
               <div>
                 <h3 className="text-2xl font-black text-nunma-forest">New Collab Group</h3>
@@ -614,7 +614,7 @@ const Inbox: React.FC = () => {
       )}
 
       {/* Sidebar */}
-      <div className="w-96 border-r border-gray-100 flex flex-col bg-white overflow-hidden">
+      <div className={`w-full md:w-96 border-r border-gray-100 flex-col bg-white overflow-hidden ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-10 pb-4 flex items-center justify-between">
           <h2 className="text-4xl font-black text-nunma-forest tracking-tighter">Inbox</h2>
         </div>
@@ -703,7 +703,7 @@ const Inbox: React.FC = () => {
               </button>
             ))
           ) : (
-            <div className="text-center py-24 opacity-20 flex flex-col items-center">
+            <div className="text-center py-8 md:py-24 opacity-20 flex flex-col items-center">
               <Mail size={40} className="mb-3" />
               <p className="text-[10px] font-black uppercase tracking-widest">No Threads Found</p>
             </div>
@@ -711,20 +711,23 @@ const Inbox: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col bg-white">
+      <div className={`flex-1 flex-col bg-white ${!selectedChatId ? 'hidden md:flex' : 'flex'}`}>
         {selectedChatId && activeChat ? (
           <div className="flex-1 flex flex-col animate-in slide-in-from-right-4 duration-500">
-            <div className="px-12 py-8 flex items-center justify-between border-b border-gray-50 bg-white sticky top-0 z-30">
-              <div className="flex items-center gap-6">
+            <div className="px-2 py-2 md:px-12 md:py-8 flex items-center justify-between border-b border-gray-50 bg-white sticky top-0 z-30">
+              <div className="flex items-center gap-2 md:gap-6">
+                <button onClick={() => setSelectedChatId(null)} className="md:hidden p-1.5 text-gray-500 hover:text-nunma-forest transition-colors rounded-full active:bg-gray-100 -ml-1">
+                  <ArrowLeft size={24} />
+                </button>
                 <div
-                  className="relative cursor-pointer hover:opacity-80 transition-opacity"
+                  className="relative cursor-pointer hover:opacity-80 transition-opacity shrink-0"
                   onClick={handleGroupHeaderClick}
                 >
-                  <img src={activeChat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={activeChat.name} className="w-14 h-14 rounded-2xl object-cover shadow-xl" />
-                  {activeChat.online && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#7cc142] border-[3px] border-white rounded-full"></div>}
+                  <img src={activeChat.avatar || 'https://picsum.photos/seed/user/80/80'} alt={activeChat.name} className="w-10 h-10 md:w-14 md:h-14 rounded-full md:rounded-2xl object-cover shadow-sm md:shadow-xl" />
+                  {activeChat.online && <div className="absolute -bottom-1 -right-1 w-3 h-3 md:w-4 md:h-4 bg-[#7cc142] border-2 md:border-[3px] border-white rounded-full"></div>}
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black text-nunma-forest tracking-tighter leading-none mb-2">{activeChat.name}</h3>
+                  <h3 className="text-lg md:text-2xl font-black text-nunma-forest tracking-tighter md:leading-none mb-0.5 md:mb-2 line-clamp-1">{activeChat.name}</h3>
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${activeChat.online ? 'bg-[#7cc142]' : 'bg-gray-300'}`}></span>
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{activeChat.online ? 'Online' : 'Offline'}</span>
@@ -734,7 +737,7 @@ const Inbox: React.FC = () => {
               <div className="flex items-center gap-3 relative">
                 <button
                   onClick={() => setShowOptionsMenu(!showOptionsMenu)}
-                  className="w-12 h-12 flex items-center justify-center hover:bg-gray-50 rounded-2xl text-gray-400 hover:text-nunma-forest transition-all bg-white border border-gray-100 shadow-sm relative z-40"
+                  className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center hover:bg-gray-50 rounded-full md:rounded-2xl text-gray-500 hover:text-nunma-forest transition-all bg-transparent md:bg-white border-0 md:border border-gray-100 shadow-none md:shadow-sm relative z-40"
                 >
                   <MoreVertical size={20} />
                 </button>
@@ -747,18 +750,18 @@ const Inbox: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-12 space-y-8 bg-gray-50/10 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-3 md:p-12 space-y-3 md:space-y-8 bg-[#efeae2] md:bg-gray-50/10 custom-scrollbar relative z-10">
               <div className="flex justify-center mb-10">
                 <span className="px-6 py-2 bg-white border border-gray-100 rounded-full text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] shadow-sm">Real-time Stream</span>
               </div>
               {messages.map((msg) => (
                 <div key={msg.id} className={`flex w-full ${msg.senderId === user?.uid ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-500`}>
                   <div className="max-w-[70%] group relative">
-                    <div className={`p-6 rounded-[2.5rem] shadow-xl relative ${msg.senderId === user?.uid
-                      ? 'bg-nunma-forest text-white rounded-tr-none'
-                      : 'bg-white text-nunma-forest rounded-tl-none border border-gray-100'
+                    <div className={`px-4 py-2 md:p-6 rounded-2xl md:rounded-[2.5rem] shadow-sm md:shadow-xl relative ${msg.senderId === user?.uid
+                      ? 'bg-[#dcf8c6] md:bg-nunma-forest text-gray-900 md:text-white rounded-tr-sm md:rounded-tr-none'
+                      : 'bg-white text-gray-900 md:text-nunma-forest rounded-tl-sm md:rounded-tl-none border border-gray-100/50 md:border-gray-100'
                       }`}>
-                      <p className="text-base font-medium leading-relaxed">{msg.text}</p>
+                      <p className="text-sm md:text-base font-medium md:leading-relaxed">{msg.text}</p>
                     </div>
                     <div className={`flex items-center gap-2 mt-3 px-4 ${msg.senderId === user?.uid ? 'justify-end' : 'justify-start'}`}>
                       <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">
@@ -774,14 +777,14 @@ const Inbox: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="px-10 py-8 bg-white border-t border-gray-100">
-              <div className="flex items-center gap-5">
-                <div className="relative" ref={addMenuRef}>
+            <div className="px-2 py-2 md:px-10 md:py-8 bg-white border-t border-gray-100">
+              <div className="flex items-center gap-2 md:gap-5">
+                <div className="relative shrink-0" ref={addMenuRef}>
                   <button
                     onClick={() => setShowAddMenu(!showAddMenu)}
-                    className={`w-14 h-14 rounded-2xl transition-all flex items-center justify-center shadow-xl ${showAddMenu ? 'bg-nunma-forest text-white rotate-45 scale-90' : 'text-gray-400 hover:text-nunma-forest hover:bg-gray-50 bg-white border border-gray-100'}`}
+                    className={`w-10 h-10 md:w-14 md:h-14 rounded-full md:rounded-2xl transition-all flex items-center justify-center shadow-none md:shadow-xl ${showAddMenu ? 'bg-nunma-forest text-white rotate-45 scale-90' : 'text-gray-500 md:text-gray-400 hover:text-nunma-forest hover:bg-gray-50 bg-transparent md:bg-white border-0 md:border border-gray-100'}`}
                   >
-                    <Plus size={28} />
+                    <Plus size={24} className="md:w-7 md:h-7" />
                   </button>
                   {showAddMenu && (
                     <div className="absolute bottom-full left-0 mb-6 w-64 bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 p-4 z-50 animate-in slide-in-from-bottom-4 duration-300">
@@ -810,39 +813,39 @@ const Inbox: React.FC = () => {
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Type your message..."
-                    className="w-full bg-gray-50 border border-gray-100 rounded-[2.25rem] pl-8 pr-16 py-5 focus:outline-none focus:ring-4 focus:ring-[#c2f575]/10 font-bold text-nunma-forest transition-all shadow-inner text-lg"
+                    placeholder="Message"
+                    className="w-full bg-gray-100 md:bg-gray-50 border border-transparent md:border-gray-100 rounded-full md:rounded-[2.25rem] pl-4 pr-10 py-2.5 md:pl-8 md:pr-16 md:py-5 focus:outline-none focus:ring-2 md:focus:ring-4 focus:ring-[#c2f575]/10 font-medium md:font-bold text-gray-800 md:text-nunma-forest transition-all md:shadow-inner text-sm md:text-lg"
                   />
-                  <div className="absolute right-5 top-1/2 -translate-y-1/2">
-                    <button className="text-gray-300 hover:text-nunma-forest">
-                      <Smile size={24} />
+                  <div className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2">
+                    <button className="text-gray-400 md:text-gray-300 hover:text-nunma-forest">
+                      <Smile size={20} className="md:w-6 md:h-6" />
                     </button>
                   </div>
                 </div>
                 <button
                   onClick={handleSendMessage}
-                  className={`w-16 h-16 rounded-[2rem] flex items-center justify-center shadow-2xl transition-all active:scale-90
-                    ${messageText.trim() ? 'bg-[#c2f575] text-nunma-forest shadow-[#c2f575]/20 scale-105' : 'bg-nunma-forest text-white shadow-nunma-forest/20'}
+                  className={`w-10 h-10 md:w-16 md:h-16 shrink-0 rounded-full md:rounded-[2rem] flex items-center justify-center shadow-sm md:shadow-2xl transition-all active:scale-90
+                    ${messageText.trim() ? 'bg-[#128C7E] md:bg-[#c2f575] text-white md:text-nunma-forest shadow-[#128C7E]/20 md:shadow-[#c2f575]/20 md:scale-105' : 'bg-[#128C7E] md:bg-nunma-forest text-white shadow-[#128C7E]/20 md:shadow-nunma-forest/20'}
                   `}
                 >
-                  {messageText.trim() ? <Send size={28} strokeWidth={2.5} className="ml-1" /> : <Mic size={28} />}
+                  {messageText.trim() ? <Send size={18} strokeWidth={2.5} className="ml-1 md:w-7 md:h-7" /> : <Mic size={20} className="md:w-7 md:h-7" />}
                 </button>
               </div>
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-20 text-center bg-gray-50/5">
+          <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-10 lg:p-20 text-center bg-gray-50/5">
             <div className="w-72 h-72 bg-white rounded-[6rem] flex items-center justify-center mb-12 relative shadow-2xl border border-gray-100">
               <MessageCircle size={120} className="text-gray-50" strokeWidth={1} />
-              <div className="absolute -top-6 -right-6 w-28 h-28 bg-[#c2f575] rounded-[3rem] flex items-center justify-center text-nunma-forest shadow-2xl rotate-12 ring-8 ring-white animate-bounce-slow">
+              <div className="absolute -top-6 -right-6 w-28 h-28 bg-[#c2f575] rounded-[1.5rem] md:rounded-[3rem] flex items-center justify-center text-nunma-forest shadow-2xl rotate-12 ring-8 ring-white animate-bounce-slow">
                 <Zap size={48} fill="currentColor" />
               </div>
             </div>
-            <h3 className="text-5xl font-black text-nunma-forest tracking-tighter mb-6 leading-none uppercase">Collaboration Hub</h3>
+            <h3 className="text-4xl md:text-5xl font-black text-nunma-forest tracking-tighter mb-6 leading-none uppercase">Collaboration Hub</h3>
             <p className="text-gray-400 font-semibold max-w-sm mx-auto mb-12 text-xl leading-relaxed italic">
               Select a conversation to sync with your squad and start the stream.
             </p>
-            <button className="bg-nunma-forest text-white px-16 py-7 rounded-[3rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl shadow-nunma-forest/20 hover:scale-105 transition-all flex items-center gap-4">
+            <button className="bg-nunma-forest text-white px-16 py-7 rounded-[1.5rem] md:rounded-[3rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl shadow-nunma-forest/20 hover:scale-105 transition-all flex items-center gap-4">
               Explore The Squad <ArrowRight size={22} className="text-[#c2f575]" />
             </button>
           </div>

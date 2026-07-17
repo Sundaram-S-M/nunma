@@ -24,6 +24,18 @@ service cloud.firestore {
       );
     }
 
+    function isCoTutor(zoneId) {
+      let zoneDoc = get(/databases/$(database)/documents/zones/$(zoneId));
+      return request.auth != null && request.auth.uid in zoneDoc.data.coTutorRoles;
+    }
+
+    function isCoTutorForSubject(zoneId, subject) {
+      let zoneDoc = get(/databases/$(database)/documents/zones/$(zoneId));
+      return request.auth != null && 
+             request.auth.uid in zoneDoc.data.coTutorRoles && 
+             (zoneDoc.data.coTutorRoles[request.auth.uid] == subject || subject == 'Multiple' || subject == 'All' || subject == 'multiple' || subject == 'all');
+    }
+
     function isZoneStudent(zoneId) {
       return exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid));
     }
@@ -38,7 +50,18 @@ service cloud.firestore {
     match /zones/{zoneId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && (
+      allow update: if request.auth != null && (
+        (resource.data.createdBy == request.auth.uid || resource.data.tutorId == request.auth.uid) ||
+        (
+           // Allow co-tutors to remove themselves
+           'coTutorRoles' in resource.data &&
+           request.auth.uid in resource.data.coTutorRoles &&
+           !(request.auth.uid in request.resource.data.get('coTutorRoles', {}))
+        )
+      ) && (
+        !('coTutors' in request.resource.data) || request.resource.data.coTutors.size() <= 7
+      );
+      allow delete: if request.auth != null && (
         resource.data.createdBy == request.auth.uid ||
         resource.data.tutorId == request.auth.uid
       );
@@ -87,12 +110,17 @@ service cloud.firestore {
     match /zones/{zoneId}/exams/{examId} {
       allow read: if isSignedIn() && (
         exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid)) ||
-        isZoneCreator(zoneId)
+        isZoneCreator(zoneId) ||
+        isCoTutorForSubject(zoneId, resource.data.subject)
       );
       allow write: if isSignedIn() && isZoneCreator(zoneId);
 
       match /submissions/{studentId} {
-        allow read: if isSignedIn() && (request.auth.uid == studentId || isZoneCreator(zoneId));
+        allow read: if isSignedIn() && (
+          request.auth.uid == studentId || 
+          isZoneCreator(zoneId) ||
+          isCoTutorForSubject(zoneId, get(/databases/$(database)/documents/zones/$(zoneId)/exams/$(examId)).data.subject)
+        );
         allow write: if false;
       }
     }
@@ -121,6 +149,22 @@ service cloud.firestore {
       
       match /attendance/{attendeeId} {
         allow read, write: if isSignedIn() && isZoneCreator(zoneId);
+      }
+    }
+
+    // ZONES/LIVESESSIONS
+    match /zones/{zoneId}/liveSessions/{sessionId} {
+      allow read: if isSignedIn() && (isZoneCreator(zoneId) || isZoneStudent(zoneId));
+      allow write: if isSignedIn() && isZoneCreator(zoneId);
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (isZoneCreator(zoneId) || isZoneStudent(zoneId));
+        allow write: if isSignedIn() && (isZoneCreator(zoneId) || isZoneStudent(zoneId));
+      }
+
+      match /raisedHands/{studentId} {
+        allow read: if isSignedIn() && (isZoneCreator(zoneId) || isZoneStudent(zoneId));
+        allow write: if isSignedIn() && (isZoneCreator(zoneId) || (isZoneStudent(zoneId) && request.auth.uid == studentId));
       }
     }
 
@@ -223,6 +267,10 @@ service cloud.firestore {
       match /invoices/{invoiceId} {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
+      }
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null;
       }
     }
 

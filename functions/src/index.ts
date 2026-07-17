@@ -22,6 +22,7 @@ import { Resend } from "resend";
 import Busboy from 'busboy';
 export { gradePdfSubmission } from "./ai/gradeSubmission";
 export { generateQuizDraft } from "./ai/generateQuizDraft";
+export { processMCQUploads } from "./ai/processMCQUploads";
 export { askZoneAnalytics } from "./ai/askZoneAnalytics";
 
 // const db = admin.firestore(); // Moved inside function scopes for deployment stability
@@ -425,7 +426,7 @@ export const bunnyStreamWebhook = onRequest(
             const videoGuid = payload.VideoGuid;
 
             if (videoGuid && payload.Status === 3) {
-                const videosSnapshot = await db.collection("videos").where("bunnyVideoId", "==", videoGuid).get();
+                const videosSnapshot = await db.collectionGroup("videos").where("bunnyVideoId", "==", videoGuid).get();
                 if (!videosSnapshot.empty) {
                     const batch = db.batch();
                     videosSnapshot.docs.forEach(doc => {
@@ -1300,26 +1301,26 @@ export const bunnyWebhook = onRequest(
                 return;
             }
 
-            // 1. Fetch all zones to find the one containing the videoId in segments array
-            const zonesSnapshot = await db.collection('zones').get();
-            let matchingZoneDoc = null;
+            // 1. Fetch all chapters using collectionGroup to find the one containing the videoId in segments array
+            const chaptersSnapshot = await db.collectionGroup('chapters').get();
+            let matchingChapterDoc = null;
             let segments = [];
 
-            for (const doc of zonesSnapshot.docs) {
+            for (const doc of chaptersSnapshot.docs) {
                 const data = doc.data();
                 if (data.segments && Array.isArray(data.segments)) {
                     const found = data.segments.some((s: any) => s.videoId === videoId);
                     if (found) {
-                        matchingZoneDoc = doc;
+                        matchingChapterDoc = doc;
                         segments = data.segments;
                         break;
                     }
                 }
             }
 
-            if (!matchingZoneDoc) {
-                console.warn(`No zone found for videoId: ${videoId}`);
-                res.status(200).send('Zone match not found');
+            if (!matchingChapterDoc) {
+                console.warn(`No chapter found for videoId: ${videoId}`);
+                res.status(200).send('Chapter match not found');
                 return;
             }
 
@@ -1343,12 +1344,12 @@ export const bunnyWebhook = onRequest(
             });
 
             // 3. Write back to Firestore
-            await matchingZoneDoc.ref.update({
+            await matchingChapterDoc.ref.update({
                 segments: updatedSegments,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            console.log(`Successfully updated segment status for videoId: ${videoId} in zone: ${matchingZoneDoc.id}`);
+            console.log(`Successfully updated segment status for videoId: ${videoId} in chapter: ${matchingChapterDoc.id}`);
             res.status(200).send('OK');
 
         } catch (error: any) {
@@ -1390,7 +1391,7 @@ export const serveSecurePdf = onRequest({ cors: true }, async (req, res) => {
 // --- ACCOUNT DELETION ---
 
 export const deleteUserAccount = onCall(
-    { secrets: ["BUNNY_API_KEY"], cors: true },
+    { secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"], cors: true },
     async (request) => {
         try {
             const db = admin.firestore();
@@ -1405,7 +1406,7 @@ export const deleteUserAccount = onCall(
             console.log(`Starting permanent deletion for user: ${uid}`);
 
             // 1. Cleanup Bunny.net Videos
-            const tutorVideosSnapshot = await db.collection("videos").where("tutorId", "==", uid).get();
+            const tutorVideosSnapshot = await db.collectionGroup("videos").where("tutorId", "==", uid).get();
             if (!tutorVideosSnapshot.empty && libraryId && apiKey) {
                 console.log(`Deleting ${tutorVideosSnapshot.size} videos from Bunny.net...`);
                 const deletePromises = tutorVideosSnapshot.docs.map(async (doc) => {
@@ -1842,8 +1843,28 @@ export const submitGradedScript = onCall({ cors: true, secrets: [resendApiKey] }
         // Authorization
         const zoneDoc = await db.collection('zones').doc(zoneId).get();
         const tutorUid = zoneDoc.data()?.createdBy || zoneDoc.data()?.tutorId;
-        if (request.auth.uid !== tutorUid) {
-            throw new functions.https.HttpsError("permission-denied", "Only the zone owner can grade exams.");
+        
+        let isAuthorized = request.auth.uid === tutorUid;
+        let coTutorSubject = null;
+        if (!isAuthorized) {
+            const roles = zoneDoc.data()?.coTutorRoles || {};
+            if (request.auth.uid in roles) {
+                isAuthorized = true;
+                coTutorSubject = roles[request.auth.uid];
+            }
+        }
+
+        if (!isAuthorized) {
+            throw new functions.https.HttpsError("permission-denied", "Only the zone owner or an assigned co-tutor can grade exams.");
+        }
+
+        // Subject matching enforcement for co-tutors
+        if (request.auth.uid !== tutorUid && coTutorSubject) {
+            const examDoc = await db.collection('zones').doc(zoneId).collection('exams').doc(examId).get();
+            const examSubject = examDoc.data()?.subject;
+            if (examSubject !== coTutorSubject) {
+                throw new functions.https.HttpsError("permission-denied", "You can only grade exams for your assigned subject.");
+            }
         }
 
         const bunnyApiKey = process.env.BUNNY_API_KEY?.trim();
@@ -1920,7 +1941,8 @@ export const submitGradedScript = onCall({ cors: true, secrets: [resendApiKey] }
             tutorFeedback: feedback,
             answerSheetUrl: newFileUrl,
             gradedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            gradedBy: request.auth.uid
         }, { merge: true });
 
         // Update student doc for quick access if needed
@@ -2144,6 +2166,17 @@ export const registerIssuance = onCall({ secrets: ["RESEND_API_KEY"], cors: true
             zoneId,
             issuedAt: admin.firestore.FieldValue.serverTimestamp(),
             issuedBy: issuerUid
+        });
+
+        const issuedCertRef = db.collection("issued_certificates").doc(urnUuid);
+        batch.set(issuedCertRef, {
+            studentId: studentUid,
+            tutorId: issuerUid,
+            zoneId,
+            studentName,
+            zoneName: zoneTitle,
+            date: isoTimestamp,
+            verified: true
         });
 
         const studentEnrollmentRef = db.collection("zones").doc(zoneId).collection("students").doc(studentUid);
@@ -2497,7 +2530,7 @@ export const processWhitelist = onCall(
                 throw new HttpsError("unauthenticated", "You must be signed in to whitelist students.");
             }
 
-            const { zoneId, email } = request.data;
+            const { zoneId, email, name } = request.data;
 
             // 1. Strict Input Validation
             if (!zoneId || !email) {
@@ -2537,10 +2570,11 @@ export const processWhitelist = onCall(
                 functions.logger.warn("RESEND_API_KEY not configured — notification emails will be skipped.");
             }
 
-            const results: { enrolled: number; pending: number; alreadyEnrolled: number } = {
+            const results: { enrolled: number; pending: number; alreadyEnrolled: number; alreadySent: number } = {
                 enrolled: 0,
                 pending: 0,
-                alreadyEnrolled: 0
+                alreadyEnrolled: 0,
+                alreadySent: 0
             };
 
             // 2. Graceful Auth Check
@@ -2609,8 +2643,16 @@ export const processWhitelist = onCall(
             } else {
                 // User doesn't exist, proceed to add their email to the invites subcollection
                 const invitesRef = db.collection("zones").doc(zoneId).collection("invites").doc(normalizedEmail);
+                
+                const inviteDoc = await invitesRef.get();
+                if (inviteDoc.exists) {
+                    results.alreadySent = 1;
+                    return { success: true, ...results };
+                }
+
                 await invitesRef.set({
                     email: normalizedEmail,
+                    name: name || "",
                     addedAt: admin.firestore.FieldValue.serverTimestamp(),
                     addedBy: callerUid,
                     status: "pending",
@@ -3289,6 +3331,16 @@ export const deleteBunnyVideo = onCall(
                 `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`,
                 { headers: { 'AccessKey': apiKey } }
             );
+
+            // Also clean up from Firestore
+            const db = admin.firestore();
+            const videoSnap = await db.collectionGroup("videos").where("bunnyVideoId", "==", videoId).get();
+            const batch = db.batch();
+            videoSnap.docs.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+
             return { success: true };
         } catch (error: any) {
             console.error(`Failed to delete Bunny video ${videoId}:`, error.message);
@@ -3369,6 +3421,40 @@ export const manageLiveTimer = onCall(
             console.error('manageLiveTimer error:', error);
             if (error instanceof functions.https.HttpsError) throw error;
             throw new functions.https.HttpsError('internal', 'Transaction failed.', error.message);
+        }
+    }
+);
+
+export const onVideoDocumentDeleted = onDocumentDeleted(
+    {
+        document: "zones/{zoneId}/videos/{videoId}",
+        secrets: ["BUNNY_API_KEY", "BUNNY_LIBRARY_ID"]
+    },
+    async (event) => {
+        const deletedData = event.data?.data();
+        if (!deletedData) return;
+
+        const videoId = deletedData.bunnyVideoId || event.params.videoId;
+        const libraryId = process.env.BUNNY_LIBRARY_ID ? process.env.BUNNY_LIBRARY_ID.trim() : null;
+        const apiKey = process.env.BUNNY_API_KEY ? process.env.BUNNY_API_KEY.trim() : null;
+
+        if (!libraryId || !apiKey) {
+            console.error('Server configuration missing for BunnyCDN. Cannot clean up deleted video.');
+            return;
+        }
+
+        try {
+            console.log(`Deleting Bunny video ${videoId} because its Firestore video document was deleted`);
+            await axios.delete(
+                `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`,
+                { headers: { 'AccessKey': apiKey } }
+            );
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                console.log(`Bunny video ${videoId} was already deleted or not found.`);
+            } else {
+                console.error(`Failed to delete Bunny video ${videoId}:`, error.message);
+            }
         }
     }
 );

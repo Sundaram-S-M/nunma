@@ -191,10 +191,10 @@ const ProductManagement: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-[3rem] border border-gray-100 shadow-[0_20px_60px_rgba(0,0,0,0.03)] overflow-hidden min-h-[600px]">
+            <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] border border-gray-100 shadow-[0_20px_60px_rgba(0,0,0,0.03)] overflow-hidden min-h-[600px]">
                 <div className="p-10">
                     {activeTab === 'calendar' && (
-                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             {/* Calendar Column */}
                             <div className="xl:col-span-7 space-y-8">
                                 <div className="flex items-center justify-between px-4">
@@ -401,25 +401,25 @@ const ProductManagement: React.FC = () => {
             {/* List Product Modal */}
             {showProductModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
-                        <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center">
+                    <div className="bg-white rounded-[2rem] md:rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
+                        <div className="px-6 md:px-12 py-10 border-b border-gray-50 flex justify-between items-center">
                             <h3 className="text-3xl font-black text-nunma-forest tracking-tight">List Digital Product</h3>
                             <button onClick={() => setShowProductModal(false)} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"><X size={24} /></button>
                         </div>
-                        <div className="p-12 space-y-10">
+                        <div className="p-6 md:p-12 space-y-10">
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRODUCT NAME</label>
                                 <input type="text" placeholder="e.g. Masterclass Assets" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest placeholder:text-gray-300 outline-none focus:bg-white focus:border-indigo-900/10 transition-all" />
                             </div>
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">TYPE</label>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {(['material', 'mentorship'] as const).map(t => (
                                         <button key={t} onClick={() => setProductType(t)} className={`py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${productType === t ? 'bg-nunma-forest text-white shadow-xl' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{t}</button>
                                     ))}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PRICE</label><input type="number" min="0" placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none" /></div>
                                 <div className="space-y-3"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CURRENCY</label>                  <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value as any)} className="w-full bg-[#f8fafc] border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none">
                                     <option value="INR">INR (₹)</option>
@@ -438,17 +438,17 @@ const ProductManagement: React.FC = () => {
             {/* Edit Product Modal */}
             {editingProduct && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
-                        <div className="px-12 py-10 border-b border-gray-50 flex justify-between items-center bg-white">
+                    <div className="bg-white rounded-[2rem] md:rounded-[3.5rem] w-full max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-500">
+                        <div className="px-6 md:px-12 py-10 border-b border-gray-50 flex justify-between items-center bg-white">
                             <h3 className="text-3xl font-black text-nunma-forest tracking-tight">Edit Product</h3>
                             <button onClick={() => setEditingProduct(null)} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"><X size={24} /></button>
                         </div>
-                        <div className="p-12 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                        <div className="p-6 md:p-12 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Product Title</label>
                                 <input type="text" value={editingProduct.title} onChange={e => setEditingProduct({ ...editingProduct, title: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none focus:bg-white focus:border-[#c2f575] transition-all" />
                             </div>
-                            <div className="grid grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <div className="space-y-3">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Price (USD Tier)</label>
                                     <input type="number" min="0" value={editingProduct.priceUSD || ''} onChange={e => setEditingProduct({ ...editingProduct, priceUSD: e.target.value })} className="w-full bg-gray-50 border border-transparent rounded-2xl px-8 py-5 font-bold text-nunma-forest outline-none focus:bg-white focus:border-[#c2f575] transition-all" />

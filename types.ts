@@ -145,6 +145,10 @@ export interface Exam {
   pdfUrl?: string; // For online-test or offline downlaod
   excelTemplateUrl?: string; // For offline download
   status: 'scheduled' | 'active' | 'completed';
+  subject?: string;
+  batchId?: string;        // Targeting a specific batch
+  examGroupId?: string;    // Shared ID linking exams in a multi-subject group
+  examGroupName?: string;  // Display name of the group (e.g. "July Monthly")
 }
 
 export interface ExamResult {
@@ -157,6 +161,7 @@ export interface ExamResult {
   warnings: number;
   completedAt?: string;
   answerSheetUrl?: string; // URL to uploaded PDF (online-test) or Excel (offline)
+  gradedBy?: string;
 }
 
 export interface AttendanceHistory {

@@ -90,9 +90,13 @@ const TutorGradingHub: React.FC<TutorGradingHubProps> = ({ zoneId, exam, student
             });
 
             onGraded();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Valuation Error:", error);
-            alert("Failed to save and upload graded document.");
+            if (error?.message?.includes('permission-denied') || error?.code === 'permission-denied' || error?.code === 'functions/permission-denied') {
+                alert('Access Denied: Your co-tutor permissions may have been revoked or you are trying to grade outside your assigned subject.');
+            } else {
+                alert("Failed to save and upload graded document.");
+            }
         } finally {
             setIsSaving(false);
         }

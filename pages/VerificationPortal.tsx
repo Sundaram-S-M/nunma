@@ -5,6 +5,9 @@ import { formatDate } from '../utils/dateUtils';
 import { QRCodeSVG } from 'qrcode.react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
+import toast from 'react-hot-toast';
+import { getLinkedInShareUrl } from '../utils/vcUtils';
+
 
 const VerificationPortal: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,7 +27,37 @@ const VerificationPortal: React.FC = () => {
           setCertData({ id: docSnap.id, ...docSnap.data() });
           setIsVerified(true);
         } else {
-          setIsVerified(false);
+          // Fallback check in issued_certificates
+          const fallbackRef = doc(db, 'issued_certificates', id);
+          const fallbackSnap = await getDoc(fallbackRef);
+          if (fallbackSnap.exists()) {
+            const data = fallbackSnap.data();
+            const payload = {
+              "@context": ["https://www.w3.org/2018/credentials/v1"],
+              "id": id,
+              "type": ["VerifiableCredential", "CourseCompletionCertificate"],
+              "issuer": `https://nunma.in/issuers/${data.tutorId}`,
+              "issuanceDate": data.date,
+              "credentialSubject": {
+                "id": `did:nunma:student:${data.studentId}`,
+                "name": data.studentName,
+                "completedCourse": data.zoneName,
+                "zoneId": data.zoneId,
+                "completionDate": data.date
+              }
+            };
+            setCertData({
+              id: fallbackSnap.id,
+              payload,
+              studentId: data.studentId,
+              zoneId: data.zoneId,
+              issuedAt: data.date,
+              issuedBy: data.tutorId
+            });
+            setIsVerified(true);
+          } else {
+            setIsVerified(false);
+          }
         }
       } catch (error) {
         console.error("Error fetching certificate:", error);
@@ -177,12 +210,39 @@ const VerificationPortal: React.FC = () => {
                     <button 
                       onClick={handlePrint}
                       className="flex-1 sm:flex-none p-4 bg-indigo-900 rounded-2xl text-white hover:bg-indigo-800 hover:shadow-xl transition-all flex items-center justify-center gap-2 group"
+                      title="Download PDF"
                     >
                       <Download size={20} className="group-hover:-translate-y-1 transition-transform" />
                       <span className="text-[10px] font-bold uppercase tracking-wider">Download PDF</span>
                     </button>
-                    <button className="p-4 bg-gray-50 rounded-2xl text-gray-400 hover:text-indigo-900 hover:bg-white hover:shadow-xl transition-all shrink-0 border border-gray-100">
+                    
+                    <button 
+                      onClick={() => {
+                        if (certData) {
+                          const url = getLinkedInShareUrl(
+                            certData.id, 
+                            courseName, 
+                            payload?.issuanceDate || new Date().toISOString()
+                          );
+                          window.open(url, '_blank');
+                        }
+                      }}
+                      className="flex-1 sm:flex-none p-4 bg-[#0077b5] rounded-2xl text-white hover:bg-[#006297] hover:shadow-xl transition-all flex items-center justify-center gap-2 group shadow-lg"
+                      title="Add to LinkedIn"
+                    >
                       <Share2 size={20} />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Add to LinkedIn</span>
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(window.location.href);
+                        toast.success("Verification link copied to clipboard!");
+                      }}
+                      className="p-4 bg-gray-50 rounded-2xl text-gray-400 hover:text-indigo-900 hover:bg-white hover:shadow-xl transition-all shrink-0 border border-gray-100"
+                      title="Copy Verification Link"
+                    >
+                      <ExternalLink size={20} />
                     </button>
                   </div>
                 </div>

@@ -27,7 +27,8 @@ import {
 import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, onSnapshot, orderBy } from 'firebase/firestore';
-import { db } from '../utils/firebase';
+import { db, functions } from '../utils/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { formatDate } from '../utils/dateUtils';
 import CertificateOverlay from '../components/CertificateOverlay';
 
@@ -382,7 +383,7 @@ const CertificateEngine: React.FC = () => {
           </tr>
           <tr>
             <td style="border:none; font-weight:bold; color:#052E16;">User Name</td>
-            <td style="border:none;">${user?.displayName || 'Tutor'}</td>
+            <td style="border:none;">${user?.name || 'Tutor'}</td>
           </tr>
           <tr>
             <td style="border:none;"></td>
@@ -408,15 +409,61 @@ const CertificateEngine: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleIssue = () => {
+  const handleIssue = async () => {
     setIsIssuing(true);
-    setTimeout(() => {
+    try {
+      const zone = zonesList.find(z => z.title === selectedZone);
+      if (!zone) {
+        alert("Selected zone not found.");
+        setIsIssuing(false);
+        return;
+      }
+      const zoneId = zone.id;
+      
+      const studentsSnap = await getDocs(collection(db, 'zones', zoneId, 'students'));
+      const activeStudentIds = studentsSnap.docs
+        .filter(docSnap => docSnap.data().status === 'active')
+        .map(docSnap => docSnap.id);
+
+      if (activeStudentIds.length === 0) {
+        alert("No active students found in this Zone to issue certificates to.");
+        setIsIssuing(false);
+        return;
+      }
+
+      const registerFn = httpsCallable(functions, 'registerIssuance');
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const studentUid of activeStudentIds) {
+        try {
+          await registerFn({ zoneId, studentUid });
+          successCount++;
+        } catch (err: any) {
+          console.error(`Failed to issue certificate to student ${studentUid}:`, err);
+          if (err.message && err.message.includes("already exists")) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        }
+      }
+
       setIsIssuing(false);
       setShowGeneratorModal(false);
       setModalStep(1);
       setIssuanceMethod(null);
-      alert('Certificates issued successfully! Students will be notified both in-app and via email.');
-    }, 2000);
+      
+      if (failCount === 0) {
+        alert(`Certificates issued successfully to all ${successCount} active students!`);
+      } else {
+        alert(`Successfully issued to ${successCount} students. Failed for ${failCount} students.`);
+      }
+    } catch (e: any) {
+      console.error("Global crash in issuing certificates:", e);
+      alert(`Issuance failed: ${e.message || e}`);
+      setIsIssuing(false);
+    }
   };
 
   const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>, slot: 1 | 2) => {

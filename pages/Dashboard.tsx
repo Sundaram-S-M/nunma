@@ -5,7 +5,7 @@ import { useSidebar } from '../context/SidebarContext';
 import {
   collection, query, where, onSnapshot, orderBy,
   getDocs, limit, doc, getDoc, addDoc, deleteDoc, updateDoc,
-  getCountFromServer // <-- Added to calculate exact student count
+  getCountFromServer, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import {
@@ -362,10 +362,10 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                     </button>
 
                     {showClockPicker && (
-                      <div className="absolute top-full left-0 right-0 mt-4 bg-white rounded-[3rem] shadow-2xl border border-gray-100 p-12 z-50 animate-in slide-in-from-top-4 duration-300">
+                      <div className="absolute top-full left-0 right-0 mt-4 bg-white rounded-[1.5rem] md:rounded-[3rem] shadow-2xl border border-gray-100 p-6 md:p-12 z-50 animate-in slide-in-from-top-4 duration-300">
                         {/* Clock Display */}
                         <div className="flex flex-col items-center mb-20 mt-6 relative">
-                          <div className="relative w-80 h-80 bg-gradient-to-br from-nunma-forest to-indigo-900 rounded-full shadow-2xl p-5">
+                          <div className="relative w-full sm:w-80 h-80 bg-gradient-to-br from-nunma-forest to-indigo-900 rounded-full shadow-2xl p-5">
                             {/* Clock Face */}
                             <div className="absolute inset-5 bg-white rounded-full flex items-center justify-center">
                               {/* Hour Markers */}
@@ -501,7 +501,8 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                         <div className="flex items-center gap-2">
                           <p className="text-base font-black text-nunma-forest">{event.title}</p>
                           {event.isLive && (
-                            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${event.session?.status === 'live' ? 'bg-red-500 text-white' : 'bg-indigo-900 text-[#c2f575]'}`}>
+                            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1 ${event.session?.status === 'live' ? 'bg-red-500 text-white animate-pulse' : 'bg-indigo-900 text-[#c2f575]'}`}>
+                              {event.session?.status === 'live' && <Radio size={10} />}
                               {event.session?.status}
                             </span>
                           )}
@@ -577,7 +578,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
       )}
 
       <div className="hidden md:flex flex-col gap-1">
-        <h1 className="text-5xl font-black text-nunma-forest tracking-tighter">
+        <h1 className="text-4xl md:text-5xl font-black text-nunma-forest tracking-tighter">
           Greetings, {user?.name || 'Achiever'}
         </h1>
         <p className="hidden md:block text-gray-400 font-semibold text-lg max-w-2xl leading-relaxed">
@@ -628,7 +629,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
             <div className="xl:col-span-8 space-y-8">
               {upcomingLiveSessions.length > 0 ? (
-                <div className="bg-white rounded-[4rem] p-12 border border-gray-100 shadow-xl overflow-hidden relative">
+                <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-12 border border-gray-100 shadow-xl overflow-hidden relative">
                   <div className="flex items-center justify-between mb-12">
                     <h3 className="text-3xl font-black text-nunma-forest tracking-tighter flex items-center gap-5">
                       <Radio className="text-red-500 animate-pulse" /> Scheduled Curriculum
@@ -640,7 +641,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {upcomingLiveSessions.map((session, i) => (
-                      <div key={i} className="p-10 bg-gray-50/50 rounded-[3rem] border border-gray-100 group hover:bg-white hover:shadow-2xl transition-all duration-700">
+                      <div key={i} className="p-10 bg-gray-50/50 rounded-[1.5rem] md:rounded-[3rem] border border-gray-100 group hover:bg-white hover:shadow-2xl transition-all duration-700">
                         <div className="space-y-6">
                           <LiveSessionStatus
                             status="scheduled"
@@ -651,20 +652,20 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{session.zoneTitle}</p>
                         </div>
                         <button
-                          disabled
-                          className="w-full mt-8 py-5 bg-white border border-gray-100 text-gray-300 rounded-[2rem] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3"
+                          onClick={() => navigate(`/classroom/${session.zoneId}`)}
+                          className="w-full mt-8 py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-900/20"
                         >
-                          Access Code Locked
+                          Join Stream Now
                         </button>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div className="bg-white rounded-[4rem] p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-12 lg:p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
                   {activeSessions.length > 0 ? (
                     <div className="w-full">
-                      <div className="bg-nunma-forest rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
+                      <div className="bg-nunma-forest rounded-[2rem] md:rounded-[3.5rem] p-6 md:p-12 text-white shadow-2xl relative overflow-hidden group">
                         <div className="relative z-10 flex flex-col items-center justify-center gap-8 text-center">
                           <LiveSessionStatus
                             status="live"
@@ -678,12 +679,12 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                           </div>
                           <button
                             onClick={() => navigate(`/classroom/${activeSessions[0].zoneId}`)}
-                            className="px-12 py-6 bg-[#c2f575] text-nunma-forest rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                            className="px-6 md:px-12 py-6 bg-[#c2f575] text-nunma-forest rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
                           >
                             Enter Room
                           </button>
                         </div>
-                        <div className="absolute top-0 right-0 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
+                        <div className="absolute top-0 right-0 w-full sm:w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
                       </div>
                     </div>
                   ) : (
@@ -702,7 +703,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
             </div>
 
             <div className="xl:col-span-4 space-y-8">
-              <div className="bg-white rounded-[3rem] p-6 md:p-8 border border-gray-100 shadow-xl overflow-hidden">
+              <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] p-6 md:p-8 border border-gray-100 shadow-xl overflow-hidden">
                 <div className="flex items-center justify-between mb-6 px-2">
                   <span className="text-xl font-black text-nunma-forest tracking-tighter">{monthName} {year}</span>
                   <div className="flex gap-2">
@@ -770,7 +771,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
             <div className="xl:col-span-8 space-y-8">
               {upcomingLiveSessions.length > 0 ? (
-                <div className="bg-white rounded-[4rem] p-12 border border-gray-100 shadow-xl overflow-hidden relative">
+                <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-12 border border-gray-100 shadow-xl overflow-hidden relative">
                   <div className="flex items-center justify-between mb-12">
                     <h3 className="text-3xl font-black text-nunma-forest tracking-tighter flex items-center gap-5">
                       <Radio className="text-red-500 animate-pulse" /> Scheduled Curriculum
@@ -782,7 +783,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {upcomingLiveSessions.map((session, i) => (
-                      <div key={i} className="p-10 bg-gray-50/50 rounded-[3rem] border border-gray-100 group hover:bg-white hover:shadow-2xl transition-all duration-700">
+                      <div key={i} className="p-10 bg-gray-50/50 rounded-[1.5rem] md:rounded-[3rem] border border-gray-100 group hover:bg-white hover:shadow-2xl transition-all duration-700">
                         <div className="space-y-6">
                           <LiveSessionStatus
                             status="scheduled"
@@ -793,20 +794,93 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{session.zoneTitle}</p>
                         </div>
                         <button
-                          disabled
-                          className="w-full mt-8 py-5 bg-white border border-gray-100 text-gray-300 rounded-[2rem] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3"
+                          onClick={async () => {
+                            try {
+                              const now = new Date();
+                              const dateStr = now.toISOString().split('T')[0];
+                              const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                              // Create Attendance Session document
+                              const newAttendanceSession = {
+                                date: dateStr,
+                                time: timeStr,
+                                className: `Live: ${session.title}`,
+                                liveSessionId: session.id,
+                                ...(session.batchId ? { batchId: session.batchId } : {})
+                              };
+                              const attDocRef = await addDoc(collection(db, 'zones', session.zoneId, 'attendance_sessions'), newAttendanceSession);
+                              const attendanceSessionId = attDocRef.id;
+
+                              // Mark all students as 'Absent' initially
+                              try {
+                                const studentsSnap = await getDocs(collection(db, 'zones', session.zoneId, 'students'));
+                                const updatePromises = studentsSnap.docs
+                                  .filter(d => !session.batchId || d.data().batchId === session.batchId)
+                                  .map(studentDoc => {
+                                    const studentData = studentDoc.data() || {};
+                                    const history = studentData.attendanceHistory || [];
+                                    const newHistory = [...history, { 
+                                      sessionId: attendanceSessionId, 
+                                      status: 'Absent', 
+                                      date: dateStr, 
+                                      className: newAttendanceSession.className,
+                                      ...(session.batchId ? { batchId: session.batchId } : {})
+                                    }];
+                                    return updateDoc(doc(db, 'zones', session.zoneId, 'students', studentDoc.id), { attendanceHistory: newHistory });
+                                  });
+                                await Promise.all(updatePromises);
+                              } catch (attErr) {
+                                console.error("Failed to initialize student attendance history:", attErr);
+                              }
+
+                              const startTimeIso = now.toISOString();
+                              await updateDoc(doc(db, 'zones', session.zoneId, 'sessions', session.id), {
+                                status: 'live',
+                                startTime: startTimeIso,
+                                attendanceSessionId
+                              });
+
+                              // Send notification to students
+                              try {
+                                const studentsSnap = await getDocs(collection(db, 'zones', session.zoneId, 'students'));
+                                const notifyPromises: Promise<any>[] = [];
+                                studentsSnap.forEach(studentDoc => {
+                                  notifyPromises.push(
+                                    addDoc(collection(db, 'users', studentDoc.id, 'notifications'), {
+                                      type: 'LIVE_SESSION_STARTED',
+                                      title: '🔴 Live Class Started',
+                                      message: `Live class "${session.title}" is now live! Join now.`,
+                                      zoneId: session.zoneId,
+                                      actionUrl: `/classroom/${session.zoneId}`,
+                                      read: false,
+                                      createdAt: serverTimestamp(),
+                                    })
+                                  );
+                                });
+                                await Promise.allSettled(notifyPromises);
+                              } catch (notifyErr) {
+                                console.warn('Could not send live notifications to students:', notifyErr);
+                              }
+
+                              navigate(`/classroom/${session.zoneId}`);
+                            } catch (e) {
+                              console.error("Failed to start stream:", e);
+                              alert("Failed to start stream. Please try again.");
+                            }
+                          }}
+                          className="w-full mt-8 py-5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-900/20"
                         >
-                          Access Code Locked
+                          Start Stream Now
                         </button>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div className="bg-white rounded-[4rem] p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-12 lg:p-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
                   {activeSessions.length > 0 ? (
                     <div className="w-full">
-                      <div className="bg-nunma-forest rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden group">
+                      <div className="bg-nunma-forest rounded-[2rem] md:rounded-[3.5rem] p-6 md:p-12 text-white shadow-2xl relative overflow-hidden group">
                         <div className="relative z-10 flex flex-col items-center justify-center gap-8 text-center">
                           <LiveSessionStatus
                             status="live"
@@ -820,12 +894,12 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                           </div>
                           <button
                             onClick={() => setActiveLiveRoom(activeSessions[0])}
-                            className="px-12 py-6 bg-[#c2f575] text-nunma-forest rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                            className="px-6 md:px-12 py-6 bg-[#c2f575] text-nunma-forest rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
                           >
                             Enter Room
                           </button>
                         </div>
-                        <div className="absolute top-0 right-0 w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
+                        <div className="absolute top-0 right-0 w-full sm:w-80 h-80 bg-[#c2f575]/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-[#c2f575]/10 transition-all duration-1000"></div>
                       </div>
                     </div>
                   ) : (
@@ -844,7 +918,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
             </div>
 
             <div className="xl:col-span-4 space-y-8">
-              <div className="bg-white rounded-[3rem] p-6 md:p-8 border border-gray-100 shadow-xl overflow-hidden">
+              <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] p-6 md:p-8 border border-gray-100 shadow-xl overflow-hidden">
                 <div className="flex items-center justify-between mb-6 px-2">
                   <span className="text-xl font-black text-nunma-forest tracking-tighter">{monthName} {year}</span>
                   <div className="flex gap-2">
