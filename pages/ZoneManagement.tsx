@@ -52,7 +52,7 @@ import { ArrowLeft,
   Star,
   Trophy,
   Loader2, Calendar as CalendarIcon, Settings, MoreVertical, ShieldAlert, Shield, FileSearch, HelpCircle, BarChart3,
-  IndianRupee, DollarSign, Euro, Camera, ChevronRight, Pencil } from 'lucide-react';
+  IndianRupee, DollarSign, Euro, Camera, ChevronRight, Pencil, ChevronDown, ChevronUp } from 'lucide-react';
 
 
 import { VideoUploadModal } from '../components/VideoUploadModal';
@@ -61,7 +61,7 @@ import DocumentModuleUploader from '../components/DocumentModuleUploader';
 import TextModuleEditor from '../components/TextModuleEditor';
 import QuizModuleEditor from '../components/QuizModuleEditor';
 import { toast } from 'react-hot-toast';
-import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, limit, deleteDoc, addDoc, arrayUnion, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, getDoc, limit, deleteDoc, addDoc, arrayUnion, serverTimestamp, increment } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
 import { sendEnrollmentEmail } from '../utils/notifications';
@@ -71,6 +71,7 @@ import { saveAs } from 'file-saver';
 import PDFViewer from '../components/PDFViewer'; // Import added for grading
 import GradingHub from '../components/GradingHub';
 import ExamAnalytics from '../components/ExamAnalytics';
+import ExamInsights from '../components/ExamInsights';
 import MCQBuilder from '../components/MCQBuilder';
 import { QRCodeSVG } from 'qrcode.react';
 import ZoneCapacityMeter from '../components/ZoneCapacityMeter';
@@ -105,6 +106,9 @@ interface Exam {
   excelTemplateUrl?: string;
   duration?: number;
   subject?: string;
+  batchId?: string;
+  examGroupId?: string;
+  examGroupName?: string;
 }
 
 interface ExamResult {
@@ -501,6 +505,11 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
   // Data States
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
+
+  const toggleChapter = (chapterId: string) => {
+    setExpandedChapters(prev => ({ ...prev, [chapterId]: !prev[chapterId] }));
+  };
   const [exams, setExams] = useState<Exam[]>([]);
   const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSession[]>([]);
   const [scheduledSessions, setScheduledSessions] = useState<any[]>([]);
@@ -612,6 +621,105 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const [newExamQuestions, setNewExamQuestions] = useState<MCQ[]>([]);
   const [newExamFile, setNewExamFile] = useState<File | null>(null);
 
+  // Cluster Exam States (for batch/subject modes)
+  const [clusterExamFiles, setClusterExamFiles] = useState<Record<string, File | null>>({});
+  const [clusterExamQuestions, setClusterExamQuestions] = useState<Record<string, MCQ[]>>({});
+  const [activeClusterItem, setActiveClusterItem] = useState<string | null>(null);
+  const [isCreatingExam, setIsCreatingExam] = useState(false);
+
+  // Exam Scheduling State
+  const [examScope, setExamScope] = useState<'single' | 'batch' | 'subject'>('single');
+  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
+  const [batchSchedules, setBatchSchedules] = useState<Record<string, { date: string; time: string }>>({});
+  
+  // Subject Scheduling State
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [subjectSchedules, setSubjectSchedules] = useState<Record<string, { date: string; time: string }>>({});
+  const [targetBatchForSubjects, setTargetBatchForSubjects] = useState<string>('all');
+
+  // Exam Insights State
+  const [insightsExam, setInsightsExam] = useState<Exam | null>(null);
+  const [showInsightsModal, setShowInsightsModal] = useState(false);
+
+  // Expanded exam groups in listing
+  const [expandedExamGroups, setExpandedExamGroups] = useState<Record<string, boolean>>({});
+
+  const [showReplicateModal, setShowReplicateModal] = useState(false);
+
+  const handleReplicateExam = (exam: Exam) => {
+    // Clear schedules and basic fields
+    setNewExamTitle('');
+    setNewExamDate('');
+    setNewExamTime('');
+    setBatchSchedules({});
+    setSubjectSchedules({});
+    setClusterExamFiles({});
+    setClusterExamQuestions({});
+    setActiveClusterItem(null);
+    setNewExamQuestions([]);
+    
+    // Copy general settings
+    setNewExamType(exam.type as any);
+    setNewExamMaxMark(exam.maxMark?.toString() || '100');
+    setNewExamMinMark(exam.minMark?.toString() || '40');
+    setNewExamDuration(exam.duration?.toString() || '60');
+    
+    if (exam.examGroupId) {
+      const groupExams = exams.filter(e => e.examGroupId === exam.examGroupId);
+      const isSubjectSplit = groupExams.some(e => e.subject !== groupExams[0]?.subject);
+      
+      if (isSubjectSplit) {
+        setExamScope('subject');
+        const subjects = groupExams.map(e => e.subject).filter(Boolean) as string[];
+        setSelectedSubjects(subjects);
+        const scheds: Record<string, any> = {};
+        const cqs: Record<string, MCQ[]> = {};
+        groupExams.forEach(e => {
+          if (e.subject) {
+            scheds[e.subject] = { date: '', time: '' };
+            if (e.questions && e.questions.length > 0) cqs[e.subject] = e.questions;
+          }
+        });
+        setSubjectSchedules(scheds);
+        setClusterExamQuestions(cqs);
+        // Retain target batch if all exams share the same batchId
+        const sharedBatchId = groupExams[0]?.batchId;
+        const allShareBatch = groupExams.every(e => e.batchId === sharedBatchId);
+        if (allShareBatch && sharedBatchId) {
+          setTargetBatchForSubjects(sharedBatchId);
+        } else {
+          setTargetBatchForSubjects('all');
+        }
+      } else if (groupExams.length > 1) {
+        setExamScope('batch');
+        setNewExamSubject(exam.subject || '');
+        const batchIds = groupExams.map(e => e.batchId).filter(Boolean) as string[];
+        setSelectedBatchIds(batchIds);
+        const scheds: Record<string, any> = {};
+        const cqs: Record<string, MCQ[]> = {};
+        groupExams.forEach(e => {
+          if (e.batchId) {
+            scheds[e.batchId] = { date: '', time: '' };
+            if (e.questions && e.questions.length > 0) cqs[e.batchId] = e.questions;
+          }
+        });
+        setBatchSchedules(scheds);
+        setClusterExamQuestions(cqs);
+      } else {
+        // Fallback to single
+        setExamScope('single');
+        setNewExamSubject(exam.subject || '');
+        if (exam.questions && exam.questions.length > 0) setNewExamQuestions(exam.questions);
+      }
+    } else {
+      setExamScope('single');
+      setNewExamSubject(exam.subject || '');
+      if (exam.questions && exam.questions.length > 0) setNewExamQuestions(exam.questions);
+    }
+    
+    setShowReplicateModal(false);
+  };
+
   const handleAddQuestion = () => {
     const newQ: MCQ = {
       id: Date.now().toString(),
@@ -625,6 +733,259 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
   const handleCreateExam = async () => {
     if (!zoneId) return;
 
+    // === BATCH EXAM MODE ===
+    if (examScope === 'batch' && selectedBatchIds.length > 0) {
+      // Validate that every selected batch has a date and time
+      for (const bId of selectedBatchIds) {
+        const sched = batchSchedules[bId];
+        if (!sched || !sched.date || !sched.time) {
+          const batchName = zoneBatches.find(b => b.id === bId)?.name || 'Unknown';
+          nunmaAlert(`Please set date and time for batch "${batchName}".`, "error");
+          return;
+        }
+      }
+
+      setIsCreatingExam(true);
+      const examGroupId = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      try {
+        const studentsSnap = await getDocs(collection(db, 'zones', zoneId, 'students'));
+        const allStudents = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+
+        const deployedExams = [];
+
+        for (const batchId of selectedBatchIds) {
+          const sched = batchSchedules[batchId];
+
+          // Build remindAt per batch
+          let remindAt: string | null = null;
+          const parts = sched.date.split('-');
+          const timeParts = sched.time.split(':');
+          if (parts.length === 3 && timeParts.length === 2) {
+            const examStart = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), parseInt(timeParts[0]), parseInt(timeParts[1]));
+            remindAt = new Date(examStart.getTime() - 24 * 60 * 60 * 1000).toISOString();
+          }
+
+          const batchExamData: any = {
+            title: newExamTitle,
+            date: sched.date,
+            time: sched.time,
+            status: 'UPCOMING',
+            type: newExamType,
+            maxMark: parseInt(newExamMaxMark),
+            minMark: parseInt(newExamMinMark),
+            questions: newExamType === 'online-mcq' ? (clusterExamQuestions[batchId] || []) : [],
+            subject: newExamSubject,
+            batchId,
+            examGroupId,
+            examGroupName: newExamTitle,
+            ...(remindAt ? { remindAt } : {}),
+          };
+
+          if (newExamType !== 'online-mcq') {
+            batchExamData.duration = parseInt(newExamDuration);
+          }
+          const bFile = clusterExamFiles[batchId];
+          if ((newExamType === 'online-test' || newExamType === 'offline') && bFile) {
+            batchExamData.pdfUrl = URL.createObjectURL(bFile);
+          }
+
+          const examRef = await addDoc(collection(db, 'zones', zoneId, 'exams'), batchExamData);
+
+          // Notify only students in this batch
+          const batchStudents = allStudents.filter(s => s.batchId === batchId);
+          const notifyPromises: Promise<any>[] = [];
+          batchStudents.forEach(student => {
+            notifyPromises.push(
+              addDoc(collection(db, 'users', student.id, 'notifications'), {
+                type: 'EXAM_SCHEDULED',
+                title: 'New Exam Scheduled',
+                message: `Exam "${newExamTitle}" has been scheduled on ${sched.date} @ ${sched.time}. Be prepared!`,
+                zoneId,
+                examId: examRef.id,
+                read: false,
+                createdAt: serverTimestamp(),
+              })
+            );
+            notifyPromises.push(
+              addDoc(collection(db, 'users', student.id, 'calendar_events'), {
+                title: `📝 Exam: ${newExamTitle}`,
+                time: sched.time || '00:00',
+                dateKey: sched.date,
+                type: 'exam',
+                color: 'indigo',
+                important: true,
+                zoneId,
+                examId: examRef.id,
+                createdAt: serverTimestamp(),
+              })
+            );
+          });
+          await Promise.allSettled(notifyPromises);
+          
+          deployedExams.push(batchExamData);
+        }
+
+        // Save deployment doc for consolidated email
+        if (deployedExams.length > 0) {
+          await addDoc(collection(db, 'zones', zoneId, 'exam_deployments'), {
+            title: newExamTitle,
+            groupId: examGroupId,
+            targetBatchIds: selectedBatchIds,
+            exams: deployedExams,
+            createdAt: serverTimestamp()
+          });
+        }
+
+        setShowAddExamModal(false);
+        setNewExamTitle(''); setNewExamDate(''); setNewExamTime('');
+        setNewExamDuration('60'); setNewExamSubject('');
+        setNewExamMaxMark('100'); setNewExamMinMark('40');
+        setNewExamQuestions([]); setNewExamFile(null);
+        setExamScope('single'); setSelectedBatchIds([]); setBatchSchedules({});
+        setSelectedSubjects([]); setSubjectSchedules({}); setTargetBatchForSubjects('all');
+        setClusterExamFiles({}); setClusterExamQuestions({}); setActiveClusterItem(null);
+        setExamScope('single'); setSelectedBatchIds([]); setBatchSchedules({});
+        nunmaAlert(`Exam "${newExamTitle}" created for ${selectedBatchIds.length} batch(es)! Students have been notified.`);
+      } catch (e) {
+        console.error("Error creating batch exams:", e);
+        nunmaAlert("Failed to create batch exams.", "error");
+      } finally {
+        setIsCreatingExam(false);
+      }
+      return;
+    }
+
+    // === SUBJECT EXAM MODE ===
+    if (examScope === 'subject' && selectedSubjects.length > 0) {
+      // Validate that every selected subject has a date and time
+      for (const subject of selectedSubjects) {
+        const sched = subjectSchedules[subject];
+        if (!sched || !sched.date || !sched.time) {
+          nunmaAlert(`Please set date and time for subject "${subject}".`, "error");
+          return;
+        }
+      }
+
+      setIsCreatingExam(true);
+      const examGroupId = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      try {
+        const studentsSnap = await getDocs(collection(db, 'zones', zoneId, 'students'));
+        let allStudents = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+
+        const deployedExams = [];
+        
+        // If targeting a specific batch, filter the students
+        if (targetBatchForSubjects !== 'all') {
+          allStudents = allStudents.filter(s => s.batchId === targetBatchForSubjects);
+        }
+
+        for (const subject of selectedSubjects) {
+          const sched = subjectSchedules[subject];
+
+          // Build remindAt per subject
+          let remindAt: string | null = null;
+          const parts = sched.date.split('-');
+          const timeParts = sched.time.split(':');
+          if (parts.length === 3 && timeParts.length === 2) {
+            const examStart = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), parseInt(timeParts[0]), parseInt(timeParts[1]));
+            remindAt = new Date(examStart.getTime() - 24 * 60 * 60 * 1000).toISOString();
+          }
+
+          const subjectExamData: any = {
+            title: newExamTitle,
+            date: sched.date,
+            time: sched.time,
+            status: 'UPCOMING',
+            type: newExamType,
+            maxMark: parseInt(newExamMaxMark),
+            minMark: parseInt(newExamMinMark),
+            questions: newExamType === 'online-mcq' ? (clusterExamQuestions[subject] || []) : [],
+            subject: subject,
+            examGroupId,
+            examGroupName: newExamTitle,
+            ...(remindAt ? { remindAt } : {}),
+          };
+
+          if (targetBatchForSubjects !== 'all') {
+            subjectExamData.batchId = targetBatchForSubjects;
+          }
+
+          if (newExamType !== 'online-mcq') {
+            subjectExamData.duration = parseInt(newExamDuration);
+          }
+          const sFile = clusterExamFiles[subject];
+          if ((newExamType === 'online-test' || newExamType === 'offline') && sFile) {
+            subjectExamData.pdfUrl = URL.createObjectURL(sFile);
+          }
+
+          const examRef = await addDoc(collection(db, 'zones', zoneId, 'exams'), subjectExamData);
+
+          const notifyPromises: Promise<any>[] = [];
+          allStudents.forEach(student => {
+            notifyPromises.push(
+              addDoc(collection(db, 'users', student.id, 'notifications'), {
+                type: 'EXAM_SCHEDULED',
+                title: 'New Exam Scheduled',
+                message: `Exam "${newExamTitle}" for ${subject} has been scheduled on ${sched.date} @ ${sched.time}. Be prepared!`,
+                zoneId,
+                examId: examRef.id,
+                read: false,
+                createdAt: serverTimestamp(),
+              })
+            );
+            notifyPromises.push(
+              addDoc(collection(db, 'users', student.id, 'calendar_events'), {
+                title: `📝 Exam: ${newExamTitle} (${subject})`,
+                time: sched.time || '00:00',
+                dateKey: sched.date,
+                type: 'exam',
+                color: 'indigo',
+                important: true,
+                zoneId,
+                examId: examRef.id,
+                createdAt: serverTimestamp(),
+              })
+            );
+          });
+          await Promise.allSettled(notifyPromises);
+          
+          deployedExams.push(subjectExamData);
+        }
+
+        // Save deployment doc for consolidated email
+        if (deployedExams.length > 0) {
+          await addDoc(collection(db, 'zones', zoneId, 'exam_deployments'), {
+            title: newExamTitle,
+            groupId: examGroupId,
+            targetBatchForSubjects: targetBatchForSubjects,
+            exams: deployedExams,
+            createdAt: serverTimestamp()
+          });
+        }
+
+        setShowAddExamModal(false);
+        setNewExamTitle(''); setNewExamDate(''); setNewExamTime('');
+        setNewExamDuration('60'); setNewExamSubject('');
+        setNewExamMaxMark('100'); setNewExamMinMark('40');
+        setNewExamQuestions([]); setNewExamFile(null);
+        setExamScope('single'); setSelectedBatchIds([]); setBatchSchedules({});
+        setSelectedSubjects([]); setSubjectSchedules({}); setTargetBatchForSubjects('all');
+        setClusterExamFiles({}); setClusterExamQuestions({}); setActiveClusterItem(null);
+        setExamScope('single'); setSelectedSubjects([]); setSubjectSchedules({});
+        setTargetBatchForSubjects('all');
+        nunmaAlert(`Exam "${newExamTitle}" created for ${selectedSubjects.length} subject(s)! Students have been notified.`);
+      } catch (e) {
+        console.error("Error creating subject exams:", e);
+        nunmaAlert("Failed to create subject exams.", "error");
+      } finally {
+        setIsCreatingExam(false);
+      }
+      return;
+    }
+
+    // === SINGLE EXAM MODE (original) ===
     // Build remindAt: exam start time minus 24 hours
     let remindAt: string | null = null;
     if (newExamDate && newExamTime) {
@@ -667,6 +1028,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       examData.pdfUrl = URL.createObjectURL(newExamFile);
     }
 
+    setIsCreatingExam(true);
     try {
       const examRef = await addDoc(collection(db, 'zones', zoneId, 'exams'), examData);
 
@@ -725,10 +1087,14 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       setNewExamMinMark('40');
       setNewExamQuestions([]);
       setNewExamFile(null);
+      setExamScope('single'); setSelectedBatchIds([]); setBatchSchedules({});
+      setSelectedSubjects([]); setSubjectSchedules({}); setTargetBatchForSubjects('all');
       nunmaAlert(`Exam "${newExamTitle}" created! Students have been notified.`);
     } catch (e) {
       console.error("Error creating exam:", e);
       nunmaAlert("Failed to create exam.", "error");
+    } finally {
+      setIsCreatingExam(false);
     }
   };
 
@@ -1009,8 +1375,27 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
     // 4. Students (Enrolled)
     const studentsq = query(collection(db, 'zones', zoneId, 'students'));
-    const studentsUnsub = onSnapshot(studentsq, (snapshot) => {
-      setStudents((snapshot.docs || []).map(doc => ({ ...doc.data(), id: doc.id } as Student)));
+    const studentsUnsub = onSnapshot(studentsq, async (snapshot) => {
+      const fetchedStudents = await Promise.all((snapshot.docs || []).map(async docSnapshot => {
+        const studentData = { ...docSnapshot.data(), id: docSnapshot.id } as Student;
+        try {
+          const userDoc = await getDoc(doc(db, 'users', docSnapshot.id));
+          if (userDoc.exists() && userDoc.data().name) {
+            studentData.name = userDoc.data().name;
+          }
+        } catch (e) {
+          console.error("Error fetching user profile:", e);
+        }
+        return studentData;
+      }));
+
+      const getSortKey = (name: string) => {
+        const clean = name.replace(/^[^a-zA-Z]+/, '').toLowerCase();
+        return clean || name.toLowerCase();
+      };
+
+      fetchedStudents.sort((a, b) => getSortKey(a.name || '').localeCompare(getSortKey(b.name || '')));
+      setStudents(fetchedStudents);
     });
 
     // 5. Scheduled Sessions (unified sessions collection)
@@ -2489,7 +2874,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   <h3 className="text-5xl font-black text-nunma-forest tracking-tighter">Create Achievement Gate</h3>
                   <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-widest">Configuration & Assessment Setup</p>
                 </div>
-                <button onClick={() => setShowAddExamModal(false)} className="p-6 bg-gray-50 text-gray-400 rounded-3xl hover:bg-black hover:text-white transition-all shadow-sm"><X size={32} /></button>
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setShowReplicateModal(true)} className="px-6 py-4 bg-indigo-50 text-indigo-600 rounded-3xl hover:bg-indigo-600 hover:text-white font-black uppercase text-[10px] tracking-widest transition-all shadow-sm flex items-center gap-3">
+                    <Copy size={20} /> Replicate Exam
+                  </button>
+                  <button onClick={() => setShowAddExamModal(false)} className="p-6 bg-gray-50 text-gray-400 rounded-3xl hover:bg-black hover:text-white transition-all shadow-sm"><X size={32} /></button>
+                </div>
               </div>
 
               <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-20">
@@ -2498,29 +2888,257 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Exam Name</label>
                     <input value={newExamTitle} onChange={e => setNewExamTitle(e.target.value)} placeholder="e.g. Final Certification Phase 1" className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all text-lg shadow-sm" />
                   </div>
+
+                  {/* Exam Scope Selector */}
                   <div className="space-y-3">
-                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Date</label>
-                    <input type="date" value={newExamDate} onChange={e => setNewExamDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Exam Scope</label>
+                    <div className="flex gap-2 p-2 bg-gray-50 rounded-3xl border border-gray-100">
+                      {(['single', 'batch', 'subject'] as const).map(scope => (
+                        <button
+                          key={scope}
+                          type="button"
+                          onClick={() => {
+                            setExamScope(scope);
+                            setSelectedBatchIds([]); setBatchSchedules({});
+                            setSelectedSubjects([]); setSubjectSchedules({});
+                          }}
+                          className={`flex-1 py-4 rounded-2xl font-black uppercase text-[9px] tracking-widest transition-all ${
+                            examScope === scope 
+                              ? 'bg-nunma-forest text-white shadow-xl scale-[1.02]' 
+                              : 'text-gray-400 hover:text-nunma-forest'
+                          }`}
+                        >
+                          {scope === 'single' ? 'Single Exam' : scope === 'batch' ? 'Split by Batch' : 'Split by Subject'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Time</label>
-                    <input type="time" value={newExamTime} onChange={e => setNewExamTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
-                  </div>
+
+                  {/* Date/Time/Subject logic based on examScope */}
+                  {examScope === 'single' && (
+                    <>
+                      {zone?.subjects && zone.subjects.length > 0 && (
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Subject</label>
+                          <select value={newExamSubject} onChange={e => setNewExamSubject(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm cursor-pointer">
+                            <option value="">Select Subject...</option>
+                            {zone.subjects.map((sub: string) => (
+                              <option key={sub} value={sub}>{sub}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <div className="space-y-3">
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Date</label>
+                        <input type="date" value={newExamDate} onChange={e => setNewExamDate(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
+                      </div>
+                      <div className="space-y-3">
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Time</label>
+                        <input type="time" value={newExamTime} onChange={e => setNewExamTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
+                      </div>
+                    </>
+                  )}
+
+                  {examScope === 'batch' && (
+                    <div className="space-y-5">
+                      {zone?.subjects && zone.subjects.length > 0 && (
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Subject</label>
+                          <select value={newExamSubject} onChange={e => setNewExamSubject(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm cursor-pointer">
+                            <option value="">Select Subject...</option>
+                            {zone.subjects.map((sub: string) => (
+                              <option key={sub} value={sub}>{sub}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Select Batches</label>
+                      {/* Batch Chips */}
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedBatchIds.length === zoneBatches.length) {
+                              setSelectedBatchIds([]);
+                              setBatchSchedules({});
+                            } else {
+                              const allIds = zoneBatches.map(b => b.id);
+                              setSelectedBatchIds(allIds);
+                              const schedules: Record<string, { date: string; time: string }> = {};
+                              allIds.forEach(id => { schedules[id] = batchSchedules[id] || { date: '', time: '' }; });
+                              setBatchSchedules(schedules);
+                            }
+                          }}
+                          className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                            selectedBatchIds.length === zoneBatches.length
+                              ? 'bg-nunma-forest text-white border-nunma-forest shadow-lg'
+                              : 'bg-gray-50 text-gray-400 border-gray-200 hover:border-nunma-forest hover:text-nunma-forest'
+                          }`}
+                        >
+                          All Batches
+                        </button>
+                        {zoneBatches.map(batch => {
+                          const isSelected = selectedBatchIds.includes(batch.id);
+                          return (
+                            <button
+                              key={batch.id}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedBatchIds(prev => prev.filter(id => id !== batch.id));
+                                  setBatchSchedules(prev => { const copy = { ...prev }; delete copy[batch.id]; return copy; });
+                                } else {
+                                  setSelectedBatchIds(prev => [...prev, batch.id]);
+                                  setBatchSchedules(prev => ({ ...prev, [batch.id]: prev[batch.id] || { date: '', time: '' } }));
+                                }
+                              }}
+                              className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
+                                isSelected
+                                  ? 'text-white shadow-lg border-transparent'
+                                  : 'bg-gray-50 text-gray-400 border-gray-200 hover:border-gray-400'
+                              }`}
+                              style={isSelected ? { backgroundColor: batch.color, borderColor: batch.color } : {}}
+                            >
+                              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: isSelected ? '#fff' : batch.color }} />
+                              {batch.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {/* Per-batch schedule inputs */}
+                      {selectedBatchIds.length > 0 && (
+                        <div className="space-y-4 mt-4">
+                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Set Schedule for Each Batch</label>
+                          {selectedBatchIds.map(bId => {
+                            const batch = zoneBatches.find(b => b.id === bId);
+                            if (!batch) return null;
+                            const sched = batchSchedules[bId] || { date: '', time: '' };
+                            return (
+                              <div
+                                key={bId}
+                                onClick={() => setActiveClusterItem(bId)}
+                                className={`bg-gray-50 rounded-2xl p-5 border cursor-pointer transition-all space-y-3 ${
+                                  activeClusterItem === bId ? 'border-[#c2f575] ring-2 ring-[#c2f575] shadow-md' : 'border-gray-100 hover:border-gray-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-6 h-6 rounded-lg flex-shrink-0" style={{ backgroundColor: batch.color }} />
+                                  <span className="text-sm font-black text-nunma-forest uppercase tracking-widest">{batch.name}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <input
+                                    type="date"
+                                    value={sched.date}
+                                    onChange={e => setBatchSchedules(prev => ({ ...prev, [bId]: { ...prev[bId], date: e.target.value } }))}
+                                    className="w-full bg-white border-2 border-transparent focus:border-[#c2f575] rounded-xl px-4 py-3 font-bold text-nunma-forest outline-none transition-all text-sm"
+                                  />
+                                  <input
+                                    type="time"
+                                    value={sched.time}
+                                    onChange={e => setBatchSchedules(prev => ({ ...prev, [bId]: { ...prev[bId], time: e.target.value } }))}
+                                    className="w-full bg-white border-2 border-transparent focus:border-[#c2f575] rounded-xl px-4 py-3 font-bold text-nunma-forest outline-none transition-all text-sm"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {examScope === 'subject' && (
+                    <div className="space-y-5">
+                      <div className="space-y-3">
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Target Batch</label>
+                        <select 
+                          value={targetBatchForSubjects} 
+                          onChange={e => setTargetBatchForSubjects(e.target.value)} 
+                          className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm cursor-pointer"
+                        >
+                          <option value="all">All Batches</option>
+                          {zoneBatches.map((b: any) => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {zone?.subjects && zone.subjects.length > 0 && (
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Select Subjects</label>
+                          <div className="flex flex-wrap gap-3">
+                            {zone.subjects.map((subject: string) => {
+                              const isSelected = selectedSubjects.includes(subject);
+                              return (
+                                <button
+                                  key={subject}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      setSelectedSubjects(prev => prev.filter(s => s !== subject));
+                                      setSubjectSchedules(prev => { const copy = { ...prev }; delete copy[subject]; return copy; });
+                                    } else {
+                                      setSelectedSubjects(prev => [...prev, subject]);
+                                      setSubjectSchedules(prev => ({ ...prev, [subject]: prev[subject] || { date: '', time: '' } }));
+                                    }
+                                  }}
+                                  className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                                    isSelected
+                                      ? 'bg-nunma-forest text-white border-nunma-forest shadow-lg'
+                                      : 'bg-gray-50 text-gray-400 border-gray-200 hover:border-nunma-forest'
+                                  }`}
+                                >
+                                  {subject}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedSubjects.length > 0 && (
+                        <div className="space-y-4 mt-4">
+                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Set Schedule for Each Subject</label>
+                          {selectedSubjects.map(subject => {
+                            const sched = subjectSchedules[subject] || { date: '', time: '' };
+                            return (
+                              <div
+                                key={subject}
+                                onClick={() => setActiveClusterItem(subject)}
+                                className={`bg-gray-50 rounded-2xl p-5 border cursor-pointer transition-all space-y-3 ${
+                                  activeClusterItem === subject ? 'border-[#c2f575] ring-2 ring-[#c2f575] shadow-md' : 'border-gray-100 hover:border-gray-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-6 h-6 rounded-lg flex-shrink-0 bg-[#c2f575] text-nunma-forest flex items-center justify-center font-black text-xs">S</div>
+                                  <span className="text-sm font-black text-nunma-forest uppercase tracking-widest">{subject}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <input
+                                    type="date"
+                                    value={sched.date}
+                                    onChange={e => setSubjectSchedules(prev => ({ ...prev, [subject]: { ...prev[subject], date: e.target.value } }))}
+                                    className="w-full bg-white border-2 border-transparent focus:border-[#c2f575] rounded-xl px-4 py-3 font-bold text-nunma-forest outline-none transition-all text-sm"
+                                  />
+                                  <input
+                                    type="time"
+                                    value={sched.time}
+                                    onChange={e => setSubjectSchedules(prev => ({ ...prev, [subject]: { ...prev[subject], time: e.target.value } }))}
+                                    className="w-full bg-white border-2 border-transparent focus:border-[#c2f575] rounded-xl px-4 py-3 font-bold text-nunma-forest outline-none transition-all text-sm"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {newExamType !== 'online-mcq' && (
                     <div className="space-y-3">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Duration (Minutes)</label>
                       <input type="number" min="1" value={newExamDuration} onChange={e => setNewExamDuration(e.target.value)} placeholder="e.g. 60" className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
-                    </div>
-                  )}
-                  {zone?.subjects && zone.subjects.length > 0 && (
-                    <div className="space-y-3">
-                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Subject</label>
-                      <select value={newExamSubject} onChange={e => setNewExamSubject(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm cursor-pointer">
-                        <option value="">Select Subject...</option>
-                        {zone.subjects.map((sub: string) => (
-                          <option key={sub} value={sub}>{sub}</option>
-                        ))}
-                      </select>
                     </div>
                   )}
                   <div className="space-y-3">
@@ -2546,58 +3164,159 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                 </div>
 
                 <div className="lg:col-span-8 bg-gray-50/50 rounded-[4rem] p-12 border border-gray-100 flex flex-col min-h-[600px] shadow-inner">
-                  <div className="flex-1 flex flex-col">
-                    {newExamType === 'online-mcq' ? (
-                      <MCQBuilder questions={newExamQuestions} setQuestions={setNewExamQuestions} />
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center p-10 space-y-8 animate-in fade-in duration-700">
-                        {newExamType === 'offline' ? (
-                          <>
-                            <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-[2rem] flex items-center justify-center shadow-sm">
-                              <FileText size={48} />
-                            </div>
-                            <div>
-                              <p className="font-black text-2xl text-nunma-forest tracking-tight">Offline Assessment Mode</p>
-                              <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-wide">Standard Paper-Based Testing</p>
-                            </div>
-                            <p className="text-gray-400 max-w-md mx-auto leading-relaxed">Upload a PDF question paper for students to download. After the exam, upload the students' marks via an Excel sheet in the gradebook.</p>
-                            <label className="flex flex-col items-center justify-center w-full max-w-lg h-48 border-4 border-dashed border-emerald-100 hover:border-emerald-300 rounded-[3rem] cursor-pointer bg-white transition-all hover:bg-emerald-50/30 group">
-                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                <Upload size={32} className="mb-4 text-emerald-300 group-hover:text-emerald-500 transition-colors" />
-                                <p className="text-sm font-black text-emerald-600 uppercase tracking-widest">{newExamFile ? newExamFile.name : 'Upload Question Paper (.pdf)'}</p>
-                              </div>
-                              <input type="file" className="hidden" accept=".pdf" onChange={(e) => e.target.files && setNewExamFile(e.target.files[0])} />
-                            </label>
-                          </>
+                  {(() => {
+                    const currentItemKey = examScope === 'single' ? 'single' : activeClusterItem;
+                    if (examScope !== 'single' && !currentItemKey) {
+                      return (
+                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-center p-10 space-y-6">
+                          <div className="w-24 h-24 bg-gray-100 text-gray-300 rounded-[2rem] flex items-center justify-center shadow-inner">
+                            <FileText size={48} />
+                          </div>
+                          <div>
+                            <p className="font-black text-2xl text-gray-400 tracking-tight">Select an Exam</p>
+                            <p className="text-sm font-bold mt-2 uppercase tracking-wide">from the schedule list on the left</p>
+                          </div>
+                          <p className="max-w-xs leading-relaxed">Select a subject or batch to configure its specific question paper and questions.</p>
+                        </div>
+                      );
+                    }
+
+                    const currentQuestions = currentItemKey === 'single' ? newExamQuestions : (clusterExamQuestions[currentItemKey!] || []);
+                    const setQuestionsFunc = currentItemKey === 'single' ? setNewExamQuestions : (newQ: any) => setClusterExamQuestions(prev => ({ ...prev, [currentItemKey!]: typeof newQ === 'function' ? newQ(prev[currentItemKey!] || []) : newQ }));
+                    
+                    const currentFile = currentItemKey === 'single' ? newExamFile : (clusterExamFiles[currentItemKey!] || null);
+                    const setFileFunc = (file: File | null) => {
+                      if (currentItemKey === 'single') {
+                        setNewExamFile(file);
+                      } else {
+                        setClusterExamFiles(prev => ({ ...prev, [currentItemKey!]: file }));
+                      }
+                    };
+
+                    return (
+                      <div className="flex-1 flex flex-col">
+                        {newExamType === 'online-mcq' ? (
+                          <MCQBuilder questions={currentQuestions} setQuestions={setQuestionsFunc} />
                         ) : (
-                          <>
-                            <div className="w-24 h-24 bg-indigo-50 text-indigo-500 rounded-[2rem] flex items-center justify-center shadow-sm">
-                              <FileText size={48} />
-                            </div>
-                            <div>
-                                <p className="font-black text-2xl text-nunma-forest tracking-tight">Online PDF Test Mode</p>
-                                <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-wide">Live Monitored Assessment</p>
-                            </div>
-                            <p className="text-gray-400 max-w-md mx-auto leading-relaxed">Students will view your uploaded PDF question paper while their camera/mic is monitored. They will have 20 mins after the exam to scan and upload their answers.</p>
-                            <label className="flex flex-col items-center justify-center w-full max-w-lg h-48 border-4 border-dashed border-indigo-100 hover:border-indigo-300 rounded-[3rem] cursor-pointer bg-white transition-all hover:bg-indigo-50/30 group">
-                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                <Upload size={32} className="mb-4 text-indigo-300 group-hover:text-indigo-500 transition-colors" />
-                                <p className="text-sm font-black text-indigo-600 uppercase tracking-widest">{newExamFile ? newExamFile.name : 'Upload Question Paper (.pdf)'}</p>
-                              </div>
-                              <input type="file" className="hidden" accept=".pdf" onChange={(e) => e.target.files && setNewExamFile(e.target.files[0])} />
-                            </label>
-                          </>
+                          <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center p-10 space-y-8 animate-in fade-in duration-700">
+                            {newExamType === 'offline' ? (
+                              <>
+                                <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-[2rem] flex items-center justify-center shadow-sm">
+                                  <FileText size={48} />
+                                </div>
+                                <div>
+                                  <p className="font-black text-2xl text-nunma-forest tracking-tight">Offline Assessment Mode</p>
+                                  <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-wide">Standard Paper-Based Testing</p>
+                                </div>
+                                <p className="text-gray-400 max-w-md mx-auto leading-relaxed">Upload a PDF question paper for students to download. After the exam, upload the students' marks via an Excel sheet in the gradebook.</p>
+                                <label className="flex flex-col items-center justify-center w-full max-w-lg h-48 border-4 border-dashed border-emerald-100 hover:border-emerald-300 rounded-[3rem] cursor-pointer bg-white transition-all hover:bg-emerald-50/30 group">
+                                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                    <Upload size={32} className="mb-4 text-emerald-300 group-hover:text-emerald-500 transition-colors" />
+                                    <p className="text-sm font-black text-emerald-600 uppercase tracking-widest">{currentFile ? currentFile.name : 'Upload Question Paper (.pdf)'}</p>
+                                  </div>
+                                  <input type="file" className="hidden" accept=".pdf" onChange={(e) => e.target.files && setFileFunc(e.target.files[0])} />
+                                </label>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-24 h-24 bg-indigo-50 text-indigo-500 rounded-[2rem] flex items-center justify-center shadow-sm">
+                                  <FileText size={48} />
+                                </div>
+                                <div>
+                                    <p className="font-black text-2xl text-nunma-forest tracking-tight">Online PDF Test Mode</p>
+                                    <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-wide">Live Monitored Assessment</p>
+                                </div>
+                                <p className="text-gray-400 max-w-md mx-auto leading-relaxed">Students will view your uploaded PDF question paper while their camera/mic is monitored. They will have 20 mins after the exam to scan and upload their answers.</p>
+                                <label className="flex flex-col items-center justify-center w-full max-w-lg h-48 border-4 border-dashed border-indigo-100 hover:border-indigo-300 rounded-[3rem] cursor-pointer bg-white transition-all hover:bg-indigo-50/30 group">
+                                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                    <Upload size={32} className="mb-4 text-indigo-300 group-hover:text-indigo-500 transition-colors" />
+                                    <p className="text-sm font-black text-indigo-600 uppercase tracking-widest">{currentFile ? currentFile.name : 'Upload Question Paper (.pdf)'}</p>
+                                  </div>
+                                  <input type="file" className="hidden" accept=".pdf" onChange={(e) => e.target.files && setFileFunc(e.target.files[0])} />
+                                </label>
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
               </div>
 
               <div className="mt-20 pt-10 border-t border-gray-100">
-                <button onClick={handleCreateExam} className="w-full py-8 bg-[#c2f575] text-nunma-forest rounded-[2.5rem] font-black uppercase text-sm tracking-[0.3em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-6">
-                  <Sparkles size={24} /> Deploy Exam Instance
+                <button 
+                  onClick={handleCreateExam} 
+                  disabled={isCreatingExam}
+                  className={`w-full py-8 ${isCreatingExam ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#c2f575] text-nunma-forest hover:scale-[1.01] active:scale-95 shadow-2xl'} rounded-[2.5rem] font-black uppercase text-sm tracking-[0.3em] transition-all flex items-center justify-center gap-6`}
+                >
+                  {isCreatingExam ? (
+                    <>
+                      <div className="w-5 h-5 border-4 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                      Deploying Exam Instance...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={24} /> Deploy Exam Instance
+                    </>
+                  )}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* REPLICATE EXAM MODAL */}
+        {showReplicateModal && (
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden p-10 flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-500">
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h3 className="text-3xl font-black text-nunma-forest">Replicate Past Exam</h3>
+                  <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mt-2">Select an exam to copy its settings</p>
+                </div>
+                <button onClick={() => setShowReplicateModal(false)} className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-black hover:text-white transition-all shadow-sm"><X size={24} /></button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
+                {(() => {
+                  let sourceExams = exams;
+                  if (examScope === 'subject' && targetBatchForSubjects !== 'all') {
+                    sourceExams = exams.filter(e => e.batchId === targetBatchForSubjects);
+                  }
+                  
+                  const uniqueExams = Array.from(new Map(sourceExams.map(e => [e.title || e.examGroupName, e])).values()) as any[];
+                  if (uniqueExams.length === 0) {
+                    return (
+                      <div className="text-center p-10 text-gray-400">
+                        <Copy size={48} className="mx-auto mb-4 opacity-50" />
+                        <p className="font-bold">No past exams found.</p>
+                      </div>
+                    );
+                  }
+                  return uniqueExams.map(exam => (
+                    <button
+                      key={exam.id}
+                      onClick={() => handleReplicateExam(exam)}
+                      className="w-full bg-gray-50 hover:bg-indigo-50 border border-gray-100 hover:border-indigo-200 rounded-3xl p-6 flex items-center justify-between transition-all group text-left"
+                    >
+                      <div className="flex items-center gap-5 min-w-0">
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                          {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={24} /> : <FileSpreadsheet size={24} />}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-black text-nunma-forest text-lg truncate group-hover:text-indigo-700 transition-colors uppercase">{exam.title || exam.examGroupName}</h4>
+                          <div className="flex items-center gap-3 text-gray-400 font-bold text-[10px] uppercase tracking-widest mt-1">
+                            <span className="truncate">{exam.subject || 'Multiple Subjects'}</span>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                            <span>{exam.type === 'online-mcq' ? 'Online MCQ' : exam.type === 'online-test' ? 'Online PDF' : 'Offline Paper'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight size={24} className="text-gray-300 group-hover:text-indigo-500 transition-colors flex-shrink-0" />
+                    </button>
+                  ));
+                })()}
               </div>
             </div>
           </div>
@@ -3315,12 +4034,30 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Class Name (Optional)</label>
                     <input type="text" placeholder="e.g. Morning Theory" value={newAttendanceClassName} onChange={e => setNewAttendanceClassName(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Batch</label>
+                    <div className="relative">
+                      <select
+                        value={activeBatchFilter}
+                        onChange={(e) => setActiveBatchFilter(e.target.value)}
+                        className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl pl-6 pr-12 py-4 font-bold text-nunma-forest outline-none transition-all appearance-none cursor-pointer"
+                      >
+                        <option value="all">All Batches</option>
+                        {zoneBatches.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                        <option value="unassigned">Unassigned</option>
+                      </select>
+                      <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto mb-8 pr-2 custom-scrollbar">
-                <div className="mb-4">
-                    <input type="text" placeholder="Search students..." value={attendanceModalSearchQuery} onChange={e => setAttendanceModalSearchQuery(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl px-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
+                <div className="mb-4 relative">
+                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                    <input type="text" placeholder="Search students..." value={attendanceModalSearchQuery} onChange={e => setAttendanceModalSearchQuery(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-2xl pl-14 pr-6 py-4 font-bold text-nunma-forest outline-none transition-all" />
                   </div>
                   <table className="w-full text-left">
                   <thead className="sticky top-0 bg-white z-10">
@@ -3765,7 +4502,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-gray-50/50">
-                          <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest sticky left-0 bg-gray-50/50 z-20 whitespace-nowrap min-w-[250px] max-w-[250px]">Student</th>
+                          <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest sticky left-0 bg-white z-20 whitespace-nowrap min-w-[300px]">Student</th>
                           <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Attendance %</th>
                           {/* Dynamic Session Columns (Last 5 or Searched) */}
                           {attendanceSessions
@@ -3794,12 +4531,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       <tbody className="divide-y divide-gray-50">
                         {(filteredStudents || []).filter(s => (s?.name || "").toLowerCase().includes((attendanceSearchQuery || "").toLowerCase()) || (s?.email || '').toLowerCase().includes((attendanceSearchQuery || "").toLowerCase())).map(student => (
                           <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
-                            <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50/30 z-10 w-[250px] min-w-[250px] max-w-[250px]">
+                            <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50 z-10 min-w-[300px]">
                               <div className="flex items-center gap-4 w-full">
                                 <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm shrink-0" alt="" />
-                                <div className="flex flex-col overflow-hidden min-w-0 flex-1">
-                                  <span className="font-bold text-nunma-forest truncate block" title={student.name}>{student.name}</span>
-                                  <span className="text-xs text-gray-400 font-medium truncate block" title={student.email}>{student.email}</span>
+                                <div className="flex flex-col min-w-0 flex-1">
+                                  <span className="font-bold text-nunma-forest whitespace-nowrap block" title={student.name}>{student.name}</span>
+                                  <span className="text-xs text-gray-400 font-medium whitespace-nowrap block" title={student.email}>{student.email}</span>
                                 </div>
                               </div>
                             </td>
@@ -3906,17 +4643,22 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         className="bg-white border border-gray-100 rounded-[3rem] p-10 space-y-8 shadow-sm group cursor-default"
                       >
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                          <div className="flex items-center gap-6 flex-1 w-full">
-                            <GripVertical className="text-gray-200 cursor-grab active:cursor-grabbing shrink-0" size={24} />
+                          <div className="flex items-center gap-6 flex-1 w-full cursor-pointer" onClick={() => toggleChapter(chapter.id)}>
+                            <GripVertical className="text-gray-200 cursor-grab active:cursor-grabbing shrink-0" size={24} onClick={(e) => e.stopPropagation()} />
                             <input
                               type="text"
                               value={chapter.title}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) => setChapters(chapters.map(c => c.id === chapter.id ? { ...c, title: e.target.value } : c))}
                               onBlur={(e) => updateChapterTitle(chapter.id, e.target.value)}
                               className="bg-transparent text-2xl font-black text-nunma-forest outline-none border-b-4 border-transparent focus:border-[#c2f575]/20 w-full min-w-0"
                             />
+                            <button className="text-gray-400 hover:text-gray-800 transition-colors shrink-0">
+                              {expandedChapters[chapter.id] ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
+                            </button>
                           </div>
-                          <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto mt-4 md:mt-0 items-stretch md:items-center">
+                          {expandedChapters[chapter.id] && (
+                            <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto mt-4 md:mt-0 items-stretch md:items-center" onClick={(e) => e.stopPropagation()}>
                             <div className="grid grid-cols-2 sm:grid-cols-4 md:flex md:items-center gap-2 md:flex-wrap flex-1">
                               <button
                                 onClick={() => handleAddSegment(chapter.id, 'video')}
@@ -3963,10 +4705,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                 <Trash2 size={20} />
                               </button>
                             )}
-                          </div>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 pl-0 md:pl-12 mt-4 md:mt-0">
+                        {expandedChapters[chapter.id] && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 pl-0 md:pl-12 mt-4 md:mt-0">
                           {(chapter.segments || []).map((seg, segIndex) => {
                             if ((seg as any).status === 'uploading') return null;
                             return (
@@ -4035,8 +4779,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                   </div>
                                 </div>
                               </div>
-                          )})}
+                            );
+                          })}
                         </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -4434,71 +5180,74 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                        {exams.filter(e => {
-                          const matchesSearch = e.title.toLowerCase().includes(examSearchQuery.toLowerCase());
-                          const matchesSubject = isCoTutor && currentCoTutor ? e.subject === currentCoTutor.subject : true;
-                          return matchesSearch && matchesSubject;
-                        }).map(exam => (
-                          <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-10 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group">
-                            <div className="flex justify-between items-start">
-                              <div className={`p-5 rounded-[1.75rem] shadow-sm ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
-                              </div>
-                              <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${getExamStatus(exam) === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : getExamStatus(exam) === 'ONGOING' ? 'bg-red-50 text-red-500 animate-pulse' : 'bg-green-50 text-green-500'}`}>
-                                {getExamStatus(exam)}
-                              </span>
-                            </div>
+                        {(() => {
+                          // Filter exams first
+                          const filteredExams = exams.filter(e => {
+                            const matchesSearch = e.title.toLowerCase().includes(examSearchQuery.toLowerCase());
+                            const matchesSubject = isCoTutor && currentCoTutor ? e.subject === currentCoTutor.subject : true;
+                            return matchesSearch && matchesSubject;
+                          });
 
-                            <div className="space-y-3">
-                              <h4 className="text-2xl font-black text-nunma-forest tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{exam.title}</h4>
-                              <div className="flex items-center gap-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
-                                <Calendar size={14} /> {exam.date} @ {exam.time}
-                              </div>
-                            </div>
+                          // Group exams by examGroupId
+                          const grouped: Record<string, Exam[]> = {};
+                          const ungrouped: Exam[] = [];
+                          filteredExams.forEach(exam => {
+                            if (exam.examGroupId) {
+                              if (!grouped[exam.examGroupId]) grouped[exam.examGroupId] = [];
+                              grouped[exam.examGroupId].push(exam);
+                            } else {
+                              ungrouped.push(exam);
+                            }
+                          });
 
-                            <div className="pt-8 border-t border-gray-50 flex justify-between items-center">
-                              <div className="space-y-1">
-                                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Target Marks</p>
-                                <p className="font-bold text-nunma-forest">{exam.minMark}/{exam.maxMark} <span className="text-[10px] text-gray-400">(Pass)</span></p>
-                              </div>
+                          const renderExamActions = (exam: Exam) => (
+                            <div className="flex gap-2 items-center flex-wrap">
+                              {/* Insights button — always visible */}
+                              <button
+                                onClick={() => { setInsightsExam(exam); setShowInsightsModal(true); }}
+                                className="p-3 bg-indigo-50 text-indigo-500 rounded-xl hover:bg-indigo-100 transition-all flex items-center gap-1.5"
+                                title="View Insights"
+                              >
+                                <BarChart3 size={16} />
+                                <span className="text-[9px] font-black uppercase tracking-widest hidden md:inline">Insights</span>
+                              </button>
                               {getExamStatus(exam) === 'CONDUCTED' ? (
-                                <div className="flex gap-2">
+                                <>
                                   {exam.type === 'online-test' && (
                                     <button
                                       onClick={() => { setSelectedExamForGrading(exam); setShowGradingHubModal(true); }}
-                                      className="bg-[#c2f575] text-nunma-forest px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
+                                      className="bg-[#c2f575] text-nunma-forest px-4 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg"
                                     >
-                                      Grade Submissions
+                                      Grade
                                     </button>
                                   )}
                                   {(exam.type === 'offline' || exam.type === 'online-mcq') && (
                                     <button
                                       onClick={() => { setSelectedExamForMarks(exam); setShowMarkEntryModal(true); }}
-                                      className="bg-nunma-forest text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 active:scale-95 transition-all"
+                                      className="bg-nunma-forest text-white px-4 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest hover:scale-105 active:scale-95 transition-all"
                                     >
-                                      Open Gradebook
+                                      Gradebook
                                     </button>
                                   )}
-                                </div>
+                                </>
                               ) : (
-                                <div className="flex gap-2">
+                                <>
                                   <button
                                     onClick={(e) => {
                                       const examDateObj = new Date(`${exam.date} ${exam.time}`);
                                       const timeDiff = examDateObj.getTime() - Date.now();
                                       if (timeDiff <= 60 * 60 * 1000 && timeDiff > 0) {
-                                        nunmaAlert("Exams cannot be edited within 1 hour of commencement to ensure a stable testing environment for students.", "success");
+                                        nunmaAlert("Exams cannot be edited within 1 hour of commencement.", "success");
                                         e.preventDefault();
                                         return;
                                       }
-                                      // TODO: Add edit exam logic here
                                     }}
-                                    className={`p-4 rounded-2xl transition-all ${new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() <= 60 * 60 * 1000 && new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() > 0
+                                    className={`p-3 rounded-xl transition-all ${new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() <= 60 * 60 * 1000 && new Date(`${exam.date} ${exam.time}`).getTime() - Date.now() > 0
                                       ? 'bg-gray-50 text-gray-400 opacity-50 cursor-not-allowed'
                                       : 'bg-gray-50 text-gray-400 hover:bg-black hover:text-white'
                                       }`}
                                   >
-                                    <Edit3 size={18} />
+                                    <Edit3 size={16} />
                                   </button>
                                   <button
                                     onClick={async () => {
@@ -4514,15 +5263,154 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                         }
                                       }
                                     }}
-                                    className="p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
+                                    className="p-3 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all"
                                   >
-                                    <Trash2 size={18} />
+                                    <Trash2 size={16} />
                                   </button>
-                                </div>
+                                </>
                               )}
                             </div>
-                          </div>
-                        ))}
+                          );
+
+                          return (
+                            <>
+                              {/* === GROUPED EXAMS (batch-based) === */}
+                              {Object.entries(grouped).map(([groupId, groupExams]) => {
+                                const isExpanded = expandedExamGroups[groupId] ?? false;
+                                const groupName = groupExams[0]?.examGroupName || groupExams[0]?.title || 'Exam Group';
+                                const examType = groupExams[0]?.type;
+                                const allStatuses = groupExams.map(e => getExamStatus(e));
+                                const groupStatus = allStatuses.includes('ONGOING') ? 'ONGOING' : allStatuses.every(s => s === 'CONDUCTED') ? 'CONDUCTED' : 'UPCOMING';
+                                const isSubjectSplit = groupExams.some(e => e.subject !== groupExams[0]?.subject);
+
+                                return (
+                                  <div key={groupId} className={`bg-white border border-gray-100 rounded-[3.5rem] shadow-sm hover:shadow-2xl transition-all duration-500 group ${isExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}>
+                                    {/* Group Header — always visible */}
+                                    <button
+                                      onClick={() => setExpandedExamGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }))}
+                                      className="w-full p-10 flex items-center justify-between text-left"
+                                    >
+                                      <div className="flex items-center gap-6">
+                                        <div className={`p-5 rounded-[1.75rem] shadow-sm ${examType === 'online-test' || examType === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                          {examType === 'online-test' || examType === 'online-mcq' ? <Radio size={28} /> : <FileSpreadsheet size={28} />}
+                                        </div>
+                                        <div>
+                                          <div className="flex items-center gap-4">
+                                            <h4 className="text-2xl font-black text-nunma-forest tracking-tight uppercase">{groupName}</h4>
+                                            {isSubjectSplit && groupExams[0]?.batchId && (() => {
+                                              const targetBatch = zoneBatches.find(b => b.id === groupExams[0].batchId);
+                                              if (!targetBatch) return null;
+                                              return (
+                                                <span className="px-3 py-1 rounded-lg text-[10px] font-bold text-white shadow-sm" style={{ backgroundColor: targetBatch.color }}>
+                                                  {targetBatch.name}
+                                                </span>
+                                              );
+                                            })()}
+                                            {isSubjectSplit && !groupExams[0]?.batchId && (
+                                              <span className="px-3 py-1 rounded-lg text-[10px] font-bold bg-gray-100 text-gray-500 shadow-sm border border-gray-200">
+                                                ALL BATCHES
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-3 mt-2">
+                                            <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                                              groupStatus === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : groupStatus === 'ONGOING' ? 'bg-red-50 text-red-500 animate-pulse' : 'bg-green-50 text-green-500'
+                                            }`}>
+                                              {groupStatus}
+                                            </span>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                              {groupExams.length} {isSubjectSplit ? `subject${groupExams.length > 1 ? 's' : ''}` : `batch${groupExams.length > 1 ? 'es' : ''}`}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className={`w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                                        <ChevronDown size={20} className="text-gray-400" />
+                                      </div>
+                                    </button>
+
+                                    {/* Expanded: per-batch/subject exam rows */}
+                                    {isExpanded && (
+                                      <div className="px-10 pb-10 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="border-t border-gray-100 pt-6" />
+                                        {groupExams.map(exam => {
+                                          const batch = zoneBatches.find(b => b.id === exam.batchId);
+                                          return (
+                                            <div key={exam.id} className="bg-gray-50 rounded-[2rem] p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-gray-100 hover:border-gray-200 transition-all">
+                                              <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                {isSubjectSplit ? (
+                                                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-100 text-indigo-600 font-black text-sm shadow-lg flex-shrink-0">
+                                                    S
+                                                  </div>
+                                                ) : batch && (
+                                                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg flex-shrink-0" style={{ backgroundColor: batch.color }}>
+                                                    {batch.name.charAt(0).toUpperCase()}
+                                                  </div>
+                                                )}
+                                                <div className="min-w-0">
+                                                  <p className="font-black text-nunma-forest text-sm uppercase tracking-widest truncate">
+                                                    {isSubjectSplit ? exam.subject : (batch?.name || 'Unknown Batch')}
+                                                  </p>
+                                                  <div className="flex items-center gap-3 text-gray-400 font-bold text-[10px] uppercase tracking-widest mt-1">
+                                                    <Calendar size={12} /> {exam.date} @ {exam.time}
+                                                    <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest ${
+                                                      getExamStatus(exam) === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : getExamStatus(exam) === 'ONGOING' ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-500'
+                                                    }`}>
+                                                      {getExamStatus(exam)}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              {renderExamActions(exam)}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+
+                              {/* === UNGROUPED EXAMS (standalone) === */}
+                              {ungrouped.map(exam => (
+                                <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-10 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group">
+                                  <div className="flex justify-between items-start">
+                                    <div className={`p-5 rounded-[1.75rem] shadow-sm ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                      {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
+                                    </div>
+                                    <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${getExamStatus(exam) === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : getExamStatus(exam) === 'ONGOING' ? 'bg-red-50 text-red-500 animate-pulse' : 'bg-green-50 text-green-500'}`}>
+                                      {getExamStatus(exam)}
+                                    </span>
+                                  </div>
+
+                                  <div className="space-y-3">
+                                    <h4 className="text-2xl font-black text-nunma-forest tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{exam.title}</h4>
+                                    <div className="flex items-center gap-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
+                                      <Calendar size={14} /> {exam.date} @ {exam.time}
+                                    </div>
+                                    {exam.batchId && (() => {
+                                      const batch = zoneBatches.find(b => b.id === exam.batchId);
+                                      return batch ? (
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: batch.color }} />
+                                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{batch.name}</span>
+                                        </div>
+                                      ) : null;
+                                    })()}
+                                  </div>
+
+                                  <div className="pt-8 border-t border-gray-50 flex justify-between items-center">
+                                    <div className="space-y-1">
+                                      <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Target Marks</p>
+                                      <p className="font-bold text-nunma-forest">{exam.minMark}/{exam.maxMark} <span className="text-[10px] text-gray-400">(Pass)</span></p>
+                                    </div>
+                                    {renderExamActions(exam)}
+                                  </div>
+                                </div>
+                              ))}
+                            </>
+                          );
+                        })()}
 
                         <button
                           onClick={() => setShowAddExamModal(true)}
@@ -4881,6 +5769,16 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
             </div>
           </div>
         </div>
+      )}
+      {showInsightsModal && insightsExam && zoneId && (
+        <ExamInsights
+          exam={insightsExam}
+          zoneId={zoneId}
+          onClose={() => {
+            setShowInsightsModal(false);
+            setInsightsExam(null);
+          }}
+        />
       )}
     </React.Fragment>
   );

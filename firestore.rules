@@ -125,6 +125,15 @@ service cloud.firestore {
       }
     }
 
+    // ZONES/EXAM_DEPLOYMENTS
+    match /zones/{zoneId}/exam_deployments/{deploymentId} {
+      allow read: if isSignedIn() && (
+        isZoneCreator(zoneId) ||
+        exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid))
+      );
+      allow write: if isSignedIn() && isZoneCreator(zoneId);
+    }
+
     // ZONES/ORDERS
     match /zones/{zoneId}/orders/{orderId} {
       allow read: if isSignedIn() && (request.auth.uid == resource.data.studentUid || isZoneCreator(zoneId));

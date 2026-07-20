@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
+exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamDeploymentCreated = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
@@ -2181,7 +2181,8 @@ exports.processWhitelist = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], co
         const results = {
             enrolled: 0,
             pending: 0,
-            alreadyEnrolled: 0
+            alreadyEnrolled: 0,
+            alreadySent: 0
         };
         // 2. Graceful Auth Check
         let uid = null;
@@ -2226,6 +2227,11 @@ exports.processWhitelist = (0, https_1.onCall)({ secrets: ["RESEND_API_KEY"], co
         else {
             // User doesn't exist, proceed to add their email to the invites subcollection
             const invitesRef = db.collection("zones").doc(zoneId).collection("invites").doc(normalizedEmail);
+            const inviteDoc = await invitesRef.get();
+            if (inviteDoc.exists) {
+                results.alreadySent = 1;
+                return Object.assign({ success: true }, results);
+            }
             await invitesRef.set(Object.assign({ email: normalizedEmail, name: name || "", addedAt: admin.firestore.FieldValue.serverTimestamp(), addedBy: callerUid, status: "pending" }, (request.data.batchId ? { batchId: request.data.batchId } : {})));
             results.pending = 1;
         }
@@ -2666,6 +2672,12 @@ exports.onExamAssigned = (0, firestore_1.onDocumentCreated)({ document: "zones/{
     const examData = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
     if (!examData)
         return;
+    // Skip individual emails for exams that are part of a cluster deployment.
+    // A consolidated email will be sent by onExamDeploymentCreated.
+    if (examData.examGroupId) {
+        functions.logger.info(`Skipping individual email for exam ${event.params.examId} because it belongs to group ${examData.examGroupId}`);
+        return;
+    }
     const zoneId = event.params.zoneId;
     const db = admin.firestore();
     try {
@@ -2719,6 +2731,101 @@ exports.onExamAssigned = (0, firestore_1.onDocumentCreated)({ document: "zones/{
     }
     catch (err) {
         functions.logger.error("Error sending exam assignment emails:", err);
+    }
+});
+exports.onExamDeploymentCreated = (0, firestore_1.onDocumentCreated)({ document: "zones/{zoneId}/exam_deployments/{deploymentId}", secrets: [resendApiKey] }, async (event) => {
+    var _a;
+    const apiKey = resendApiKey.value();
+    if (!apiKey) {
+        functions.logger.warn("RESEND_API_KEY not configured — cluster exam emails skipped.");
+        return;
+    }
+    const deploymentData = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
+    if (!deploymentData || !deploymentData.exams || deploymentData.exams.length === 0)
+        return;
+    const zoneId = event.params.zoneId;
+    const db = admin.firestore();
+    try {
+        // Get Zone details
+        const zoneDoc = await db.collection("zones").doc(zoneId).get();
+        if (!zoneDoc.exists)
+            return;
+        const zoneData = zoneDoc.data() || {};
+        const zoneName = zoneData.title || "a Learning Zone";
+        const tutorName = zoneData.tutorName || "Your Instructor";
+        // Get students (filter if targetBatchIds exists)
+        const studentsSnap = await db.collection("zones").doc(zoneId).collection("students").get();
+        if (studentsSnap.empty)
+            return;
+        const emails = [];
+        studentsSnap.forEach(doc => {
+            const data = doc.data();
+            // Filter by batch if specified
+            if (deploymentData.targetBatchIds && deploymentData.targetBatchIds.length > 0) {
+                if (!deploymentData.targetBatchIds.includes(data.batchId))
+                    return;
+            }
+            else if (deploymentData.targetBatchForSubjects && deploymentData.targetBatchForSubjects !== 'all') {
+                if (data.batchId !== deploymentData.targetBatchForSubjects)
+                    return;
+            }
+            if (data.email)
+                emails.push(data.email);
+        });
+        if (emails.length === 0)
+            return;
+        const resend = new resend_1.Resend(apiKey);
+        const examCount = deploymentData.exams.length;
+        // Build the exam list HTML
+        let examsHtml = "";
+        for (const ex of deploymentData.exams) {
+            examsHtml += `
+                    <div style="background-color: #f9fafb; border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #c2f575;">
+                        <h3 style="margin-top: 0; color: #052e16; font-size: 16px;">${ex.title}</h3>
+                        <p style="margin: 5px 0; color: #4b5563; font-size: 14px;">📚 <strong>Subject:</strong> ${ex.subject || 'General'}</p>
+                        <p style="margin: 5px 0; color: #4b5563; font-size: 14px;">📅 <strong>Date:</strong> ${ex.date}</p>
+                        <p style="margin: 5px 0; color: #4b5563; font-size: 14px;">⏰ <strong>Time:</strong> ${ex.time || ex.startTime} ${ex.duration ? `(${ex.duration} minutes)` : ''}</p>
+                        <p style="margin: 5px 0; color: #4b5563; font-size: 14px;">📝 <strong>Type:</strong> ${ex.type === 'online-mcq' ? 'Online MCQ' : ex.type === 'offline' ? 'Offline PDF' : 'Online PDF'}</p>
+                    </div>
+                `;
+        }
+        for (const email of emails) {
+            await resend.emails.send({
+                from: "Nunma <support@nunma.in>",
+                to: email,
+                subject: `${examCount} New Exams Scheduled in ${zoneName} 📝`,
+                html: `
+                        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #eee; border-radius: 20px;">
+                            <div style="text-align: center; margin-bottom: 30px;">
+                                <h1 style="color: #040457; font-size: 24px;">New Exams Scheduled!</h1>
+                            </div>
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;">Hi Student,</p>
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;"><strong>${tutorName}</strong> has scheduled <strong>${examCount} new exams</strong> in the zone <strong>"${zoneName}"</strong>. Here are the details:</p>
+                            
+                            <div style="margin: 30px 0;">
+                                ${examsHtml}
+                            </div>
+                            
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;">Make sure you're prepared and log in a few minutes early. You can view all your scheduled exams anytime from your Nunma dashboard.</p>
+                            
+                            <div style="text-align: center; margin: 40px 0;">
+                                <a href="https://nunma.in/classroom/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                                    View My Exams →
+                                </a>
+                            </div>
+                            
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;">Good luck!<br>— Team Nunma</p>
+                            
+                            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
+                            <p style="color: #999; font-size: 12px; text-align: center;">Nunma — The Trust Layer for Education</p>
+                        </div>
+                    `
+            });
+        }
+        functions.logger.info("Sent clustered exam emails to " + emails.length + " students for deployment " + event.params.deploymentId);
+    }
+    catch (err) {
+        functions.logger.error("Error sending clustered exam emails:", err);
     }
 });
 exports.sendEnrollmentEmail = (0, https_1.onCall)({ secrets: [resendApiKey] }, async (request) => {

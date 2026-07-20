@@ -157,6 +157,40 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     return (i >= 2 ? val.toFixed(2) : val.toFixed(0)) + ' ' + s[i];
   };
 
+  const InboxIcon = ({ size = 16, className, ...props }: any) => {
+    // Exclude any properties not valid for SVG
+    const { strokeWidth, ...rest } = props;
+    return (
+      <svg 
+        width={size} 
+        height={size} 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        xmlns="http://www.w3.org/2000/svg"
+        className={className}
+        {...rest}
+      >
+        <g style={{ transform: 'scale(1.18)', transformOrigin: 'center' }}>
+          {/* Back Bubble (Darker/Opacity) */}
+          <path 
+            d="M14.5 6C18.6421 6 22 9.35786 22 13.5C22 15.3486 21.3311 17.0409 20.2337 18.3585L21.5 21.5L17.9173 20.6046C16.8803 20.8631 15.7181 21 14.5 21C10.3579 21 7 17.6421 7 13.5C7 12.3331 7.26647 11.2285 7.7402 10.2393Z" 
+            fill="currentColor"
+            fillOpacity="0.3"
+          />
+          {/* Front Bubble */}
+          <path 
+            d="M9.5 2C13.6421 2 17 5.35786 17 9.5C17 13.6421 13.6421 17 9.5 17C8.28186 17 7.11974 16.7369 6.08272 16.2654L2.5 17.5L3.76632 14.3585C2.66887 13.0409 2 11.3486 2 9.5C2 5.35786 5.35786 2 9.5 2Z" 
+            fill="currentColor" 
+          />
+          {/* 3 Dots */}
+          <circle cx="5.5" cy="9.5" r="1.2" fill="var(--surface, #ffffff)" />
+          <circle cx="9.5" cy="9.5" r="1.2" fill="var(--surface, #ffffff)" />
+          <circle cx="13.5" cy="9.5" r="1.2" fill="var(--surface, #ffffff)" />
+        </g>
+      </svg>
+    );
+  };
+
   const navLinks = [
     { id: 'dashboard', icon: <LayoutDashboard size={16} />, path: '/dashboard',  label: 'Dashboard' },
     {
@@ -166,7 +200,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
       label: role === UserRole.STUDENT ? 'My Classroom' : 'My Workplace',
     },
     { id: 'explore', icon: <Layers size={16} />,      path: '/explore',  label: 'Explore' },
-    { id: 'inbox',   icon: <Mail size={16} />,         path: '/inbox',    label: 'Inbox'   },
+    { id: 'inbox',   icon: <InboxIcon size={16} />,         path: '/inbox',    label: 'Inbox'   },
     ...(role === UserRole.THALA && user?.onboardingCompleted
       ? [{ id: 'products', icon: <ShoppingBag size={16} />, path: '/products', label: 'Products' }]
       : []),

@@ -3187,6 +3187,13 @@ export const onExamAssigned = onDocumentCreated(
 
         const examData = event.data?.data();
         if (!examData) return;
+        
+        // Skip individual emails for exams that are part of a cluster deployment.
+        // A consolidated email will be sent by onExamDeploymentCreated.
+        if (examData.examGroupId) {
+            functions.logger.info(`Skipping individual email for exam ${event.params.examId} because it belongs to group ${examData.examGroupId}`);
+            return;
+        }
 
         const zoneId = event.params.zoneId;
         const db = admin.firestore();
@@ -3243,6 +3250,106 @@ export const onExamAssigned = onDocumentCreated(
             functions.logger.info("Sent exam emails to " + emails.length + " students for zone " + zoneId);
         } catch (err) {
             functions.logger.error("Error sending exam assignment emails:", err);
+        }
+    }
+);
+
+export const onExamDeploymentCreated = onDocumentCreated(
+    { document: "zones/{zoneId}/exam_deployments/{deploymentId}", secrets: [resendApiKey] },
+    async (event) => {
+        const apiKey = resendApiKey.value();
+        if (!apiKey) {
+            functions.logger.warn("RESEND_API_KEY not configured — cluster exam emails skipped.");
+            return;
+        }
+
+        const deploymentData = event.data?.data();
+        if (!deploymentData || !deploymentData.exams || deploymentData.exams.length === 0) return;
+
+        const zoneId = event.params.zoneId;
+        const db = admin.firestore();
+
+        try {
+            // Get Zone details
+            const zoneDoc = await db.collection("zones").doc(zoneId).get();
+            if (!zoneDoc.exists) return;
+            const zoneData = zoneDoc.data() || {};
+            const zoneName = zoneData.title || "a Learning Zone";
+            const tutorName = zoneData.tutorName || "Your Instructor";
+
+            // Get students (filter if targetBatchIds exists)
+            const studentsSnap = await db.collection("zones").doc(zoneId).collection("students").get();
+            if (studentsSnap.empty) return;
+
+            const emails: string[] = [];
+            studentsSnap.forEach(doc => {
+                const data = doc.data();
+                // Filter by batch if specified
+                if (deploymentData.targetBatchIds && deploymentData.targetBatchIds.length > 0) {
+                    if (!deploymentData.targetBatchIds.includes(data.batchId)) return;
+                } else if (deploymentData.targetBatchForSubjects && deploymentData.targetBatchForSubjects !== 'all') {
+                    if (data.batchId !== deploymentData.targetBatchForSubjects) return;
+                }
+                
+                if (data.email) emails.push(data.email);
+            });
+
+            if (emails.length === 0) return;
+
+            const resend = new Resend(apiKey);
+            const examCount = deploymentData.exams.length;
+            
+            // Build the exam list HTML
+            let examsHtml = "";
+            for (const ex of deploymentData.exams) {
+                examsHtml += `
+                    <div style="background-color: #f9fafb; border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #c2f575;">
+                        <h3 style="margin-top: 0; color: #052e16; font-size: 16px;">${ex.title}</h3>
+                        <p style="margin: 5px 0; color: #4b5563; font-size: 14px;">📚 <strong>Subject:</strong> ${ex.subject || 'General'}</p>
+                        <p style="margin: 5px 0; color: #4b5563; font-size: 14px;">📅 <strong>Date:</strong> ${ex.date}</p>
+                        <p style="margin: 5px 0; color: #4b5563; font-size: 14px;">⏰ <strong>Time:</strong> ${ex.time || ex.startTime} ${ex.duration ? `(${ex.duration} minutes)` : ''}</p>
+                        <p style="margin: 5px 0; color: #4b5563; font-size: 14px;">📝 <strong>Type:</strong> ${ex.type === 'online-mcq' ? 'Online MCQ' : ex.type === 'offline' ? 'Offline PDF' : 'Online PDF'}</p>
+                    </div>
+                `;
+            }
+
+            for (const email of emails) {
+                await resend.emails.send({
+                    from: "Nunma <support@nunma.in>",
+                    to: email,
+                    subject: `${examCount} New Exams Scheduled in ${zoneName} 📝`,
+                    html: `
+                        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #eee; border-radius: 20px;">
+                            <div style="text-align: center; margin-bottom: 30px;">
+                                <h1 style="color: #040457; font-size: 24px;">New Exams Scheduled!</h1>
+                            </div>
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;">Hi Student,</p>
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;"><strong>${tutorName}</strong> has scheduled <strong>${examCount} new exams</strong> in the zone <strong>"${zoneName}"</strong>. Here are the details:</p>
+                            
+                            <div style="margin: 30px 0;">
+                                ${examsHtml}
+                            </div>
+                            
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;">Make sure you're prepared and log in a few minutes early. You can view all your scheduled exams anytime from your Nunma dashboard.</p>
+                            
+                            <div style="text-align: center; margin: 40px 0;">
+                                <a href="https://nunma.in/classroom/${zoneId}" style="background: #c2f575; color: #040457; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                                    View My Exams →
+                                </a>
+                            </div>
+                            
+                            <p style="color: #333; font-size: 16px; line-height: 1.6;">Good luck!<br>— Team Nunma</p>
+                            
+                            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
+                            <p style="color: #999; font-size: 12px; text-align: center;">Nunma — The Trust Layer for Education</p>
+                        </div>
+                    `
+                });
+            }
+
+            functions.logger.info("Sent clustered exam emails to " + emails.length + " students for deployment " + event.params.deploymentId);
+        } catch (err) {
+            functions.logger.error("Error sending clustered exam emails:", err);
         }
     }
 );
