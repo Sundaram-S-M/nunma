@@ -212,13 +212,14 @@ const Workplace: React.FC = () => {
   }
 
   const isKycVerified = hasAccess;
-  const currentTier = user?.current_tier || 'STARTER';
-  const tierLimits = {
+  const currentTier = ((user as any)?.current_tier || (user as any)?.tier || 'PREMIUM').toString().toUpperCase();
+  const tierLimits: Record<string, number> = {
     'STARTER': 10,
-    'STANDARD': 25,
-    'PREMIUM': 60
+    'STANDARD': 20,
+    'PREMIUM': 30,
+    'PRO': 30
   };
-  const streamLimit = tierLimits[currentTier] || 10;
+  const streamLimit = (user?.subscription_entitlements as any)?.streamLimit || (user as any)?.streamLimit || tierLimits[currentTier] || 30;
 
   const currentMonthIdx = new Date().getMonth();
   const currentYear = new Date().getFullYear();
@@ -584,8 +585,8 @@ const Workplace: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             {(() => {
               const uniqueStudents = allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length;
-              const studentLimit = user?.subscription_entitlements?.studentLimit || (
-                (currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : currentTier === 'PREMIUM' ? 1000 : 100)
+              const studentLimit = user?.subscription_entitlements?.studentLimit || (user as any)?.studentLimit || (
+                (currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : 500)
                 + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
               );
               const studentPct = Math.min(100, Math.round((uniqueStudents / studentLimit) * 100));
@@ -680,16 +681,16 @@ const Workplace: React.FC = () => {
               <div className="flex justify-between items-end mb-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-nunma-forest">Cumulative Students</span>
                 <span className="text-xs font-bold text-gray-400">
-                  {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} / {user?.subscription_entitlements?.studentLimit || (
-                    (currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : currentTier === 'PREMIUM' ? 1000 : 100)
+                  {allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length} / {user?.subscription_entitlements?.studentLimit || (user as any)?.studentLimit || (
+                    (currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : 500)
                     + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)
                   )}
                 </span>
               </div>
               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-1000 ${(allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length / (user?.subscription_entitlements?.studentLimit || ((currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : currentTier === 'PREMIUM' ? 1000 : 100) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)))) >= 1 ? 'bg-red-500' : 'bg-nunma-lime'}`}
-                  style={{ width: `${Math.min(100, (allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length / (user?.subscription_entitlements?.studentLimit || ((currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : currentTier === 'PREMIUM' ? 1000 : 100) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)))) * 100)}%` }}
+                  className={`h-full rounded-full transition-all duration-1000 ${(allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length / (user?.subscription_entitlements?.studentLimit || (user as any)?.studentLimit || ((currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : 500) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)))) >= 1 ? 'bg-red-500' : 'bg-nunma-lime'}`}
+                  style={{ width: `${Math.min(100, (allStudents.filter((v, i, a) => a.findIndex(t => (t.email && t.email === v.email) || t.id === v.id) === i).length / (user?.subscription_entitlements?.studentLimit || (user as any)?.studentLimit || ((currentTier === 'STARTER' ? 100 : currentTier === 'STANDARD' ? 250 : 500) + ((user?.subscription_entitlements?.studentAddonBlocks || 0) * 50)))) * 100)}%` }}
                 />
               </div>
             </div>

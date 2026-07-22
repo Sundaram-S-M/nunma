@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Asterisk } from 'lucide-react';
+import { ArrowRight, Asterisk, Sparkles, FileSpreadsheet, Download, Clock, Award } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
@@ -44,54 +44,68 @@ const LandingPowerfulFeatures: React.FC = () => {
             transition={{ duration: 0.7 }}
             className="relative"
           >
-            <div className="w-full aspect-[4/3] bg-white rounded-[2rem] border border-gray-100 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-4 flex flex-col relative z-20">
-              <div className="flex-1 bg-white rounded-xl border border-gray-100 flex overflow-hidden">
-                {/* Sidebar fake */}
-                <div className="w-1/4 bg-[#eef9f2]/50 border-r border-gray-50 p-4 space-y-4">
-                  <div className="h-6 w-20 bg-[#052e16] rounded-md mb-8" />
-                  <div className="h-4 w-full bg-[#052e16] rounded opacity-90" />
-                  <div className="h-4 w-full bg-gray-100 rounded" />
-                  <div className="h-4 w-full bg-gray-100 rounded" />
-                  <div className="h-4 w-full bg-gray-100 rounded" />
-                </div>
-                {/* Profile fake */}
-                <div className="w-1/3 border-r border-gray-50 p-6 flex flex-col items-center pt-10">
-                  <div className="w-16 h-16 rounded-full bg-gray-200 mb-4 border-4 border-white shadow-sm" />
-                  <div className="h-4 w-24 bg-gray-800 rounded mb-2" />
-                  <div className="h-3 w-16 bg-gray-300 rounded mb-8" />
-                  <div className="w-full h-8 bg-[#052e16] rounded-lg mb-3" />
-                  <div className="w-full h-8 bg-gray-50 rounded-lg" />
-                </div>
-                {/* Stats fake */}
-                <div className="flex-1 p-6 pt-10 space-y-5">
-                  <div className="h-6 w-32 bg-gray-800 rounded mb-6" />
-                  <div className="h-4 w-full bg-gray-100 rounded" />
-                  <div className="h-4 w-full bg-gray-100 rounded" />
-                  <div className="h-4 w-full bg-gray-100 rounded" />
-                  <div className="h-4 w-full bg-gray-100 rounded" />
-                </div>
+            <div className="w-full aspect-[4/3] bg-[#f8f9fa] rounded-[2rem] border border-gray-100 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-6 flex flex-col relative z-20 overflow-hidden">
+              <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden relative">
+                 <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-white z-10 relative">
+                   <h4 className="font-black text-[#052e16] text-lg">Score Preview</h4>
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-1.5 flex items-center gap-3">
+                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mt-0.5">Attendance</span>
+                     <span className="text-sm font-black text-[#c2f575] bg-[#052e16] px-2 py-0.5 rounded-lg leading-none">42</span>
+                   </div>
+                 </div>
+                 <div className="flex-1 overflow-hidden bg-white relative">
+                   <table className="w-full text-left text-sm">
+                     <thead className="bg-gray-50/50 border-b border-gray-50">
+                       <tr>
+                         <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Student</th>
+                         <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Marks</th>
+                         <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center hidden sm:table-cell">Status</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-50">
+                       {[
+                         { name: 'Arjun M.', marks: 95, status: 'Graded', color: 'bg-green-100 text-green-600' },
+                         { name: 'Priya S.', marks: 88, status: 'Graded', color: 'bg-green-100 text-green-600' },
+                         { name: 'Karthik R.', marks: '-', status: 'Pending', color: 'bg-yellow-100 text-yellow-600' },
+                         { name: 'Sneha V.', marks: 92, status: 'Graded', color: 'bg-green-100 text-green-600' },
+                       ].map((r, i) => (
+                         <tr key={i} className="hover:bg-gray-50 transition-colors">
+                           <td className="px-5 py-4 font-bold text-[#052e16] flex items-center gap-3">
+                             <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-[10px]">{r.name[0]}</div>
+                             {r.name}
+                           </td>
+                           <td className="px-5 py-4 text-center">
+                             <span className="font-black text-indigo-600">{r.marks}</span>
+                             <span className="text-[10px] text-gray-400 font-bold ml-1">/ 100</span>
+                           </td>
+                           <td className="px-5 py-4 text-center hidden sm:table-cell">
+                             <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded-md ${r.color}`}>
+                               {r.status}
+                             </span>
+                           </td>
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
+                   {/* Gradient fade to hide bottom */}
+                   <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                 </div>
               </div>
 
-              {/* Overlay popup */}
-              <div className="hidden md:block absolute -bottom-10 -right-10 w-[80%] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 z-30">
-                <div className="flex justify-between items-center mb-6">
-                  <div className="h-5 w-32 bg-gray-800 rounded" />
-                  <div className="h-6 w-24 bg-gray-100 rounded-full" />
-                </div>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div className="h-3 w-20 bg-gray-300 rounded" />
-                    <div className="h-5 w-16 bg-[#c2f575]/40 rounded text-center" />
+              {/* Overlay popup to look like bulk export */}
+              <div className="absolute -bottom-6 -right-6 w-[65%] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 z-30">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-[#c2f575]/20 text-[#6ea812] flex items-center justify-center">
+                    <FileSpreadsheet size={24} />
                   </div>
-                  <div className="flex justify-between items-center">
-                    <div className="h-3 w-24 bg-gray-300 rounded" />
-                    <div className="h-5 w-16 bg-red-100 rounded text-center" />
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <div className="h-3 w-16 bg-gray-300 rounded" />
-                    <div className="h-5 w-16 bg-[#c2f575]/40 rounded text-center" />
+                  <div>
+                    <h4 className="text-base font-black text-[#052e16]">Bulk Export</h4>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Date Range Report</p>
                   </div>
                 </div>
+                <button className="w-full py-3 bg-[#052e16] text-[#c2f575] rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2">
+                  <Download size={14} /> Extract Report
+                </button>
               </div>
             </div>
             {/* Decorative blob */}
@@ -152,45 +166,57 @@ const LandingPowerfulFeatures: React.FC = () => {
             transition={{ duration: 0.7 }}
             className="relative order-1 lg:order-2"
           >
-            <div className="w-full aspect-[4/3] bg-white rounded-[2rem] border border-gray-100 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-4 flex flex-col relative z-20">
-              <div className="flex-1 bg-white rounded-xl border border-gray-100 flex overflow-hidden">
-                {/* Editor area */}
-                <div className="flex-1 p-8">
-                  <div className="h-4 w-32 bg-gray-300 rounded mb-3" />
-                  <div className="h-10 w-full bg-gray-50 border border-gray-100 rounded-lg mb-6" />
-                  {/* Toolbar */}
-                  <div className="flex gap-3 mb-6 pb-4 border-b border-gray-100">
-                    <div className="w-6 h-6 bg-gray-100 rounded" />
-                    <div className="w-6 h-6 bg-gray-100 rounded" />
-                    <div className="w-6 h-6 bg-gray-100 rounded" />
-                    <div className="w-6 h-6 bg-gray-100 rounded" />
-                    <div className="w-6 h-6 bg-gray-50 rounded ml-4" />
-                    <div className="w-6 h-6 bg-gray-50 rounded" />
-                  </div>
-                  <div className="space-y-4">
-                    <div className="h-4 w-1/3 bg-[#c2f575]/40 rounded mb-6" />
-                    <div className="h-3 w-full bg-gray-100 rounded" />
-                    <div className="h-3 w-[90%] bg-gray-100 rounded" />
-                    <div className="h-3 w-[95%] bg-gray-100 rounded" />
-                    <div className="h-3 w-3/4 bg-gray-100 rounded mb-4" />
-                    <div className="h-3 w-full bg-gray-100 rounded" />
-                    <div className="h-3 w-[85%] bg-gray-100 rounded" />
-                  </div>
+            <div className="w-full aspect-[4/3] bg-[#f8f9fa] rounded-[2rem] border border-gray-100 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-6 flex flex-col relative z-20 overflow-hidden">
+              <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 overflow-hidden flex flex-col relative">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-gray-50 pb-5">
+                   <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-[#c2f575]/20 flex items-center justify-center text-[#052e16] font-black text-lg">1</div>
+                      <div className="text-xl font-black text-[#052e16]">Question Title</div>
+                   </div>
+                   <div className="flex gap-2">
+                     <div className="px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black tracking-widest uppercase shadow-sm">MCQ Format</div>
+                   </div>
                 </div>
-                {/* Right sidebar */}
-                <div className="w-[30%] bg-[#fcfcfc] border-l border-gray-100 p-6 space-y-6">
-                  <div>
-                    <div className="h-3 w-16 bg-gray-300 rounded mb-3" />
-                    <div className="h-10 w-full bg-white border border-gray-200 rounded-lg" />
-                  </div>
-                  <div>
-                    <div className="h-3 w-20 bg-gray-300 rounded mb-3" />
-                    <div className="h-10 w-full bg-white border border-gray-200 rounded-lg" />
-                  </div>
-                  <div>
-                    <div className="h-3 w-12 bg-gray-300 rounded mb-3" />
-                    <div className="h-10 w-full bg-white border border-gray-200 rounded-lg" />
-                  </div>
+                
+                <div className="w-full bg-gray-50 rounded-xl p-5 mb-6 border border-gray-100 shadow-inner">
+                  <div className="text-sm font-bold text-gray-600 leading-relaxed">What is the core philosophy behind Nunma's decentralized education approach?</div>
+                </div>
+
+                <div className="space-y-3 flex-1 overflow-hidden relative">
+                  {[
+                    { opt: 'Centralized server content', correct: false },
+                    { opt: 'Peer-to-peer knowledge sharing', correct: true },
+                    { opt: 'Proprietary closed curriculum', correct: false },
+                  ].map((o, i) => (
+                    <div key={i} className="flex items-center gap-4">
+                       <div className={`w-6 h-6 rounded-lg border-2 flex flex-shrink-0 transition-all ${o.correct ? 'bg-[#c2f575] border-[#c2f575] rotate-45' : 'border-gray-200 bg-white'}`}>
+                          {o.correct && <div className="w-2 h-2 m-auto bg-[#052e16] -rotate-45 rounded-sm" />}
+                       </div>
+                       <div className={`flex-1 py-3 px-5 rounded-xl border-2 font-bold text-sm shadow-sm ${o.correct ? 'bg-[#c2f575]/10 border-[#c2f575]/40 text-[#052e16]' : 'bg-white border-gray-100 text-gray-500'}`}>
+                         {o.opt}
+                       </div>
+                    </div>
+                  ))}
+                  {/* Gradient fade to hide bottom */}
+                  <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                </div>
+                
+                {/* Floating AI badge & toolbar */}
+                <div className="absolute bottom-4 left-6 right-6 flex justify-between items-center">
+                   <div className="flex items-center gap-4 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 shadow-sm">
+                      <div className="flex items-center gap-2">
+                         <Clock size={14} className="text-gray-400" />
+                         <span className="font-black text-[#052e16] text-sm">60</span>
+                      </div>
+                      <div className="w-px h-4 bg-gray-200" />
+                      <div className="flex items-center gap-2">
+                         <Award size={14} className="text-[#c2f575]" />
+                         <span className="font-black text-[#052e16] text-sm">5</span>
+                      </div>
+                   </div>
+                   <div className="bg-[#052e16] text-[#c2f575] px-4 py-2.5 rounded-xl text-[10px] font-black tracking-widest uppercase shadow-xl flex items-center gap-2 border border-[#c2f575]/20">
+                     <Sparkles size={14} /> AI Generated
+                   </div>
                 </div>
               </div>
             </div>

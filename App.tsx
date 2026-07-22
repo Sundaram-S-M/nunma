@@ -28,6 +28,7 @@ const ClassroomPage = React.lazy(() => import('./pages/ClassroomPage'));
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
 const PublicLayout = React.lazy(() => import('./layouts/PublicLayout'));
 const LegalPolicy = React.lazy(() => import('./pages/LegalPolicy'));
+const About = React.lazy(() => import('./pages/About'));
 const WhiteboardPage = React.lazy(() => import('./pages/WhiteboardPage'));
 const BlogList = React.lazy(() => import('./pages/BlogList'));
 const BlogDetail = React.lazy(() => import('./pages/BlogDetail'));
@@ -35,6 +36,7 @@ const AnalyticsDashboard = React.lazy(() => import('./pages/AnalyticsDashboard')
 const AnalyticsChat = React.lazy(() => import('./pages/AnalyticsChat.tsx'));
 const Payment = React.lazy(() => import('./pages/Payment'));
 const ZoneDetailView = React.lazy(() => import('./pages/ZoneDetailView'));
+const ProFeatures = React.lazy(() => import('./pages/ProFeatures'));
 import { Toaster, ToastBar, toast } from 'react-hot-toast';
 import { X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -69,7 +71,7 @@ const AppContent: React.FC = () => {
     }
   }, [location]);
 
-  const isPublicRoute = location.pathname.startsWith('/verify/') || location.pathname.startsWith('/u/') || location.pathname.startsWith('/zone/') || location.pathname.startsWith('/blog') || location.pathname === '/';
+  const isPublicRoute = location.pathname.startsWith('/verify/') || location.pathname.startsWith('/u/') || location.pathname.startsWith('/zone/') || location.pathname.startsWith('/blog') || location.pathname.startsWith('/legal') || location.pathname === '/about' || location.pathname === '/pro-features' || location.pathname === '/';
   const isAuthRoute = location.pathname === '/auth';
   const isSandboxRoute = location.pathname.startsWith('/sandbox/');
   const isLiveRoute = location.pathname.startsWith('/live/') || (location.pathname.startsWith('/classroom/') && !location.pathname.startsWith('/classroom/zone/'));
@@ -110,7 +112,10 @@ const AppContent: React.FC = () => {
             <Route path="/u/:id" element={<ProfileView />} />
             <Route path="/profile/:id" element={<ProfileView />} />
             <Route path="/zone/:zoneId" element={<PublicLayout><ErrorBoundary><ZoneDetailView /></ErrorBoundary></PublicLayout>} />
-            <Route path="/legal" element={<PublicLayout><LegalPolicy /></PublicLayout>} />
+            <Route path="/legal" element={<LegalPolicy />} />
+            <Route path="/legal/:section" element={<LegalPolicy />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/pro-features" element={<ProFeatures />} />
             <Route path="/blog" element={<PublicLayout><BlogList /></PublicLayout>} />
             <Route path="/blog/:id" element={<PublicLayout><BlogDetail /></PublicLayout>} />
             {/* LandingPage owns its own navbar and footer — no PublicLayout wrapper */}

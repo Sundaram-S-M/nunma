@@ -887,7 +887,7 @@ const StudentZoneView: React.FC = () => {
 
                   const result = examResults.find(r => r.examId === exam.id && r.studentId === (authUser?.uid || 'anon'));
                   return (
-                    <div key={exam.id} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-8 shadow-sm hover:shadow-2xl transition-all group">
+                    <div key={exam.id} className="bg-white border border-gray-100 rounded-[2rem] md:rounded-[3.5rem] p-6 md:p-10 space-y-8 shadow-sm hover:shadow-2xl transition-all group">
                       <div className="flex justify-between items-start">
                         <div className={`p-5 rounded-3xl ${exam.type === 'online-test' || exam.type === 'online-mcq' ? 'bg-indigo-50 text-indigo-600' : 'bg-green-50 text-green-600'}`}>
                           {exam.type === 'online-test' || exam.type === 'online-mcq' ? <Radio size={32} /> : <FileSpreadsheet size={32} />}
@@ -918,7 +918,7 @@ const StudentZoneView: React.FC = () => {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Your Score</p>
-                              <p className="font-black text-3xl text-nunma-forest">{result.status === 'PENDING_GRADING' ? '-' : (result.marks ?? 0)}</p>
+                              <p className="font-black text-xl md:text-3xl text-nunma-forest">{result.status === 'PENDING_GRADING' ? '-' : (result.marks ?? 0)}</p>
                             </div>
                             <div className="text-right">
                               <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Points Awarded</p>
@@ -1042,7 +1042,7 @@ const StudentZoneView: React.FC = () => {
             <ArrowLeft size={24} />
           </button>
           <div>
-            <h1 className="text-3xl md:text-5xl font-black text-nunma-forest tracking-tighter leading-tight mb-2">{zone.title}</h1>
+            <h1 className="text-xl md:text-3xl md:text-5xl font-black text-nunma-forest tracking-tighter leading-tight mb-2">{zone.title}</h1>
             <div className="flex items-center gap-2 md:gap-3">
               <span className="text-[8px] md:text-[10px] font-black bg-[#c2f575] text-indigo-900 px-3 md:px-4 py-1 md:py-1.5 rounded-full uppercase tracking-widest shadow-sm">
                 {zone.level} Level
@@ -1094,7 +1094,7 @@ const StudentZoneView: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-12 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-12 items-start">
         <div className="xl:col-span-8 space-y-8">
           <div className="flex bg-white/50 p-1 md:p-2 rounded-2xl md:rounded-3xl border border-gray-100 gap-1 md:gap-2 mb-4 overflow-x-auto no-scrollbar snap-x snap-mandatory w-full">
             {(!zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course') && (
@@ -1135,25 +1135,25 @@ const StudentZoneView: React.FC = () => {
                     <div className="w-32 h-32 bg-gray-50 rounded-[3rem] flex items-center justify-center text-indigo-900 mb-10 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-700">
                       <FileText size={64} strokeWidth={1.5} />
                     </div>
-                    <h2 className="text-4xl font-black text-indigo-900 mb-6 tracking-tight">{activeContent.title}</h2>
+                    <h2 className="text-2xl md:text-4xl font-black text-indigo-900 mb-6 tracking-tight">{activeContent.title}</h2>
                     <p className="text-gray-400 max-w-md mx-auto leading-relaxed text-lg font-medium italic">
                       {activeContent.type === 'video' ? 'Video ID missing. Please re-upload.' : 'Content loaded successfully.'}
                     </p>
                   </>
                 )}
-                <div className="mt-14 flex gap-6">
-                  <button onClick={() => setActiveContent(null)} className="px-12 py-5 bg-gray-50 text-gray-400 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-white hover:shadow-md transition-all">Close Player</button>
+                <div className="mt-8 md:mt-14 flex flex-col md:flex-row gap-4 md:gap-6 w-full">
+                  <button onClick={() => setActiveContent(null)} className="w-full md:w-auto px-6 md:px-12 py-4 md:py-5 bg-gray-50 text-gray-400 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-white hover:shadow-md transition-all">Close Player</button>
                   {studentData?.completedSegments?.includes(activeContent.id) ? (
                     <button
                       onClick={() => autoAdvance(activeContent.id)}
-                      className="px-14 py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center gap-3"
+                      className="w-full md:w-auto px-6 md:px-14 py-4 md:py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl hover:brightness-110 active:scale-95 transition-all flex items-center gap-3"
                     >
                       Continue to Next Module <ArrowRight size={16} />
                     </button>
                   ) : activeContent.type !== 'video' && (
                     <button
                       onClick={() => handleMarkAsCompleted(activeContent.id)}
-                      className="px-14 py-5 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all bg-[#c2f575] text-indigo-900 shadow-[#c2f575]/30 hover:brightness-110 active:scale-95 flex items-center gap-3"
+                      className="w-full md:w-auto px-6 md:px-14 py-4 md:py-5 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all bg-[#c2f575] text-indigo-900 shadow-[#c2f575]/30 hover:brightness-110 active:scale-95 flex items-center gap-3"
                     >
                       Mark as Completed
                     </button>
@@ -1161,9 +1161,9 @@ const StudentZoneView: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="bg-indigo-900 rounded-[4rem] p-16 text-white relative overflow-hidden h-[450px] flex flex-col justify-center shadow-2xl border border-white/5">
+              <div className="bg-indigo-900 rounded-[2rem] md:rounded-[4rem] p-8 md:p-16 text-white relative overflow-hidden h-[450px] flex flex-col justify-center shadow-2xl border border-white/5">
                 <div className="relative z-10 max-w-xl">
-                  <h2 className="text-6xl font-black tracking-tighter mb-6 leading-[1.1]">Welcome to your <br /><span className="text-[#c2f575]">Learning Journey</span></h2>
+                  <h2 className="text-2xl md:text-4xl md:text-6xl font-black tracking-tighter mb-6 leading-[1.1]">Welcome to your <br /><span className="text-[#c2f575]">Learning Journey</span></h2>
                   <p className="text-indigo-100/70 text-xl font-medium leading-relaxed">Select a professional module from the curriculum sidebar to begin your knowledge stream. </p>
                 </div>
                 <div className="absolute -bottom-20 -right-20 w-[450px] h-[450px] bg-[#c2f575]/5 rounded-full blur-[120px] animate-pulse"></div>
@@ -1178,7 +1178,7 @@ const StudentZoneView: React.FC = () => {
                       <ArrowLeft size={20} className="text-gray-600" />
                     </button>
                     <div>
-                      <h3 className="text-3xl font-black text-indigo-900 tracking-tighter">{selectedExamGroup.name}</h3>
+                      <h3 className="text-xl md:text-3xl font-black text-indigo-900 tracking-tighter">{selectedExamGroup.name}</h3>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Select a subject to begin</p>
                     </div>
                   </div>
@@ -1206,7 +1206,7 @@ const StudentZoneView: React.FC = () => {
                       } else {
                         // Render group card
                         return (
-                          <div key={groupName} onClick={() => setSelectedExamGroup({ name: groupName, exams: groupExams })} className="bg-white border border-gray-100 rounded-[3.5rem] p-10 space-y-8 shadow-sm hover:shadow-2xl transition-all group cursor-pointer flex flex-col justify-between">
+                          <div key={groupName} onClick={() => setSelectedExamGroup({ name: groupName, exams: groupExams })} className="bg-white border border-gray-100 rounded-[2rem] md:rounded-[3.5rem] p-6 md:p-10 space-y-8 shadow-sm hover:shadow-2xl transition-all group cursor-pointer flex flex-col justify-between">
                             <div className="flex justify-between items-start">
                               <div className="p-5 rounded-3xl bg-indigo-50 text-indigo-600 shadow-sm">
                                 <Layers size={32} />
@@ -1231,9 +1231,9 @@ const StudentZoneView: React.FC = () => {
               )}
             </div>
           ) : activeTab === 'students' ? (
-            <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
+            <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
               <div className="flex items-center justify-between mb-12">
-                <h3 className="text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
+                <h3 className="text-xl md:text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
                   <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-900">
                     <Users size={24} />
                   </div>
@@ -1254,16 +1254,16 @@ const StudentZoneView: React.FC = () => {
               </div>
             </div>
           ) : activeTab === 'attendance' ? (
-            <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
+            <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
               <div className="flex items-center justify-between mb-12">
-                <h3 className="text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
+                <h3 className="text-xl md:text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
                   <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-900">
                     <CheckCircle size={24} />
                   </div>
                   Your Attendance
                 </h3>
               </div>
-              <div className="flex flex-col md:flex-row gap-12 items-center">
+              <div className="flex flex-col md:flex-row gap-6 md:gap-12 items-center">
                 <div className="w-64 h-64 rounded-full border-[16px] border-[#c2f575] flex flex-col items-center justify-center shadow-xl relative">
                   {(() => {
                     const history = studentData?.attendanceHistory || [];
@@ -1272,7 +1272,7 @@ const StudentZoneView: React.FC = () => {
                     const pct = total > 0 ? Math.round((present / total) * 100) : 0;
                     return (
                       <>
-                        <span className="text-6xl font-black text-nunma-forest">{pct}%</span>
+                        <span className="text-2xl md:text-4xl md:text-6xl font-black text-nunma-forest">{pct}%</span>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">Overall</span>
                       </>
                     );
@@ -1292,7 +1292,7 @@ const StudentZoneView: React.FC = () => {
                           const d = new Date(record.date);
                           const isPresent = record.status === 'Present';
                           return (
-                            <div key={i} className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:shadow-md transition-all">
+                            <div key={i} className="flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 gap-4 md:gap-0 bg-gray-50 rounded-3xl border border-gray-100 hover:shadow-md transition-all">
                               <div className="flex items-center gap-4">
                                 <div className={`p-3 rounded-2xl ${isPresent ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                                   {isPresent ? <CheckCircle size={20} /> : <X size={20} />}
@@ -1333,9 +1333,9 @@ const StudentZoneView: React.FC = () => {
               </div>
             </div>
           ) : activeTab === 'marks' ? (
-            <div className="bg-white rounded-[4rem] p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
+            <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-14 border border-gray-100 shadow-2xl animate-in fade-in duration-500">
               <div className="flex items-center justify-between mb-12">
-                <h3 className="text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
+                <h3 className="text-xl md:text-3xl font-black text-indigo-900 tracking-tighter flex items-center gap-4">
                   <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-900">
                     <Award size={24} />
                   </div>
@@ -1362,10 +1362,10 @@ const StudentZoneView: React.FC = () => {
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Completed: {formatDate(new Date(result.completedAt))}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-200 pt-4 md:pt-0 md:pl-8">
+                        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-200 pt-4 md:pt-0 md:pl-8">
                           <div className="text-center">
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Score</p>
-                            <p className="font-black text-3xl text-nunma-forest">{result.marks !== undefined ? result.marks : '--'}<span className="text-lg text-gray-400">/{exam?.maxMark || 100}</span></p>
+                            <p className="font-black text-xl md:text-3xl text-nunma-forest">{result.marks !== undefined ? result.marks : '--'}<span className="text-lg text-gray-400">/{exam?.maxMark || 100}</span></p>
                           </div>
                           <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${result.status === 'passed' ? 'bg-green-100 text-green-600' : result.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-500'}`}>
                             {result.status || 'Pending'}
@@ -1382,7 +1382,7 @@ const StudentZoneView: React.FC = () => {
         </div>
 
         <div className="xl:col-span-4 space-y-8">
-          <div className="bg-white rounded-[4rem] p-10 border border-gray-100 shadow-2xl relative overflow-hidden">
+          <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-10 border border-gray-100 shadow-2xl relative overflow-hidden">
             <h3 className="text-2xl font-black text-indigo-900 mb-10 flex items-center gap-4">
               <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-900">
                 <Layout size={24} />
@@ -1451,7 +1451,7 @@ const StudentZoneView: React.FC = () => {
 
           {/* Upcoming Scheduled Sessions */}
           {liveSessions.filter(s => s.status === 'scheduled').length > 0 && (
-            <div className="bg-white rounded-[4rem] p-10 border border-gray-100 shadow-2xl relative overflow-hidden">
+            <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-10 border border-gray-100 shadow-2xl relative overflow-hidden">
               <h3 className="text-2xl font-black text-indigo-900 mb-8 flex items-center gap-4">
                 <div className="p-3 bg-red-50 rounded-2xl text-red-500">
                   <Calendar size={24} />
@@ -1483,7 +1483,7 @@ const StudentZoneView: React.FC = () => {
           <div className="bg-[#c2f575] p-12 rounded-[4rem] text-indigo-900 relative overflow-hidden group shadow-2xl border-4 border-white">
             <div className="relative z-10">
               <Zap size={40} fill="currentColor" className="mb-8" />
-              <h4 className="text-3xl font-black mb-3 tracking-tighter">Live Support</h4>
+              <h4 className="text-xl md:text-3xl font-black mb-3 tracking-tighter">Live Support</h4>
               <p className="text-indigo-900/60 text-xs font-bold uppercase tracking-[0.2em] mb-12">Direct Channel to Mentor</p>
               <button
                 onClick={() => {
@@ -1544,7 +1544,7 @@ const StudentZoneView: React.FC = () => {
                 <div className="w-16 h-16 bg-[#c2f575] rounded-2xl flex items-center justify-center text-indigo-900 mb-8 shadow-xl">
                   <Award size={32} />
                 </div>
-                <h3 className="text-4xl font-black tracking-tighter mb-4 leading-tight">Verifiable <br />Achievement</h3>
+                <h3 className="text-2xl md:text-4xl font-black tracking-tighter mb-4 leading-tight">Verifiable <br />Achievement</h3>
                 <p className="text-indigo-200 text-sm font-medium opacity-80 mb-8">OpenBadges 3.0 Standard • W3C VC Compiled</p>
 
                 <div className="mb-10 p-6 bg-white rounded-[2rem] shadow-2xl flex items-center justify-center group/qr relative overflow-hidden">
@@ -1601,7 +1601,7 @@ const StudentZoneView: React.FC = () => {
         <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[310] bg-nunma-forest/90 backdrop-blur-sm flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-300 transition-all`}>
           <div className="w-24 h-24 border-8 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
           <div className="text-center">
-            <h2 className="text-white text-3xl font-black tracking-tighter mb-2">Compiling Verifiable Proof</h2>
+            <h2 className="text-white text-xl md:text-3xl font-black tracking-tighter mb-2">Compiling Verifiable Proof</h2>
             <p className="text-indigo-200/60 font-black uppercase tracking-[0.3em] text-[10px]">Assembling JSON-LD & OpenBadges 3.0 Meta-Data</p>
           </div>
         </div>
@@ -1614,7 +1614,7 @@ const StudentZoneView: React.FC = () => {
               <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mx-auto shadow-sm">
                 <GraduationCap size={40} />
               </div>
-              <h3 className="text-3xl font-black text-nunma-forest tracking-tight">Proctoring Requirements</h3>
+              <h3 className="text-xl md:text-3xl font-black text-nunma-forest tracking-tight">Proctoring Requirements</h3>
               <p className="text-gray-400 font-medium">Please verify your environment before starting the assessment.</p>
             </div>
             <div className="space-y-6">
@@ -1668,7 +1668,7 @@ const StudentZoneView: React.FC = () => {
               <div className="w-20 h-20 bg-[#c2f575]/20 rounded-[2rem] flex items-center justify-center text-indigo-900 mx-auto shadow-sm">
                 <ShieldCheck size={40} className="text-indigo-900" />
               </div>
-              <h3 className="text-3xl font-black text-nunma-forest tracking-tight">AI & Proctoring Consent</h3>
+              <h3 className="text-xl md:text-3xl font-black text-nunma-forest tracking-tight">AI & Proctoring Consent</h3>
               <p className="text-gray-400 font-medium">To maintain assessment integrity, we require your explicit consent for the following:</p>
             </div>
             <div className="space-y-6">
@@ -1714,7 +1714,7 @@ const StudentZoneView: React.FC = () => {
             <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto animate-pulse">
               <AlertTriangle size={48} />
             </div>
-            <h3 className="text-3xl font-black text-nunma-forest">Tab Switching Detected</h3>
+            <h3 className="text-xl md:text-3xl font-black text-nunma-forest">Tab Switching Detected</h3>
             <p className="text-gray-500 font-medium text-lg leading-relaxed">
               You have {3 - cheatViolations} warning(s) left before your exam is automatically terminated.
             </p>
@@ -1755,7 +1755,7 @@ const StudentZoneView: React.FC = () => {
                 <Radio size={32} className="animate-pulse" />
               </div>
               <div>
-                <h2 className="text-3xl font-black text-nunma-forest tracking-tight uppercase">{activeExam.title}</h2>
+                <h2 className="text-xl md:text-3xl font-black text-nunma-forest tracking-tight uppercase">{activeExam.title}</h2>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Proctored Assessment Session</p>
               </div>
             </div>
@@ -1775,7 +1775,7 @@ const StudentZoneView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 flex gap-12 overflow-hidden">
+          <div className="flex-1 flex gap-6 md:gap-12 overflow-hidden">
             <div className="flex-1 bg-gray-50 rounded-[4rem] border border-gray-100 p-16 flex flex-col overflow-y-auto custom-scrollbar">
               {activeExam.type === 'online-test' ? (
                 /* ── Written Exam (online-test): show question paper PDF download ── */
@@ -1784,7 +1784,7 @@ const StudentZoneView: React.FC = () => {
                     <FileText size={48} />
                   </div>
                   <div className="space-y-4">
-                    <h3 className="text-4xl font-black text-nunma-forest tracking-tight leading-tight">Written Assessment</h3>
+                    <h3 className="text-2xl md:text-4xl font-black text-nunma-forest tracking-tight leading-tight">Written Assessment</h3>
                     <p className="text-gray-400 font-medium text-lg max-w-md mx-auto leading-relaxed">
                       Download the question paper below, write your answers on paper, and upload your scanned answer sheet when you are finished.
                     </p>
@@ -1816,7 +1816,7 @@ const StudentZoneView: React.FC = () => {
                 <div className="max-w-3xl mx-auto w-full space-y-12">
                   <div className="space-y-4">
                     <span className="text-[10px] font-black bg-nunma-forest text-white px-4 py-1.5 rounded-full uppercase tracking-widest">Question {examCurrentQuestion + 1} of {activeExam.questions?.length ?? 0}</span>
-                    <h3 className="text-4xl font-black text-nunma-forest tracking-tight leading-tight">{activeExam.questions?.[examCurrentQuestion]?.question}</h3>
+                    <h3 className="text-2xl md:text-4xl font-black text-nunma-forest tracking-tight leading-tight">{activeExam.questions?.[examCurrentQuestion]?.question}</h3>
                   </div>
 
                   <div className="grid grid-cols-1 gap-6">
@@ -1890,7 +1890,7 @@ const StudentZoneView: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="text-xl font-black text-nunma-forest mb-2 uppercase tracking-tight">Time Remaining</h4>
-                  <p className="text-4xl font-black text-nunma-forest tabular-nums">{formatTime(examTimeRemaining)}</p>
+                  <p className="text-2xl md:text-4xl font-black text-nunma-forest tabular-nums">{formatTime(examTimeRemaining)}</p>
                 </div>
                 <div className="pt-8 border-t border-gray-50 text-[10px] font-black text-gray-300 uppercase tracking-widest leading-relaxed">
                   Your session will auto-submit <br /> when the timer reaches zero.
@@ -1914,7 +1914,7 @@ const StudentZoneView: React.FC = () => {
             {postExamTimer === 0 && (
               <div className="absolute inset-0 bg-red-900/95 flex flex-col items-center justify-center z-50 p-8 backdrop-blur-md animate-in fade-in duration-500">
                 <AlertTriangle size={64} className="text-white mb-6" />
-                <h2 className="text-4xl font-black text-white mb-4">Submission Window Closed</h2>
+                <h2 className="text-2xl md:text-4xl font-black text-white mb-4">Submission Window Closed</h2>
                 <p className="text-red-200 text-center font-bold">You failed to submit your answer sheet within the 15-minute buffer.</p>
                 <button 
                   onClick={() => { 
@@ -1935,12 +1935,12 @@ const StudentZoneView: React.FC = () => {
             <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8 ${postExamTimer > 0 && postExamTimer < 300 ? 'bg-red-500 text-white animate-pulse' : 'bg-red-100 text-red-600'}`}>
               <Clock size={48} />
             </div>
-            <h3 className="text-3xl font-black text-nunma-forest tracking-tight mb-4">Exam Concluded</h3>
+            <h3 className="text-xl md:text-3xl font-black text-nunma-forest tracking-tight mb-4">Exam Concluded</h3>
             <p className="text-gray-500 font-medium mb-8">Scan your answer sheets and upload them as a single PDF. You have strictly 15 minutes before submissions are locked.</p>
             
             <div className={`p-6 rounded-3xl mb-10 transition-colors duration-1000 flex flex-col items-center ${postExamTimer > 0 && postExamTimer < 300 ? 'bg-red-500 animate-pulse text-white shadow-xl shadow-red-500/30' : 'bg-gray-100/50 text-indigo-900'}`}>
               <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${postExamTimer > 0 && postExamTimer < 300 ? 'text-red-100' : 'text-gray-400'}`}>Submission Window Closes In:</p>
-              <div className="text-6xl font-black tracking-tighter tabular-nums drop-shadow-sm">
+              <div className="text-2xl md:text-4xl md:text-6xl font-black tracking-tighter tabular-nums drop-shadow-sm">
                 {Math.floor(postExamTimer / 60).toString().padStart(2, '0')}:{(postExamTimer % 60).toString().padStart(2, '0')}
               </div>
             </div>

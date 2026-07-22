@@ -15,18 +15,19 @@ const ZoneCapacityMeter: React.FC<ZoneCapacityMeterProps> = ({ zoneId }) => {
     const [isLoading, setIsLoading] = useState(true);
 
     // Calculate dynamic limit based on plan + addons
-    const currentTier = (user as any)?.current_tier?.toLowerCase() || 'starter';
+    const currentTier = ((user as any)?.current_tier || (user as any)?.tier || 'PREMIUM').toString().toLowerCase();
     const baseLimits: Record<string, number> = {
         'starter': 100,
         'standard': 250,
-        'premium': 1000
+        'premium': 500,
+        'pro': 500
     };
 
-    const baseLimit = baseLimits[currentTier] || 100;
+    const baseLimit = baseLimits[currentTier] || 500;
     const addonBlocks = (user as any)?.subscription_entitlements?.studentAddonBlocks || 0;
 
-    // Explicit override if studentLimitRaw is set manually, otherwise calculate dynamically
-    const studentLimitRaw = (user as any)?.subscription_entitlements?.studentLimit || (baseLimit + (addonBlocks * 50));
+    // Explicit override if studentLimit is set manually, otherwise calculate dynamically
+    const studentLimitRaw = (user as any)?.subscription_entitlements?.studentLimit || (user as any)?.studentLimit || (baseLimit + (addonBlocks * 50));
 
     useEffect(() => {
         let active = true;

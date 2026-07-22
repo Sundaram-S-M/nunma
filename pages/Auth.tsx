@@ -34,7 +34,7 @@ const Auth: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<UserRole>(UserRole.STUDENT);
+  const [role, setRole] = useState<UserRole>((searchParams.get('role') as UserRole) || UserRole.STUDENT);
 
   const { login, signup, requestOTP, verifyOTP, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -58,7 +58,12 @@ const Auth: React.FC = () => {
         sessionStorage.removeItem('pendingZoneId');
       }
     } else {
-      navigate('/dashboard');
+      const redirectParam = searchParams.get('redirect');
+      if (redirectParam) {
+        navigate(redirectParam);
+      } else {
+        navigate('/dashboard');
+      }
     }
   };
 

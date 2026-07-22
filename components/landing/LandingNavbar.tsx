@@ -18,6 +18,7 @@ const scrollToSection = (id: string) => {
 const LandingNavbar: React.FC = () => {
   const [activeSection, setActiveSection] = useState('home');
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const navigate = useNavigate();
 
   const handleNavClick = (id: string) => {
@@ -55,6 +56,13 @@ const LandingNavbar: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
+  // Scroll header squish
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   // Close mobile menu on scroll
   useEffect(() => {
     if (!mobileOpen) return;
@@ -79,19 +87,19 @@ const LandingNavbar: React.FC = () => {
     }`;
 
   return (
-    <nav className="sticky top-0 z-50 bg-[#fcfcfc]/90 backdrop-blur-md text-[#000000]">
-      <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between font-sans">
+    <header className="sticky top-0 z-50 w-full pt-3 pb-1 px-4 md:px-8 transition-all duration-300">
+      <div className={`mx-auto px-6 h-16 md:h-18 flex items-center justify-between font-sans bg-white/70 backdrop-blur-xl border border-white/60 rounded-full transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${isScrolled ? 'max-w-[850px] shadow-[0_12px_40px_rgba(0,0,0,0.12)]' : 'max-w-7xl shadow-[0_8px_30px_rgb(0,0,0,0.06)]'}`}>
         {/* Logo — scroll to top */}
         <button
           onClick={() => handleNavClick('home')}
-          className="text-[#052e16] focus:outline-none"
+          className="text-[#052e16] focus:outline-none flex items-center"
           aria-label="Go to top"
         >
           <LandingLogo className="h-8 text-[#052e16]" />
         </button>
 
         {/* Desktop pill nav — uses JS scroll, NOT href="#section" */}
-        <div className="hidden md:flex items-center space-x-1 p-1.5 bg-gray-200/80 rounded-full">
+        <div className="hidden md:flex items-center space-x-1 p-1.5 bg-gray-100/80 rounded-full border border-gray-200/50">
           {navLinks.map(({ id, label }) => (
             <button
               key={id}
@@ -113,7 +121,7 @@ const LandingNavbar: React.FC = () => {
           </a>
           <button
             onClick={() => navigate('/auth?mode=signup')}
-            className="bg-[#c2f575] text-[#052e16] hover:bg-[#aee85e] px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-md"
+            className="bg-[#c2f575] text-[#052e16] hover:bg-[#aee85e] px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-sm hover:shadow-md active:scale-95"
           >
             Get Started
           </button>
@@ -121,7 +129,7 @@ const LandingNavbar: React.FC = () => {
 
         {/* Mobile hamburger */}
         <button
-          className="md:hidden p-2 text-[#1a1a4e]"
+          className="md:hidden p-2 text-[#052e16]"
           onClick={() => setMobileOpen(v => !v)}
           aria-label="Toggle menu"
         >
@@ -129,36 +137,36 @@ const LandingNavbar: React.FC = () => {
         </button>
       </div>
 
-      {/* Mobile dropdown */}
+      {/* Mobile dropdown floating card */}
       {mobileOpen && (
-        <div className="md:hidden bg-[#fcfcfc] border-t border-gray-100 px-6 pb-6 pt-4 flex flex-col gap-3 shadow-lg">
+        <div className="md:hidden max-w-7xl mx-auto mt-2 bg-white/90 backdrop-blur-2xl border border-white/80 rounded-3xl p-6 flex flex-col gap-3 shadow-[0_12px_40px_rgba(0,0,0,0.12)] animate-in fade-in slide-in-from-top-2 duration-200">
           {navLinks.map(({ id, label }) => (
             <button
               key={id}
               onClick={() => { setMobileOpen(false); handleNavClick(id); }}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors text-left ${
+              className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-colors text-left ${
                 activeSection === id
                   ? 'bg-[#052e16] text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  : 'text-gray-600 hover:bg-gray-100/80'
               }`}
             >
               {label}
             </button>
           ))}
           <div className="border-t border-gray-100 pt-3 flex flex-col gap-3">
-            <a href="/#/auth" className="text-sm font-bold text-[#052e16] px-4">
+            <a href="/#/auth" className="text-sm font-bold text-[#052e16] px-4 py-1">
               Sign In
             </a>
             <button
               onClick={() => { setMobileOpen(false); navigate('/auth?mode=signup'); }}
-              className="bg-[#c2f575] text-[#052e16] hover:bg-[#aee85e] px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-md"
+              className="bg-[#c2f575] text-[#052e16] hover:bg-[#aee85e] px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-md text-center"
             >
               Get Started
             </button>
           </div>
         </div>
       )}
-    </nav>
+    </header>
   );
 };
 

@@ -12,6 +12,50 @@ export interface BlogPost {
 
 export const blogPosts: BlogPost[] = [
   {
+    id: 7,
+    slug: '5-ways-home-tutors-run-like-institution',
+    image: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&q=80&w=800',
+    date: 'Jul 22, 2026',
+    readTime: '5 min read',
+    author: 'Nunma Team',
+    title: '5 Ways Independent Home Tutors Can Look (and Run) Like a Real Institution',
+    excerpt: 'Independent home tutors in Tamil Nadu often lose students to bigger coaching centres. Here\'s how to compete without hiring staff.',
+    content: [
+      'You might be the best teacher in your neighborhood — genuinely great at what you do, with students who improve fast and parents who trust you. But when a parent is comparing you against a coaching centre with a branded sign, a website, and a "professional" feel, that trust doesn\'t always show up on paper. Here\'s how independent tutors can close that gap without hiring a single extra person.',
+      '1. Have a real online presence, not just a phone number: Parents increasingly Google a tutor before enrolling their child. If your entire digital footprint is a WhatsApp number, you\'re invisible next to a centre with even a basic website and student reviews.',
+      '2. Send professional invoices, not just verbal fee reminders: Asking for money in person or over a call can feel awkward, and it also looks informal. Automated invoicing — the kind generated instantly when a parent pays online — signals structure and reliability.',
+      '3. Give students something to show for their progress: A certificate, a progress report, a verifiable record of completed coursework — these matter more than people admit. They give the student (and their parents) proof of value beyond "my child seems to be doing better."',
+      '4. Run live classes professionally, even for a small group: If you teach online or hybrid, using a proper live-class tool with recording, screen sharing, and a stable connection matters more than most tutors realize. A dropped call or laggy video mid-lesson quietly erodes trust every time it happens.',
+      '5. Free up your time from admin so you can actually teach more: The biggest limiter on an independent tutor\'s income isn\'t teaching skill — it\'s the hours lost to manual scheduling, fee follow-ups, and juggling multiple student groups. Every hour spent on admin is an hour not spent teaching (or resting).',
+      'How Nunma helps solo tutors punch above their size: Nunma was built with independent educators specifically in mind — not just large institutes. As a single "Thala" on the platform, you get live classes, automated fee collection via Razorpay, a storefront on the Discovery Market where new students can find you, and W3C verifiable certificates you can issue to your own students — all the infrastructure of a big coaching centre, without needing to be one.',
+      'Start free: Nunma\'s Starter tier is free, which means there\'s no cost to trying this out and seeing whether it changes how parents perceive your teaching business. Sign up at nunma.in and set up your profile today.'
+    ]
+  },
+  {
+    id: 6,
+    slug: 'neet-jee-tnpsc-coaching-fee-batch-chaos',
+    image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=800',
+    date: 'Jul 22, 2026',
+    readTime: '6 min read',
+    author: 'Nunma Team',
+    title: 'How NEET, JEE & TNPSC Coaching Institutes Can Stop Losing Time to Fee Collection and Batch Chaos',
+    excerpt: 'NEET, JEE and TNPSC coaching institutes in Tamil Nadu manage hundreds of students across batches. Here\'s how to automate fees, track attendance, and stay organized without extra staff.',
+    content: [
+      'Competitive exam coaching is a different animal from regular tuition. You\'re not managing 20 students in one batch — you\'re managing multiple batches, multiple subjects, multiple faculty, and hundreds of students all working toward one high-stakes date on the calendar. At that scale, manual processes don\'t just slow you down — they actively cost you students and revenue.',
+      'Where coaching institutes bleed time and money:',
+      '• Fee defaults go unnoticed for weeks because no one is tracking 200+ students\' payment status in real time.',
+      '• Batch reshuffling is a nightmare when attendance and performance data live in separate spreadsheets kept by different faculty.',
+      '• Parents of NEET/JEE aspirants want frequent updates — and generic WhatsApp broadcasts don\'t cut it when they\'re paying premium fees and expecting premium communication.',
+      '• Faculty coordination breaks down across subjects, especially when batches are split by rank, or by repeat vs. first-time aspirants.',
+      'For an institute running serious NEET, JEE, or TNPSC batches, three things matter most:',
+      '1. Automated, trackable fee collection — Razorpay-integrated systems that send reminders and auto-generate invoices via Zoho Books, so a single admin can manage payment status across hundreds of students without spreadsheets.',
+      '2. Batch-level visibility — attendance, test scores, and progress tracked per batch and per subject, visible to every faculty member who needs it.',
+      '3. A professional, verifiable credential system — W3C verifiable certificates that give your top performers something tangible to show, and give your institute a reputation edge over competitors still running things informally.',
+      'Nunma\'s Discovery Market and multi-tutor structure let a coaching institute run several faculty members and batches under one umbrella, with fee automation and Zoho-integrated invoicing handling the admin work that used to eat up an entire staff member\'s week. Co-tutor access with proper Firestore-secured permissions means your physics faculty doesn\'t need to see your chemistry batch\'s fee records — everyone gets exactly the access they need.',
+      'If you\'re running a NEET, JEE, or TNPSC coaching institute anywhere in Tamil Nadu and manual fee tracking has become a full-time job for someone, it\'s worth seeing what a purpose-built platform looks like. Explore Nunma at nunma.in and onboard your institute as a Thala.'
+    ]
+  },
+  {
     id: 1,
     slug: 'digitizing-attendance-tuition-centres',
     image: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&q=80&w=800',

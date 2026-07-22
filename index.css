@@ -488,4 +488,30 @@ img { display: block; max-width: 100%; object-fit: cover; }
   color: #F8FAFC !important;
 }
 
+/* Nunma Green Text Hover Glow */
+.nunma-text-glow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nunma-text-glow:hover {
+  color: #c2f575 !important;
+  text-shadow: 0 0 12px rgba(194, 245, 117, 0.85), 0 0 24px rgba(194, 245, 117, 0.5);
+}
 
+.nunma-heading-glow {
+  transition: all 0.3s ease;
+}
+.nunma-heading-glow:hover {
+  color: #c2f575 !important;
+  text-shadow: 0 0 16px rgba(194, 245, 117, 0.9), 0 0 30px rgba(194, 245, 117, 0.6);
+}
+
+.nunma-icon-glow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nunma-icon-glow:hover {
+  color: #c2f575 !important;
+  border-color: rgba(194, 245, 117, 0.6) !important;
+  background-color: rgba(194, 245, 117, 0.15) !important;
+  box-shadow: 0 0 18px rgba(194, 245, 117, 0.5), inset 0 0 10px rgba(194, 245, 117, 0.2);
+  transform: translateY(-3px) scale(1.1);
+}

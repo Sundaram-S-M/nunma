@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Building2, GraduationCap, Rocket, BookOpen, Award, School } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
@@ -48,10 +48,9 @@ const LandingHero: React.FC = () => {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="text-lg md:text-xl max-w-2xl mx-auto mb-10 text-gray-600 leading-relaxed font-medium"
+          className="text-lg md:text-xl max-w-3xl mx-auto mb-10 text-gray-700 leading-relaxed font-medium"
         >
-          The all-in-one virtual classroom and marketplace built for independent educators.
-          Host high-performance live streams and scale your empire effortlessly.
+          Nunma is the all-in-one platform to run live classes, collect fees, and issue verified certificates — replacing WhatsApp groups and paper registers.
         </motion.p>
 
         {/* CTAs */}
@@ -85,7 +84,7 @@ const LandingHero: React.FC = () => {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, delay: 0.4 }}
-          className="w-full max-w-5xl mx-auto h-[400px] md:h-[500px] bg-white rounded-[2rem] border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-4 relative flex flex-col mb-24"
+          className="w-full max-w-5xl mx-auto h-[400px] md:h-[500px] bg-white rounded-[2rem] border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] p-4 relative flex flex-col mb-16"
         >
           {/* Traffic lights */}
           <div className="flex items-center gap-2 mb-4 px-2 border-b border-gray-100 pb-4">
@@ -101,6 +100,50 @@ const LandingHero: React.FC = () => {
               className="w-full h-full object-cover object-left-top transition-transform duration-700 group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+          </div>
+        </motion.div>
+
+        {/* "Who is this for?" segment section */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="pt-6 border-t border-gray-200/60 max-w-5xl mx-auto"
+        >
+          <div className="text-center mb-8">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-[#052e16] bg-[#c2f575]/50 px-3.5 py-1 rounded-full border border-[#c2f575]/80 inline-block mb-3 shadow-sm">
+              Built For You
+            </span>
+            <h3 className="text-2xl md:text-3xl font-extrabold text-[#000000] tracking-tight">
+              Who is Nunma for?
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+            {[
+              { name: 'Tuition Centre Owner', icon: Building2 },
+              { name: 'Coaching Institute', icon: GraduationCap },
+              { name: 'Bootcamp Organizer', icon: Rocket },
+              { name: 'Independent Tutor', icon: BookOpen },
+              { name: 'Freelance Coach', icon: Award },
+              { name: 'School/College Teacher', icon: School },
+            ].map((item, idx) => {
+              const IconComp = item.icon;
+              return (
+                <div
+                  key={idx}
+                  className="bg-white/90 backdrop-blur-md border border-gray-200/90 hover:border-[#c2f575] rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-all group cursor-pointer"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-[#052e16]/5 text-[#052e16] group-hover:bg-[#c2f575] group-hover:text-[#052e16] flex items-center justify-center mb-2.5 transition-colors">
+                    <IconComp className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-bold text-gray-800 group-hover:text-[#052e16] leading-snug">
+                    {item.name}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </motion.div>
       </div>

@@ -103,7 +103,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const { user } = useAuth();
   const navigate  = useNavigate();
   const role      = user?.role || UserRole.STUDENT;
-  const tier      = (user as any)?.current_tier || 'STARTER';
+  const rawTier = ((user as any)?.current_tier || (user as any)?.tier || 'PREMIUM').toString().toUpperCase();
+  const tier = rawTier;
   const [showAddonModal, setShowAddonModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -144,8 +145,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     }
   };
 
-  const usedBytes  = (user as any)?.usedStorageBytes || (user as any)?.storage_used_bytes || user?.subscription_entitlements?.storageUsed || 0;
-  const limitBytes = tier === 'PREMIUM' ? 32212254720 : tier === 'STANDARD' ? 16106127360 : 3221225472;
+  const usedBytes = (user as any)?.usedStorageBytes || (user as any)?.storage_used_bytes || user?.subscription_entitlements?.storageUsed || 0;
+  
+  const customLimitBytes = 
+    (user as any)?.storageLimitBytes || 
+    (user as any)?.storage_limit_bytes || 
+    ((user as any)?.storageLimitGB ? (user as any).storageLimitGB * 1024 * 1024 * 1024 : null) ||
+    ((user as any)?.storage_limit_gb ? (user as any).storage_limit_gb * 1024 * 1024 * 1024 : null);
+
+  // 200 GB = 214748364800 bytes
+  const defaultTierLimit = 
+    (rawTier === 'STANDARD' || rawTier === 'GROWTH') ? 53687091200 : // 50 GB
+    (rawTier === 'STARTER' && usedBytes <= 3221225472) ? 3221225472 : // 3 GB
+    214748364800; // 200 GB for Premium upgraded account
+
+  const limitBytes = customLimitBytes || defaultTierLimit;
   const pct        = limitBytes > 0 ? Math.min(100, Math.round((usedBytes / limitBytes) * 100)) : 0;
   const overLimit  = usedBytes > limitBytes;
 
@@ -154,7 +168,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     const k = 1024, s = ['B', 'KB', 'MB', 'GB'];
     const i = Math.max(0, Math.floor(Math.log(b) / Math.log(k)));
     const val = b / Math.pow(k, i);
-    return (i >= 2 ? val.toFixed(2) : val.toFixed(0)) + ' ' + s[i];
+    return (i >= 2 ? (val % 1 === 0 ? val.toFixed(0) : val.toFixed(2)) : val.toFixed(0)) + ' ' + s[i];
   };
 
   const InboxIcon = ({ size = 16, className, ...props }: any) => {
