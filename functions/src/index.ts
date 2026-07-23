@@ -2031,13 +2031,19 @@ export const submitExam = onCall({ cors: true }, async (request) => {
         let marks = 0;
         let status = 'ongoing';
         const isTerminatedByCheat = violationLogs && violationLogs.length >= 3;
+        const wrongQuestions: string[] = [];
 
         // Secure Scoring
         if (examData.type === 'online-mcq' || examData.type === 'online-test') {
             if (examData.questions && answers) {
                 let score = 0;
-                examData.questions.forEach((q: any) => {
-                    if (answers[q.id] === q.correctAnswer) score++;
+                examData.questions.forEach((q: any, idx: number) => {
+                    const studentAns = answers[q.id];
+                    if (studentAns === q.correctAnswer) {
+                        score++;
+                    } else {
+                        wrongQuestions.push(`Q${idx + 1}`);
+                    }
                 });
                 marks = Math.round((score / examData.questions.length) * (examData.maxMark || 100));
                 const minMark = examData.minMark || 0;
@@ -2056,6 +2062,8 @@ export const submitExam = onCall({ cors: true }, async (request) => {
             studentName: request.auth.token.name || 'Student',
             marks,
             status,
+            answers: answers || {},
+            wrongQuestions,
             cheatViolations: violationLogs || [],
             completedAt: admin.firestore.FieldValue.serverTimestamp()
         };
@@ -2073,7 +2081,13 @@ export const submitExam = onCall({ cors: true }, async (request) => {
             examStartedAt: admin.firestore.FieldValue.delete()
         });
 
-        return { success: true, marks, status };
+        return {
+            success: true,
+            marks,
+            status,
+            wrongQuestions,
+            pdfUrl: examData.pdfUrl || null
+        };
     } catch (error: any) {
         if (error instanceof functions.https.HttpsError) throw error;
         functions.logger.error("Global crash in submitExam:", error);

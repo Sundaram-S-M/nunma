@@ -21,6 +21,12 @@ const QuizModuleEditor: React.FC<QuizModuleEditorProps> = ({ onClose, onSuccess 
             return;
         }
 
+        const needsReview = questions.some(q => q.needsReview);
+        if (needsReview) {
+            alert("you didnt select the answer of the question first select right answer and then deploy the exam");
+            return;
+        }
+
         onSuccess({
             title: title.trim(),
             maxMark,

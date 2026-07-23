@@ -101,6 +101,7 @@ const StudentZoneView: React.FC = () => {
   const [studentData, setStudentData] = useState<any>(null);
   const [examEndTime, setExamEndTime] = useState<Date | null>(null);
   const [examTimeRemaining, setExamTimeRemaining] = useState<number | null>(null);
+  const [submittedExamResult, setSubmittedExamResult] = useState<{ examTitle: string; marks: number; maxMark: number; status: string; wrongQuestions: string[]; pdfUrl?: string } | null>(null);
 
   const { user: authUser } = useAuth();
 
@@ -588,7 +589,7 @@ const StudentZoneView: React.FC = () => {
 
     try {
       const submitFn = httpsCallable(functions, 'submitExam');
-      await submitFn({
+      const submitRes: any = await submitFn({
         zoneId,
         examId: activeExam.id,
         answers: examAnswers,
@@ -599,14 +600,34 @@ const StudentZoneView: React.FC = () => {
         currentExamWarnings: 0,
         violationLogs: []
       });
+
+      const resData = submitRes?.data || {};
+      const wrongList: string[] = resData.wrongQuestions || [];
+      const pdfUrl: string | undefined = resData.pdfUrl || activeExam.pdfUrl;
+      const resMarks: number = resData.marks ?? 0;
+      const resStatus: string = resData.status || (logsToSubmit.length >= 3 ? 'failed' : status);
+
       setExamResults(prev => [...prev, { 
         id: 'temp-' + Date.now(), 
         examId: activeExam.id, 
         studentId: authUser?.uid || 'anon', 
-        status: logsToSubmit.length >= 3 ? 'failed' : status, 
+        status: resStatus,
+        marks: resMarks,
+        answers: examAnswers,
+        wrongQuestions: wrongList,
+        pdfUrl: pdfUrl,
         cheatViolations: logsToSubmit, 
         completedAt: new Date().toISOString() 
       }]);
+
+      setSubmittedExamResult({
+        examTitle: activeExam.title,
+        marks: resMarks,
+        maxMark: activeExam.maxMark || 100,
+        status: resStatus,
+        wrongQuestions: wrongList,
+        pdfUrl: pdfUrl
+      });
     } catch (e) {
       console.error("Failed to save exam result via function", e);
       alert("Failed to submit exam result. Time window may have closed.");
@@ -1351,25 +1372,69 @@ const StudentZoneView: React.FC = () => {
                 ) : (
                   examResults.filter(r => r.studentId === (authUser?.uid || 'anon')).map((result, idx) => {
                     const exam = exams.find(e => e.id === result.examId);
+                    let wrongList: string[] = result.wrongQuestions || [];
+                    if (wrongList.length === 0 && exam?.questions && result.answers) {
+                      exam.questions.forEach((q: any, qIdx: number) => {
+                        if (result.answers[q.id] !== undefined && result.answers[q.id] !== q.correctAnswer) {
+                          wrongList.push(`Q${qIdx + 1}`);
+                        }
+                      });
+                    }
+                    const pdfUrl = exam?.pdfUrl || result.pdfUrl;
+
                     return (
-                      <div key={idx} className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-xl hover:bg-white hover:border-[#c2f575] transition-all">
-                        <div className="flex items-center gap-6 w-full md:w-auto">
-                          <div className={`p-4 rounded-3xl ${result.status === 'passed' ? 'bg-green-100 text-green-600' : result.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                            <Target size={28} />
+                      <div key={idx} className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex flex-col gap-6 hover:shadow-xl hover:bg-white hover:border-[#c2f575] transition-all">
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                          <div className="flex items-center gap-6 w-full md:w-auto">
+                            <div className={`p-4 rounded-3xl ${result.status === 'passed' ? 'bg-green-100 text-green-600' : result.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                              <Target size={28} />
+                            </div>
+                            <div>
+                              <p className="font-black text-indigo-900 text-xl">{exam?.title || 'Assessment'}</p>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Completed: {formatDate(new Date(result.completedAt))}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-black text-indigo-900 text-xl">{exam?.title || 'Assessment'}</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Completed: {formatDate(new Date(result.completedAt))}</p>
+                          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-200 pt-4 md:pt-0 md:pl-8">
+                            <div className="text-center">
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Score</p>
+                              <p className="font-black text-xl md:text-3xl text-nunma-forest">{result.marks !== undefined ? result.marks : '--'}<span className="text-lg text-gray-400">/{exam?.maxMark || 100}</span></p>
+                            </div>
+                            <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${result.status === 'passed' ? 'bg-green-100 text-green-600' : result.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-500'}`}>
+                              {result.status || 'Pending'}
+                            </span>
                           </div>
                         </div>
-                        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-200 pt-4 md:pt-0 md:pl-8">
-                          <div className="text-center">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Score</p>
-                            <p className="font-black text-xl md:text-3xl text-nunma-forest">{result.marks !== undefined ? result.marks : '--'}<span className="text-lg text-gray-400">/{exam?.maxMark || 100}</span></p>
+
+                        {/* Wrong Questions Breakdown & Question Paper PDF Download */}
+                        <div className="pt-4 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {wrongList.length > 0 ? (
+                              <>
+                                <span className="text-[10px] font-black uppercase text-red-500 tracking-wider">Incorrect Questions:</span>
+                                {wrongList.map((qNum, i) => (
+                                  <span key={i} className="px-3 py-1 bg-red-50 border border-red-200 text-red-700 text-xs font-black rounded-xl">
+                                    {qNum}
+                                  </span>
+                                ))}
+                              </>
+                            ) : (
+                              <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                                <CheckCircle size={16} /> Perfect Score! No incorrect questions.
+                              </span>
+                            )}
                           </div>
-                          <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${result.status === 'passed' ? 'bg-green-100 text-green-600' : result.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-500'}`}>
-                            {result.status || 'Pending'}
-                          </span>
+
+                          {pdfUrl && (
+                            <a
+                              href={pdfUrl}
+                              download={`${exam?.title || 'Question_Paper'}.pdf`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-wider shadow-md hover:bg-nunma-forest transition-all"
+                            >
+                              <FileDown size={16} /> Download Question Paper (PDF)
+                            </a>
+                          )}
                         </div>
                       </div>
                     );
@@ -1965,6 +2030,79 @@ const StudentZoneView: React.FC = () => {
             >
               {isUploading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"/> : null}
               {isUploading ? 'Uploading...' : 'Submit Answers'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* POST-EXAM RESULTS SUMMARY MODAL */}
+      {submittedExamResult && (
+        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[700] flex items-center justify-center bg-nunma-forest/90 backdrop-blur-2xl p-6 animate-in fade-in duration-500`}>
+          <div className="bg-white rounded-[3.5rem] w-full max-w-xl shadow-3xl p-10 space-y-8 animate-in zoom-in-95 duration-500 relative text-center">
+            <div className="w-20 h-20 bg-indigo-50 text-indigo-900 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
+              <Award size={40} />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl md:text-3xl font-black text-nunma-forest tracking-tight">{submittedExamResult.examTitle}</h3>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Assessment Submission Completed</p>
+            </div>
+
+            <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 flex items-center justify-around">
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Score</p>
+                <p className="font-black text-3xl text-nunma-forest">{submittedExamResult.marks}<span className="text-lg text-gray-400">/{submittedExamResult.maxMark}</span></p>
+              </div>
+              <div className="w-px h-12 bg-gray-200" />
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Result</p>
+                <span className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${submittedExamResult.status === 'passed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {submittedExamResult.status}
+                </span>
+              </div>
+            </div>
+
+            {/* Wrong Question Numbers */}
+            <div className="text-left bg-gray-50/80 p-6 rounded-3xl border border-gray-100 space-y-3">
+              <h4 className="text-xs font-black text-indigo-900 uppercase tracking-wider flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-500" />
+                Incorrect Questions Summary
+              </h4>
+              {submittedExamResult.wrongQuestions && submittedExamResult.wrongQuestions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {submittedExamResult.wrongQuestions.map((qNum: string, idx: number) => (
+                    <span key={idx} className="px-3 py-1.5 bg-red-100 border border-red-200 text-red-700 text-xs font-black rounded-xl">
+                      {qNum}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs font-bold text-emerald-600 flex items-center gap-2">
+                  <CheckCircle size={16} /> Perfect Score! No incorrect questions.
+                </p>
+              )}
+            </div>
+
+            {/* Download Question Paper Button */}
+            {submittedExamResult.pdfUrl && (
+              <div className="pt-2">
+                <a
+                  href={submittedExamResult.pdfUrl}
+                  download={`${submittedExamResult.examTitle}_Question_Paper.pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-5 bg-indigo-900 text-white rounded-3xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 shadow-xl hover:bg-nunma-forest transition-all"
+                >
+                  <FileDown size={20} /> Download Question Paper (PDF)
+                </a>
+              </div>
+            )}
+
+            <button
+              onClick={() => setSubmittedExamResult(null)}
+              className="w-full py-4 text-gray-400 font-black uppercase text-xs tracking-widest hover:text-nunma-forest transition-colors"
+            >
+              Close & View Dashboard
             </button>
           </div>
         </div>

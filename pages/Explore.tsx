@@ -45,35 +45,8 @@ const Explore: React.FC = () => {
         setLoading(false);
       });
     } else {
-      console.log("Explore: Using Mock Content (No Firebase)");
-      setZones([
-        {
-          id: 'mock-1',
-          tutorId: 't1',
-          tutorName: 'Sundaram S M',
-          title: 'Advanced Project Management',
-          description: 'Master the art of high-stake project delivery with industry-proven frameworks.',
-          level: 'Expert',
-          domain: 'Project Management',
-          price: '199',
-          currency: 'USD',
-          image: 'https://images.unsplash.com/photo-1507537243993-c0a373bba793?q=80&w=1000&auto=format&fit=crop',
-          students: 1240
-        },
-        {
-          id: 'mock-2',
-          tutorId: 't2',
-          tutorName: 'Alpha Mentor',
-          title: 'UI/UX Design Masterclass',
-          description: 'Deep dive into user-centric design principles and modern interface aesthetics.',
-          level: 'Intermediate',
-          domain: 'UI/UX Design',
-          price: '149',
-          currency: 'USD',
-          image: 'https://images.unsplash.com/photo-1586717791821-3f44a563dc4c?q=80&w=1000&auto=format&fit=crop',
-          students: 856
-        }
-      ]);
+      console.log("Explore: No Firebase database connection available.");
+      setZones([]);
       setLoading(false);
     }
 

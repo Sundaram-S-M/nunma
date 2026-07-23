@@ -1,5 +1,5 @@
 import { pdfjs } from 'react-pdf';
-import { MCQ } from '../components/MCQBuilder';
+import { MCQ, MCQOption } from '../components/MCQBuilder';
 
 // Extract text from PDF ArrayBuffer
 export async function extractTextFromPdf(pdfBuffer: ArrayBuffer): Promise<string> {
@@ -38,13 +38,51 @@ function getMatches(regex: RegExp, line: string) {
     return matches;
 }
 
+// Render a specific page from PDF ArrayBuffer onto a Canvas and return PNG Data URL
+export async function renderPdfPageToImage(pdfBuffer: ArrayBuffer, pageNumber: number): Promise<string> {
+    const loadingTask = pdfjs.getDocument({ data: pdfBuffer });
+    const pdf = await loadingTask.promise;
+    const targetPageNum = Math.min(Math.max(1, pageNumber), pdf.numPages);
+    const page = await pdf.getPage(targetPageNum);
+
+    const viewport = page.getViewport({ scale: 2.0 });
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    if (!context) {
+        throw new Error('Failed to create canvas context for PDF page rendering');
+    }
+
+    const renderContext: any = {
+        canvasContext: context,
+        viewport: viewport,
+        canvas: canvas
+    };
+
+    await page.render(renderContext).promise;
+    return canvas.toDataURL('image/png');
+}
+
 // Helper to split a single line containing multiple options (e.g., "(A) 1 (B) 3 (C) 2 (D) 4" or "a 110 b 115 c 125 d140")
 function splitLineIntoOptions(line: string): { letter: string; text: string }[] {
     const strictRegex = /(?:^|\s)\(?([A-D])\)[.)\]\s-]*|(?:^|\s)\b([A-D])[.)\]-]+/gi;
     let matches = getMatches(strictRegex, line);
 
+    // Filter out weak single matches (like "c." at the end of "a + b + c.")
+    if (matches.length === 1 && matches[0].index > 0) {
+        const m = matches[0];
+        const matchText = line.substr(m.index, m.length).trim();
+        if (/^[a-d][.)\]]+$/.test(matchText)) {
+            // If it's a lowercase letter with just a dot/bracket in the middle of a line, it's likely part of the question text.
+            matches = [];
+        }
+    }
+
     if (matches.length === 0) {
-        const relaxedRegex = /(?:^|\s)([A-D])\s+(?=\S)|(?:^|\s)([A-D])(?=\d+)/gi;
+        // relaxedRegex should be case-sensitive to avoid matching "a + b + c" as options A, B, C
+        const relaxedRegex = /(?:^|\s)([A-D])\s+(?=\S)|(?:^|\s)([A-D])(?=\d+)/g;
         matches = getMatches(relaxedRegex, line);
         if (matches.length > 0) {
             const letters = matches.map(m => m.letter);
@@ -83,6 +121,11 @@ export function parseMCQFromText(text: string, answerKeyText?: string): MCQ[] {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         
+        // Ignore common footers like "Page 1 of 3" or standalone page numbers
+        if (/^page\s*\d+\s*of\s*\d+$/i.test(line) || (/^\d+$/.test(line) && i > 0 && i === lines.length - 1)) {
+            continue;
+        }
+        
         const qMatch = line.match(questionRegex);
         if (qMatch) {
             if (currentQuestion && currentQuestion.question) {
@@ -94,7 +137,7 @@ export function parseMCQFromText(text: string, answerKeyText?: string): MCQ[] {
                 options: [],
                 correctAnswer: 0,
                 timerSeconds: 60,
-                marks: 5
+                marks: 1
             };
             continue;
         }
@@ -103,7 +146,7 @@ export function parseMCQFromText(text: string, answerKeyText?: string): MCQ[] {
         if (lineOptions.length > 0 && currentQuestion) {
             currentQuestion.options = currentQuestion.options || [];
             for (const opt of lineOptions) {
-                currentQuestion.options.push(opt.text);
+                (currentQuestion.options as any[]).push({ text: opt.text, textTranslated: undefined });
             }
             continue;
         }
@@ -112,7 +155,12 @@ export function parseMCQFromText(text: string, answerKeyText?: string): MCQ[] {
         if (currentQuestion && qMatch === null) {
             if (currentQuestion.options && currentQuestion.options.length > 0) {
                 const lastIdx = currentQuestion.options.length - 1;
-                currentQuestion.options[lastIdx] += ' ' + line;
+                const currentOpt = (currentQuestion.options as any[])[lastIdx];
+                if (typeof currentOpt === 'string') {
+                    (currentQuestion.options as any[])[lastIdx] = { text: currentOpt + ' ' + line, textTranslated: undefined };
+                } else if (currentOpt && typeof currentOpt === 'object') {
+                    currentOpt.text = (currentOpt.text || '') + ' ' + line;
+                }
             } else {
                 currentQuestion.question += ' ' + line;
             }
@@ -155,17 +203,37 @@ export function parseMCQFromText(text: string, answerKeyText?: string): MCQ[] {
     return questions;
 }
 
-function finalizeQuestion(q: Partial<MCQ>): MCQ {
-    const options = q.options || [];
+function finalizeQuestion(q: any): MCQ {
+    const rawOptions = q.options || [];
+    const options: any[] = rawOptions.map((o: any) => {
+        if (typeof o === 'string') {
+            return { text: o.trim(), textTranslated: undefined };
+        }
+        return {
+            text: (o.text || '').trim(),
+            textTranslated: o.textTranslated ? o.textTranslated.trim() : undefined
+        };
+    });
+
     while (options.length < 4) {
-        options.push('');
+        options.push({ text: '', textTranslated: undefined });
     }
+
     return {
         id: q.id || `${Date.now()}_${Math.random()}`,
         question: q.question?.trim() || '',
-        options: options.map(o => o.trim()),
+        questionTranslated: q.questionTranslated?.trim() || undefined,
+        options: options,
         correctAnswer: q.correctAnswer ?? 0,
         timerSeconds: q.timerSeconds ?? 60,
-        marks: q.marks ?? 5
+        marks: q.marks ?? 1,
+        needsReview: q.needsReview,
+        reviewReason: q.reviewReason,
+        sharedPassage: q.sharedPassage,
+        passageId: q.passageId,
+        hasFigure: q.hasFigure,
+        figurePageNumber: q.figurePageNumber,
+        figureImageUrl: q.figureImageUrl,
+        figureDescription: q.figureDescription
     };
 }

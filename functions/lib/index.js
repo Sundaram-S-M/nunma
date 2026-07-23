@@ -15,13 +15,23 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -729,10 +739,10 @@ exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID",
             await db.collection("zones").doc(zoneId).collection("orders").doc(razorpayOrder.id).set({
                 orderId: razorpayOrder.id,
                 studentUid: request.auth.uid,
-                tutorUid: tutorUid,
+                tutorUid: tutorUid, // Store tutorUid for webhook consumption
                 amount: finalAmount,
-                commission: commission,
-                tutorShare: tutorShare,
+                commission: commission, // Store commission for webhook invoicing
+                tutorShare: tutorShare, // Store tutorShare for reference
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 status: 'CREATED'
             });
@@ -1710,13 +1720,19 @@ exports.submitExam = (0, https_1.onCall)({ cors: true }, async (request) => {
         let marks = 0;
         let status = 'ongoing';
         const isTerminatedByCheat = violationLogs && violationLogs.length >= 3;
+        const wrongQuestions = [];
         // Secure Scoring
         if (examData.type === 'online-mcq' || examData.type === 'online-test') {
             if (examData.questions && answers) {
                 let score = 0;
-                examData.questions.forEach((q) => {
-                    if (answers[q.id] === q.correctAnswer)
+                examData.questions.forEach((q, idx) => {
+                    const studentAns = answers[q.id];
+                    if (studentAns === q.correctAnswer) {
                         score++;
+                    }
+                    else {
+                        wrongQuestions.push(`Q${idx + 1}`);
+                    }
                 });
                 marks = Math.round((score / examData.questions.length) * (examData.maxMark || 100));
                 const minMark = examData.minMark || 0;
@@ -1733,6 +1749,8 @@ exports.submitExam = (0, https_1.onCall)({ cors: true }, async (request) => {
             studentName: request.auth.token.name || 'Student',
             marks,
             status,
+            answers: answers || {},
+            wrongQuestions,
             cheatViolations: violationLogs || [],
             completedAt: admin.firestore.FieldValue.serverTimestamp()
         };
@@ -1747,7 +1765,13 @@ exports.submitExam = (0, https_1.onCall)({ cors: true }, async (request) => {
             violationLogs: admin.firestore.FieldValue.delete(),
             examStartedAt: admin.firestore.FieldValue.delete()
         });
-        return { success: true, marks, status };
+        return {
+            success: true,
+            marks,
+            status,
+            wrongQuestions,
+            pdfUrl: examData.pdfUrl || null
+        };
     }
     catch (error) {
         if (error instanceof functions.https.HttpsError)
@@ -2944,7 +2968,7 @@ exports.manageLiveTimer = (0, https_1.onCall)({ cors: true }, async (request) =>
                 }
                 const remaining = Math.max(0, currentTimer.timerEndsAt - now);
                 newTimer = {
-                    timerEndsAt: currentTimer.timerEndsAt,
+                    timerEndsAt: currentTimer.timerEndsAt, // keep previous endsAt for history, though unused while paused
                     timerRemaining: remaining,
                     timerStatus: 'paused'
                 };

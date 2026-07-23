@@ -72,7 +72,7 @@ import PDFViewer from '../components/PDFViewer'; // Import added for grading
 import GradingHub from '../components/GradingHub';
 import ExamAnalytics from '../components/ExamAnalytics';
 import ExamInsights from '../components/ExamInsights';
-import MCQBuilder from '../components/MCQBuilder';
+import MCQBuilder, { MCQ, MCQOption } from '../components/MCQBuilder';
 import { QRCodeSVG } from 'qrcode.react';
 import ZoneCapacityMeter from '../components/ZoneCapacityMeter';
 import { formatDate } from '../utils/dateUtils';
@@ -80,15 +80,6 @@ import { formatDate } from '../utils/dateUtils';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import { Student, AttendanceHistory, UserRole, Batch, MAX_BATCHES_PER_ZONE } from '../types';
-
-export interface MCQ {
-  id: string;
-  question: string;
-  options: string[];
-  correctAnswer: number; // Index of the correct option
-  timerSeconds?: number;
-  marks?: number;
-}
 
 interface Exam {
   id: string;
@@ -724,7 +715,12 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     const newQ: MCQ = {
       id: Date.now().toString(),
       question: '',
-      options: ['', '', '', ''],
+      options: [
+        { text: '', textTranslated: undefined },
+        { text: '', textTranslated: undefined },
+        { text: '', textTranslated: undefined },
+        { text: '', textTranslated: undefined }
+      ],
       correctAnswer: 0
     };
     setNewExamQuestions([...newExamQuestions, newQ]);
@@ -732,6 +728,23 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
   const handleCreateExam = async () => {
     if (!zoneId) return;
+
+    if (newExamType === 'online-mcq') {
+      let questionsToCheck: MCQ[] = [];
+      if (examScope === 'batch') {
+        selectedBatchIds.forEach(bId => questionsToCheck.push(...(clusterExamQuestions[bId] || [])));
+      } else if (examScope === 'subject') {
+        selectedSubjects.forEach(s => questionsToCheck.push(...(clusterExamQuestions[s] || [])));
+      } else {
+        questionsToCheck = newExamQuestions;
+      }
+      
+      const needsReview = questionsToCheck.some(q => q.needsReview);
+      if (needsReview) {
+        nunmaAlert("you didnt select the answer of the question first select right answer and then deploy the exam", "error");
+        return;
+      }
+    }
 
     // === BATCH EXAM MODE ===
     if (examScope === 'batch' && selectedBatchIds.length > 0) {
@@ -766,15 +779,23 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
             remindAt = new Date(examStart.getTime() - 24 * 60 * 60 * 1000).toISOString();
           }
 
+          const batchQuestions = newExamType === 'online-mcq' ? (clusterExamQuestions[batchId] || []) : [];
+          let batchDuration = parseInt(newExamDuration) || 30;
+          if (newExamType === 'online-mcq' && batchQuestions.length > 0) {
+            const totalSecs = batchQuestions.reduce((sum: number, q: any) => sum + (q.timerSeconds || 60), 0);
+            batchDuration = Math.ceil(totalSecs / 60) || batchDuration;
+          }
+
           const batchExamData: any = {
             title: newExamTitle,
             date: sched.date,
             time: sched.time,
             status: 'UPCOMING',
             type: newExamType,
+            duration: batchDuration,
             maxMark: parseInt(newExamMaxMark),
             minMark: parseInt(newExamMinMark),
-            questions: newExamType === 'online-mcq' ? (clusterExamQuestions[batchId] || []) : [],
+            questions: batchQuestions,
             subject: newExamSubject,
             batchId,
             examGroupId,
@@ -782,12 +803,11 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
             ...(remindAt ? { remindAt } : {}),
           };
 
-          if (newExamType !== 'online-mcq') {
-            batchExamData.duration = parseInt(newExamDuration);
-          }
           const bFile = clusterExamFiles[batchId];
-          if ((newExamType === 'online-test' || newExamType === 'offline') && bFile) {
+          if (bFile) {
             batchExamData.pdfUrl = URL.createObjectURL(bFile);
+          } else if (batchQuestions.length > 0 && batchQuestions[0]?.pdfUrl) {
+            batchExamData.pdfUrl = batchQuestions[0].pdfUrl;
           }
 
           const examRef = await addDoc(collection(db, 'zones', zoneId, 'exams'), batchExamData);
@@ -893,15 +913,23 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
             remindAt = new Date(examStart.getTime() - 24 * 60 * 60 * 1000).toISOString();
           }
 
+          const subjQuestions = newExamType === 'online-mcq' ? (clusterExamQuestions[subject] || []) : [];
+          let subjDuration = parseInt(newExamDuration) || 30;
+          if (newExamType === 'online-mcq' && subjQuestions.length > 0) {
+            const totalSecs = subjQuestions.reduce((sum: number, q: any) => sum + (q.timerSeconds || 60), 0);
+            subjDuration = Math.ceil(totalSecs / 60) || subjDuration;
+          }
+
           const subjectExamData: any = {
             title: newExamTitle,
             date: sched.date,
             time: sched.time,
             status: 'UPCOMING',
             type: newExamType,
+            duration: subjDuration,
             maxMark: parseInt(newExamMaxMark),
             minMark: parseInt(newExamMinMark),
-            questions: newExamType === 'online-mcq' ? (clusterExamQuestions[subject] || []) : [],
+            questions: subjQuestions,
             subject: subject,
             examGroupId,
             examGroupName: newExamTitle,
@@ -911,13 +939,11 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           if (targetBatchForSubjects !== 'all') {
             subjectExamData.batchId = targetBatchForSubjects;
           }
-
-          if (newExamType !== 'online-mcq') {
-            subjectExamData.duration = parseInt(newExamDuration);
-          }
           const sFile = clusterExamFiles[subject];
-          if ((newExamType === 'online-test' || newExamType === 'offline') && sFile) {
+          if (sFile) {
             subjectExamData.pdfUrl = URL.createObjectURL(sFile);
+          } else if (subjQuestions.length > 0 && subjQuestions[0]?.pdfUrl) {
+            subjectExamData.pdfUrl = subjQuestions[0].pdfUrl;
           }
 
           const examRef = await addDoc(collection(db, 'zones', zoneId, 'exams'), subjectExamData);
@@ -1004,12 +1030,19 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       }
     }
 
+    let singleDuration = parseInt(newExamDuration) || 30;
+    if (newExamType === 'online-mcq' && newExamQuestions.length > 0) {
+      const totalSecs = newExamQuestions.reduce((sum: number, q: any) => sum + (q.timerSeconds || 60), 0);
+      singleDuration = Math.ceil(totalSecs / 60) || singleDuration;
+    }
+
     const examData: any = {
       title: newExamTitle,
       date: newExamDate,
       time: newExamTime,
       status: 'UPCOMING',
       type: newExamType,
+      duration: singleDuration,
       maxMark: parseInt(newExamMaxMark),
       minMark: parseInt(newExamMinMark),
       questions: newExamType === 'online-mcq' ? newExamQuestions : [],
@@ -1017,15 +1050,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       ...(remindAt ? { remindAt } : {}),
     };
 
-    if (newExamType !== 'online-mcq') {
-      examData.duration = parseInt(newExamDuration);
-    }
-
-    if (newExamType === 'online-test' && newExamFile) {
+    if (newExamFile) {
       examData.pdfUrl = URL.createObjectURL(newExamFile);
-    }
-    if (newExamType === 'offline' && newExamFile) {
-      examData.pdfUrl = URL.createObjectURL(newExamFile);
+    } else if (newExamQuestions.length > 0 && newExamQuestions[0]?.pdfUrl) {
+      examData.pdfUrl = newExamQuestions[0].pdfUrl;
     }
 
     setIsCreatingExam(true);
@@ -1530,14 +1558,9 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           setIsSearchingUsers(false);
         }
       } else {
-        // Mock Search Results
+        // No Database available
         setTimeout(() => {
-          const mockUsers = [
-            { id: '1', name: 'Sundaram S M', email: 'sundaramsm55@gmail.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sundaram' },
-            { id: '2', name: 'John Doe', email: 'john.doe@example.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john' },
-            { id: '3', name: 'Jane Smith', email: 'jane.smith@test.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=jane' }
-          ].filter(u => (u?.email || "").toLowerCase().includes((newStudentEmail || "").toLowerCase()));
-          setUserSearchResults(mockUsers);
+          setUserSearchResults([]);
           setIsSearchingUsers(false);
         }, 300);
       }
@@ -1580,14 +1603,9 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           setIsSearchingCoTutors(false);
         }
       } else {
-        // Mock Search Results
+        // No Database available
         setTimeout(() => {
-          const mockUsers = [
-            { id: '1', name: 'Sundaram S M', email: 'sundaramsm55@gmail.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sundaram' },
-            { id: '2', name: 'John Doe', email: 'john.doe@example.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john' },
-            { id: '3', name: 'Jane Smith', email: 'jane.smith@test.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=jane' }
-          ].filter(u => (u?.email || "").toLowerCase().includes((newCoTutorEmail || "").toLowerCase()));
-          setCoTutorSearchResults(mockUsers);
+          setCoTutorSearchResults([]);
           setIsSearchingCoTutors(false);
         }, 300);
       }
@@ -1995,13 +2013,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     setIsAnalyzing(true);
     setView('grading');
     setTimeout(() => {
-      const mockClusters: AnswerCluster[] = [
-        { id: 'cl1', label: 'Precise Logic', description: 'Calculated derivative correctly.', confidence: 95, studentIds: ['1'], representativeImage: 'https://images.unsplash.com/photo-1596495578065-6e0763fa1178?q=80&w=1000&auto=format&fit=crop', score: 10 },
-        { id: 'cl2', label: 'Arithmetic Error', description: 'Sign flip in step 2.', confidence: 82, studentIds: ['2'], representativeImage: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?q=80&w=1000&auto=format&fit=crop', score: 7 },
-      ];
+      const mockClusters: AnswerCluster[] = [];
       setClusters(mockClusters);
-      setActiveClusterId(mockClusters[0].id);
-      setSelectedScript(mockClusters[0].representativeImage);
+      setActiveClusterId('');
+      setSelectedScript('');
       setIsAnalyzing(false);
     }, 2000);
   };
