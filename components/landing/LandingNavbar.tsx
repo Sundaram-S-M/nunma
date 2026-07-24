@@ -96,7 +96,6 @@ const LandingNavbar: React.FC = () => {
           aria-label="Go to top"
         >
           <LandingLogo className="h-8 text-[#052e16]" />
-          <span className="font-extrabold text-xl tracking-tight">Nunma</span>
         </button>
 
         {/* Desktop pill nav — uses JS scroll, NOT href="#section" */}

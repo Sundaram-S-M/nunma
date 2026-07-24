@@ -576,7 +576,7 @@ const LegalPolicy: React.FC = () => {
                   {/* Entity Box */}
                   <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200">
                     <h4 className="font-extrabold text-[#052e16] text-lg mb-3">Registered Business Address</h4>
-                    <p className="text-sm font-semibold text-slate-800 mb-1">Nunma Technologies</p>
+                    <p className="text-sm font-semibold text-slate-800 mb-1">Nunma Private Limited</p>
                     <p className="text-sm text-slate-600 mb-1">Founder &amp; CEO: Sundaram S M</p>
                     <p className="text-sm text-slate-600 flex items-start gap-1.5 mt-2">
                       <MapPin className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />

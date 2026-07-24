@@ -22,7 +22,6 @@ const LandingFooter: React.FC = () => {
             aria-label="Go to top"
           >
             <LandingLogo className="h-10" />
-            <span className="font-extrabold tracking-tight">Nunma</span>
           </button>
           <p className="text-sm font-medium leading-relaxed max-w-sm text-gray-400 nunma-text-glow">
             Building the Trust Layer for Education. Empowering Thalas to teach, earn, and build a
