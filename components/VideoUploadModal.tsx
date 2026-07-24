@@ -72,6 +72,14 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
             return;
         }
 
+        const usedBytes = (user as any)?.usedStorageBytes || (user as any)?.storage_used_bytes || user?.subscription_entitlements?.storageUsed || 0;
+        const limitBytes = user?.subscription_entitlements?.storageLimit || 3221225472; // Default 3GB
+
+        if (usedBytes + selectedFile.size > limitBytes) {
+            setErrorMessage('STORAGE_LIMIT_REACHED');
+            return;
+        }
+
         setErrorMessage('');
         setFile(selectedFile);
         setUploadStatus('idle');
@@ -461,9 +469,27 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ isOpen, onCl
                             )}
 
                             {/* Error Message */}
-                            {errorMessage && (
+                            {errorMessage && errorMessage !== 'STORAGE_LIMIT_REACHED' && (
                                 <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl text-sm font-semibold">
                                     {errorMessage}
+                                </div>
+                            )}
+
+                            {errorMessage === 'STORAGE_LIMIT_REACHED' && (
+                                <div className="bg-orange-50 border border-orange-200 p-6 rounded-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-300">
+                                    <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 mb-4">
+                                        <AlertTriangle size={24} />
+                                    </div>
+                                    <h4 className="text-orange-900 font-black text-lg mb-2">Storage Limit Exceeded</h4>
+                                    <p className="text-orange-700 text-sm mb-6">
+                                        This file exceeds your current plan's storage limit. Please upgrade your plan to continue uploading.
+                                    </p>
+                                    <a
+                                        href="/settings/pricing"
+                                        className="px-6 py-3 bg-orange-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-orange-700 transition-colors shadow-lg"
+                                    >
+                                        Upgrade Plan
+                                    </a>
                                 </div>
                             )}
 

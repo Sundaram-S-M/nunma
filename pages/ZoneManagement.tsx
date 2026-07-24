@@ -1746,6 +1746,17 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     const file = e.target.files?.[0];
     if (!file || !activeChapterForUpload || !activeTypeForUpload || !zoneId) return;
 
+    const usedBytes = (user as any)?.usedStorageBytes || (user as any)?.storage_used_bytes || user?.subscription_entitlements?.storageUsed || 0;
+    const limitBytes = user?.subscription_entitlements?.storageLimit || 3221225472; // Default 3GB
+    
+    if (usedBytes + file.size > limitBytes) {
+        if (window.confirm("This file exceeds your current plan's storage limit. Please upgrade your plan to continue uploading. Click OK to view plans.")) {
+            navigate('/settings/pricing');
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+    }
+
     // Standard File Upload (PDF/Reading - preserved logic usually mock or different storage)
     const newSeg: Segment = {
       id: `s${Date.now()}`,

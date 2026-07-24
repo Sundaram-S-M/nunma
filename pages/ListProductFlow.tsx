@@ -180,9 +180,21 @@ const ListProductFlow: React.FC = () => {
             return;
         }
 
-        if (productType === 'material' && !file) {
-            alert("Please upload a file for your material.");
-            return;
+        if (productType === 'material') {
+            if (!file) {
+                alert("Please upload a file for your material.");
+                return;
+            }
+
+            const usedBytes = (user as any)?.usedStorageBytes || (user as any)?.storage_used_bytes || user?.subscription_entitlements?.storageUsed || 0;
+            const limitBytes = user?.subscription_entitlements?.storageLimit || 3221225472; // Default 3GB
+            
+            if (usedBytes + file.size > limitBytes) {
+                if (window.confirm("This file exceeds your current plan's storage limit. Please upgrade your plan to continue uploading. Click OK to view plans.")) {
+                    navigate('/settings/pricing');
+                }
+                return;
+            }
         }
 
         setIsLoading(true);
