@@ -92,10 +92,11 @@ const LandingNavbar: React.FC = () => {
         {/* Logo — scroll to top */}
         <button
           onClick={() => handleNavClick('home')}
-          className="text-[#052e16] focus:outline-none flex items-center"
+          className="text-[#052e16] focus:outline-none flex items-center gap-2"
           aria-label="Go to top"
         >
           <LandingLogo className="h-8 text-[#052e16]" />
+          <span className="font-extrabold text-xl tracking-tight">Nunma</span>
         </button>
 
         {/* Desktop pill nav — uses JS scroll, NOT href="#section" */}

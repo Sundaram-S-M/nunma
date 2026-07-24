@@ -50,7 +50,7 @@ const LandingHero: React.FC = () => {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="text-lg md:text-xl max-w-3xl mx-auto mb-10 text-gray-700 leading-relaxed font-medium"
         >
-          Nunma is the all-in-one platform to run live classes, collect fees, and issue verified certificates — replacing WhatsApp groups and paper registers.
+          Nunma is a software platform designed to help tutors manage their business and reach more students. We provide an all-in-one platform to run live classes, collect fees, and issue verified certificates.
         </motion.p>
 
         {/* CTAs */}

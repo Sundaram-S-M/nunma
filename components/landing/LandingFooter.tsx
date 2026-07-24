@@ -18,10 +18,11 @@ const LandingFooter: React.FC = () => {
         <div className="md:col-span-2">
           <button
             onClick={() => scrollToSection('home')}
-            className="mb-6 text-white text-3xl focus:outline-none text-left nunma-heading-glow inline-block"
+            className="mb-6 text-white text-3xl focus:outline-none text-left nunma-heading-glow flex items-center gap-2"
             aria-label="Go to top"
           >
             <LandingLogo className="h-10" />
+            <span className="font-extrabold tracking-tight">Nunma</span>
           </button>
           <p className="text-sm font-medium leading-relaxed max-w-sm text-gray-400 nunma-text-glow">
             Building the Trust Layer for Education. Empowering Thalas to teach, earn, and build a
