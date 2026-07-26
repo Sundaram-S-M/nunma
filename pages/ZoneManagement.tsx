@@ -64,6 +64,7 @@ import { toast } from 'react-hot-toast';
 import { collection, query, onSnapshot, doc, updateDoc, setDoc, where, getDocs, getDoc, limit, deleteDoc, addDoc, arrayUnion, serverTimestamp, increment } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../utils/firebase';
+import { getAuth } from 'firebase/auth';
 import { sendEnrollmentEmail } from '../utils/notifications';
 import * as XLSX from 'xlsx';
 import * as ExcelJS from 'exceljs';
@@ -726,6 +727,34 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     setNewExamQuestions([...newExamQuestions, newQ]);
   };
 
+  const uploadExamPdfToBunny = async (file: File, targetZoneId: string): Promise<string> => {
+    const idToken = await getAuth().currentUser?.getIdToken();
+    if (!idToken) throw new Error("Not authenticated");
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', `zones/${targetZoneId}/exams`);
+
+    const region = 'us-central1';
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'nunma-learning-zone';
+    const uploadUrl = `https://${region}-${projectId}.cloudfunctions.net/uploadFileToBunny`;
+
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Upload failed: ${errText}`);
+    }
+
+    const data = await response.json();
+    return data.fileUrl;
+  };
+
   const handleCreateExam = async () => {
     if (!zoneId) return;
 
@@ -776,7 +805,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           const timeParts = sched.time.split(':');
           if (parts.length === 3 && timeParts.length === 2) {
             const examStart = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), parseInt(timeParts[0]), parseInt(timeParts[1]));
-            remindAt = new Date(examStart.getTime() - 24 * 60 * 60 * 1000).toISOString();
+            const remind = new Date(examStart.getTime() - 24 * 60 * 60 * 1000);
+            if (remind.getTime() > Date.now()) {
+              remindAt = remind.toISOString();
+            }
           }
 
           const batchQuestions = newExamType === 'online-mcq' ? (clusterExamQuestions[batchId] || []) : [];
@@ -805,7 +837,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
           const bFile = clusterExamFiles[batchId];
           if (bFile) {
-            batchExamData.pdfUrl = URL.createObjectURL(bFile);
+            batchExamData.pdfUrl = await uploadExamPdfToBunny(bFile, zoneId);
           } else if (batchQuestions.length > 0 && batchQuestions[0]?.pdfUrl) {
             batchExamData.pdfUrl = batchQuestions[0].pdfUrl;
           }
@@ -910,7 +942,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           const timeParts = sched.time.split(':');
           if (parts.length === 3 && timeParts.length === 2) {
             const examStart = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), parseInt(timeParts[0]), parseInt(timeParts[1]));
-            remindAt = new Date(examStart.getTime() - 24 * 60 * 60 * 1000).toISOString();
+            const remind = new Date(examStart.getTime() - 24 * 60 * 60 * 1000);
+            if (remind.getTime() > Date.now()) {
+              remindAt = remind.toISOString();
+            }
           }
 
           const subjQuestions = newExamType === 'online-mcq' ? (clusterExamQuestions[subject] || []) : [];
@@ -941,7 +976,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           }
           const sFile = clusterExamFiles[subject];
           if (sFile) {
-            subjectExamData.pdfUrl = URL.createObjectURL(sFile);
+            subjectExamData.pdfUrl = await uploadExamPdfToBunny(sFile, zoneId);
           } else if (subjQuestions.length > 0 && subjQuestions[0]?.pdfUrl) {
             subjectExamData.pdfUrl = subjQuestions[0].pdfUrl;
           }
@@ -1026,7 +1061,9 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
           parseInt(timeParts[1])
         );
         const remind = new Date(examStart.getTime() - 24 * 60 * 60 * 1000);
-        remindAt = remind.toISOString();
+        if (remind.getTime() > Date.now()) {
+          remindAt = remind.toISOString();
+        }
       }
     }
 
@@ -1050,14 +1087,14 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       ...(remindAt ? { remindAt } : {}),
     };
 
-    if (newExamFile) {
-      examData.pdfUrl = URL.createObjectURL(newExamFile);
-    } else if (newExamQuestions.length > 0 && newExamQuestions[0]?.pdfUrl) {
-      examData.pdfUrl = newExamQuestions[0].pdfUrl;
-    }
-
     setIsCreatingExam(true);
     try {
+      if (newExamFile) {
+        examData.pdfUrl = await uploadExamPdfToBunny(newExamFile, zoneId);
+      } else if (newExamQuestions.length > 0 && newExamQuestions[0]?.pdfUrl) {
+        examData.pdfUrl = newExamQuestions[0].pdfUrl;
+      }
+
       const examRef = await addDoc(collection(db, 'zones', zoneId, 'exams'), examData);
 
       // === Notify all enrolled students ===
@@ -4256,7 +4293,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
             {/* 🏷️ BATCH FILTER BAR (shown when batches exist on people-related tabs) 🏷️ */}
             {zoneBatches.length > 0 && (activeTab === 'attendance' || activeTab === 'exams' || activeTab === 'students' || activeTab === 'schedule') && (
-              <div className="px-16 max-md:px-4 pt-6 pb-2 flex items-center gap-3 overflow-x-auto no-scrollbar border-b border-gray-50">
+              <div className="px-16 max-md:px-4 pt-6 pb-2 flex flex-wrap items-center gap-3 border-b border-gray-50">
                 <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest flex-shrink-0 mr-1">Batch</span>
                 <button
                   onClick={() => setActiveBatchFilter('all')}

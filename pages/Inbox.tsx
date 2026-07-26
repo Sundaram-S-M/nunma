@@ -370,7 +370,7 @@ const Inbox: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-140px)] flex bg-[#fbfbfb] rounded-[2rem] md:rounded-[4rem] border border-gray-100 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-700 relative">
+    <div className="h-[calc(100vh-72px)] md:h-[calc(100vh-140px)] -m-4 md:m-0 w-[calc(100%+2rem)] md:w-auto flex bg-transparent md:bg-[#fbfbfb] rounded-none md:rounded-[4rem] border-none md:border md:border-gray-100 overflow-hidden shadow-none md:shadow-2xl animate-in fade-in zoom-in-95 duration-700 relative">
 
       {adjustingImage && (
         <PhotoAdjustModal
@@ -614,7 +614,7 @@ const Inbox: React.FC = () => {
       )}
 
       {/* Sidebar */}
-      <div className={`w-full md:w-96 border-r border-gray-100 flex-col bg-white overflow-hidden ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`w-full md:w-96 border-none md:border-r md:border-gray-100 flex-col bg-transparent md:bg-white overflow-hidden ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-10 pb-4 flex items-center justify-between">
           <h2 className="text-4xl font-black text-nunma-forest tracking-tighter">Inbox</h2>
         </div>
@@ -777,7 +777,7 @@ const Inbox: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="px-2 py-2 md:px-10 md:py-8 bg-white border-t border-gray-100">
+            <div className="px-2 pt-2 pb-28 md:px-10 md:py-8 bg-white border-t border-gray-100">
               <div className="flex items-center gap-2 md:gap-5">
                 <div className="relative shrink-0" ref={addMenuRef}>
                   <button

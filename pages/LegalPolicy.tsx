@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  FileText, 
-  ShieldCheck, 
-  RotateCcw, 
-  Truck, 
-  PhoneCall, 
-  Mail, 
-  MapPin, 
-  CheckCircle2, 
+import {
+  ArrowLeft,
+  FileText,
+  ShieldCheck,
+  RotateCcw,
+  Truck,
+  PhoneCall,
+  Mail,
+  MapPin,
+  CheckCircle2,
   ExternalLink,
   ChevronRight,
   Sparkles
@@ -81,13 +81,13 @@ const LegalPolicy: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#0F172A] antialiased font-sans selection:bg-[#c2f575] selection:text-[#052e16]">
-      
+
       {/* Top Navbar */}
       <LandingNavbar />
 
       {/* Top Navigation Sub-bar */}
       <div className="max-w-7xl mx-auto px-6 pt-6 pb-2 flex justify-between items-center">
-        <button 
+        <button
           onClick={() => navigate('/')}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-700 hover:text-[#052e16] hover:border-slate-300 font-semibold text-sm transition-all shadow-sm group"
         >
@@ -121,17 +121,15 @@ const LegalPolicy: React.FC = () => {
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
-                className={`p-5 rounded-2xl text-left transition-all duration-200 flex flex-col justify-between border ${
-                  isActive
+                className={`p-5 rounded-2xl text-left transition-all duration-200 flex flex-col justify-between border ${isActive
                     ? 'bg-[#052e16] text-white border-[#052e16] shadow-lg scale-[1.02]'
                     : 'bg-white text-slate-800 border-slate-200/90 hover:border-emerald-400 hover:shadow-md'
-                }`}
+                  }`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      isActive ? 'bg-[#c2f575] text-[#052e16]' : 'bg-emerald-50 text-[#052e16] border border-emerald-100'
-                    }`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isActive ? 'bg-[#c2f575] text-[#052e16]' : 'bg-emerald-50 text-[#052e16] border border-emerald-100'
+                      }`}>
                       <Icon className="w-5 h-5" />
                     </div>
                     <ChevronRight className={`w-4 h-4 ${isActive ? 'text-[#c2f575]' : 'text-slate-400'}`} />
@@ -159,7 +157,7 @@ const LegalPolicy: React.FC = () => {
       {/* DETAILED CONTENT DISPLAY CONTAINER */}
       <section className="px-6 pb-20 max-w-5xl mx-auto">
         <div className="bg-white rounded-3xl border border-slate-200/90 shadow-lg overflow-hidden">
-          
+
           {/* Active Header Banner */}
           <div className="p-8 md:p-10 bg-[#052e16] text-white border-b border-emerald-700/50 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
@@ -173,7 +171,7 @@ const LegalPolicy: React.FC = () => {
                 Last updated &amp; effective: July 2026 · Compliant with Indian IT Act &amp; RBI Payment Rules
               </p>
             </div>
-            
+
             <div className="shrink-0 text-slate-300 text-xs font-mono bg-emerald-950/80 px-4 py-2 rounded-xl border border-emerald-700/50">
               Doc ID: NUNMA-POL-{activeTab.toUpperCase()}-2026
             </div>
@@ -181,11 +179,11 @@ const LegalPolicy: React.FC = () => {
 
           {/* POLICY BODY CONTENT */}
           <div className="p-8 md:p-12 prose prose-slate max-w-none text-slate-700 leading-relaxed text-base space-y-8">
-            
+
             {/* 1. TERMS OF SERVICE */}
             {activeTab === 'terms' && (
               <div className="space-y-6">
-                
+
                 {/* Preamble */}
                 <div className="p-6 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-slate-800 space-y-4">
                   <p className="font-medium leading-relaxed">
@@ -289,7 +287,7 @@ const LegalPolicy: React.FC = () => {
             {/* 2. PRIVACY POLICY */}
             {activeTab === 'privacy' && (
               <div className="space-y-6">
-                
+
                 {/* Preamble */}
                 <div className="p-6 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-slate-800 space-y-4">
                   <p className="font-medium leading-relaxed">
@@ -572,7 +570,7 @@ const LegalPolicy: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
-                  
+
                   {/* Entity Box */}
                   <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200">
                     <h4 className="font-extrabold text-[#052e16] text-lg mb-3">Registered Business Address</h4>
@@ -587,28 +585,28 @@ const LegalPolicy: React.FC = () => {
                   {/* Direct Channels */}
                   <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200">
                     <h4 className="font-extrabold text-[#052e16] text-lg mb-3">Direct Support Channels</h4>
-                    
+
                     <div className="space-y-3 text-sm">
-                      <a 
-                        href="mailto:support@nunma.in" 
+                      <a
+                        href="mailto:support@nunma.in"
                         className="flex items-center gap-2 font-semibold text-emerald-800 hover:underline"
                       >
                         <Mail className="w-4 h-4 text-emerald-700" />
                         <span>Customer Support: support@nunma.in</span>
                       </a>
 
-                      <a 
-                        href="mailto:grievance@nunma.in" 
+                      <a
+                        href="mailto:grievance@nunma.in"
                         className="flex items-center gap-2 font-semibold text-emerald-800 hover:underline"
                       >
                         <ShieldCheck className="w-4 h-4 text-emerald-700" />
                         <span>Grievance Desk: grievance@nunma.in</span>
                       </a>
 
-                      <a 
-                        href="https://wa.me/919487724185" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
+                      <a
+                        href="https://wa.me/919487724185"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="flex items-center gap-2 font-bold text-emerald-900 hover:underline"
                       >
                         <PhoneCall className="w-4 h-4 text-emerald-700" />
@@ -641,9 +639,9 @@ const LegalPolicy: React.FC = () => {
           {/* Footer Bar inside card */}
           <div className="p-6 bg-slate-50 border-t border-slate-200/80 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-semibold text-slate-500">
             <div>Have questions about these legal policies? Contact our team.</div>
-            <a 
-              href="https://wa.me/919487724185" 
-              target="_blank" 
+            <a
+              href="https://wa.me/919487724185"
+              target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#052e16] text-white hover:bg-[#084824] transition-colors"
             >

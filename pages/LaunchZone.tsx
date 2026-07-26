@@ -249,8 +249,8 @@ const LaunchZone: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-700 pb-20 pt-6">
-      <div className="flex items-center gap-6">
+    <div className="max-w-6xl mx-auto px-4 md:px-8 space-y-10 animate-in fade-in duration-700 pb-20 pt-6">
+      <div className="flex items-start md:items-center gap-4 md:gap-6">
         <button
           onClick={() => navigate('/workplace')}
           className="p-4 bg-white border border-gray-100 rounded-2xl text-indigo-900 shadow-sm hover:shadow-xl hover:bg-gray-50 transition-all"
@@ -270,8 +270,8 @@ const LaunchZone: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white rounded-[4rem] border border-gray-100 shadow-[0_40px_120px_rgba(0,0,0,0.06)] overflow-hidden">
-        <div className="px-14 py-10 border-b border-gray-50 flex items-center justify-between bg-gray-50/20">
+      <div className="bg-transparent md:bg-white md:rounded-[4rem] border-none md:border md:border-gray-100 md:shadow-[0_40px_120px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="hidden md:flex px-4 py-6 md:px-14 md:py-10 border-b border-gray-50/50 md:border-gray-50 items-center justify-between md:bg-gray-50/20">
           <div className="flex items-center gap-5">
             <div className="w-14 h-14 bg-nunma-forest rounded-2xl flex items-center justify-center text-[#c1e60d] shadow-lg">
               <Layers size={28} />
@@ -286,7 +286,7 @@ const LaunchZone: React.FC = () => {
           </button>
         </div>
 
-        <div className="p-14 space-y-12">
+        <div className="px-4 py-8 md:p-14 space-y-12">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
             {/* Left Column */}
             <div className="space-y-10">
@@ -507,39 +507,41 @@ const LaunchZone: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-10 bg-white rounded-[3.5rem] border border-gray-100 flex items-center justify-between shadow-sm hover:border-gray-200 transition-colors">
-                <div className="flex items-center gap-6">
-                  <div className={`p-4 rounded-3xl shadow-md transition-colors ${isPrivate ? 'bg-nunma-forest text-[#c1e60d]' : 'bg-gray-50 text-gray-400'}`}>
-                    <Lock size={32} />
+              <div className="p-6 md:p-10 bg-white rounded-[2rem] md:rounded-[3.5rem] border border-gray-100 flex items-center justify-between gap-4 md:gap-0 shadow-sm hover:border-gray-200 transition-colors">
+                <div className="flex items-center gap-4 md:gap-6">
+                  <div className={`p-3 md:p-4 rounded-2xl md:rounded-3xl shadow-md transition-colors flex-shrink-0 ${isPrivate ? 'bg-nunma-forest text-[#c1e60d]' : 'bg-gray-50 text-gray-400'}`}>
+                    <Lock size={24} className="hidden md:block w-8 h-8" />
+                    <Lock size={24} className="md:hidden" />
                   </div>
                   <div>
-                    <p className="text-lg font-black text-indigo-900">Private Zone</p>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mt-1 max-w-[200px]">STUDENTS CAN'T JOIN THE ZONE UNTIL YOU PROVIDE ACCESS TO THEM.</p>
+                    <p className="text-base md:text-lg font-black text-indigo-900">Private Zone</p>
+                    <p className="text-[9px] md:text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mt-1 max-w-[150px] md:max-w-[200px]">STUDENTS CAN'T JOIN THE ZONE UNTIL YOU PROVIDE ACCESS TO THEM.</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsPrivate(!isPrivate)}
-                  className={`w-16 h-9 rounded-full p-1.5 transition-all duration-300 shadow-inner ${isPrivate ? 'bg-nunma-forest' : 'bg-gray-300'}`}
+                  className={`w-12 md:w-16 h-7 md:h-9 rounded-full p-1 md:p-1.5 transition-all duration-300 shadow-inner flex-shrink-0 ${isPrivate ? 'bg-nunma-forest' : 'bg-gray-300'}`}
                 >
-                  <div className={`w-6 h-6 rounded-full bg-white shadow-xl transition-transform duration-300 ${isPrivate ? 'translate-x-7' : ''}`} />
+                  <div className={`w-5 h-5 md:w-6 md:h-6 rounded-full bg-white shadow-xl transition-transform duration-300 ${isPrivate ? 'translate-x-5 md:translate-x-7' : ''}`} />
                 </button>
               </div>
 
-              <div className="p-10 bg-[#faffdf] rounded-[3.5rem] border border-[#c1e60d]/20 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-6">
-                  <div className="p-4 bg-white rounded-3xl text-indigo-900 shadow-md">
-                    <Award size={32} />
+              <div className="p-6 md:p-10 bg-[#faffdf] rounded-[2rem] md:rounded-[3.5rem] border border-[#c1e60d]/20 flex items-center justify-between gap-4 md:gap-0 shadow-sm">
+                <div className="flex items-center gap-4 md:gap-6">
+                  <div className="p-3 md:p-4 bg-white rounded-2xl md:rounded-3xl text-indigo-900 shadow-md flex-shrink-0">
+                    <Award size={24} className="hidden md:block w-8 h-8" />
+                    <Award size={24} className="md:hidden" />
                   </div>
                   <div>
-                    <p className="text-lg font-black text-indigo-900">Official Certification</p>
-                    <p className="text-[10px] font-bold text-indigo-900/40 uppercase tracking-[0.1em] mt-1">GENERATE NUNMA-VERIFIED CERTIFICATES UPON COMPLETION</p>
+                    <p className="text-base md:text-lg font-black text-indigo-900">Official Certification</p>
+                    <p className="text-[9px] md:text-[10px] font-bold text-indigo-900/40 uppercase tracking-[0.1em] mt-1 max-w-[150px] md:max-w-[200px]">GENERATE NUNMA-VERIFIED CERTIFICATES UPON COMPLETION</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setProvideCertificate(!provideCertificate)}
-                  className={`w-16 h-9 rounded-full p-1.5 transition-all duration-300 shadow-inner ${provideCertificate ? 'bg-indigo-900' : 'bg-gray-300'}`}
+                  className={`w-12 md:w-16 h-7 md:h-9 rounded-full p-1 md:p-1.5 transition-all duration-300 shadow-inner flex-shrink-0 ${provideCertificate ? 'bg-indigo-900' : 'bg-gray-300'}`}
                 >
-                  <div className={`w-6 h-6 rounded-full bg-white shadow-xl transition-transform duration-300 ${provideCertificate ? 'translate-x-7' : ''}`} />
+                  <div className={`w-5 h-5 md:w-6 md:h-6 rounded-full bg-white shadow-xl transition-transform duration-300 ${provideCertificate ? 'translate-x-5 md:translate-x-7' : ''}`} />
                 </button>
               </div>
             </div>

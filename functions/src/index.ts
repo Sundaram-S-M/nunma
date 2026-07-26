@@ -2028,6 +2028,26 @@ export const submitExam = onCall({ cors: true }, async (request) => {
             throw new functions.https.HttpsError("not-found", "Exam not found.");
         }
 
+        // 10-minute late entry server-side validation
+        if (studentData.examStartedAt && examData.date && examData.time) {
+            const parts = examData.date.split('-');
+            const timeParts = examData.time.split(':');
+            if (parts.length === 3 && timeParts.length === 2) {
+                const scheduledStart = new Date(
+                    parseInt(parts[0]),
+                    parseInt(parts[1]) - 1,
+                    parseInt(parts[2]),
+                    parseInt(timeParts[0]),
+                    parseInt(timeParts[1])
+                ).getTime();
+                const studentStarted = new Date(studentData.examStartedAt).getTime();
+                const LATE_ENTRY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+                if (studentStarted - scheduledStart > LATE_ENTRY_WINDOW_MS) {
+                    throw new functions.https.HttpsError("permission-denied", "Late entry: You joined more than 10 minutes after the exam started. Submission rejected.");
+                }
+            }
+        }
+
         let marks = 0;
         let status = 'ongoing';
         const isTerminatedByCheat = violationLogs && violationLogs.length >= 3;

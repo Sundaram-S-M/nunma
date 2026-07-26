@@ -328,7 +328,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
 
       {/* ... Event Modal ... */}
       {showEventModal && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 left-0 md:${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 transition-all`}>
           <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-visible animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-gray-50 flex justify-between items-start bg-gray-50/30">
               <div>
@@ -339,7 +339,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
                 <X size={20} />
               </button>
             </div>
-            <div className="p-8 space-y-4 min-h-[600px] max-h-[80vh] overflow-y-auto custom-scrollbar">
+            <div className="p-8 space-y-4 min-h-[50vh] md:min-h-[600px] max-h-[60vh] md:max-h-[80vh] overflow-y-auto custom-scrollbar">
               {isCreatingEvent ? (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                   <input

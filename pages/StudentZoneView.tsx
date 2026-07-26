@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, o
 import { formatDate } from '../utils/dateUtils';
 import { db, functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
+import { getAuth } from 'firebase/auth';
 import { Student } from '../types';
 import {
   ArrowLeft,
@@ -45,6 +46,33 @@ import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import { BunnyVideoPlayer } from '../components/BunnyVideoPlayer';
 import ExamInsights from '../components/ExamInsights';
+
+const calculateExamEndState = (exam: any, now: Date) => {
+  const durationMins = exam.duration || 30;
+  let endTime = new Date(now.getTime() + durationMins * 60000);
+
+  if (exam.date && exam.time) {
+    const parts = exam.date.split('-');
+    const timeParts = exam.time.split(':');
+    if (parts.length === 3 && timeParts.length === 2) {
+      const examStartTime = new Date(
+        parseInt(parts[0]),
+        parseInt(parts[1]) - 1,
+        parseInt(parts[2]),
+        parseInt(timeParts[0]),
+        parseInt(timeParts[1])
+      );
+      const scheduledEndTime = new Date(examStartTime.getTime() + durationMins * 60000);
+      
+      if (scheduledEndTime.getTime() < endTime.getTime()) {
+        endTime = scheduledEndTime;
+      }
+    }
+  }
+
+  const finalDurationSecs = Math.max(0, Math.floor((endTime.getTime() - now.getTime()) / 1000));
+  return { endTime, finalDurationSecs };
+};
 
 const formatJoinedDate = (joinedAt: any) => {
   if (!joinedAt) return '';
@@ -200,7 +228,31 @@ const StudentZoneView: React.FC = () => {
       const remindKey = `reminded_${exam.id}`;
       if (exam.remindAt && exam.id && !notifiedExams.includes(remindKey) && !isLive) {
         const remindTime = new Date(exam.remindAt);
-        if (remindTime <= new Date()) {
+        const now = new Date();
+
+        // Calculate examStart date to verify it's not scheduled for today
+        let examStart: Date | null = null;
+        if (exam.date && exam.time) {
+          const parts = exam.date.split('-');
+          const timeParts = exam.time.split(':');
+          if (parts.length === 3 && timeParts.length === 2) {
+            examStart = new Date(
+              parseInt(parts[0]),
+              parseInt(parts[1]) - 1,
+              parseInt(parts[2]),
+              parseInt(timeParts[0]),
+              parseInt(timeParts[1])
+            );
+          }
+        }
+
+        const isSameDay = examStart && (
+          examStart.getFullYear() === now.getFullYear() &&
+          examStart.getMonth() === now.getMonth() &&
+          examStart.getDate() === now.getDate()
+        );
+
+        if (remindTime <= now && !isSameDay) {
           addDoc(collection(db, 'users', authUser.uid, 'notifications'), {
             type: 'EXAM_REMINDER',
             title: '24-Hour Exam Reminder',
@@ -433,7 +485,14 @@ const StudentZoneView: React.FC = () => {
         setActiveExam(foundExam);
         setCheatViolations(studentData.currentExamWarnings || 0);
         if (studentData.examEndsAt) {
-          setExamEndTime(new Date(studentData.examEndsAt));
+          const resumeEnd = new Date(studentData.examEndsAt);
+          setExamEndTime(resumeEnd);
+          const remainMs = resumeEnd.getTime() - Date.now();
+          setExamTimeRemaining(Math.max(0, Math.ceil(remainMs / 1000)));
+        } else {
+          const fallbackEnd = new Date(Date.now() + (foundExam.duration || 30) * 60000);
+          setExamEndTime(fallbackEnd);
+          setExamTimeRemaining((foundExam.duration || 30) * 60);
         }
         // Continue but maybe show a message
         console.log("Resuming active exam session...");
@@ -515,10 +574,10 @@ const StudentZoneView: React.FC = () => {
     }
 
     const now = new Date();
-    // Use exam duration or default to 30 mins
-    const durationMins = exam.duration || 30;
-    const endTime = new Date(now.getTime() + durationMins * 60000);
+    const { endTime, finalDurationSecs } = calculateExamEndState(exam, now);
+    
     setExamEndTime(endTime);
+    setExamTimeRemaining(finalDurationSecs);
 
     // Persist to Firestore
     if (zoneId && studentData) {
@@ -546,7 +605,7 @@ const StudentZoneView: React.FC = () => {
       if (remainingMs <= 0) {
         clearInterval(timer);
         setExamTimeRemaining(0);
-        alert("Time is up! Your exam is being automatically submitted.");
+        // Removed blocking alert here, handleTerminateExam shows its own alert
 
         if (activeExam.type === 'online-test') {
           handleTerminateExam('ongoing');
@@ -574,14 +633,8 @@ const StudentZoneView: React.FC = () => {
     if (!zoneId || !activeExam || !studentData) return;
 
     if (activeExam.type === 'online-test' && !terminatedByCheat && !logsOverride) {
-      if (studentData.examEndsAt) {
-        const endTime = new Date(studentData.examEndsAt).getTime();
-        const remainingMs = (endTime + UPLOAD_BUFFER_MS) - Date.now();
-        setPostExamTimer(Math.max(0, Math.ceil(remainingMs / 1000)));
-      } else {
-        setPostExamTimer(15 * 60);
-      }
-      alert("Time is up! You have 15 minutes to scan and upload your answer script as a PDF.");
+      setPostExamTimer(15 * 60);
+      // Removed alert to avoid blocking, UI already shows the modal
       return;
     }
 
@@ -663,24 +716,31 @@ const StudentZoneView: React.FC = () => {
     try {
       setIsUploading(true);
 
-      const toBase64 = (f: File) => new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(f);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = error => reject(error);
+      const idToken = await getAuth().currentUser?.getIdToken();
+      if (!idToken) throw new Error("Not authenticated");
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', `zones/${zoneId}/exams/submissions/${studentData.id}`);
+
+      const region = 'us-central1';
+      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'nunma-learning-zone';
+      const uploadUrl = `https://${region}-${projectId}.cloudfunctions.net/uploadFileToBunny`;
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: formData
       });
 
-      const base64File = await toBase64(file);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Upload to Bunny failed: ${errText}`);
+      }
 
-      const uploadFn = httpsCallable(functions, 'uploadExamScript');
-      const uploadRes = await uploadFn({
-        file: base64File,
-        fileName: file.name,
-        zoneId,
-        examId: targetExam.id
-      });
-
-      const answerSheetUrl = (uploadRes.data as any).fileUrl;
+      const data = await response.json();
+      const answerSheetUrl = data.fileUrl;
 
       const submitFn = httpsCallable(functions, 'submitExam');
       await submitFn({
@@ -729,21 +789,19 @@ const StudentZoneView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (postExamTimer !== null && postExamTimer > 0 && studentData?.examEndsAt) {
+    if (postExamTimer !== null && postExamTimer > 0) {
       const timerId = setInterval(() => {
-        const endTime = new Date(studentData.examEndsAt).getTime();
-        const remainingMs = (endTime + UPLOAD_BUFFER_MS) - Date.now();
-        
-        if (remainingMs <= 0) {
-          clearInterval(timerId);
-          setPostExamTimer(0);
-        } else {
-          setPostExamTimer(Math.ceil(remainingMs / 1000));
-        }
+        setPostExamTimer(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(timerId);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
       return () => clearInterval(timerId);
     }
-  }, [postExamTimer !== null, studentData?.examEndsAt]);
+  }, [postExamTimer !== null]);
 
   useEffect(() => {
     if (cameraStatus === 'on') {
@@ -882,10 +940,13 @@ const StudentZoneView: React.FC = () => {
   const renderExamCard = (exam: any) => {
     
                   let isLive = false;
+                  let examStartTime: Date | null = null;
                   if (exam.scheduledAt?.toDate) {
-                    isLive = exam.scheduledAt.toDate() <= new Date();
+                    examStartTime = exam.scheduledAt.toDate();
+                    isLive = examStartTime! <= new Date();
                   } else if (exam.scheduledAt?.seconds) {
-                    isLive = new Date(exam.scheduledAt.seconds * 1000) <= new Date();
+                    examStartTime = new Date(exam.scheduledAt.seconds * 1000);
+                    isLive = examStartTime <= new Date();
                   } else if (exam.status === 'LIVE') {
                     isLive = true;
                   } else if (exam.date && exam.time) {
@@ -893,18 +954,21 @@ const StudentZoneView: React.FC = () => {
                     const parts = exam.date.split('-');
                     const timeParts = exam.time.split(':');
                     if (parts.length === 3 && timeParts.length === 2) {
-                      const examStart = new Date(
+                      examStartTime = new Date(
                         parseInt(parts[0]),
                         parseInt(parts[1]) - 1,
                         parseInt(parts[2]),
                         parseInt(timeParts[0]),
                         parseInt(timeParts[1])
                       );
-                      isLive = examStart <= new Date() && exam.status !== 'CONDUCTED';
+                      isLive = examStartTime <= new Date() && exam.status !== 'CONDUCTED';
                     }
                   }
 
-                  const computedStatus = isLive ? 'LIVE' : 'UPCOMING';
+                  // 10-minute late entry lockout
+                  const LATE_ENTRY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+                  const isExpired = isLive && examStartTime && (new Date().getTime() - examStartTime.getTime() > LATE_ENTRY_WINDOW_MS);
+                  const computedStatus = isExpired ? 'EXPIRED' : (isLive ? 'LIVE' : 'UPCOMING');
 
                   const result = examResults.find(r => r.examId === exam.id && r.studentId === (authUser?.uid || 'anon'));
                   return (
@@ -918,8 +982,8 @@ const StudentZoneView: React.FC = () => {
                             Result: {result.status === 'PENDING_GRADING' ? 'Evaluating' : result.status === 'graded' ? 'Evaluated' : result.status}
                           </span>
                         ) : (
-                          <span className="px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                            {computedStatus}
+                          <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${computedStatus === 'EXPIRED' ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
+                            {computedStatus === 'EXPIRED' ? 'CLOSED' : computedStatus}
                           </span>
                         )}
                       </div>
@@ -964,6 +1028,14 @@ const StudentZoneView: React.FC = () => {
                       ) : (
                         computedStatus === 'UPCOMING' ? (
                           <button disabled className="w-full py-5 bg-gray-100 text-gray-400 rounded-2xl font-black uppercase text-[11px] tracking-widest cursor-not-allowed">Starts Soon</button>
+                        ) : computedStatus === 'EXPIRED' ? (
+                          // Locked out — more than 10 minutes past exam start
+                          <div className="pt-4 border-t border-gray-50 text-center space-y-3">
+                            <button disabled className="w-full py-5 bg-red-50 text-red-400 rounded-2xl font-black uppercase text-[11px] tracking-widest cursor-not-allowed flex items-center justify-center gap-2">
+                              <Clock size={16} /> Entry Window Closed
+                            </button>
+                            <p className="text-[10px] text-red-400 font-bold px-2">You can only join within 10 minutes of the scheduled start time.</p>
+                          </div>
                         ) : exam.type === 'online-mcq' && computedStatus === 'LIVE' ? (
                           // MCQ: auto-graded, just launch
                           <button onClick={() => {
@@ -1116,8 +1188,8 @@ const StudentZoneView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-12 items-start">
-        <div className="xl:col-span-8 space-y-8">
-          <div className="flex bg-white/50 p-1 md:p-2 rounded-2xl md:rounded-3xl border border-gray-100 gap-1 md:gap-2 mb-4 overflow-x-auto no-scrollbar snap-x snap-mandatory w-full">
+        <div className={`${activeTab === 'content' ? 'xl:col-span-8' : 'xl:col-span-12'} space-y-8`}>
+          <div className="flex flex-wrap md:flex-nowrap bg-white/50 p-1 md:p-2 rounded-2xl md:rounded-3xl border border-gray-100 gap-1 md:gap-2 mb-4 md:overflow-x-auto md:no-scrollbar md:snap-x md:snap-mandatory w-full justify-center md:justify-start">
             {(!zone?.zoneType || zone.zoneType === 'Class Management' || zone.zoneType === 'Course') && (
               <button onClick={() => setActiveTab('content')} className={`snap-start min-w-fit px-4 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all whitespace-nowrap md:flex-1 md:min-w-[120px] md:px-0 md:py-4 md:rounded-2xl md:text-[10px] ${activeTab === 'content' ? 'bg-nunma-forest text-white shadow-md md:shadow-xl' : 'text-gray-400 hover:bg-white'}`}>Learning Content</button>
             )}
@@ -1391,7 +1463,7 @@ const StudentZoneView: React.FC = () => {
                             </div>
                             <div>
                               <p className="font-black text-indigo-900 text-xl">{exam?.title || 'Assessment'}</p>
-                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Completed: {formatDate(new Date(result.completedAt))}</p>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Completed: {formatDate(result.completedAt) || 'Recently'}</p>
                             </div>
                           </div>
                           <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-gray-200 pt-4 md:pt-0 md:pl-8">
@@ -1446,7 +1518,8 @@ const StudentZoneView: React.FC = () => {
           {/* Removed Zone Description and Progress tracking sections as per minimalist UI requirement */}
         </div>
 
-        <div className="xl:col-span-4 space-y-8">
+        {activeTab === 'content' && (
+          <div className="xl:col-span-4 space-y-8">
           <div className="bg-white rounded-[2rem] md:rounded-[4rem] p-6 md:p-10 border border-gray-100 shadow-2xl relative overflow-hidden">
             <h3 className="text-2xl font-black text-indigo-900 mb-10 flex items-center gap-4">
               <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-900">
@@ -1599,6 +1672,7 @@ const StudentZoneView: React.FC = () => {
             <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-white/20 rounded-full blur-[60px] group-hover:scale-150 transition-transform duration-1000"></div>
           </div>
         </div>
+        )}
       </div>
 
       {showCertModal && (
@@ -1673,7 +1747,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {showExamRules && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[400] flex items-center justify-center bg-nunma-forest/90 backdrop-blur-xl p-6 animate-in fade-in duration-500 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[400] flex items-center justify-center bg-nunma-forest/90 backdrop-blur-xl p-6 animate-in fade-in duration-500 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 space-y-10 animate-in zoom-in-95 duration-500">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-900 mx-auto shadow-sm">
@@ -1705,9 +1779,10 @@ const StudentZoneView: React.FC = () => {
                   setExamCurrentQuestion(0);
                   if (exam.type === 'online-test') setCameraStatus('on');
                   const now = new Date();
-                  const durationMins = exam.duration || 30;
-                  const endTime = new Date(now.getTime() + durationMins * 60000);
+                  const { endTime, finalDurationSecs } = calculateExamEndState(exam, now);
+                  
                   setExamEndTime(endTime);
+                  setExamTimeRemaining(finalDurationSecs);
                   if (zoneId && studentData) {
                     updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
                       activeExamId: exam.id,
@@ -1727,7 +1802,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {showConsentModal && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex items-center justify-center bg-nunma-forest/95 backdrop-blur-2xl p-6 animate-in fade-in duration-500 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[600] flex items-center justify-center bg-nunma-forest/95 backdrop-blur-2xl p-6 animate-in fade-in duration-500 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 space-y-10 animate-in zoom-in-95 duration-500">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-[#c2f575]/20 rounded-[2rem] flex items-center justify-center text-indigo-900 mx-auto shadow-sm">
@@ -1774,7 +1849,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {showCheatWarningModal && createPortal(
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex items-center justify-center bg-nunma-forest/95 backdrop-blur-2xl p-6 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[600] flex items-center justify-center bg-nunma-forest/95 backdrop-blur-2xl p-6 transition-all`}>
           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-3xl p-12 text-center space-y-8 animate-in zoom-in-95 duration-300">
             <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto animate-pulse">
               <AlertTriangle size={48} />
@@ -1795,7 +1870,7 @@ const StudentZoneView: React.FC = () => {
       )}
 
       {terminatedByCheat && createPortal(
-         <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[600] flex flex-col items-center justify-center bg-red-900/95 backdrop-blur-3xl p-6 text-white text-center animate-in fade-in duration-500 transition-all`}>
+         <div className={`fixed top-0 right-0 bottom-0 left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[600] flex flex-col items-center justify-center bg-red-900/95 backdrop-blur-3xl p-6 text-white text-center animate-in fade-in duration-500 transition-all`}>
             <AlertTriangle size={80} className="mb-8" />
             <h2 className="text-5xl font-black mb-4">Test Terminated</h2>
             <p className="text-xl opacity-80 max-w-lg mb-12">Your assessment was forcefully concluded due to repeated tab switching or window evasion. Your attempt has been logged and submitted.</p>
@@ -1809,13 +1884,13 @@ const StudentZoneView: React.FC = () => {
 
       {activeExam && !terminatedByCheat && postExamTimer === null && createPortal(
         <div
-          className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[500] bg-white flex flex-col p-10 animate-in slide-in-from-bottom-10 duration-700 transition-all`}
+          className={`fixed top-0 right-0 bottom-0 left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[500] bg-white flex flex-col p-6 md:p-10 animate-in slide-in-from-bottom-10 duration-700 transition-all overflow-y-auto md:overflow-y-hidden`}
           onContextMenu={(e) => e.preventDefault()}
           onCopy={(e) => e.preventDefault()}
           onPaste={(e) => e.preventDefault()}
         >
-          <div className="flex justify-between items-center mb-12">
-            <div className="flex items-center gap-6">
+          <div className="flex flex-wrap justify-between items-center gap-6 mb-8 md:mb-12">
+            <div className="flex items-center gap-4 md:gap-6">
               <div className="w-16 h-16 bg-nunma-forest rounded-2xl flex items-center justify-center text-white shadow-xl">
                 <Radio size={32} className="animate-pulse" />
               </div>
@@ -1840,41 +1915,59 @@ const StudentZoneView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 flex gap-6 md:gap-12 overflow-hidden">
-            <div className="flex-1 bg-gray-50 rounded-[4rem] border border-gray-100 p-16 flex flex-col overflow-y-auto custom-scrollbar">
+          <div className="flex-1 flex flex-col xl:flex-row gap-6 md:gap-12 overflow-visible xl:overflow-hidden">
+            <div className="flex-1 bg-gray-50 rounded-[2rem] md:rounded-[4rem] border border-gray-100 p-6 md:p-16 flex flex-col xl:overflow-y-auto custom-scrollbar">
               {activeExam.type === 'online-test' ? (
-                /* ── Written Exam (online-test): show question paper PDF download ── */
-                <div className="max-w-3xl mx-auto w-full flex flex-col items-center justify-center flex-1 space-y-12 text-center">
-                  <div className="w-24 h-24 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-600 shadow-sm">
-                    <FileText size={48} />
-                  </div>
-                  <div className="space-y-4">
-                    <h3 className="text-2xl md:text-4xl font-black text-nunma-forest tracking-tight leading-tight">Written Assessment</h3>
-                    <p className="text-gray-400 font-medium text-lg max-w-md mx-auto leading-relaxed">
-                      Download the question paper below, write your answers on paper, and upload your scanned answer sheet when you are finished.
-                    </p>
+                /* ── Written Exam (online-test): show question paper PDF inline ── */
+                <div className="w-full flex flex-col flex-1 space-y-6">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                        <FileText size={24} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg md:text-2xl font-black text-nunma-forest tracking-tight leading-tight">Question Paper</h3>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Read questions on screen • Write answers on paper</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {activeExam.pdfUrl && (
+                        <a
+                          href={activeExam.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-5 py-3 bg-gray-100 text-gray-600 rounded-2xl font-black uppercase text-[9px] tracking-widest hover:bg-gray-200 transition-all shrink-0"
+                        >
+                          <FileDown size={14} />
+                          Download PDF
+                        </a>
+                      )}
+                      <button onClick={handleSubmitExam} className="px-5 py-3 bg-red-500 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest shadow-lg hover:brightness-110 active:scale-95 transition-all shrink-0">End Exam & Upload</button>
+                    </div>
                   </div>
                   {activeExam.pdfUrl ? (
-                    <a
-                      href={activeExam.pdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-3 px-14 py-5 bg-nunma-forest text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all"
-                    >
-                      <FileDown size={20} />
-                      Download Question Paper
-                    </a>
+                    <div className="flex-1 w-full rounded-2xl md:rounded-3xl overflow-hidden border border-gray-200 shadow-inner bg-white" style={{ minHeight: '500px' }}>
+                      <iframe
+                        src={activeExam.pdfUrl.startsWith('blob:') ? `${activeExam.pdfUrl}#toolbar=0` : `https://docs.google.com/gview?url=${encodeURIComponent(activeExam.pdfUrl)}&embedded=true`}
+                        className="w-full h-full border-none"
+                        style={{ minHeight: '500px', height: '100%' }}
+                        title="Question Paper"
+                        allow="autoplay"
+                      />
+                    </div>
                   ) : (
-                    <div className="px-10 py-5 bg-gray-100 text-gray-400 rounded-3xl font-black uppercase text-[10px] tracking-widest">
-                      Question paper not uploaded by tutor yet
+                    <div className="flex-1 flex flex-col items-center justify-center text-center py-20">
+                      <div className="w-20 h-20 bg-gray-50 rounded-[2rem] flex items-center justify-center text-gray-300 mb-6">
+                        <FileText size={40} />
+                      </div>
+                      <p className="text-gray-400 font-black uppercase text-[10px] tracking-widest">Question paper not uploaded by tutor yet</p>
                     </div>
                   )}
-                  <div className="pt-8 border-t border-gray-200 w-full max-w-md">
+                  <div className="pt-4 border-t border-gray-200 text-center">
                     <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest leading-relaxed">
                       When the timer expires you will get a 15-minute window to scan and upload your answer sheet as a PDF.
                     </p>
                   </div>
-                  <button onClick={handleSubmitExam} className="px-14 py-5 bg-red-500 text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:brightness-110 active:scale-95 transition-all">End Exam &amp; Upload Answers</button>
                 </div>
               ) : (
                 /* ── MCQ Exam (online-mcq): show questions one-by-one ── */
@@ -1920,7 +2013,7 @@ const StudentZoneView: React.FC = () => {
               )}
             </div>
 
-            <div className="w-[350px] space-y-8 flex flex-col">
+            <div className="w-full xl:w-[350px] space-y-8 flex flex-col">
               <div className="bg-black rounded-[3rem] aspect-video relative overflow-hidden shadow-2xl">
                 <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-[8px] font-black text-white uppercase tracking-widest shadow-lg z-10">
                   <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
@@ -1974,7 +2067,7 @@ const StudentZoneView: React.FC = () => {
 
       {/* Post Exam Timer Modal for Online Test */}
       {postExamTimer !== null && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[200] flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-in zoom-in-95 duration-500 transition-all`}>
+        <div className={`fixed top-0 right-0 bottom-0 left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[200] flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-in zoom-in-95 duration-500 transition-all`}>
           <div className="bg-white rounded-[3rem] max-w-lg w-full p-12 text-center shadow-2xl border border-white/10 relative overflow-hidden">
             {postExamTimer === 0 && (
               <div className="absolute inset-0 bg-red-900/95 flex flex-col items-center justify-center z-50 p-8 backdrop-blur-md animate-in fade-in duration-500">
@@ -2026,10 +2119,24 @@ const StudentZoneView: React.FC = () => {
                   handleUploadAnswerSheet(activeExam, postExamAnswerFile).then(() => setPostExamAnswerFile(null));
                 }
               }}
-              className="w-full py-6 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-[11px] tracking-[0.2em] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
+              className="w-full py-6 bg-nunma-forest text-white rounded-[2rem] font-black uppercase text-[11px] tracking-[0.2em] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 mb-4"
             >
               {isUploading ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"/> : null}
               {isUploading ? 'Uploading...' : 'Submit Answers'}
+            </button>
+            <button
+              onClick={() => {
+                setPostExamTimer(null);
+                setActiveExam(null);
+                setCameraStatus('off');
+                if (videoStream) {
+                  videoStream.getTracks().forEach((track: any) => track.stop());
+                  setVideoStream(null);
+                }
+              }}
+              className="w-full py-4 text-gray-400 font-black uppercase text-xs tracking-widest hover:text-red-500 transition-colors"
+            >
+              Cancel & View Dashboard
             </button>
           </div>
         </div>
@@ -2037,7 +2144,7 @@ const StudentZoneView: React.FC = () => {
 
       {/* POST-EXAM RESULTS SUMMARY MODAL */}
       {submittedExamResult && (
-        <div className={`fixed top-0 right-0 bottom-0 ${isSidebarOpen ? 'left-[240px]' : 'left-[64px]'} z-[700] flex items-center justify-center bg-nunma-forest/90 backdrop-blur-2xl p-6 animate-in fade-in duration-500`}>
+        <div className={`fixed top-0 right-0 bottom-0 left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[700] flex items-center justify-center bg-nunma-forest/90 backdrop-blur-2xl p-6 animate-in fade-in duration-500`}>
           <div className="bg-white rounded-[3.5rem] w-full max-w-xl shadow-3xl p-10 space-y-8 animate-in zoom-in-95 duration-500 relative text-center">
             <div className="w-20 h-20 bg-indigo-50 text-indigo-900 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
               <Award size={40} />
