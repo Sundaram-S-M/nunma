@@ -10,6 +10,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatDate } from '../utils/dateUtils';
 import {
   Plus,
   X,
@@ -106,7 +107,7 @@ const Workplace: React.FC = () => {
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
       return `<tr>
         <td>${t.id}</td>
-        <td>${t.date}</td>
+        <td>${formatDate(t.date)}</td>
         <td>${timeStr}</td>
         <td>${t.service}</td>
         <td>${t.amount}</td>
@@ -363,7 +364,7 @@ const Workplace: React.FC = () => {
             title: isLiveNow ? '🔴 Live Class Started' : '📅 Live Class Scheduled',
             message: isLiveNow 
               ? `Live class "${title}" is now live! Join now.`
-              : `A live class "${title}" has been scheduled for ${scheduledDate} @ ${scheduledTime}.`,
+              : `A live class "${title}" has been scheduled for ${formatDate(scheduledDate)} @ ${scheduledTime}.`,
             zoneId,
             actionUrl: `/classroom/${zoneId}`,
             read: false,
@@ -1026,7 +1027,7 @@ const Workplace: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-lg font-black text-nunma-forest">{t.service}</p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{t.id} • {t.date}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{t.id} • {formatDate(t.date)}</p>
                       </div>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">

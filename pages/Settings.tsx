@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { formatDate } from '../utils/dateUtils';
 import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import {
   Edit2,
@@ -608,7 +609,7 @@ const Billings = () => {
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
       return `<tr>
         <td>${t.id}</td>
-        <td>${t.date}</td>
+        <td>${formatDate(t.date)}</td>
         <td>${timeStr}</td>
         <td>${t.service}</td>
         <td>${t.amount}</td>
@@ -927,7 +928,7 @@ const Billings = () => {
                 </div>
                 <div>
                   <p className="text-lg font-black text-indigo-900">{t.service}</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{t.id} • {t.date}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{t.id} • {formatDate(t.date)}</p>
                 </div>
               </div>
               <div className="text-right flex flex-col items-end gap-2">

@@ -5,6 +5,7 @@ import { db, functions } from '../utils/firebase';
 import * as XLSX from 'xlsx';
 import { Calendar, Download, Users, FileSpreadsheet, Search, Bot, Send, X, MessageSquare, Loader2, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { formatDate } from '../utils/dateUtils';
 
 interface ExamAnalyticsProps {
     zoneId: string;
@@ -122,7 +123,7 @@ const ExamAnalytics: React.FC<ExamAnalyticsProps> = ({ zoneId, filteredStudents 
                 };
 
                 filteredExams.forEach(exam => {
-                    const colName = `${exam.title} (${exam.date})`;
+                    const colName = `${exam.title} (${formatDate(exam.date)})`;
                     const sub = allSubmissions[exam.id]?.find(s => s.studentId === student.id);
                     row[colName] = sub?.marks ?? 'Absent/Not Graded';
                 });

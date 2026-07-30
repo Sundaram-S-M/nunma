@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getZohoAccessToken = getZohoAccessToken;
+exports.getZohoAccessToken = void 0;
 const axios_1 = __importDefault(require("axios"));
 let cachedToken = null;
 let tokenExpiryTime = 0;
@@ -30,4 +30,5 @@ async function getZohoAccessToken() {
     tokenExpiryTime = Date.now() + ((authRes.data.expires_in || 3600) * 1000) - 300000;
     return cachedToken;
 }
+exports.getZohoAccessToken = getZohoAccessToken;
 //# sourceMappingURL=zohoUtils.js.map

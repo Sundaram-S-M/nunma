@@ -466,15 +466,25 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     if (!exam?.date || !exam?.time) return 'TBD';
 
     // Parse exam date and time
-    const examDateParts = (exam.date || "").split('-'); // Expected YYYY-MM-DD
+    const examDateParts = (exam.date || "").split('-'); // Expected YYYY-MM-DD or DD-MM-YYYY
     const examTimeParts = (exam.time || "").split(':'); // Expected HH:MM
 
     if (examDateParts.length !== 3 || examTimeParts.length !== 2) return exam?.status || 'UPCOMING';
 
+    let year = parseInt(examDateParts[0]);
+    let month = parseInt(examDateParts[1]) - 1;
+    let day = parseInt(examDateParts[2]);
+
+    if (examDateParts[2].length === 4) {
+      day = parseInt(examDateParts[0]);
+      month = parseInt(examDateParts[1]) - 1;
+      year = parseInt(examDateParts[2]);
+    }
+
     const examStart = new Date(
-      parseInt(examDateParts[0]),
-      parseInt(examDateParts[1]) - 1,
-      parseInt(examDateParts[2]),
+      year,
+      month,
+      day,
       parseInt(examTimeParts[0]),
       parseInt(examTimeParts[1])
     );
@@ -852,7 +862,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               addDoc(collection(db, 'users', student.id, 'notifications'), {
                 type: 'EXAM_SCHEDULED',
                 title: 'New Exam Scheduled',
-                message: `Exam "${newExamTitle}" has been scheduled on ${sched.date} @ ${sched.time}. Be prepared!`,
+                message: `Exam "${newExamTitle}" has been scheduled on ${formatDate(sched.date)} @ ${sched.time}. Be prepared!`,
                 zoneId,
                 examId: examRef.id,
                 read: false,
@@ -989,7 +999,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
               addDoc(collection(db, 'users', student.id, 'notifications'), {
                 type: 'EXAM_SCHEDULED',
                 title: 'New Exam Scheduled',
-                message: `Exam "${newExamTitle}" for ${subject} has been scheduled on ${sched.date} @ ${sched.time}. Be prepared!`,
+                message: `Exam "${newExamTitle}" for ${subject} has been scheduled on ${formatDate(sched.date)} @ ${sched.time}. Be prepared!`,
                 zoneId,
                 examId: examRef.id,
                 read: false,
@@ -5415,7 +5425,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                                     {isSubjectSplit ? exam.subject : (batch?.name || 'Unknown Batch')}
                                                   </p>
                                                   <div className="flex items-center gap-3 text-gray-400 font-bold text-[10px] uppercase tracking-widest mt-1">
-                                                    <Calendar size={12} /> {exam.date} @ {exam.time}
+                                                    <Calendar size={12} /> {formatDate(exam.date)} @ {exam.time}
                                                     <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest ${
                                                       getExamStatus(exam) === 'UPCOMING' ? 'bg-indigo-50 text-indigo-500' : getExamStatus(exam) === 'ONGOING' ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-500'
                                                     }`}>
@@ -5448,8 +5458,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
                                   <div className="space-y-3">
                                     <h4 className="text-2xl font-black text-nunma-forest tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{exam.title}</h4>
-                                    <div className="flex items-center gap-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
-                                      <Calendar size={14} /> {exam.date} @ {exam.time}
+                                    <div className="flex items-center gap-4 text-gray-400 font-bold text-[10px] uppercase tracking-widest">
+                                      <Calendar size={14} /> {formatDate(exam.date)} @ {exam.time}
                                     </div>
                                     {exam.batchId && (() => {
                                       const batch = zoneBatches.find(b => b.id === exam.batchId);
@@ -5816,7 +5826,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                 >
                   <div>
                     <h3 className="font-bold text-nunma-forest group-hover:text-indigo-700">{ex.title}</h3>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">{ex.date} @ {ex.time}</p>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">{formatDate(ex.date)} @ {ex.time}</p>
                   </div>
                   <ChevronRight size={20} className="text-gray-400 group-hover:text-indigo-500" />
                 </button>

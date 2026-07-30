@@ -1578,9 +1578,9 @@ export const uploadFileToBunny = onRequest(
                 });
 
                 // 5. Update Metrics
-                await db.collection("users").doc(uid).update({
+                await db.collection("users").doc(uid).set({
                     usedStorageBytes: admin.firestore.FieldValue.increment(fileSize)
-                });
+                }, { merge: true });
 
                 const fileUrl = `${pullZoneUrl}/${storagePath}`;
                 res.status(200).json({ fileUrl, fileName, size: fileSize });
@@ -1738,7 +1738,7 @@ export const recordCheatViolation = onCall(
             const { zoneId, examId, violationType } = request.data;
 
             // 2. Validate input strings and violationType
-            const allowedViolations = ['TAB_SWITCH', 'COPY_PASTE', 'WINDOW_BLUR', 'FULLSCREEN_EXIT'];
+            const allowedViolations = ['TAB_SWITCH', 'COPY_PASTE', 'WINDOW_BLUR', 'FULLSCREEN_EXIT', 'GAZE_AWAY', 'MULTIPLE_FACES', 'FACE_ABSENT', 'PHONE_DETECTED'];
             if (!zoneId || !examId || !violationType || !allowedViolations.includes(violationType)) {
                 throw new functions.https.HttpsError("invalid-argument", "Invalid or missing parameters: { zoneId, examId, violationType }.");
             }

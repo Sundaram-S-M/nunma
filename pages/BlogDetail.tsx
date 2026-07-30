@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Clock, Calendar, User, ChevronRight } from 'lucide-react';
 import { blogPosts } from '../utils/blogData';
+import { formatDate } from '../utils/dateUtils';
 
 const BlogDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -64,7 +65,7 @@ const BlogDetail: React.FC = () => {
         <div className="flex flex-wrap gap-4 text-xs font-bold text-slate-400 justify-center md:justify-start items-center">
           <span className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-slate-400" />
-            {post.date}
+            {formatDate(post.date)}
           </span>
           <span className="w-1.5 h-1.5 rounded-full bg-slate-200" />
           <span className="flex items-center gap-1.5">
@@ -134,7 +135,7 @@ const BlogDetail: React.FC = () => {
               <h4 className="font-extrabold text-slate-800 text-sm mb-2 group-hover:text-[#052e16] transition-colors line-clamp-2 min-h-[40px]">
                 {rPost.title}
               </h4>
-              <span className="text-[11px] font-bold text-slate-400">{rPost.date}</span>
+              <span className="text-[11px] font-bold text-slate-400">{formatDate(rPost.date)}</span>
             </div>
           ))}
         </div>

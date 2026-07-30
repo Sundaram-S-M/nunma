@@ -15,23 +15,13 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -739,10 +729,10 @@ exports.createRazorpayOrder = (0, https_1.onCall)({ secrets: ["RAZORPAY_KEY_ID",
             await db.collection("zones").doc(zoneId).collection("orders").doc(razorpayOrder.id).set({
                 orderId: razorpayOrder.id,
                 studentUid: request.auth.uid,
-                tutorUid: tutorUid, // Store tutorUid for webhook consumption
+                tutorUid: tutorUid,
                 amount: finalAmount,
-                commission: commission, // Store commission for webhook invoicing
-                tutorShare: tutorShare, // Store tutorShare for reference
+                commission: commission,
+                tutorShare: tutorShare,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 status: 'CREATED'
             });
@@ -1336,9 +1326,9 @@ exports.uploadFileToBunny = (0, https_1.onRequest)({ secrets: ["BUNNY_STORAGE_PA
                 }
             });
             // 5. Update Metrics
-            await db.collection("users").doc(uid).update({
+            await db.collection("users").doc(uid).set({
                 usedStorageBytes: admin.firestore.FieldValue.increment(fileSize)
-            });
+            }, { merge: true });
             const fileUrl = `${pullZoneUrl}/${storagePath}`;
             res.status(200).json({ fileUrl, fileName, size: fileSize });
         }
@@ -1466,7 +1456,7 @@ exports.recordCheatViolation = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY"],
         const uid = request.auth.uid;
         const { zoneId, examId, violationType } = request.data;
         // 2. Validate input strings and violationType
-        const allowedViolations = ['TAB_SWITCH', 'COPY_PASTE', 'WINDOW_BLUR', 'FULLSCREEN_EXIT'];
+        const allowedViolations = ['TAB_SWITCH', 'COPY_PASTE', 'WINDOW_BLUR', 'FULLSCREEN_EXIT', 'GAZE_AWAY', 'MULTIPLE_FACES', 'FACE_ABSENT', 'PHONE_DETECTED'];
         if (!zoneId || !examId || !violationType || !allowedViolations.includes(violationType)) {
             throw new functions.https.HttpsError("invalid-argument", "Invalid or missing parameters: { zoneId, examId, violationType }.");
         }
@@ -1716,6 +1706,19 @@ exports.submitExam = (0, https_1.onCall)({ cors: true }, async (request) => {
         const examData = examDoc.data();
         if (!examData) {
             throw new functions.https.HttpsError("not-found", "Exam not found.");
+        }
+        // 10-minute late entry server-side validation
+        if (studentData.examStartedAt && examData.date && examData.time) {
+            const parts = examData.date.split('-');
+            const timeParts = examData.time.split(':');
+            if (parts.length === 3 && timeParts.length === 2) {
+                const scheduledStart = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), parseInt(timeParts[0]), parseInt(timeParts[1])).getTime();
+                const studentStarted = new Date(studentData.examStartedAt).getTime();
+                const LATE_ENTRY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+                if (studentStarted - scheduledStart > LATE_ENTRY_WINDOW_MS) {
+                    throw new functions.https.HttpsError("permission-denied", "Late entry: You joined more than 10 minutes after the exam started. Submission rejected.");
+                }
+            }
         }
         let marks = 0;
         let status = 'ongoing';
@@ -2968,7 +2971,7 @@ exports.manageLiveTimer = (0, https_1.onCall)({ cors: true }, async (request) =>
                 }
                 const remaining = Math.max(0, currentTimer.timerEndsAt - now);
                 newTimer = {
-                    timerEndsAt: currentTimer.timerEndsAt, // keep previous endsAt for history, though unused while paused
+                    timerEndsAt: currentTimer.timerEndsAt,
                     timerRemaining: remaining,
                     timerStatus: 'paused'
                 };

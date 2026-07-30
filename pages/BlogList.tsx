@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, Calendar, User } from 'lucide-react';
 import { blogPosts } from '../utils/blogData';
+import { formatDate } from '../utils/dateUtils';
 
 const BlogList: React.FC = () => {
   const navigate = useNavigate();
@@ -57,7 +58,7 @@ const BlogList: React.FC = () => {
                 <div className="flex flex-wrap gap-4 text-xs font-bold text-slate-400 mb-4 items-center">
                   <span className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    {post.date}
+                    {formatDate(post.date)}
                   </span>
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-200" />
                   <span className="flex items-center gap-1.5">

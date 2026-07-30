@@ -4,6 +4,7 @@ import { db } from '../utils/firebase';
 import { X, Trophy, TrendingDown, TrendingUp, Award, Download, Users, BarChart3, Medal, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import * as XLSX from 'xlsx';
+import { formatDate } from '../utils/dateUtils';
 
 interface ExamInsightsProps {
   zoneId: string;
@@ -126,7 +127,7 @@ const ExamInsights: React.FC<ExamInsightsProps> = ({ zoneId, exam, onClose, stud
           <div>
             <h1 className="text-2xl md:text-3xl font-black text-nunma-forest tracking-tight">{exam.title}</h1>
             <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-              {exam.subject ? `${exam.subject} · ` : ''}{exam.date} · {gradedSubmissions.length} graded
+              {exam.subject ? `${exam.subject} · ` : ''}{formatDate(exam.date)} · {gradedSubmissions.length} graded
             </p>
           </div>
         </div>

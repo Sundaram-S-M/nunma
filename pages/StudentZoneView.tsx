@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { collection, query, where, getDocs, limit, updateDoc, doc, arrayUnion, onSnapshot, addDoc, orderBy, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, limit, updateDoc, doc, arrayUnion, onSnapshot, addDoc, orderBy, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { formatDate } from '../utils/dateUtils';
 import { db, functions } from '../utils/firebase';
+import { useProctoringVision } from '../hooks/useProctoringVision';
 import { httpsCallable } from 'firebase/functions';
 import { getAuth } from 'firebase/auth';
 import { Student } from '../types';
@@ -49,29 +50,35 @@ import ExamInsights from '../components/ExamInsights';
 
 const calculateExamEndState = (exam: any, now: Date) => {
   const durationMins = exam.duration || 30;
-  let endTime = new Date(now.getTime() + durationMins * 60000);
 
   if (exam.date && exam.time) {
     const parts = exam.date.split('-');
     const timeParts = exam.time.split(':');
     if (parts.length === 3 && timeParts.length === 2) {
-      const examStartTime = new Date(
-        parseInt(parts[0]),
-        parseInt(parts[1]) - 1,
-        parseInt(parts[2]),
-        parseInt(timeParts[0]),
-        parseInt(timeParts[1])
-      );
+      let year, month, day;
+      if (parts[0].length === 4) {
+        year = parseInt(parts[0]);
+        month = parseInt(parts[1]) - 1;
+        day = parseInt(parts[2]);
+      } else {
+        day = parseInt(parts[0]);
+        month = parseInt(parts[1]) - 1;
+        year = parseInt(parts[2]);
+      }
+      const examStartTime = new Date(year, month, day, parseInt(timeParts[0]), parseInt(timeParts[1]));
       const scheduledEndTime = new Date(examStartTime.getTime() + durationMins * 60000);
-      
-      if (scheduledEndTime.getTime() < endTime.getTime()) {
-        endTime = scheduledEndTime;
+      const remainingSecs = Math.floor((scheduledEndTime.getTime() - now.getTime()) / 1000);
+
+      if (remainingSecs > 0) {
+        // Student joined within the window — give them the remaining strict time
+        return { endTime: scheduledEndTime, finalDurationSecs: remainingSecs };
       }
     }
   }
 
-  const finalDurationSecs = Math.max(0, Math.floor((endTime.getTime() - now.getTime()) / 1000));
-  return { endTime, finalDurationSecs };
+  // Fallback: no scheduled date, or edge case — give the full duration from now
+  const endTime = new Date(now.getTime() + durationMins * 60000);
+  return { endTime, finalDurationSecs: durationMins * 60 };
 };
 
 const formatJoinedDate = (joinedAt: any) => {
@@ -195,32 +202,41 @@ const StudentZoneView: React.FC = () => {
       } else if (exam.status === 'LIVE') {
         isLive = true;
       } else if (exam.date && exam.time) {
-        // Exams are created with date (YYYY-MM-DD) and time (HH:MM) strings
+        // Exams are created with date (YYYY-MM-DD or DD-MM-YYYY) and time (HH:MM) strings
         const parts = exam.date.split('-');
         const timeParts = exam.time.split(':');
         if (parts.length === 3 && timeParts.length === 2) {
-          const examStart = new Date(
-            parseInt(parts[0]),
-            parseInt(parts[1]) - 1,
-            parseInt(parts[2]),
-            parseInt(timeParts[0]),
-            parseInt(timeParts[1])
-          );
+          let year, month, day;
+          if (parts[0].length === 4) {
+            year = parseInt(parts[0]);
+            month = parseInt(parts[1]) - 1;
+            day = parseInt(parts[2]);
+          } else {
+            day = parseInt(parts[0]);
+            month = parseInt(parts[1]) - 1;
+            year = parseInt(parts[2]);
+          }
+          const examStart = new Date(year, month, day, parseInt(timeParts[0]), parseInt(timeParts[1]));
           isLive = examStart <= new Date() && exam.status !== 'CONDUCTED';
         }
       }
 
       // EXAM_LIVE notification
       if (isLive && exam.id && !notifiedExams.includes(exam.id)) {
-        addDoc(collection(db, 'users', authUser.uid, 'notifications'), {
-          type: 'EXAM_LIVE',
-          title: 'Exam Starting Now!',
-          message: `Your exam "${exam.title}" is now live! You have limited time to attempt it.`,
-          zoneId,
-          examId: exam.id,
-          read: false,
-          createdAt: new Date()
-        }).catch(console.error);
+        const notifRef = doc(db, 'users', authUser.uid, 'notifications', `exam_live_${exam.id}`);
+        getDoc(notifRef).then(docSnap => {
+          if (!docSnap.exists()) {
+            setDoc(notifRef, {
+              type: 'EXAM_LIVE',
+              title: 'Exam Starting Now!',
+              message: `Your exam "${exam.title}" is now live! You have limited time to attempt it.`,
+              zoneId,
+              examId: exam.id,
+              read: false,
+              createdAt: new Date()
+            }).catch(console.error);
+          }
+        });
         setNotifiedExams(prev => [...prev, exam.id]);
       }
 
@@ -253,15 +269,20 @@ const StudentZoneView: React.FC = () => {
         );
 
         if (remindTime <= now && !isSameDay) {
-          addDoc(collection(db, 'users', authUser.uid, 'notifications'), {
-            type: 'EXAM_REMINDER',
-            title: '24-Hour Exam Reminder',
-            message: `Reminder: Exam "${exam.title}" is scheduled tomorrow on ${exam.date} @ ${exam.time}. Be prepared!`,
-            zoneId,
-            examId: exam.id,
-            read: false,
-            createdAt: new Date()
-          }).catch(console.error);
+          const notifRef = doc(db, 'users', authUser.uid, 'notifications', `exam_remind_${exam.id}`);
+          getDoc(notifRef).then(docSnap => {
+            if (!docSnap.exists()) {
+              setDoc(notifRef, {
+                type: 'EXAM_REMINDER',
+                title: '24-Hour Exam Reminder',
+                message: `Reminder: Exam "${exam.title}" is scheduled tomorrow on ${formatDate(exam.date)} @ ${exam.time}. Be prepared!`,
+                zoneId,
+                examId: exam.id,
+                read: false,
+                createdAt: new Date()
+              }).catch(console.error);
+            }
+          });
           setNotifiedExams(prev => [...prev, remindKey]);
         }
       }
@@ -483,7 +504,13 @@ const StudentZoneView: React.FC = () => {
       const foundExam = exams.find(e => e.id === studentData.activeExamId);
       if (foundExam) {
         setActiveExam(foundExam);
-        setCheatViolations(studentData.currentExamWarnings || 0);
+        const warnings = studentData.currentExamWarnings || 0;
+        setCheatViolations(warnings);
+        if (warnings >= 3) {
+          setTerminatedByCheat(true);
+          handleTerminateExam('failed', studentData.violationLogs || []);
+          return;
+        }
         if (studentData.examEndsAt) {
           const resumeEnd = new Date(studentData.examEndsAt);
           setExamEndTime(resumeEnd);
@@ -496,6 +523,9 @@ const StudentZoneView: React.FC = () => {
         }
         // Continue but maybe show a message
         console.log("Resuming active exam session...");
+        if (foundExam.type === 'online-test' || foundExam.type === 'online-mcq') {
+          setCameraStatus('on');
+        }
       }
     }
 
@@ -519,23 +549,16 @@ const StudentZoneView: React.FC = () => {
 
   // Cheating Detection: Window Visibility
   useEffect(() => {
-    if (activeExam && !isExamTerminated && !terminatedByCheat && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq')) {
+    if (activeExam && !showExamRules && !isExamTerminated && !terminatedByCheat && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq')) {
       const handleVisibilityChange = async () => {
         if (document.visibilityState !== 'hidden') return;
         
         const timestamp = new Date().toISOString();
-        let newWarningCount = 0;
-        let currentLogs: string[] = [];
+        const newWarningCount = cheatViolations + 1;
+        const currentLogs = [...violationLogs, timestamp];
         
-        setCheatViolations(prev => {
-          newWarningCount = prev + 1;
-          return newWarningCount;
-        });
-        
-        setViolationLogs(prev => {
-          currentLogs = [...prev, timestamp];
-          return currentLogs;
-        });
+        setCheatViolations(newWarningCount);
+        setViolationLogs(currentLogs);
 
         if (zoneId && studentData) {
           try {
@@ -558,7 +581,50 @@ const StudentZoneView: React.FC = () => {
       document.addEventListener('visibilitychange', handleVisibilityChange);
       return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
-  }, [activeExam, isExamTerminated, terminatedByCheat, zoneId, studentData]);
+  }, [activeExam, showExamRules, isExamTerminated, terminatedByCheat, zoneId, studentData, cheatViolations, violationLogs]);
+
+  // AI Vision Proctoring Callback & Hook
+  const handleVisionViolation = React.useCallback(async (type: string, message: string) => {
+    if (!activeExam || isExamTerminated || terminatedByCheat) return;
+
+    const timestamp = new Date().toISOString();
+    const newWarningCount = cheatViolations + 1;
+    const currentLogs = [...violationLogs, `${type}: ${message} (${timestamp})`];
+
+    setCheatViolations(newWarningCount);
+    setViolationLogs(currentLogs);
+
+    if (zoneId && studentData) {
+      try {
+        await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
+          currentExamWarnings: newWarningCount,
+          violationLogs: arrayUnion(`${type}: ${message} (${timestamp})`)
+        });
+
+        const recordViolationFn = httpsCallable(functions, 'recordCheatViolation');
+        recordViolationFn({
+          zoneId,
+          examId: activeExam.id,
+          violationType: type
+        }).catch(err => console.warn("Failed to record vision violation remotely:", err));
+      } catch (e) {
+        console.error("Failed to sync vision warning", e);
+      }
+    }
+
+    if (newWarningCount >= 3) {
+      setTerminatedByCheat(true);
+      handleTerminateExam('failed', currentLogs);
+    } else {
+      setShowCheatWarningModal(true);
+    }
+  }, [activeExam, isExamTerminated, terminatedByCheat, zoneId, studentData, cheatViolations, violationLogs]);
+
+  const proctorVision = useProctoringVision({
+    enabled: !!activeExam && !showExamRules && !isExamTerminated && !terminatedByCheat && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq'),
+    onViolation: handleVisionViolation,
+    fps: 7
+  });
 
   const handleStartExam = async (exam: any) => {
     if (!hasExplicitConsent) {
@@ -569,7 +635,7 @@ const StudentZoneView: React.FC = () => {
     setActiveExam(exam);
     setExamCurrentQuestion(0);
 
-    if (exam.type === 'online-test') {
+    if (exam.type === 'online-test' || exam.type === 'online-mcq') {
       setCameraStatus('on');
     }
 
@@ -621,7 +687,7 @@ const StudentZoneView: React.FC = () => {
   }, [activeExam, examEndTime, isExamTerminated]);
 
   const formatTime = (seconds: number | null) => {
-    if (seconds === null) return "00:00";
+    if (seconds === null) return "--:--";
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -634,7 +700,11 @@ const StudentZoneView: React.FC = () => {
 
     if (activeExam.type === 'online-test' && !terminatedByCheat && !logsOverride) {
       setPostExamTimer(15 * 60);
-      // Removed alert to avoid blocking, UI already shows the modal
+      setCameraStatus('off');
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        setVideoStream(null);
+      }
       return;
     }
 
@@ -780,9 +850,9 @@ const StudentZoneView: React.FC = () => {
         }
       }
       alert("Answer script submitted successfully. Awaiting grading.");
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to save exam result via function", e);
-      alert("Time over. You can't upload the answer sheet after the allowed time window has passed.");
+      alert(e.message || "Failed to upload answer script. Please try again.");
     } finally {
       setIsUploading(false);
     }
@@ -950,24 +1020,30 @@ const StudentZoneView: React.FC = () => {
                   } else if (exam.status === 'LIVE') {
                     isLive = true;
                   } else if (exam.date && exam.time) {
-                    // Exams created with date (YYYY-MM-DD) + time (HH:MM) strings
+                    // Exams created with date (YYYY-MM-DD or DD-MM-YYYY) + time (HH:MM) strings
                     const parts = exam.date.split('-');
                     const timeParts = exam.time.split(':');
                     if (parts.length === 3 && timeParts.length === 2) {
-                      examStartTime = new Date(
-                        parseInt(parts[0]),
-                        parseInt(parts[1]) - 1,
-                        parseInt(parts[2]),
-                        parseInt(timeParts[0]),
-                        parseInt(timeParts[1])
-                      );
+                      let year, month, day;
+                      if (parts[0].length === 4) {
+                        year = parseInt(parts[0]);
+                        month = parseInt(parts[1]) - 1;
+                        day = parseInt(parts[2]);
+                      } else {
+                        day = parseInt(parts[0]);
+                        month = parseInt(parts[1]) - 1;
+                        year = parseInt(parts[2]);
+                      }
+                      examStartTime = new Date(year, month, day, parseInt(timeParts[0]), parseInt(timeParts[1]));
                       isLive = examStartTime <= new Date() && exam.status !== 'CONDUCTED';
                     }
                   }
 
-                  // 10-minute late entry lockout
-                  const LATE_ENTRY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-                  const isExpired = isLive && examStartTime && (new Date().getTime() - examStartTime.getTime() > LATE_ENTRY_WINDOW_MS);
+                  // Entry window = full exam duration set by tutor
+                  const examDurationMs = (exam.duration || 30) * 60 * 1000;
+                  const uploadGracePeriodMs = 15 * 60 * 1000; // 15 minutes grace period for uploading
+                  const isPastExamDuration = isLive && examStartTime && (new Date().getTime() - examStartTime.getTime() > examDurationMs);
+                  const isExpired = isLive && examStartTime && (new Date().getTime() - examStartTime.getTime() > examDurationMs + uploadGracePeriodMs);
                   const computedStatus = isExpired ? 'EXPIRED' : (isLive ? 'LIVE' : 'UPCOMING');
 
                   const result = examResults.find(r => r.examId === exam.id && r.studentId === (authUser?.uid || 'anon'));
@@ -991,7 +1067,7 @@ const StudentZoneView: React.FC = () => {
                         <h4 className="text-2xl font-black text-nunma-forest tracking-tight truncate">{exam.title}</h4>
                         <div className="mt-4 flex flex-wrap gap-4">
                           <div className="flex items-center gap-2 text-gray-400 text-xs font-bold uppercase">
-                            <Clock size={14} /> {exam.date} @ {exam.time}
+                            <Clock size={14} /> {formatDate(exam.date)} @ {exam.time}
                           </div>
                           <div className="flex items-center gap-2 text-gray-400 text-xs font-bold uppercase">
                             <Target size={14} /> Pass: {exam.minMark}/{exam.maxMark}
@@ -1034,33 +1110,43 @@ const StudentZoneView: React.FC = () => {
                             <button disabled className="w-full py-5 bg-red-50 text-red-400 rounded-2xl font-black uppercase text-[11px] tracking-widest cursor-not-allowed flex items-center justify-center gap-2">
                               <Clock size={16} /> Entry Window Closed
                             </button>
-                            <p className="text-[10px] text-red-400 font-bold px-2">You can only join within 10 minutes of the scheduled start time.</p>
+                            <p className="text-[10px] text-red-400 font-bold px-2">You can only join within the exam duration window of the scheduled start time.</p>
                           </div>
                         ) : exam.type === 'online-mcq' && computedStatus === 'LIVE' ? (
-                          // MCQ: auto-graded, just launch
-                          <button onClick={() => {
-                            if (!exam?.id || !zoneId || !studentData?.id) return;
-                            updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), { activeExamId: exam.id });
-                            setActiveExam(exam);
-                            setShowExamRules(true);
-                          }} className="w-full py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
-                        ) : exam.type === 'online-test' && computedStatus === 'LIVE' ? (
-                          // Online-test: launch portal + upload answer script (within 15 min after exam)
-                          <div className="space-y-3">
+                          !isPastExamDuration ? (
                             <button onClick={() => {
                               if (!exam?.id || !zoneId || !studentData?.id) return;
                               updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), { activeExamId: exam.id });
                               setActiveExam(exam);
                               setShowExamRules(true);
                             }} className="w-full py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
+                          ) : (
+                            <div className="w-full py-5 bg-gray-100 text-gray-400 rounded-2xl font-black uppercase text-[11px] tracking-widest text-center">Exam Entry Closed</div>
+                          )
+                        ) : exam.type === 'online-test' && computedStatus === 'LIVE' ? (
+                          // Online-test: launch portal + upload answer script (within 15 min after exam)
+                          <div className="space-y-3">
+                            {!isPastExamDuration ? (
+                              <button onClick={() => {
+                                if (!exam?.id || !zoneId || !studentData?.id) return;
+                                updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), { activeExamId: exam.id });
+                                setActiveExam(exam);
+                                setShowExamRules(true);
+                              }} className="w-full py-5 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:brightness-110 active:scale-95 transition-all">Launch Exam Portal</button>
+                            ) : (
+                              <div className="w-full py-3 bg-red-50 text-red-400 rounded-2xl font-black uppercase text-[10px] tracking-widest text-center border border-red-100">Exam Entry Closed</div>
+                            )}
                             <div className="pt-1 border-t border-gray-50 space-y-2">
                               <p className="text-center text-[10px] text-gray-400 font-bold px-2">After completing, upload your written answer script within 15 minutes for tutor evaluation.</p>
                               <label className="w-full py-4 bg-[#c2f575]/10 border border-[#c2f575]/30 text-indigo-900 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-[#c2f575]/20 transition-all flex items-center justify-center gap-2 cursor-pointer">
                                 <Upload size={14} /> Upload Answer Script
-                                <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => {
+                                <input type="file" className="hidden" accept=".pdf" onChange={(e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    // Store keyed by THIS exam's id — completely isolated
+                                    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                                      alert("Only PDF files are allowed for answer scripts.");
+                                      return;
+                                    }
                                     setUploadedAnswerFiles(prev => ({ ...prev, [exam.id]: file }));
                                   }
                                 }} />
@@ -1626,8 +1712,8 @@ const StudentZoneView: React.FC = () => {
               <button
                 onClick={() => {
                   if (db && authUser) {
-                    const batchIdQuery = studentData?.batchId ? where('batchId', '==', studentData.batchId) : where('batchId', '==', null);
-                    const q = query(collection(db, 'conversations'), where('zoneId', '==', zoneId), batchIdQuery, limit(1));
+                    // Find the single unified community chat for this zone
+                    const q = query(collection(db, 'conversations'), where('zoneId', '==', zoneId), where('type', '==', 'community'), limit(1));
                     getDocs(q).then(async snapshot => {
                       if (!snapshot.empty) {
                         const chatDoc = snapshot.docs[0];
@@ -1640,15 +1726,13 @@ const StudentZoneView: React.FC = () => {
                         navigate(`/inbox?tab=community&chatId=${chatDoc.id}`);
                       } else {
                         // Auto-create fallback
-                        const currentBatch = studentData?.batchId ? zone?.batches?.find((b: any) => b.id === studentData.batchId) : null;
-                        const chatName = currentBatch ? `${zone?.title || "Community Chat"} - ${currentBatch.name}` : (zone?.title || "Community Chat");
+                        const chatName = `${zone?.title || "Community Chat"} - Community`;
                         
                         const newChatRef = await addDoc(collection(db, 'conversations'), {
                           name: chatName,
                           avatar: zone?.image || "",
                           type: 'community',
                           zoneId: zoneId,
-                          ...(studentData?.batchId ? { batchId: studentData.batchId } : { batchId: null }),
                           participants: [zone?.createdBy || zone?.tutorId, authUser.uid].filter(Boolean),
                           lastMessage: 'Community Chat created!',
                           lastMessageTime: serverTimestamp(),
@@ -1777,7 +1861,7 @@ const StudentZoneView: React.FC = () => {
                   if (!activeExam) return;
                   const exam = activeExam;
                   setExamCurrentQuestion(0);
-                  if (exam.type === 'online-test') setCameraStatus('on');
+                  if (exam.type === 'online-test' || exam.type === 'online-mcq') setCameraStatus('on');
                   const now = new Date();
                   const { endTime, finalDurationSecs } = calculateExamEndState(exam, now);
                   
@@ -1882,7 +1966,7 @@ const StudentZoneView: React.FC = () => {
          document.body
       )}
 
-      {activeExam && !terminatedByCheat && postExamTimer === null && createPortal(
+      {activeExam && !showExamRules && !terminatedByCheat && postExamTimer === null && createPortal(
         <div
           className={`fixed top-0 right-0 bottom-0 left-0 ${isSidebarOpen ? 'md:left-[240px]' : 'md:left-[64px]'} z-[500] bg-white flex flex-col p-6 md:p-10 animate-in slide-in-from-bottom-10 duration-700 transition-all overflow-y-auto md:overflow-y-hidden`}
           onContextMenu={(e) => e.preventDefault()}
@@ -1899,7 +1983,33 @@ const StudentZoneView: React.FC = () => {
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Proctored Assessment Session</p>
               </div>
             </div>
-            <div className="flex items-center gap-10">
+            <div className="flex items-center gap-6">
+              {/* Hidden Video Element capturing webcam for Vision ML */}
+              <video 
+                ref={proctorVision.videoRef as any} 
+                className="hidden" 
+                playsInline 
+                muted 
+              />
+              
+              {/* Vision HUD Status Badge */}
+              <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50/80 rounded-2xl border border-indigo-100/60 shadow-sm">
+                <div className={`w-3 h-3 rounded-full ${proctorVision.isCameraReady ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                <div>
+                  <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">AI Vision Status</p>
+                  <p className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                    {proctorVision.isLoadingModels ? (
+                      <span className="text-amber-600 animate-pulse">Initializing Vision AI...</span>
+                    ) : proctorVision.warningMessage ? (
+                      <span className="text-red-600 font-bold">{proctorVision.warningMessage}</span>
+                    ) : (
+                      <span className="text-emerald-700">🟢 Face Centered & Protected</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="w-[1.5px] h-12 bg-gray-100" />
               <div className="text-right">
                 <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Status</p>
                 <div className="flex items-center gap-2 text-green-500 font-black text-xs">
@@ -2106,9 +2216,15 @@ const StudentZoneView: React.FC = () => {
             <label className={`w-full py-6 border-2 border-dashed rounded-[2rem] font-black uppercase text-[11px] tracking-widest flex flex-col items-center justify-center gap-3 mb-6 h-32 transition-all ${postExamTimer === 0 || isUploading ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white border-gray-300 text-indigo-900 hover:border-[#c2f575] hover:bg-gray-50 cursor-pointer shadow-sm hover:shadow-md'}`}>
               <Upload size={24} className={postExamTimer === 0 || isUploading ? 'text-gray-300' : 'text-indigo-400'} />
               {postExamAnswerFile ? postExamAnswerFile.name : 'Select PDF Answer Sheet'}
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={postExamTimer === 0 || isUploading} onChange={(e) => {
+              <input type="file" accept=".pdf" className="hidden" disabled={postExamTimer === 0 || isUploading} onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) setPostExamAnswerFile(file);
+                if (file) {
+                  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                    alert("Only PDF files are allowed for answer scripts.");
+                    return;
+                  }
+                  setPostExamAnswerFile(file);
+                }
               }} />
             </label>
             <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mb-4 text-center">Max limit: 5MB</p>

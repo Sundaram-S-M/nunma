@@ -24,6 +24,7 @@ interface Message {
   senderId: string;
   createdAt: any;
   status?: 'sent' | 'delivered' | 'read';
+  batchId?: string | null;
 }
 
 interface Chat {
@@ -44,6 +45,7 @@ interface Chat {
     avatar: string;
     online?: boolean; // Add if we track online status
   };
+  zoneId?: string; // For community chats
 }
 
 const Inbox: React.FC = () => {
@@ -71,6 +73,12 @@ const Inbox: React.FC = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Community Chat State
+  const [activeBatchFilter, setActiveBatchFilter] = useState<string>('all');
+  const [communityZone, setCommunityZone] = useState<any>(null);
+  const [communityStudentData, setCommunityStudentData] = useState<any>(null);
+  const [isTutor, setIsTutor] = useState(false);
 
   const addMenuRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -238,6 +246,40 @@ const Inbox: React.FC = () => {
     handleDirectMessage();
   }, [user, targetUserId, chats, loading]);
 
+  // Fetch community metadata
+  const activeChat = chats.find(c => c.id === selectedChatId);
+
+  useEffect(() => {
+    const fetchCommunityMeta = async () => {
+      if (activeChat?.type === 'community' && activeChat.zoneId && user) {
+        try {
+          const zoneDoc = await getDoc(doc(db, 'zones', activeChat.zoneId));
+          if (zoneDoc.exists()) {
+            const zData = zoneDoc.data();
+            setCommunityZone(zData);
+            const tutorStatus = zData.createdBy === user.uid || zData.tutorId === user.uid;
+            setIsTutor(tutorStatus);
+
+            if (!tutorStatus) {
+              const studentsQ = query(collection(db, 'zones', activeChat.zoneId, 'students'), where('userId', '==', user.uid), limit(1));
+              const sSnap = await getDocs(studentsQ);
+              if (!sSnap.empty) {
+                setCommunityStudentData(sSnap.docs[0].data());
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching community meta:", e);
+        }
+      } else {
+        setCommunityZone(null);
+        setCommunityStudentData(null);
+        setIsTutor(false);
+      }
+    };
+    fetchCommunityMeta();
+  }, [activeChat?.type, activeChat?.zoneId, user]);
+
   useEffect(() => {
     if (!user || !user.uid || !selectedChatId) {
       setMessages([]);
@@ -250,14 +292,28 @@ const Inbox: React.FC = () => {
     );
 
     const unsubscribeMessages = onSnapshot(q, (snapshot) => {
-      setMessages(snapshot.docs.map(doc => ({
+      let fetchedMessages = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as Message[]);
+      })) as Message[];
+
+      if (activeChat?.type === 'community') {
+        if (isTutor) {
+          if (activeBatchFilter !== 'all') {
+            fetchedMessages = fetchedMessages.filter(m => !m.batchId || m.batchId === activeBatchFilter);
+          }
+        } else {
+          if (communityStudentData?.batchId) {
+            fetchedMessages = fetchedMessages.filter(m => !m.batchId || m.batchId === communityStudentData.batchId);
+          }
+        }
+      }
+
+      setMessages(fetchedMessages);
     });
 
     return () => unsubscribeMessages();
-  }, [selectedChatId]);
+  }, [selectedChatId, activeChat?.type, isTutor, activeBatchFilter, communityStudentData]);
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !selectedChatId || !user) return;
@@ -266,12 +322,22 @@ const Inbox: React.FC = () => {
     setMessageText('');
 
     try {
-      await addDoc(collection(db, 'conversations', selectedChatId, 'messages'), {
+      const messageData: any = {
         text: msgText,
         senderId: user.uid,
         createdAt: serverTimestamp(),
         status: 'sent'
-      });
+      };
+
+      if (activeChat?.type === 'community') {
+        if (isTutor && activeBatchFilter !== 'all') {
+          messageData.batchId = activeBatchFilter;
+        } else if (!isTutor && communityStudentData?.batchId) {
+          messageData.batchId = communityStudentData.batchId;
+        }
+      }
+
+      await addDoc(collection(db, 'conversations', selectedChatId, 'messages'), messageData);
 
       await updateDoc(doc(db, 'conversations', selectedChatId), {
         lastMessage: msgText,
@@ -290,7 +356,6 @@ const Inbox: React.FC = () => {
   ];
 
   const filteredChats = chats.filter(c => (c.type || 'chat') === activeCategory);
-  const activeChat = chats.find(c => c.id === selectedChatId);
   const canEditGroup = activeChat?.type !== 'collaboration' || activeChat?.createdBy === user?.uid || !activeChat?.createdBy;
 
   useEffect(() => {
@@ -749,6 +814,30 @@ const Inbox: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {activeChat.type === 'community' && isTutor && communityZone?.batches && communityZone.batches.length > 0 && (
+              <div className="bg-white border-b border-gray-50 px-4 py-3 flex gap-2 overflow-x-auto custom-scrollbar sticky top-[65px] md:top-[121px] z-20">
+                <button
+                  onClick={() => setActiveBatchFilter('all')}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors ${
+                    activeBatchFilter === 'all' ? 'bg-[#c2f575] text-nunma-forest' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                  }`}
+                >
+                  All Batches
+                </button>
+                {communityZone.batches.map((b: any) => (
+                  <button
+                    key={b.id}
+                    onClick={() => setActiveBatchFilter(b.id)}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors ${
+                      activeBatchFilter === b.id ? 'bg-[#c2f575] text-nunma-forest' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                    }`}
+                  >
+                    {b.name}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-3 md:p-12 space-y-3 md:space-y-8 bg-[#efeae2] md:bg-gray-50/10 custom-scrollbar relative z-10">
               <div className="flex justify-center mb-10">
