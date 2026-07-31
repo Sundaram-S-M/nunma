@@ -1454,7 +1454,6 @@ export const deleteUserAccount = onCall(
 
 // --- STORAGE QUOTA HELPERS ---
 
-const DEFAULT_TUTOR_QUOTA = 1024 * 1024 * 1024; // 1GB
 const DEFAULT_STUDENT_QUOTA = 100 * 1024 * 1024; // 100MB
 
 /**
@@ -1467,8 +1466,22 @@ async function checkStorageQuota(uid: string, incomingSize: number): Promise<{ i
     
     const data = userDoc.data()!;
     const role = data.role || "STUDENT";
-    const used = data.usedStorageBytes || 0;
-    const max = data.maxStorageQuota || (role === "TUTOR" || role === "THALA" ? DEFAULT_TUTOR_QUOTA : DEFAULT_STUDENT_QUOTA);
+    
+    const used = data.usedStorageBytes || data.storage_used_bytes || data.subscription_entitlements?.storageUsed || 0;
+    
+    const customLimitBytes = 
+      data.storageLimitBytes || 
+      data.storage_limit_bytes || 
+      (data.storageLimitGB ? data.storageLimitGB * 1024 * 1024 * 1024 : null) ||
+      (data.storage_limit_gb ? data.storage_limit_gb * 1024 * 1024 * 1024 : null);
+      
+    const rawTier = data.tier || 'STARTER';
+    const defaultTierLimit = 
+      (rawTier === 'STANDARD' || rawTier === 'GROWTH') ? 53687091200 : // 50 GB
+      (rawTier === 'STARTER' && used <= 3221225472) ? 3221225472 : // 3 GB
+      214748364800; // 200 GB for Premium upgraded account
+      
+    const max = customLimitBytes || data.maxStorageQuota || (role === "TUTOR" || role === "THALA" ? defaultTierLimit : DEFAULT_STUDENT_QUOTA);
     
     return {
         isAllowed: (used + incomingSize) <= max,
@@ -2394,6 +2407,69 @@ export const verifyOTPAndSignIn = onCall({ cors: true }, async (request) => {
         }
 
         await otpDoc.ref.delete();
+        
+        // Resolve pending email invites
+        try {
+            const db = admin.firestore();
+            const pendingInvites = await db.collectionGroup("invites")
+                .where("email", "==", email)
+                .where("status", "==", "pending")
+                .get();
+
+            if (!pendingInvites.empty) {
+                const batch = db.batch();
+                for (const inviteDoc of pendingInvites.docs) {
+                    const zoneRef = inviteDoc.ref.parent.parent;
+                    if (zoneRef) {
+                        const zoneId = zoneRef.id;
+                        const zoneDoc = await zoneRef.get();
+                        const zoneData = zoneDoc.data() || {};
+                        const zoneTitle = zoneData.title || zoneData.name || "Untitled Zone";
+                        const tutorId = zoneData.tutorId || zoneData.createdBy;
+                        const inviteData = inviteDoc.data();
+                        
+                        const studentName = user.displayName || (registrationData ? registrationData.name : null) || inviteData.name || "Student";
+                        const studentAvatar = user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`;
+
+                        const studentRef = zoneRef.collection("students").doc(user.uid);
+
+                        batch.set(studentRef, {
+                            uid: user.uid,
+                            name: studentName,
+                            email: email,
+                            avatar: studentAvatar,
+                            status: "active",
+                            source: "whitelist",
+                            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                            joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            ...(inviteData.batchId ? { batchId: inviteData.batchId } : {})
+                        });
+
+                        const enrollmentRef = db.collection("users").doc(user.uid).collection("enrollments").doc(zoneId);
+                        batch.set(enrollmentRef, {
+                            zoneId,
+                            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                            tutorId: tutorId,
+                            zoneName: zoneTitle
+                        });
+
+                        batch.update(zoneRef, {
+                            studentCount: admin.firestore.FieldValue.increment(1)
+                        });
+
+                        batch.update(inviteDoc.ref, {
+                            status: "accepted",
+                            acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            uid: user.uid
+                        });
+                    }
+                }
+                await batch.commit();
+                functions.logger.info(`Successfully processed ${pendingInvites.size} pending invites for ${email}`);
+            }
+        } catch (inviteError: any) {
+            functions.logger.error("Error processing pending invites for", email, inviteError);
+        }
         
         try {
             const customToken = await admin.auth().createCustomToken(user.uid);
@@ -3599,3 +3675,79 @@ export const onVideoDocumentDeleted = onDocumentDeleted(
         }
     }
 );
+
+export const onUserCreatedProcessInvites = onDocumentCreated(
+    { document: "users/{userId}" },
+    async (event) => {
+        const snapshot = event.data;
+        if (!snapshot) return;
+
+        const userData = snapshot.data();
+        const email = userData.email;
+        if (!email) return;
+
+        const db = admin.firestore();
+
+        try {
+            const pendingInvites = await db.collectionGroup("invites")
+                .where("email", "==", email)
+                .where("status", "==", "pending")
+                .get();
+
+            if (!pendingInvites.empty) {
+                const batch = db.batch();
+                for (const inviteDoc of pendingInvites.docs) {
+                    const zoneRef = inviteDoc.ref.parent.parent;
+                    if (zoneRef) {
+                        const zoneId = zoneRef.id;
+                        const zoneDoc = await zoneRef.get();
+                        const zoneData = zoneDoc.data() || {};
+                        const zoneTitle = zoneData.title || zoneData.name || "Untitled Zone";
+                        const tutorId = zoneData.tutorId || zoneData.createdBy;
+                        const inviteData = inviteDoc.data();
+                        
+                        const studentName = userData.name || inviteData.name || "Student";
+                        const studentAvatar = userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${event.params.userId}`;
+
+                        const studentRef = zoneRef.collection("students").doc(event.params.userId);
+
+                        batch.set(studentRef, {
+                            uid: event.params.userId,
+                            name: studentName,
+                            email: email,
+                            avatar: studentAvatar,
+                            status: "active",
+                            source: "whitelist",
+                            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                            joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            ...(inviteData.batchId ? { batchId: inviteData.batchId } : {})
+                        });
+
+                        const enrollmentRef = db.collection("users").doc(event.params.userId).collection("enrollments").doc(zoneId);
+                        batch.set(enrollmentRef, {
+                            zoneId,
+                            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                            tutorId: tutorId,
+                            zoneName: zoneTitle
+                        });
+
+                        batch.update(zoneRef, {
+                            studentCount: admin.firestore.FieldValue.increment(1)
+                        });
+
+                        batch.update(inviteDoc.ref, {
+                            status: "accepted",
+                            acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            uid: event.params.userId
+                        });
+                    }
+                }
+                await batch.commit();
+                functions.logger.info(`[onUserCreatedProcessInvites] Successfully processed ${pendingInvites.size} pending invites for ${email}`);
+            }
+        } catch (inviteError: any) {
+            functions.logger.error("[onUserCreatedProcessInvites] Error processing pending invites for", email, inviteError);
+        }
+    }
+);
+

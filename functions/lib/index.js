@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamDeploymentCreated = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
+exports.onUserCreatedProcessInvites = exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamDeploymentCreated = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
@@ -1221,20 +1221,28 @@ exports.deleteUserAccount = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY", "BU
     }
 });
 // --- STORAGE QUOTA HELPERS ---
-const DEFAULT_TUTOR_QUOTA = 1024 * 1024 * 1024; // 1GB
 const DEFAULT_STUDENT_QUOTA = 100 * 1024 * 1024; // 100MB
 /**
  * Checks if the user has enough storage quota for an incoming file.
  */
 async function checkStorageQuota(uid, incomingSize) {
+    var _a;
     const db = admin.firestore();
     const userDoc = await db.collection("users").doc(uid).get();
     if (!userDoc.exists)
         return { isAllowed: false, used: 0, max: 0 };
     const data = userDoc.data();
     const role = data.role || "STUDENT";
-    const used = data.usedStorageBytes || 0;
-    const max = data.maxStorageQuota || (role === "TUTOR" || role === "THALA" ? DEFAULT_TUTOR_QUOTA : DEFAULT_STUDENT_QUOTA);
+    const used = data.usedStorageBytes || data.storage_used_bytes || ((_a = data.subscription_entitlements) === null || _a === void 0 ? void 0 : _a.storageUsed) || 0;
+    const customLimitBytes = data.storageLimitBytes ||
+        data.storage_limit_bytes ||
+        (data.storageLimitGB ? data.storageLimitGB * 1024 * 1024 * 1024 : null) ||
+        (data.storage_limit_gb ? data.storage_limit_gb * 1024 * 1024 * 1024 : null);
+    const rawTier = data.tier || 'STARTER';
+    const defaultTierLimit = (rawTier === 'STANDARD' || rawTier === 'GROWTH') ? 53687091200 : // 50 GB
+        (rawTier === 'STARTER' && used <= 3221225472) ? 3221225472 : // 3 GB
+            214748364800; // 200 GB for Premium upgraded account
+    const max = customLimitBytes || data.maxStorageQuota || (role === "TUTOR" || role === "THALA" ? defaultTierLimit : DEFAULT_STUDENT_QUOTA);
     return {
         isAllowed: (used + incomingSize) <= max,
         used,
@@ -2030,6 +2038,52 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)({ cors: true }, async (request)
             }
         }
         await otpDoc.ref.delete();
+        // Resolve pending email invites
+        try {
+            const db = admin.firestore();
+            const pendingInvites = await db.collectionGroup("invites")
+                .where("email", "==", email)
+                .where("status", "==", "pending")
+                .get();
+            if (!pendingInvites.empty) {
+                const batch = db.batch();
+                for (const inviteDoc of pendingInvites.docs) {
+                    const zoneRef = inviteDoc.ref.parent.parent;
+                    if (zoneRef) {
+                        const zoneId = zoneRef.id;
+                        const zoneDoc = await zoneRef.get();
+                        const zoneData = zoneDoc.data() || {};
+                        const zoneTitle = zoneData.title || zoneData.name || "Untitled Zone";
+                        const tutorId = zoneData.tutorId || zoneData.createdBy;
+                        const inviteData = inviteDoc.data();
+                        const studentName = user.displayName || (registrationData ? registrationData.name : null) || inviteData.name || "Student";
+                        const studentAvatar = user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`;
+                        const studentRef = zoneRef.collection("students").doc(user.uid);
+                        batch.set(studentRef, Object.assign({ uid: user.uid, name: studentName, email: email, avatar: studentAvatar, status: "active", source: "whitelist", enrolledAt: admin.firestore.FieldValue.serverTimestamp(), joinedAt: admin.firestore.FieldValue.serverTimestamp() }, (inviteData.batchId ? { batchId: inviteData.batchId } : {})));
+                        const enrollmentRef = db.collection("users").doc(user.uid).collection("enrollments").doc(zoneId);
+                        batch.set(enrollmentRef, {
+                            zoneId,
+                            enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                            tutorId: tutorId,
+                            zoneName: zoneTitle
+                        });
+                        batch.update(zoneRef, {
+                            studentCount: admin.firestore.FieldValue.increment(1)
+                        });
+                        batch.update(inviteDoc.ref, {
+                            status: "accepted",
+                            acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            uid: user.uid
+                        });
+                    }
+                }
+                await batch.commit();
+                functions.logger.info(`Successfully processed ${pendingInvites.size} pending invites for ${email}`);
+            }
+        }
+        catch (inviteError) {
+            functions.logger.error("Error processing pending invites for", email, inviteError);
+        }
         try {
             const customToken = await admin.auth().createCustomToken(user.uid);
             return { verified: true, customToken };
@@ -3033,6 +3087,60 @@ exports.onVideoDocumentDeleted = (0, firestore_1.onDocumentDeleted)({
         else {
             console.error(`Failed to delete Bunny video ${videoId}:`, error.message);
         }
+    }
+});
+exports.onUserCreatedProcessInvites = (0, firestore_1.onDocumentCreated)({ document: "users/{userId}" }, async (event) => {
+    const snapshot = event.data;
+    if (!snapshot)
+        return;
+    const userData = snapshot.data();
+    const email = userData.email;
+    if (!email)
+        return;
+    const db = admin.firestore();
+    try {
+        const pendingInvites = await db.collectionGroup("invites")
+            .where("email", "==", email)
+            .where("status", "==", "pending")
+            .get();
+        if (!pendingInvites.empty) {
+            const batch = db.batch();
+            for (const inviteDoc of pendingInvites.docs) {
+                const zoneRef = inviteDoc.ref.parent.parent;
+                if (zoneRef) {
+                    const zoneId = zoneRef.id;
+                    const zoneDoc = await zoneRef.get();
+                    const zoneData = zoneDoc.data() || {};
+                    const zoneTitle = zoneData.title || zoneData.name || "Untitled Zone";
+                    const tutorId = zoneData.tutorId || zoneData.createdBy;
+                    const inviteData = inviteDoc.data();
+                    const studentName = userData.name || inviteData.name || "Student";
+                    const studentAvatar = userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${event.params.userId}`;
+                    const studentRef = zoneRef.collection("students").doc(event.params.userId);
+                    batch.set(studentRef, Object.assign({ uid: event.params.userId, name: studentName, email: email, avatar: studentAvatar, status: "active", source: "whitelist", enrolledAt: admin.firestore.FieldValue.serverTimestamp(), joinedAt: admin.firestore.FieldValue.serverTimestamp() }, (inviteData.batchId ? { batchId: inviteData.batchId } : {})));
+                    const enrollmentRef = db.collection("users").doc(event.params.userId).collection("enrollments").doc(zoneId);
+                    batch.set(enrollmentRef, {
+                        zoneId,
+                        enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                        tutorId: tutorId,
+                        zoneName: zoneTitle
+                    });
+                    batch.update(zoneRef, {
+                        studentCount: admin.firestore.FieldValue.increment(1)
+                    });
+                    batch.update(inviteDoc.ref, {
+                        status: "accepted",
+                        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        uid: event.params.userId
+                    });
+                }
+            }
+            await batch.commit();
+            functions.logger.info(`[onUserCreatedProcessInvites] Successfully processed ${pendingInvites.size} pending invites for ${email}`);
+        }
+    }
+    catch (inviteError) {
+        functions.logger.error("[onUserCreatedProcessInvites] Error processing pending invites for", email, inviteError);
     }
 });
 //# sourceMappingURL=index.js.map
