@@ -111,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 uid: firebaseUser.uid,
                 email: firebaseUser.email || '',
                 name: firebaseUser.displayName || 'New User',
-                avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
+                avatar: firebaseUser.photoURL || "/default-avatar.png",
                 role: UserRole.STUDENT,
                 subscription_entitlements: { storageLimit: 3221225472, storageUsed: 0, studentLimit: 100 },
                 storage_used_bytes: 0,

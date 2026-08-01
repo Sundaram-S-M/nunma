@@ -105,7 +105,7 @@ const Explore: React.FC = () => {
           try {
             const q = query(collection(db, 'zones', zone.id, 'students'), limit(3));
             const snap = await getDocs(q);
-            newAvatars[zone.id] = snap.docs.map(d => d.data().avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`);
+            newAvatars[zone.id] = snap.docs.map(d => d.data().avatar || "/default-avatar.png");
           } catch (err) {
             console.error("Failed to fetch students for zone", zone.id, err);
             newAvatars[zone.id] = [];
@@ -209,11 +209,11 @@ const Explore: React.FC = () => {
                   <div className="absolute bottom-4 left-4 z-10 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500">
                     <div className="flex items-center gap-2 bg-white/95 backdrop-blur-xl p-1.5 pr-4 rounded-full border border-white/50 shadow-lg">
                       <img
-                        src={tutorData[zone.tutorId]?.photoURL || tutorData[zone.tutorName]?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutorData[zone.tutorId]?.name || zone.tutorName}&backgroundColor=e2e8f0`}
+                        src={tutorData[zone.tutorId]?.photoURL || tutorData[zone.tutorName]?.photoURL || "/default-avatar.png"}
                         alt="Tutor avatar"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
-                          target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.tutorName}&backgroundColor=e2e8f0`;
+                          target.src = "/default-avatar.png";
                         }}
                         className="w-8 h-8 rounded-full object-cover shadow-inner"
                       />

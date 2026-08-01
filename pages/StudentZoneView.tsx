@@ -117,6 +117,7 @@ const StudentZoneView: React.FC = () => {
   const [activeExam, setActiveExam] = useState<any>(null);
   const [examCurrentQuestion, setExamCurrentQuestion] = useState(0);
   const [examAnswers, setExamAnswers] = useState<Record<string, number>>({});
+  const [pdfZoomLevel, setPdfZoomLevel] = useState(100);
   const [cheatViolations, setCheatViolations] = useState(0);
   const [violationLogs, setViolationLogs] = useState<string[]>([]);
   const [showCheatWarningModal, setShowCheatWarningModal] = useState(false);
@@ -465,7 +466,7 @@ const StudentZoneView: React.FC = () => {
           const newStudent: Student = {
             id: authUser.uid,
             name: whitelistedName || authUser.name || authUser.email.split('@')[0],
-            avatar: authUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser.uid}`,
+            avatar: authUser.avatar || "/default-avatar.png",
             joinedAt: formatDate(new Date()),
             status: 'Present',
             engagementScore: 0,
@@ -549,37 +550,51 @@ const StudentZoneView: React.FC = () => {
 
   // Cheating Detection: Window Visibility
   useEffect(() => {
+    let visibilityTimeout: NodeJS.Timeout;
+
     if (activeExam && !showExamRules && !isExamTerminated && !terminatedByCheat && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq')) {
       const handleVisibilityChange = async () => {
-        if (document.visibilityState !== 'hidden') return;
-        
-        const timestamp = new Date().toISOString();
-        const newWarningCount = cheatViolations + 1;
-        const currentLogs = [...violationLogs, timestamp];
-        
-        setCheatViolations(newWarningCount);
-        setViolationLogs(currentLogs);
+        if (document.visibilityState === 'hidden') {
+          // 3-second grace period for mobile notifications and screen rotations
+          visibilityTimeout = setTimeout(async () => {
+            const timestamp = new Date().toISOString();
+            const newWarningCount = cheatViolations + 1;
+            const currentLogs = [...violationLogs, timestamp];
+            
+            setCheatViolations(newWarningCount);
+            setViolationLogs(currentLogs);
 
-        if (zoneId && studentData) {
-          try {
-            await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
-              currentExamWarnings: newWarningCount,
-              violationLogs: arrayUnion(timestamp)
-            });
-          } catch (e) {
-            console.error("Failed to sync warning", e);
+            if (zoneId && studentData) {
+              try {
+                await updateDoc(doc(db, 'zones', zoneId, 'students', studentData.id), {
+                  currentExamWarnings: newWarningCount,
+                  violationLogs: arrayUnion(timestamp)
+                });
+              } catch (e) {
+                console.error("Failed to sync warning", e);
+              }
+            }
+
+            if (newWarningCount >= 3) {
+              setTerminatedByCheat(true);
+              handleTerminateExam('failed', currentLogs);
+            } else {
+              setShowCheatWarningModal(true);
+            }
+          }, 3000);
+        } else {
+          // User returned within the grace period, cancel the penalty
+          if (visibilityTimeout) {
+            clearTimeout(visibilityTimeout);
           }
         }
-
-        if (newWarningCount >= 3) {
-          setTerminatedByCheat(true);
-          handleTerminateExam('failed', currentLogs);
-        } else {
-          setShowCheatWarningModal(true);
-        }
       };
+      
       document.addEventListener('visibilitychange', handleVisibilityChange);
-      return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        if (visibilityTimeout) clearTimeout(visibilityTimeout);
+      };
     }
   }, [activeExam, showExamRules, isExamTerminated, terminatedByCheat, zoneId, studentData, cheatViolations, violationLogs]);
 
@@ -2042,6 +2057,13 @@ const StudentZoneView: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-3">
                       {activeExam.pdfUrl && (
+                        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-2xl">
+                          <button onClick={() => setPdfZoomLevel(prev => Math.max(50, prev - 25))} className="px-3 py-2 text-gray-500 hover:bg-white hover:shadow-sm rounded-xl transition-all font-black" title="Zoom Out">-</button>
+                          <span className="text-[10px] font-black px-2 text-gray-500">{pdfZoomLevel}%</span>
+                          <button onClick={() => setPdfZoomLevel(prev => Math.min(300, prev + 25))} className="px-3 py-2 text-gray-500 hover:bg-white hover:shadow-sm rounded-xl transition-all font-black" title="Zoom In">+</button>
+                        </div>
+                      )}
+                      {activeExam.pdfUrl && (
                         <a
                           href={activeExam.pdfUrl}
                           target="_blank"
@@ -2056,14 +2078,16 @@ const StudentZoneView: React.FC = () => {
                     </div>
                   </div>
                   {activeExam.pdfUrl ? (
-                    <div className="flex-1 w-full rounded-2xl md:rounded-3xl overflow-hidden border border-gray-200 shadow-inner bg-white" style={{ minHeight: '500px' }}>
-                      <iframe
-                        src={activeExam.pdfUrl.startsWith('blob:') ? `${activeExam.pdfUrl}#toolbar=0` : `https://docs.google.com/gview?url=${encodeURIComponent(activeExam.pdfUrl)}&embedded=true`}
-                        className="w-full h-full border-none"
-                        style={{ minHeight: '500px', height: '100%' }}
-                        title="Question Paper"
-                        allow="autoplay"
-                      />
+                    <div className="flex-1 w-full rounded-2xl md:rounded-3xl overflow-auto border border-gray-200 shadow-inner bg-white" style={{ minHeight: '500px' }}>
+                      <div style={{ width: `${pdfZoomLevel}%`, minHeight: '500px', height: '100%', transition: 'width 0.3s ease' }}>
+                        <iframe
+                          src={activeExam.pdfUrl.startsWith('blob:') ? `${activeExam.pdfUrl}#toolbar=0` : `https://docs.google.com/gview?url=${encodeURIComponent(activeExam.pdfUrl)}&embedded=true`}
+                          className="w-full h-full border-none"
+                          style={{ minHeight: '500px', height: '100%' }}
+                          title="Question Paper"
+                          allow="autoplay"
+                        />
+                      </div>
                     </div>
                   ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-center py-20">

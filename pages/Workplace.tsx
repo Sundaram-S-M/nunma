@@ -974,7 +974,7 @@ const Workplace: React.FC = () => {
                   <div key={`${student.id}-${student.zoneId}`} className="bg-white border border-gray-100 rounded-[1.5rem] md:rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
                     <div className="relative">
                       <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                        <img src={student.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`} className="w-full h-full object-cover" alt="" />
+                        <img src={student.avatar || "/default-avatar.png"} className="w-full h-full object-cover" alt="" />
                       </div>
                       <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-nunma-forest shadow-lg">
                         <Check size={16} strokeWidth={3} />

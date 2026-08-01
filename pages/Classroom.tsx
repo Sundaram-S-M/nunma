@@ -252,7 +252,7 @@ const Classroom: React.FC = () => {
                ...s,
                xp: s.engagementScore || 0, // Fallback to 0
                name: s.name || 'Anonymous',
-               avatar: s.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.uid}`
+               avatar: s.avatar || "/default-avatar.png"
             })).sort((a, b) => b.xp - a.xp)
                .map((s, idx) => ({ ...s, rank: idx + 1 }));
 
@@ -594,7 +594,7 @@ const Classroom: React.FC = () => {
                      {followedTutors.length > 0 ? followedTutors.map(tutor => (
                         <div key={tutor.uid} onClick={() => navigate(`/u/${tutor.uid}`)} className="flex items-center gap-5 p-6 bg-white/5 border border-white/5 rounded-[2.5rem] hover:bg-white/10 transition-all cursor-pointer group/tutor">
                            <div className="relative">
-                              <img src={tutor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tutor.uid}`} className="w-16 h-16 rounded-2xl object-cover shadow-2xl" alt="" />
+                              <img src={tutor.avatar || "/default-avatar.png"} className="w-16 h-16 rounded-2xl object-cover shadow-2xl" alt="" />
                               <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 bg-[#7cc142] border-[4px] border-indigo-900 rounded-full shadow-lg"></div>
                            </div>
                            <div>

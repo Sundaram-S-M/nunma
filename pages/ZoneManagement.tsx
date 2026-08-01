@@ -3534,7 +3534,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       {zone.coTutors.map((ct: any) => (
                         <div key={ct.uid} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
                           <div className="flex items-center gap-4">
-                            <img src={ct.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${ct.name}`} alt="" className="w-10 h-10 rounded-xl" />
+                            <img src={ct.avatar || "/default-avatar.png"} alt="" className="w-10 h-10 rounded-xl" />
                             <div>
                               <p className="font-bold text-nunma-forest">{ct.name}</p>
                               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{ct.subject}</p>
@@ -3591,7 +3591,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                   }}
                                   className="w-full p-4 flex items-center gap-4 hover:bg-[#c2f575]/10 transition-colors text-left"
                                 >
-                                  <img src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name}`} className="w-10 h-10 rounded-xl" alt="" />
+                                  <img src={u.avatar || "/default-avatar.png"} className="w-10 h-10 rounded-xl" alt="" />
                                   <div>
                                     <p className="font-black text-nunma-forest text-sm">{u.name}</p>
                                     <p className="text-xs text-gray-400 font-medium">{u.email}</p>
@@ -3794,6 +3794,8 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                             toast.success('Email added. Access will be granted when they register.', { icon: '📧' });
                           } else if (data.alreadyEnrolled > 0) {
                             toast('Student is already enrolled in this Zone.', { icon: 'ℹ️' });
+                          } else if (data.alreadySent > 0) {
+                            toast('Invitation already sent to this email. They will get access when they register.', { icon: 'ℹ️' });
                           } else {
                             toast.error('Failed to process this email. Please check the address.');
                           }

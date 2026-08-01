@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onUserCreatedProcessInvites = exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamDeploymentCreated = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
+exports.onUserUpdatedPropagateName = exports.onUserCreatedProcessInvites = exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamDeploymentCreated = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
@@ -2018,7 +2018,7 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)({ cors: true }, async (request)
                             name: registrationData.name,
                             role: registrationData.role || "STUDENT",
                             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
+                            avatar: "/default-avatar.png",
                             subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
                             storage_used_bytes: 0,
                             studentProfile: { isComplete: false },
@@ -2057,7 +2057,7 @@ exports.verifyOTPAndSignIn = (0, https_1.onCall)({ cors: true }, async (request)
                         const tutorId = zoneData.tutorId || zoneData.createdBy;
                         const inviteData = inviteDoc.data();
                         const studentName = user.displayName || (registrationData ? registrationData.name : null) || inviteData.name || "Student";
-                        const studentAvatar = user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`;
+                        const studentAvatar = user.photoURL || "/default-avatar.png";
                         const studentRef = zoneRef.collection("students").doc(user.uid);
                         batch.set(studentRef, Object.assign({ uid: user.uid, name: studentName, email: email, avatar: studentAvatar, status: "active", source: "whitelist", enrolledAt: admin.firestore.FieldValue.serverTimestamp(), joinedAt: admin.firestore.FieldValue.serverTimestamp() }, (inviteData.batchId ? { batchId: inviteData.batchId } : {})));
                         const enrollmentRef = db.collection("users").doc(user.uid).collection("enrollments").doc(zoneId);
@@ -3115,7 +3115,7 @@ exports.onUserCreatedProcessInvites = (0, firestore_1.onDocumentCreated)({ docum
                     const tutorId = zoneData.tutorId || zoneData.createdBy;
                     const inviteData = inviteDoc.data();
                     const studentName = userData.name || inviteData.name || "Student";
-                    const studentAvatar = userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${event.params.userId}`;
+                    const studentAvatar = userData.avatar || "/default-avatar.png";
                     const studentRef = zoneRef.collection("students").doc(event.params.userId);
                     batch.set(studentRef, Object.assign({ uid: event.params.userId, name: studentName, email: email, avatar: studentAvatar, status: "active", source: "whitelist", enrolledAt: admin.firestore.FieldValue.serverTimestamp(), joinedAt: admin.firestore.FieldValue.serverTimestamp() }, (inviteData.batchId ? { batchId: inviteData.batchId } : {})));
                     const enrollmentRef = db.collection("users").doc(event.params.userId).collection("enrollments").doc(zoneId);
@@ -3141,6 +3141,53 @@ exports.onUserCreatedProcessInvites = (0, firestore_1.onDocumentCreated)({ docum
     }
     catch (inviteError) {
         functions.logger.error("[onUserCreatedProcessInvites] Error processing pending invites for", email, inviteError);
+    }
+});
+exports.onUserUpdatedPropagateName = (0, firestore_1.onDocumentUpdated)("users/{userId}", async (event) => {
+    var _a, _b;
+    const db = admin.firestore();
+    const beforeData = (_a = event.data) === null || _a === void 0 ? void 0 : _a.before.data();
+    const afterData = (_b = event.data) === null || _b === void 0 ? void 0 : _b.after.data();
+    if (!beforeData || !afterData)
+        return;
+    // If name didn't change, we do nothing
+    if (beforeData.name === afterData.name) {
+        return;
+    }
+    const newName = afterData.name;
+    const userId = event.params.userId;
+    const batch = db.batch();
+    let count = 0;
+    try {
+        // 1. Update tutorName in zones where the user is the tutor
+        const zonesAsTutorSnap = await db.collection("zones")
+            .where("tutorId", "==", userId)
+            .get();
+        zonesAsTutorSnap.docs.forEach((docSnap) => {
+            batch.update(docSnap.ref, { tutorName: newName });
+            count++;
+        });
+        // 2. Fetch the user's enrollments to update their studentName in those zones
+        const enrollmentsSnap = await db.collection("users")
+            .doc(userId)
+            .collection("enrollments")
+            .get();
+        for (const enrollmentDoc of enrollmentsSnap.docs) {
+            const zoneId = enrollmentDoc.data().zoneId;
+            if (zoneId) {
+                const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(userId);
+                batch.update(studentRef, { name: newName });
+                count++;
+            }
+        }
+        if (count > 0) {
+            await batch.commit();
+            functions.logger.info(`[onUserUpdatedPropagateName] Successfully updated ${count} name references for user ${userId}`);
+        }
+    }
+    catch (error) {
+        functions.logger.error("[onUserUpdatedPropagateName] Error propagating name change:", error);
+        throw error;
     }
 });
 //# sourceMappingURL=index.js.map

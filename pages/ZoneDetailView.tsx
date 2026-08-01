@@ -393,7 +393,7 @@ const ZoneDetailView: React.FC = () => {
                 <div className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-sm flex flex-col items-center text-center space-y-6">
                   <div className="w-32 h-32 rounded-full overflow-hidden ring-4 ring-indigo-50 p-1">
                     <img 
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${zone.tutorName}&backgroundColor=e2e8f0`} 
+                      src={"/default-avatar.png"} 
                       className="w-full h-full object-cover rounded-full" 
                       alt={zone.tutorName} 
                     />

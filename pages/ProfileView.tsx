@@ -189,11 +189,11 @@ const ProfileHeader = ({
                     <div className="w-10 h-10 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 ) : (
-                  <img src={profileUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + profileUser.uid} alt="Profile" className="w-full h-full object-cover" />
+                  <img src={profileUser.avatar || "/default-avatar.png"} alt="Profile" className="w-full h-full object-cover" />
                 )}
                 {isMe && !uploadingAvatar && (
-                  <div className="absolute bottom-2 right-2">
-                    <button onClick={() => avatarInputRef.current?.click()} className="w-8 h-8 md:w-10 md:h-10 bg-white text-indigo-900 rounded-full shadow-lg flex items-center justify-center hover:bg-[#c2f575] border border-transparent transition-all opacity-0 group-hover:opacity-100"><Camera size={14} /></button>
+                  <div className="absolute bottom-2 right-2 z-40">
+                    <button onClick={() => avatarInputRef.current?.click()} className="w-8 h-8 md:w-10 md:h-10 bg-white text-indigo-900 rounded-full shadow-lg flex items-center justify-center hover:bg-[#c2f575] border border-transparent transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100"><Camera size={14} /></button>
                   </div>
                 )}
                 <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'avatar')} />
@@ -203,8 +203,37 @@ const ProfileHeader = ({
 
           {/* Mobile-only Name, Headline, and Buttons (WhatsApp/Insta DM style alignment) */}
           <div className="flex md:hidden flex-col items-center text-center w-full px-4 mb-6 relative z-30">
-            <h1 className="text-3xl font-black text-nunma-forest tracking-tighter mb-1">{profileUser.name}</h1>
-            {profileUser.headline && <p className="text-gray-500 text-sm italic mb-4 max-w-sm">{profileUser.headline}</p>}
+            {isEditing ? (
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Your Name"
+                className="text-3xl font-black text-nunma-forest tracking-tighter mb-1 text-center bg-transparent border-b border-gray-300 outline-none w-full max-w-[250px]"
+              />
+            ) : (
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <h1 className="text-3xl font-black text-nunma-forest tracking-tighter">{profileUser.name}</h1>
+                {isMe && (
+                  <button 
+                    onClick={() => setIsEditing(true)}
+                    className="p-1.5 bg-gray-100 rounded-lg text-gray-400 hover:bg-gray-200 hover:text-nunma-forest transition-all"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                )}
+              </div>
+            )}
+            
+            {isEditing ? (
+              <input
+                value={editHeadline}
+                onChange={(e) => setEditHeadline(e.target.value)}
+                placeholder="Your Headline"
+                className="text-gray-500 text-sm italic mb-4 max-w-sm text-center bg-transparent border-b border-gray-300 outline-none w-full"
+              />
+            ) : (
+              profileUser.headline && <p className="text-gray-500 text-sm italic mb-4 max-w-sm">{profileUser.headline}</p>
+            )}
             
             {/* Mobile Action Buttons */}
             <div className="flex items-center gap-3 w-full justify-center">
@@ -1003,6 +1032,12 @@ const ProfileView: React.FC = () => {
 
   const handleSaveProfile = async () => {
     if (!currentUser || !db) return;
+    
+    if (editName.trim().length < 3) {
+      toast.error("Name must be at least 3 characters long.");
+      return;
+    }
+
     try {
       await updateDoc(doc(db, 'users', currentUser.uid), {
         name: editName,
@@ -1195,7 +1230,7 @@ const ProfileView: React.FC = () => {
                 <div className="space-y-4">
                   {followersList.map(fUser => (
                     <div key={fUser.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl cursor-pointer" onClick={() => { setShowFollowersModal(false); navigate(`/profile/${fUser.id}`); }}>
-                      <img src={fUser.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + fUser.id} className="w-12 h-12 rounded-xl object-cover" alt="" />
+                      <img src={fUser.avatar || "/default-avatar.png"} className="w-12 h-12 rounded-xl object-cover" alt="" />
                       <div>
                         <p className="text-sm font-black text-indigo-900">{fUser.name}</p>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate w-48">{fUser.headline || 'Nunma User'}</p>

@@ -524,7 +524,7 @@ const Inbox: React.FC = () => {
                         onClick={() => { setShowGroupProfile(false); navigate(`/profile/${p.id}`); }}
                         className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl cursor-pointer transition-colors border border-transparent hover:border-gray-100"
                       >
-                        <img src={p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`} className="w-12 h-12 rounded-[1rem] object-cover shadow-sm" alt="" />
+                        <img src={p.avatar || "/default-avatar.png"} className="w-12 h-12 rounded-[1rem] object-cover shadow-sm" alt="" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-black text-nunma-forest truncate">{p.name}</p>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{p.headline || 'Member'}</p>
@@ -616,7 +616,7 @@ const Inbox: React.FC = () => {
                     (mutualFollowers.filter(m => m.name?.toLowerCase().includes(memberSearchQuery.toLowerCase()))).map(mUser => (
                       <div key={mUser.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
                         <div className="flex items-center gap-4">
-                          <img src={mUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mUser.id}`} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                          <img src={mUser.avatar || "/default-avatar.png"} className="w-10 h-10 rounded-xl object-cover" alt="" />
                           <p className="text-sm font-black text-nunma-forest">{mUser.name}</p>
                         </div>
                         <button

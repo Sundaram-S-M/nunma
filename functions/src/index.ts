@@ -3,7 +3,7 @@ admin.initializeApp();
 
 import * as functions from "firebase-functions";
 import { onRequest, onCall, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 
@@ -2389,7 +2389,7 @@ export const verifyOTPAndSignIn = onCall({ cors: true }, async (request) => {
                             name: registrationData.name,
                             role: registrationData.role || "STUDENT",
                             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
+                            avatar: "/default-avatar.png",
                             subscription_entitlements: { storageLimit: 104857600, storageUsed: 0, studentLimit: 100 },
                             storage_used_bytes: 0,
                             studentProfile: { isComplete: false },
@@ -2429,7 +2429,7 @@ export const verifyOTPAndSignIn = onCall({ cors: true }, async (request) => {
                         const inviteData = inviteDoc.data();
                         
                         const studentName = user.displayName || (registrationData ? registrationData.name : null) || inviteData.name || "Student";
-                        const studentAvatar = user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`;
+                        const studentAvatar = user.photoURL || "/default-avatar.png";
 
                         const studentRef = zoneRef.collection("students").doc(user.uid);
 
@@ -3707,7 +3707,7 @@ export const onUserCreatedProcessInvites = onDocumentCreated(
                         const inviteData = inviteDoc.data();
                         
                         const studentName = userData.name || inviteData.name || "Student";
-                        const studentAvatar = userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${event.params.userId}`;
+                        const studentAvatar = userData.avatar || "/default-avatar.png";
 
                         const studentRef = zoneRef.collection("students").doc(event.params.userId);
 
@@ -3751,3 +3751,59 @@ export const onUserCreatedProcessInvites = onDocumentCreated(
     }
 );
 
+
+export const onUserUpdatedPropagateName = onDocumentUpdated(
+    "users/{userId}",
+    async (event) => {
+        const db = admin.firestore();
+        const beforeData = event.data?.before.data();
+        const afterData = event.data?.after.data();
+        
+        if (!beforeData || !afterData) return;
+
+        // If name didn't change, we do nothing
+        if (beforeData.name === afterData.name) {
+            return;
+        }
+
+        const newName = afterData.name;
+        const userId = event.params.userId;
+        const batch = db.batch();
+        let count = 0;
+        
+        try {
+            // 1. Update tutorName in zones where the user is the tutor
+            const zonesAsTutorSnap = await db.collection("zones")
+                .where("tutorId", "==", userId)
+                .get();
+                
+            zonesAsTutorSnap.docs.forEach((docSnap: any) => {
+                batch.update(docSnap.ref, { tutorName: newName });
+                count++;
+            });
+            
+            // 2. Fetch the user's enrollments to update their studentName in those zones
+            const enrollmentsSnap = await db.collection("users")
+                .doc(userId)
+                .collection("enrollments")
+                .get();
+                
+            for (const enrollmentDoc of enrollmentsSnap.docs) {
+                const zoneId = enrollmentDoc.data().zoneId;
+                if (zoneId) {
+                    const studentRef = db.collection("zones").doc(zoneId).collection("students").doc(userId);
+                    batch.update(studentRef, { name: newName });
+                    count++;
+                }
+            }
+            
+            if (count > 0) {
+                await batch.commit();
+                functions.logger.info(`[onUserUpdatedPropagateName] Successfully updated ${count} name references for user ${userId}`);
+            }
+        } catch (error) {
+            functions.logger.error("[onUserUpdatedPropagateName] Error propagating name change:", error);
+            throw error;
+        }
+    }
+);

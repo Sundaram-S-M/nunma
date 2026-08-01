@@ -73,7 +73,7 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
     let filledCount = fields.filter(field => (user as any)[field] && (user as any)[field].length > 0).length;
 
     // Check if avatar is custom (not the default DiceBear URL)
-    if (user.avatar && !user.avatar.includes('dicebear.com')) {
+    if (user.avatar && !user.avatar.includes('/default-avatar.png')) {
       filledCount++;
     }
 
