@@ -552,10 +552,10 @@ const StudentZoneView: React.FC = () => {
   useEffect(() => {
     let visibilityTimeout: NodeJS.Timeout;
 
-    if (activeExam && !showExamRules && !isExamTerminated && !terminatedByCheat && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq')) {
+    if (activeExam && postExamTimer === null && !showExamRules && !isExamTerminated && !terminatedByCheat && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq')) {
       const handleVisibilityChange = async () => {
         if (document.visibilityState === 'hidden') {
-          // 3-second grace period for mobile notifications and screen rotations
+          // 15-second grace period for checking the time via mobile notifications and screen rotations
           visibilityTimeout = setTimeout(async () => {
             const timestamp = new Date().toISOString();
             const newWarningCount = cheatViolations + 1;
@@ -581,7 +581,7 @@ const StudentZoneView: React.FC = () => {
             } else {
               setShowCheatWarningModal(true);
             }
-          }, 3000);
+          }, 15000);
         } else {
           // User returned within the grace period, cancel the penalty
           if (visibilityTimeout) {
@@ -596,7 +596,7 @@ const StudentZoneView: React.FC = () => {
         if (visibilityTimeout) clearTimeout(visibilityTimeout);
       };
     }
-  }, [activeExam, showExamRules, isExamTerminated, terminatedByCheat, zoneId, studentData, cheatViolations, violationLogs]);
+  }, [activeExam, showExamRules, isExamTerminated, terminatedByCheat, zoneId, studentData, cheatViolations, violationLogs, postExamTimer]);
 
   // AI Vision Proctoring Callback & Hook
   const handleVisionViolation = React.useCallback(async (type: string, message: string) => {
@@ -636,7 +636,7 @@ const StudentZoneView: React.FC = () => {
   }, [activeExam, isExamTerminated, terminatedByCheat, zoneId, studentData, cheatViolations, violationLogs]);
 
   const proctorVision = useProctoringVision({
-    enabled: !!activeExam && !showExamRules && !isExamTerminated && !terminatedByCheat && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq'),
+    enabled: !!activeExam && postExamTimer === null && !showExamRules && !isExamTerminated && !terminatedByCheat && (activeExam.type === 'online-test' || activeExam.type === 'online-mcq'),
     onViolation: handleVisionViolation,
     fps: 7
   });

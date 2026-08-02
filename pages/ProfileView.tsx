@@ -32,11 +32,13 @@ import {
   CreditCard as CardIcon,
   Plus as PlusIcon,
   HelpCircle,
-  Edit2
+  Edit2,
+  Loader
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { db, auth } from '../utils/firebase';
+import { getSafeAvatar } from '../utils/avatarUtils';
 import {
   doc,
   onSnapshot,
@@ -185,11 +187,11 @@ const ProfileHeader = ({
             <div className={`w-36 h-36 md:w-44 md:h-44 rounded-3xl md:rounded-[2.2rem] p-[5px] bg-gradient-to-tr from-[#c2f575] via-[#4d56c8] to-nunma-forest shadow-2xl overflow-hidden`}>
               <div className="w-full h-full bg-nunma-forest rounded-[1.8rem] overflow-hidden border-2 border-nunma-forest relative group">
                 {uploadingAvatar ? (
-                  <div className="w-full h-full flex items-center justify-center bg-navy/50 backdrop-blur-md">
-                    <div className="w-10 h-10 border-4 border-[#c2f575] border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-full h-full flex items-center justify-center bg-gray-50 text-indigo-900">
+                    <Loader size={24} className="animate-spin" />
                   </div>
                 ) : (
-                  <img src={profileUser.avatar || "/default-avatar.png"} alt="Profile" className="w-full h-full object-cover" />
+                  <img src={getSafeAvatar(profileUser.avatar)} alt="Profile" className="w-full h-full object-cover" />
                 )}
                 {isMe && !uploadingAvatar && (
                   <div className="absolute bottom-2 right-2 z-40">
@@ -1230,7 +1232,7 @@ const ProfileView: React.FC = () => {
                 <div className="space-y-4">
                   {followersList.map(fUser => (
                     <div key={fUser.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl cursor-pointer" onClick={() => { setShowFollowersModal(false); navigate(`/profile/${fUser.id}`); }}>
-                      <img src={fUser.avatar || "/default-avatar.png"} className="w-12 h-12 rounded-xl object-cover" alt="" />
+                      <img src={getSafeAvatar(fUser.avatar)} className="w-12 h-12 rounded-xl object-cover" alt="" />
                       <div>
                         <p className="text-sm font-black text-indigo-900">{fUser.name}</p>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate w-48">{fUser.headline || 'Nunma User'}</p>

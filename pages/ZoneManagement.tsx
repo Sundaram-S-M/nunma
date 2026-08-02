@@ -77,6 +77,7 @@ import MCQBuilder, { MCQ, MCQOption } from '../components/MCQBuilder';
 import { QRCodeSVG } from 'qrcode.react';
 import ZoneCapacityMeter from '../components/ZoneCapacityMeter';
 import { formatDate } from '../utils/dateUtils';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
@@ -2429,6 +2430,31 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     }
   };
 
+  useEffect(() => {
+    const addMissingVideo = async () => {
+      if (zoneId && chapters.length > 0) {
+        // Find Chapter 1 or just the first chapter
+        const chapter1 = chapters.find(c => c.title.toLowerCase().includes('chapter 1') || c.title.toLowerCase().includes('chapter- 1')) || chapters[0];
+        const videoId = "a260d121-5f9c-4801-ace4-6e5b5b019200";
+        if (chapter1 && !chapter1.segments?.find(s => s.type === 'video' && (s as any).videoId === videoId)) {
+          const newSeg: any = {
+            id: `s_fixed_${videoId}`,
+            title: "Part 1",
+            type: 'video',
+            videoId: videoId,
+            status: 'processing'
+          };
+          const updatedSegments = [...(chapter1.segments || []), newSeg];
+          await updateDoc(doc(db, 'zones', zoneId, 'chapters', chapter1.id), {
+            segments: updatedSegments
+          });
+          nunmaAlert("Restored Part 1 video to " + chapter1.title, "success");
+        }
+      }
+    };
+    addMissingVideo();
+  }, [zoneId, chapters]);
+
   if (!zone) {
     return (
       <div className="p-20 text-center text-gray-400 font-bold uppercase tracking-widest animate-pulse">
@@ -3440,7 +3466,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       return (
                         <div key={student.id} className="grid grid-cols-4 items-center bg-white p-5 rounded-2xl shadow-sm">
                           <div className="flex items-center gap-4">
-                            <img src={student.avatar} className="w-10 h-10 rounded-xl" alt="" />
+                            <img src={getSafeAvatar(student.avatar)} className="w-10 h-10 rounded-xl" alt="" />
                             <span className="font-bold text-nunma-forest text-sm">{student.name}</span>
                           </div>
                           <div className="text-center">
@@ -3534,7 +3560,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       {zone.coTutors.map((ct: any) => (
                         <div key={ct.uid} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
                           <div className="flex items-center gap-4">
-                            <img src={ct.avatar || "/default-avatar.png"} alt="" className="w-10 h-10 rounded-xl" />
+                            <img src={getSafeAvatar(ct.avatar)} alt="" className="w-10 h-10 rounded-xl" />
                             <div>
                               <p className="font-bold text-nunma-forest">{ct.name}</p>
                               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{ct.subject}</p>
@@ -3591,7 +3617,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                   }}
                                   className="w-full p-4 flex items-center gap-4 hover:bg-[#c2f575]/10 transition-colors text-left"
                                 >
-                                  <img src={u.avatar || "/default-avatar.png"} className="w-10 h-10 rounded-xl" alt="" />
+                                  <img src={getSafeAvatar(u.avatar)} className="w-10 h-10 rounded-xl" alt="" />
                                   <div>
                                     <p className="font-black text-nunma-forest text-sm">{u.name}</p>
                                     <p className="text-xs text-gray-400 font-medium">{u.email}</p>
@@ -3741,7 +3767,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                                   }}
                                   className="w-full p-4 flex items-center gap-4 hover:bg-[#c2f575]/10 transition-colors text-left group"
                                 >
-                                  <img src={u.avatar} className="w-10 h-10 rounded-xl" alt="" />
+                                  <img src={getSafeAvatar(u.avatar)} className="w-10 h-10 rounded-xl" alt="" />
                                   <div>
                                     <p className="font-black text-nunma-forest text-sm group-hover:text-indigo-600 transition-colors">{u.name}</p>
                                     <p className="text-xs text-gray-400 font-medium">{u.email}</p>
@@ -4541,7 +4567,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         return (
                           <div key={student.id} className="flex items-center gap-4 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 active:scale-[0.98] transition-transform">
                             {/* Avatar */}
-                            <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover flex-shrink-0 shadow-sm" alt="" />
+                            <img src={getSafeAvatar(student.avatar)} className="w-12 h-12 rounded-2xl object-cover flex-shrink-0 shadow-sm" alt="" />
                             {/* Name + Email */}
                             <div className="flex-1 min-w-0">
                               <p className="font-black text-nunma-forest text-sm leading-tight truncate">{student.name}</p>
@@ -4608,7 +4634,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                           <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
                             <td className="px-10 py-6 sticky left-0 bg-white group-hover:bg-gray-50 z-10 min-w-[300px]">
                               <div className="flex items-center gap-4 w-full">
-                                <img src={student.avatar} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm shrink-0" alt="" />
+                                <img src={getSafeAvatar(student.avatar)} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm shrink-0" alt="" />
                                 <div className="flex flex-col min-w-0 flex-1">
                                   <span className="font-bold text-nunma-forest whitespace-nowrap block" title={student.name}>{student.name}</span>
                                   <span className="text-xs text-gray-400 font-medium whitespace-nowrap block" title={student.email}>{student.email}</span>
@@ -4768,11 +4794,25 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                               <button
                                 onClick={async () => {
                                   if (!zoneId) return;
-                                  try {
-                                    await deleteDoc(doc(db, 'zones', zoneId, 'chapters', chapter.id));
-                                  } catch (e) {
-                                    console.error("Failed to delete chapter:", e);
-                                    nunmaAlert("Failed to delete chapter", "error");
+                                  if (await asyncConfirm('Are you sure you want to delete this chapter? All segments inside will be deleted.')) {
+                                    try {
+                                      // First delete any BunnyCDN videos
+                                      for (const seg of chapter.segments || []) {
+                                        if (seg.type === 'video' && (seg as any).videoId) {
+                                          try {
+                                            const deleteFn = httpsCallable(functions, 'deleteBunnyVideo');
+                                            await deleteFn({ videoId: (seg as any).videoId });
+                                          } catch (videoError) {
+                                            console.warn("Failed to delete video from BunnyCDN, proceeding with chapter deletion:", videoError);
+                                          }
+                                        }
+                                      }
+                                      await deleteDoc(doc(db, 'zones', zoneId, 'chapters', chapter.id));
+                                      nunmaAlert("Chapter deleted successfully", "success");
+                                    } catch (e) {
+                                      console.error("Failed to delete chapter:", e);
+                                      nunmaAlert("Failed to delete chapter", "error");
+                                    }
                                   }
                                 }}
                                 className="flex items-center justify-center p-4 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all w-full md:w-auto"
@@ -4880,7 +4920,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                       <div key={student.id} className="bg-white border border-gray-100 rounded-[3rem] p-8 flex flex-col items-center text-center space-y-6 shadow-sm group hover:shadow-xl transition-all duration-500">
                         <div className="relative">
                           <div className="w-24 h-24 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                            <img src={student.avatar} className="w-full h-full object-cover" alt="" />
+                            <img src={getSafeAvatar(student.avatar)} className="w-full h-full object-cover" alt="" />
                           </div>
                           <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#c2f575] rounded-xl flex items-center justify-center text-nunma-forest shadow-lg">
                             <Check size={16} strokeWidth={3} />
@@ -5739,7 +5779,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   <div className="absolute top-10 left-10 z-50 flex -space-x-4">
                     {clusters.find(c => c.id === activeClusterId)?.studentIds?.map(sid => (
                       <div key={sid} className="w-16 h-16 rounded-full border-4 border-[#03031f] overflow-hidden shadow-2xl group cursor-help transition-transform hover:scale-125 hover:z-20">
-                        <img src={students.find(s => s.id === sid)?.avatar} className="w-full h-full object-cover" alt="" />
+                        <img src={getSafeAvatar(students.find(s => s.id === sid)?.avatar)} className="w-full h-full object-cover" alt="" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     ))}
