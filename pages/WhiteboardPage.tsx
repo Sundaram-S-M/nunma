@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { Excalidraw } from '@excalidraw/excalidraw';
 import { ArrowLeft, Monitor } from 'lucide-react';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
+import WhiteboardStage from '../components/WhiteboardStage';
 
 const WhiteboardPage: React.FC = () => {
   const { zoneId } = useParams<{ zoneId: string }>();
@@ -129,10 +129,10 @@ const WhiteboardPage: React.FC = () => {
         </div>
       </header>
 
-      <main className="whiteboard-main">
-        <Excalidraw 
-          viewModeEnabled={(!isThala && isMobile) || !isThala}
-        />
+      <main className="whiteboard-main relative">
+        <div className="absolute inset-0">
+          <WhiteboardStage />
+        </div>
       </main>
 
       <style>{`

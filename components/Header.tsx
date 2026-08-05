@@ -30,7 +30,6 @@ const headerStyle: React.CSSProperties = {
   background: 'transparent',
   borderBottom: 'none',
   boxShadow: 'none',
-  display: 'flex',
   alignItems: 'center',
   justifyContent: 'flex-end',
   padding: '0 1.5rem',
@@ -76,6 +75,27 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>(
     (localStorage.getItem('theme') as 'light' | 'dark') || 'light'
   );
+
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const container = document.getElementById('main-scroll-container');
+    if (!container) return;
+
+    const handleScroll = () => {
+      const currentScrollY = container.scrollTop;
+      if (currentScrollY > lastScrollY.current && currentScrollY > 50) {
+        setIsVisible(false);
+      } else if (currentScrollY < lastScrollY.current) {
+        setIsVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -162,7 +182,13 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
       }
     );
 
-    return () => { unsubCal(); unsubMsg(); unsubGen(); };
+    return () => {
+      setTimeout(() => {
+        unsubCal();
+        unsubMsg();
+        unsubGen();
+      }, 0);
+    };
   }, [user]);
 
   if (!user) return null;
@@ -173,7 +199,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleRole }) => {
 
   /* ══════════════════════════════════════════════════════════ */
   return (
-    <header style={headerStyle}>
+    <header id="global-header" style={headerStyle} className={`flex transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full md:translate-y-0'}`}>
 
       {/* ── Icon strip ─────────────────────────── */}
       {/* Search */}

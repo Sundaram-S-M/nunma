@@ -632,6 +632,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
   // Exam Scheduling State
   const [examScope, setExamScope] = useState<'single' | 'batch' | 'subject'>('single');
+  const [singleExamTargetBatch, setSingleExamTargetBatch] = useState<string>('all');
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
   const [batchSchedules, setBatchSchedules] = useState<Record<string, { date: string; time: string }>>({});
   
@@ -905,10 +906,10 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         setNewExamDuration('60'); setNewExamSubject('');
         setNewExamMaxMark('100'); setNewExamMinMark('40');
         setNewExamQuestions([]); setNewExamFile(null);
-        setExamScope('single'); setSelectedBatchIds([]); setBatchSchedules({});
+        setExamScope('single'); setSelectedBatchIds([]); setBatchSchedules({}); setSingleExamTargetBatch('all');
         setSelectedSubjects([]); setSubjectSchedules({}); setTargetBatchForSubjects('all');
         setClusterExamFiles({}); setClusterExamQuestions({}); setActiveClusterItem(null);
-        setExamScope('single'); setSelectedBatchIds([]); setBatchSchedules({});
+        setExamScope('single'); setSelectedBatchIds([]); setBatchSchedules({}); setSingleExamTargetBatch('all');
         nunmaAlert(`Exam "${newExamTitle}" created for ${selectedBatchIds.length} batch(es)! Students have been notified.`);
       } catch (e) {
         console.error("Error creating batch exams:", e);
@@ -1045,7 +1046,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         setExamScope('single'); setSelectedBatchIds([]); setBatchSchedules({});
         setSelectedSubjects([]); setSubjectSchedules({}); setTargetBatchForSubjects('all');
         setClusterExamFiles({}); setClusterExamQuestions({}); setActiveClusterItem(null);
-        setExamScope('single'); setSelectedSubjects([]); setSubjectSchedules({});
+        setExamScope('single'); setSelectedSubjects([]); setSubjectSchedules({}); setSingleExamTargetBatch('all');
         setTargetBatchForSubjects('all');
         nunmaAlert(`Exam "${newExamTitle}" created for ${selectedSubjects.length} subject(s)! Students have been notified.`);
       } catch (e) {
@@ -1095,6 +1096,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
       minMark: parseInt(newExamMinMark),
       questions: newExamType === 'online-mcq' ? newExamQuestions : [],
       subject: newExamSubject,
+      ...(singleExamTargetBatch !== 'all' ? { batchId: singleExamTargetBatch } : {}),
       ...(remindAt ? { remindAt } : {}),
     };
 
@@ -1108,13 +1110,18 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
 
       const examRef = await addDoc(collection(db, 'zones', zoneId, 'exams'), examData);
 
-      // === Notify all enrolled students ===
+      // === Notify targeted students ===
       try {
         const studentsSnap = await getDocs(collection(db, 'zones', zoneId, 'students'));
         const notifyPromises: Promise<any>[] = [];
 
         studentsSnap.forEach(studentDoc => {
           const studentUid = studentDoc.id;
+          const studentData = studentDoc.data();
+          
+          if (singleExamTargetBatch !== 'all' && studentData.batchId !== singleExamTargetBatch) {
+            return;
+          }
 
           // 1. In-app notification
           notifyPromises.push(
@@ -2970,7 +2977,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
             <div className="w-full min-h-screen p-12 md:p-20 flex flex-col">
               <div className="flex justify-between items-center mb-16">
                 <div>
-                  <h3 className="text-5xl font-black text-nunma-forest tracking-tighter">Create Achievement Gate</h3>
+                  <h3 className="text-5xl font-black text-nunma-forest tracking-tighter">Exam Details</h3>
                   <p className="text-sm text-gray-400 font-bold mt-2 uppercase tracking-widest">Configuration & Assessment Setup</p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -3035,6 +3042,17 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Time</label>
                         <input type="time" value={newExamTime} onChange={e => setNewExamTime(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm" />
                       </div>
+                      {zone?.batches && zone.batches.length > 0 && (
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] block px-1">Target Batch</label>
+                          <select value={singleExamTargetBatch} onChange={e => setSingleExamTargetBatch(e.target.value)} className="w-full bg-gray-50 border-2 border-transparent focus:border-[#c2f575] rounded-3xl px-10 py-6 font-bold text-nunma-forest outline-none transition-all shadow-sm cursor-pointer">
+                            <option value="all">All Students</option>
+                            {zone.batches.map((b: any) => (
+                              <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -3356,7 +3374,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                     </>
                   ) : (
                     <>
-                      <Sparkles size={24} /> Deploy Exam Instance
+                      <Sparkles size={24} /> Create Exam
                     </>
                   )}
                 </button>
@@ -5159,7 +5177,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                   {/* Desktop heading + inline buttons */}
                   <div className="hidden md:flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div>
-                      <h3 className="text-5xl font-black text-nunma-forest tracking-tighter">Achievement Gating</h3>
+                      <h3 className="text-5xl font-black text-nunma-forest tracking-tighter">Paper Valuation</h3>
                       <p className="text-sm text-gray-400 font-bold mt-2">Manage online proctored exams and offline certifications.</p>
                     </div>
                     <div className="flex gap-4">
@@ -5199,15 +5217,6 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         className="px-6 py-5 bg-indigo-100 text-indigo-700 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 hover:shadow-xl transition-all"
                       >
                         <Wand2 size={20} /> Evaluate Exams
-                      </button>
-                      <button
-                        onClick={() => setShowExamAnalytics(!showExamAnalytics)}
-                        className={`px-8 py-5 rounded-[1.75rem] font-black uppercase text-xs tracking-widest flex items-center gap-3 transition-all ${showExamAnalytics
-                          ? 'bg-indigo-100 text-indigo-700 shadow-inner'
-                          : 'bg-white border border-gray-100 text-nunma-forest hover:shadow-xl'
-                          }`}
-                      >
-                        <Trophy size={20} /> {showExamAnalytics ? 'Exams List' : 'Download Analytics'}
                       </button>
                       {isCreator && (
                         <button
@@ -5252,16 +5261,6 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
                         <Wand2 size={20} />
                       </div>
                       <span className="text-[11px] font-black uppercase tracking-wide leading-tight">Evaluate Exams</span>
-                    </button>
-                    <button
-                      onClick={() => setShowExamAnalytics(!showExamAnalytics)}
-                      className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-95 text-left border shadow-sm
-                        ${showExamAnalytics ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-400 border-gray-100'}`}
-                    >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${showExamAnalytics ? 'bg-indigo-100' : 'bg-gray-50'}`}>
-                        <Trophy size={20} />
-                      </div>
-                      <span className="text-[11px] font-black uppercase tracking-wide leading-tight">{showExamAnalytics ? 'Exams List' : 'Analytics'}</span>
                     </button>
                     {isCreator && (
                       <button

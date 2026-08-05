@@ -6,6 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { formatDate } from '../utils/dateUtils';
 import { db, functions } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
+import BillingSummary from '../components/BillingSummary';
 
 const Payment: React.FC = () => {
     const { user } = useAuth();
@@ -208,25 +209,14 @@ const Payment: React.FC = () => {
                             </div>
 
                             {gstBreakdown && (
-                                <div className="mx-5 mb-2 rounded-2xl border border-[#c1e60d]/20 bg-[#c1e60d]/5 overflow-hidden">
-                                    <div className="px-5 py-2.5 flex items-center justify-between border-b border-[#c1e60d]/10">
-                                        <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Price Breakdown</span>
-                                        <span className="text-[10px] font-bold text-[#c1e60d]/60 bg-[#c1e60d]/10 px-2 py-0.5 rounded-full">18% GST</span>
-                                    </div>
-                                    <div className="px-5 py-3 space-y-2">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-xs text-indigo-300 font-medium">Base Price (excl. GST)</span>
-                                            <span className="text-xs font-black text-white">&#8377;{gstBreakdown.base.toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-xs text-indigo-300 font-medium">GST @ 18%</span>
-                                            <span className="text-xs font-black text-[#c1e60d]">+ &#8377;{gstBreakdown.gst.toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center pt-2 border-t border-[#c1e60d]/10">
-                                            <span className="text-xs font-black text-white uppercase tracking-wider">Total</span>
-                                            <span className="text-sm font-black text-[#c1e60d]">&#8377;{gstBreakdown.total.toFixed(2)}</span>
-                                        </div>
-                                    </div>
+                                <div className="mt-4 text-black">
+                                    <BillingSummary
+                                        basePrice={gstBreakdown.base}
+                                        fullAddonPrice={gstBreakdown.gst} // using addon price as GST for now
+                                        proratedDiscount={0}
+                                        totalToPayNow={gstBreakdown.total}
+                                        currencySymbol="₹"
+                                    />
                                 </div>
                             )}
 

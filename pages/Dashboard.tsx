@@ -97,6 +97,14 @@ const Dashboard: React.FC<{ role: UserRole }> = ({ role }) => {
           const q = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
           const snap = await getDocs(q);
           snap.forEach(d => zonesList.push({ id: d.id, ...d.data(), role: 'tutor' }));
+
+          const qAsst = query(collection(db, 'zones'), where('assistantTeacherId', '==', user.uid));
+          const snapAsst = await getDocs(qAsst);
+          snapAsst.forEach(d => {
+            if (!zonesList.find(z => z.id === d.id)) {
+              zonesList.push({ id: d.id, ...d.data(), role: 'tutor' });
+            }
+          });
         }
 
         // B. Enrolled Zones (Student)

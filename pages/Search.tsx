@@ -76,7 +76,10 @@ const Search: React.FC = () => {
           });
         });
 
-        const uniqueHits = Array.from(hits.values());
+        let uniqueHits = Array.from(hits.values());
+        if (type === 'Zone') {
+          uniqueHits = uniqueHits.filter((item: any) => item.isPublic !== false);
+        }
         setSuggestions(uniqueHits);
         setShowSuggestions(uniqueHits.length > 0);
 
@@ -136,7 +139,11 @@ const Search: React.FC = () => {
         });
       });
 
-      setResults(Array.from(hits.values()));
+      let finalResults = Array.from(hits.values());
+      if (type === 'Zone') {
+        finalResults = finalResults.filter((item: any) => item.isPublic !== false);
+      }
+      setResults(finalResults);
 
     } catch (error) {
       console.error("Search error:", error);

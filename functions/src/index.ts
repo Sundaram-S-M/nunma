@@ -1001,6 +1001,48 @@ export const razorpayWebhook = onRequest(
                 return;
             }
             
+            // Handle Subscription Charged for Platform Subscriptions via Payment Links
+            if (event === 'subscription.charged' || event === 'subscription.activated') {
+                const subscription = payload.payload?.subscription?.entity;
+                const payment = payload.payload?.payment?.entity;
+                const email = payment?.email || subscription?.customer_details?.email;
+                const amount = payment?.amount; // in paise
+
+                if (!email) {
+                    functions.logger.warn("No email found in subscription payment payload.", payload);
+                    res.status(200).send({ status: 'ignored', reason: 'no_email' });
+                    return;
+                }
+
+                // Determine Tier based on amount (499900 = PREMIUM, 149900 = STANDARD)
+                let tier = 'STARTER';
+                if (amount >= 499900) {
+                    tier = 'PREMIUM';
+                } else if (amount >= 149900) {
+                    tier = 'STANDARD';
+                } else {
+                    functions.logger.warn(`Unknown subscription amount: ${amount}`);
+                }
+
+                const usersSnapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+                if (usersSnapshot.empty) {
+                    functions.logger.error(`Subscription fulfillment failed: User with email ${email} not found.`);
+                    res.status(200).send({ status: 'error', message: 'user_not_found' });
+                    return;
+                }
+
+                const userDoc = usersSnapshot.docs[0];
+                await userDoc.ref.update({
+                    current_tier: tier,
+                    subscriptionId: subscription?.id || null,
+                    subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                functions.logger.info(`Successfully upgraded user ${userDoc.id} (${email}) to ${tier} via subscription.`);
+                res.status(200).send({ status: 'ok' });
+                return;
+            }
+
             // Only handle payment.captured for core fulfillment
             if (event !== 'payment.captured' && event !== 'order.paid') {
                 functions.logger.info(`Ignoring Razorpay event type: ${event}`);
@@ -2060,7 +2102,6 @@ export const submitExam = onCall({ cors: true }, async (request) => {
                 }
             }
         }
-
         let marks = 0;
         let status = 'ongoing';
         const isTerminatedByCheat = violationLogs && violationLogs.length >= 3;
@@ -2068,7 +2109,7 @@ export const submitExam = onCall({ cors: true }, async (request) => {
 
         // Secure Scoring
         if (examData.type === 'online-mcq' || examData.type === 'online-test') {
-            if (examData.questions && answers) {
+            if (examData.questions && examData.questions.length > 0 && answers && !answerSheetUrl) {
                 let score = 0;
                 examData.questions.forEach((q: any, idx: number) => {
                     const studentAns = answers[q.id];
@@ -3318,11 +3359,15 @@ export const onExamAssigned = onDocumentCreated(
 
             // Get all students
             const studentsSnap = await db.collection("zones").doc(zoneId).collection("students").get();
-            if (studentsSnap.empty) return;
-
             const emails: string[] = [];
             studentsSnap.forEach(doc => {
                 const data = doc.data();
+                
+                // If exam is targeted to a specific batch, only notify students in that batch
+                if (examData.batchId && examData.batchId !== 'all') {
+                    if (data.batchId !== examData.batchId) return;
+                }
+
                 if (data.email) emails.push(data.email);
             });
 
@@ -3807,3 +3852,119 @@ export const onUserUpdatedPropagateName = onDocumentUpdated(
         }
     }
 );
+
+// --- CEO DASHBOARD STUBS & AGGREGATION ---
+
+export const approveRefund = onCall({ cors: true }, async (request) => {
+    // STUB: Actual Razorpay/Zoho logic will be implemented in the next PR
+    const db = admin.firestore();
+    const { disputeId } = request.data;
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can approve refunds.");
+    }
+    // Update dispute status
+    await db.collection("disputes").doc(disputeId).update({ status: "Resolved (Refunded)" });
+    return { success: true, message: "Refund approved (Stub)" };
+});
+
+export const denyAndUnfreeze = onCall({ cors: true }, async (request) => {
+    // STUB: Actual Razorpay Route logic will be implemented in the next PR
+    const db = admin.firestore();
+    const { disputeId } = request.data;
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can deny refunds.");
+    }
+    // Update dispute status
+    await db.collection("disputes").doc(disputeId).update({ status: "Resolved (Denied)" });
+    return { success: true, message: "Refund denied and funds unfrozen (Stub)" };
+});
+
+export const recoverWebhook = onCall({ cors: true }, async (request) => {
+    // STUB: Manual trigger to re-run stuck razorpayWebhook transactions
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can recover webhooks.");
+    }
+    return { success: true, message: "Webhook recovery triggered (Stub)" };
+});
+
+export const updateKycStatus = onCall({ cors: true }, async (request) => {
+    // STUB: Toggle KYC status
+    const db = admin.firestore();
+    const { userId, status } = request.data;
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can update KYC.");
+    }
+    await db.collection("users").doc(userId).update({ kycStatus: status });
+    return { success: true, message: `KYC status updated to ${status}` };
+});
+
+
+async function calculateAndSavePlatformStats() {
+    const db = admin.firestore();
+    let tgv = 0;
+    let nunmaNetRevenue = 0;
+    let thalaCount = 0;
+    let studentCount = 0;
+    let totalUsers = 0;
+    let activeZones = 0;
+
+    // 1. Calculate TGV and Revenue
+    const ordersSnap = await db.collection("platform_orders").where("status", "==", "CAPTURED").get();
+    ordersSnap.forEach((doc: any) => {
+        const data = doc.data();
+        const amount = data.amount || 0;
+        const type = data.type;
+        
+        if (type === "PLATFORM_SUBSCRIPTION") {
+            nunmaNetRevenue += amount;
+        } else {
+            tgv += amount;
+            const commissionRate = data.commissionRate || 0.05; 
+            nunmaNetRevenue += amount * commissionRate;
+        }
+    });
+
+    // 2. Count Users by Role
+    const usersSnap = await db.collection("users").get();
+    totalUsers = usersSnap.size;
+    usersSnap.forEach((doc: any) => {
+        const role = doc.data().role;
+        if (role === "THALA") thalaCount++;
+        if (role === "STUDENT") studentCount++;
+    });
+
+    // 3. Count Active Zones
+    const zonesSnap = await db.collection("zones").where("status", "==", "published").get();
+    activeZones = zonesSnap.size;
+
+    await db.collection("platform_stats").doc("latest").set({
+        tgv,
+        nunmaNetRevenue,
+        activeUserCount: { THALA: thalaCount, STUDENT: studentCount, TOTAL: totalUsers },
+        activeZones,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    functions.logger.info(`Aggregated Platform Stats: TGV=${tgv}, NetRev=${nunmaNetRevenue}, Users=${totalUsers}`);
+    return { tgv, nunmaNetRevenue, totalUsers };
+}
+
+export const aggregatePlatformStats = onSchedule("every 1 hours", async (event) => {
+    try {
+        await calculateAndSavePlatformStats();
+    } catch (error) {
+        functions.logger.error("Error aggregating platform stats", error);
+    }
+});
+
+export const triggerAggregation = onCall({ cors: true }, async (request) => {
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can trigger aggregation.");
+    }
+    try {
+        const stats = await calculateAndSavePlatformStats();
+        return { success: true, message: "Stats aggregated", stats };
+    } catch (error: any) {
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});

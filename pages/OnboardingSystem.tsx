@@ -105,7 +105,7 @@ const OnboardingSystem: React.FC = () => {
             navigate('/dashboard');
             return;
         }
-        if (role === UserRole.THALA && user?.tutorProfile?.isComplete) {
+        if (role === UserRole.THALA && (user?.kycStatus === 'VERIFIED' || user?.kycStatus === 'PENDING' || (user as any)?.tutorId)) {
             navigate('/dashboard');
             return;
         }
@@ -319,6 +319,18 @@ const OnboardingSystem: React.FC = () => {
 
                         <form onSubmit={studentForm.handleSubmit(onSubmitStudent)} className="space-y-6">
                             <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Age</label>
+                                <input
+                                    type="number"
+                                    placeholder="Your Age"
+                                    {...studentForm.register('age')}
+                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${studentForm.formState.errors.age ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                />
+                                {studentForm.formState.errors.age && (
+                                    <p className="text-red-500 text-xs font-bold pl-2">{studentForm.formState.errors.age.message as string}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Phone Number</label>
                                 <input
                                     type="tel"
@@ -448,6 +460,19 @@ const OnboardingSystem: React.FC = () => {
                                     className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${tutorForm.formState.errors.legalName ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
                                 />
                                 {tutorForm.formState.errors.legalName && <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.legalName.message}</p>}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Age</label>
+                                <input
+                                    type="number"
+                                    placeholder="Your Age"
+                                    {...tutorForm.register('age')}
+                                    className={`w-full bg-gray-50 border-2 focus:bg-white rounded-[1.25rem] px-5 py-4 font-bold text-nunma-forest outline-none transition-all ${tutorForm.formState.errors.age ? 'border-red-400 focus:border-red-400' : 'border-transparent focus:border-[#c2f575]'}`}
+                                />
+                                {tutorForm.formState.errors.age && (
+                                    <p className="text-red-500 text-xs font-bold pl-2">{tutorForm.formState.errors.age.message as string}</p>
+                                )}
                             </div>
 
                             <div className="space-y-2">
@@ -687,6 +712,7 @@ const OnboardingSystem: React.FC = () => {
                                     {isSubmitting ? 'Creating Profile...' : 'Launch Profile'} <ChevronRight size={20} strokeWidth={3} />
                                 </button>
                             </div>
+
                         </form>
                     </div>
                 )}

@@ -321,8 +321,8 @@ const PricingPlans = () => {
   const navigate = useNavigate();
   const currentTier = (user as any)?.current_tier?.toUpperCase() || 'STARTER';
 
-  const STRIPE_STANDARD_URL = '#';
-  const STRIPE_PREMIUM_URL = '#';
+  const RAZORPAY_STANDARD_URL = 'https://rzp.io/rzp/f7u4ZIU';
+  const RAZORPAY_PREMIUM_URL = 'https://rzp.io/rzp/gqRaVthx';
 
   const tiers = [
     {
@@ -363,7 +363,7 @@ const PricingPlans = () => {
         { name: 'Add-ons Available', included: true },
       ],
       buttonText: currentTier === 'STANDARD' ? 'Current Plan' : 'Upgrade to Standard',
-      buttonAction: () => window.open(STRIPE_STANDARD_URL, '_blank'),
+      buttonAction: () => window.open(`${RAZORPAY_STANDARD_URL}?email=${encodeURIComponent(user?.email || '')}`, '_blank'),
       buttonVariant: currentTier === 'STANDARD' ? 'outline' : 'primary',
     },
     {
@@ -383,7 +383,7 @@ const PricingPlans = () => {
         { name: 'Add-ons Available', included: true },
       ],
       buttonText: currentTier === 'PREMIUM' ? 'Current Plan' : 'Upgrade to Premium',
-      buttonAction: () => window.open(STRIPE_PREMIUM_URL, '_blank'),
+      buttonAction: () => window.open(`${RAZORPAY_PREMIUM_URL}?email=${encodeURIComponent(user?.email || '')}`, '_blank'),
       buttonVariant: currentTier === 'PREMIUM' ? 'outline' : 'dark',
     }
   ];
@@ -769,7 +769,7 @@ const Billings = () => {
             </div>
           </div>
 
-          {(user?.kycStatus === 'VERIFIED' && (user as any)?.razorpay_account_id) || user?.isDevBypass ? (
+          {(user?.kycStatus === 'VERIFIED' && (user?.razorpay_account_id || user?.razorpayAccountId)) || user?.isDevBypass ? (
             <div className="bg-[#f8fafc] border border-gray-100 rounded-3xl p-8 flex flex-col sm:flex-row items-center gap-8 shadow-inner">
               <div className="flex items-center gap-6 flex-1">
                 <div className="w-16 h-16 bg-[#c2f575]/20 rounded-full flex items-center justify-center text-[#7cc142] shrink-0 border border-[#c2f575]/30">

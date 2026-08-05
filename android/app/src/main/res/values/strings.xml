@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nunma</string>
+    <string name="title_activity_main">Nunma</string>
+    <string name="package_name">in.nunma.app</string>
+    <string name="custom_url_scheme">in.nunma.app</string>
+</resources>

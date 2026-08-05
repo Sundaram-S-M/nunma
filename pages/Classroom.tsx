@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 import { formatDate } from '../utils/dateUtils';
 import { getLinkedInShareUrl } from '../utils/vcUtils';
+import RefundRequestModal from '../components/RefundRequestModal';
 
 
 import {
@@ -57,6 +58,7 @@ const Classroom: React.FC = () => {
    const [enrollmentIds, setEnrollmentIds] = useState<string[]>([]);
    const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
    const [certificates, setCertificates] = useState<any[]>([]);
+   const [activeRefundZone, setActiveRefundZone] = useState<any>(null);
 
    useEffect(() => {
       if (!user) return;
@@ -65,13 +67,14 @@ const Classroom: React.FC = () => {
       const fetchEnrollments = async () => {
          try {
             const snap = await getDocs(collection(db, `users/${user.uid}/enrollments`));
-            const ids = snap.docs.map(d => d.data().zoneId);
-            setEnrollmentIds(ids);
+            const enrollments = snap.docs.map(d => ({ zoneId: d.data().zoneId, enrolledAt: d.data().enrolledAt }));
+            setEnrollmentIds(enrollments.map(e => e.zoneId));
 
             const zonesData: any[] = [];
             const tutorsData: any[] = [];
 
-            for (const id of ids) {
+            for (const enrollment of enrollments) {
+               const id = enrollment.zoneId;
                try {
                   const zDoc = await getDoc(doc(db, 'zones', id));
                   if (zDoc.exists()) {
@@ -107,7 +110,8 @@ const Classroom: React.FC = () => {
                         progress: progressPercent,
                         completedCount,
                         totalSegments,
-                        engagementScore: studentData.engagementScore || 0
+                        engagementScore: studentData.engagementScore || 0,
+                        enrolledAt: enrollment.enrolledAt
                      });
 
                      // Collect Tutor Info
@@ -316,7 +320,7 @@ const Classroom: React.FC = () => {
    }
 
    return (
-      <div className="space-y-12 max-w-[1600px] mx-auto animate-in fade-in duration-700 pb-20 pr-10">
+      <div className="space-y-12 max-w-[1600px] mx-auto animate-in fade-in duration-700 pb-20 pr-0 md:pr-10">
 
          {/* Live Room Overlay Removed (replaced by sandbox navigation) */}
 
@@ -475,8 +479,8 @@ const Classroom: React.FC = () => {
 
          <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
             <div className="xl:col-span-8 space-y-10">
-               <div className="bg-transparent md:bg-white rounded-none md:rounded-[4rem] p-4 md:p-14 border-0 md:border border-gray-100 shadow-none md:shadow-2xl relative overflow-hidden">
-                  <div className="flex justify-between items-center mb-14">
+               <div className="bg-transparent md:bg-white rounded-none md:rounded-[4rem] py-4 px-0 md:p-14 border-0 md:border border-gray-100 shadow-none md:shadow-2xl relative overflow-hidden">
+                  <div className="flex justify-between items-center mb-14 px-2 md:px-0">
                      <h3 className="text-3xl font-black text-nunma-forest tracking-tighter flex items-center gap-5">
                         <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-900">
                            <MonitorPlay size={24} />
@@ -494,13 +498,13 @@ const Classroom: React.FC = () => {
                            <div
                               key={zone.id}
                               onClick={() => navigate(`/classroom/zone/${zone.id}`)}
-                              className="group bg-gray-50/50 rounded-[3rem] border border-gray-100 p-8 hover:bg-white hover:shadow-2xl hover:border-[#c2f575] transition-all duration-700 cursor-pointer"
+                              className="group bg-gray-50/50 rounded-[2rem] md:rounded-[3rem] border border-gray-100 p-4 md:p-8 hover:bg-white hover:shadow-2xl hover:border-[#c2f575] transition-all duration-700 cursor-pointer"
                            >
-                              <div className="h-auto aspect-[1.7] md:aspect-auto md:h-48 rounded-[2rem] overflow-hidden mb-8 relative shadow-lg">
+                              <div className="h-auto aspect-[1.7] md:aspect-auto md:h-48 rounded-[1.5rem] md:rounded-[2rem] overflow-hidden mb-4 md:mb-8 relative shadow-lg">
                                  <img src={zone.image} alt={zone.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
                               </div>
                               <div>
-                                 <h4 className="text-2xl font-black text-nunma-forest group-hover:text-indigo-600 transition-colors mb-2">{zone.title}</h4>
+                                 <h4 className="text-xl md:text-2xl font-black text-nunma-forest group-hover:text-indigo-600 transition-colors mb-2">{zone.title}</h4>
                                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">By {zone.tutorName || 'Expert Tutor'}</p>
 
                                  {/* Progress Bar */}
@@ -517,12 +521,28 @@ const Classroom: React.FC = () => {
                                     </div>
                                  </div>
                               </div>
-                              <div className="flex items-center justify-between mt-auto pt-6 border-t border-gray-100">
-                                 <span className="text-[9px] font-black text-indigo-900/40 uppercase tracking-[0.2em]">{zone.level} • {zone.domain}</span>
-                                 <div className="p-4 bg-indigo-900 rounded-2xl shadow-xl shadow-indigo-900/10 text-white group-hover:bg-[#c2f575] group-hover:text-indigo-900 transition-all active:scale-90">
-                                    <ArrowRight size={20} />
-                                 </div>
-                              </div>
+                               <div className="flex items-center justify-between mt-auto pt-6 border-t border-gray-100">
+                                  <span className="text-[9px] font-black text-indigo-900/40 uppercase tracking-[0.2em]">{zone.level} • {zone.domain}</span>
+                                  <div className="flex gap-3">
+                                     {zone.progress < 45 && zone.enrolledAt && new Date() < new Date(new Date(zone.enrolledAt).getTime() + 7 * 24 * 60 * 60 * 1000) && (
+                                        <button 
+                                          onClick={(e) => { 
+                                             e.stopPropagation(); 
+                                             setActiveRefundZone({
+                                                ...zone, 
+                                                refundCutoffTime: new Date(new Date(zone.enrolledAt).getTime() + 7 * 24 * 60 * 60 * 1000)
+                                             }); 
+                                          }}
+                                          className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-all shadow-sm"
+                                        >
+                                           Refund
+                                        </button>
+                                     )}
+                                     <div className="p-4 bg-indigo-900 rounded-2xl shadow-xl shadow-indigo-900/10 text-white group-hover:bg-[#c2f575] group-hover:text-indigo-900 transition-all active:scale-90 flex items-center justify-center">
+                                        <ArrowRight size={20} />
+                                     </div>
+                                  </div>
+                               </div>
                            </div>
                         ))}
                      </div>
@@ -587,7 +607,7 @@ const Classroom: React.FC = () => {
             <div className="xl:col-span-4 space-y-10">
                <div className="bg-nunma-forest rounded-[3.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
                   <div className="flex items-center justify-between mb-10 relative z-10">
-                     <h3 className="text-2xl font-black tracking-tighter">My Mentors</h3>
+                     <h3 className="text-2xl font-black tracking-tighter text-[#c2f575]">My Mentors</h3>
                      <button className="text-[10px] font-black text-[#c2f575] uppercase tracking-widest px-4 py-2 bg-white/5 rounded-xl">Search</button>
                   </div>
                   <div className="space-y-4 relative z-10">
@@ -671,6 +691,23 @@ const Classroom: React.FC = () => {
                </div>
             </div>
          </div>
+         
+         {/* Modals */}
+         {activeRefundZone && (
+            <RefundRequestModal
+               transactionId={`tx_${Math.random().toString(36).substr(2, 9)}`}
+               tutorId={activeRefundZone.tutorId || activeRefundZone.createdBy}
+               zoneId={activeRefundZone.id}
+               refundCutoffTime={activeRefundZone.refundCutoffTime}
+               amount={activeRefundZone.price?.toString() || "0"}
+               currency="USD"
+               onClose={() => setActiveRefundZone(null)}
+               onSuccess={() => {
+                  setActiveRefundZone(null);
+                  alert("Refund request submitted successfully!");
+               }}
+            />
+         )}
       </div>
    );
 };

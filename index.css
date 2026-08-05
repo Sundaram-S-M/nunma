@@ -515,3 +515,11 @@ img { display: block; max-width: 100%; object-fit: cover; }
   box-shadow: 0 0 18px rgba(194, 245, 117, 0.5), inset 0 0 10px rgba(194, 245, 117, 0.2);
   transform: translateY(-3px) scale(1.1);
 }
+
+/* Hide global header and mobile nav when chat is active on mobile */
+@media (max-width: 767px) {
+  body.chat-active #global-header,
+  body.chat-active #global-mobile-nav {
+    display: none !important;
+  }
+}

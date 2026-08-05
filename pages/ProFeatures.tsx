@@ -11,6 +11,7 @@ import {
   CreditCard,
   ArrowRight
 } from 'lucide-react';
+import SubscribeButton from '../components/SubscribeButton';
 
 const ProFeatures: React.FC = () => {
   const navigate = useNavigate();
@@ -128,12 +129,20 @@ const ProFeatures: React.FC = () => {
       <section className="py-24 px-6 bg-white text-center">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-8 tracking-tight">Ready to upgrade your teaching?</h2>
-          <button
-            onClick={() => navigate('/auth?mode=signup&role=THALA&redirect=/workplace/launch')}
-            className="bg-[#052e16] text-white hover:bg-[#0a4724] px-10 py-4 rounded-full font-extrabold text-lg transition-all shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 mx-auto block"
-          >
-            Create Your Zone Now
-          </button>
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
+            <button
+              onClick={() => navigate('/auth?mode=signup&role=THALA&redirect=/workplace/launch')}
+              className="bg-[#052e16] text-white hover:bg-[#0a4724] px-10 py-4 rounded-full font-extrabold text-lg transition-all shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95"
+            >
+              Create Your Zone Now
+            </button>
+            <SubscribeButton 
+              amount={9900} 
+              tutorId="nunma-platform" 
+              label="Subscribe to Pro Features ($99/mo)" 
+              className="bg-[#c2f575] text-nunma-forest px-10 py-4 rounded-full font-extrabold text-lg transition-all shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 border-2 border-[#c2f575] hover:border-white"
+            />
+          </div>
         </div>
       </section>
 

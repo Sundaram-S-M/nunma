@@ -15,14 +15,16 @@ const LiveNotification: React.FC = () => {
     useEffect(() => {
         if (!user) return;
 
+        let isMounted = true;
         let unsubs: (() => void)[] = [];
 
         const setupListeners = async () => {
             // Get enrollments to know which zones to watch
             const enrollRef = collection(db, `users/${user.uid}/enrollments`);
             const enrollSnap = await getDocs(enrollRef);
-            const zoneIds = enrollSnap.docs.map(d => d.data().zoneId);
+            if (!isMounted) return;
 
+            const zoneIds = enrollSnap.docs.map(d => d.data().zoneId);
             if (zoneIds.length === 0) return;
 
             zoneIds.forEach(zId => {
@@ -31,12 +33,8 @@ const LiveNotification: React.FC = () => {
                     where('status', '==', 'live')
                 );
                 const unsub = onSnapshot(q, (snap) => {
-                    // If we find a live session we haven't seen/dismissed, show it
-                    // For simplicity, just show the first one found
                     if (!snap.empty) {
                         const live = { id: snap.docs[0].id, zoneId: zId, ...snap.docs[0].data() };
-                        // Only show if it's different from current or we haven't shown it?
-                        // The logic in original was: if live && (!active || diff), show.
                         setActiveSession((prev: any) => {
                             if (!prev || prev.id !== live.id) {
                                 setShow(true);
@@ -45,7 +43,6 @@ const LiveNotification: React.FC = () => {
                             return prev;
                         });
                     } else {
-                        // If the current active session ended, hide
                         setActiveSession((prev: any) => {
                             if (prev && prev.zoneId === zId) {
                                 setShow(false);
@@ -60,7 +57,12 @@ const LiveNotification: React.FC = () => {
         };
 
         setupListeners();
-        return () => unsubs.forEach(u => u());
+        return () => {
+            isMounted = false;
+            setTimeout(() => {
+                unsubs.forEach(u => u());
+            }, 0);
+        };
     }, [user]);
 
     if (!show || !activeSession) return null;

@@ -8,6 +8,8 @@ import { X, AlertCircle, CheckCircle2 } from 'lucide-react';
 interface RefundRequestModalProps {
     transactionId: string;
     bookingId?: string;
+    tutorId: string;
+    zoneId: string;
     refundCutoffTime: Date;
     amount: string;
     currency: string;
@@ -18,6 +20,8 @@ interface RefundRequestModalProps {
 const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
     transactionId,
     bookingId,
+    tutorId,
+    zoneId,
     refundCutoffTime,
     amount,
     currency,
@@ -58,6 +62,8 @@ const RefundRequestModal: React.FC<RefundRequestModalProps> = ({
             const disputeRef = await addDoc(collection(db, 'disputes'), {
                 transactionId,
                 bookingId: bookingId || null,
+                tutorId,
+                zoneId,
                 userId: user.uid,
                 userEmail: user.email,
                 amount,

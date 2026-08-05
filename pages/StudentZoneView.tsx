@@ -39,9 +39,12 @@ import {
   ArrowRight,
   Upload,
   Calendar,
-  Trophy
+  Trophy,
+  MessageSquare
 } from 'lucide-react';
 import LiveSessionStatus from '../components/LiveSessionStatus';
+import ChatSidebar from '../components/ChatSidebar';
+import VideoStage from '../components/VideoStage';
 import { generateOpenBadgeVC, downloadVCAsJSON } from '../utils/vcUtils';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
@@ -138,6 +141,10 @@ const StudentZoneView: React.FC = () => {
   const [examEndTime, setExamEndTime] = useState<Date | null>(null);
   const [examTimeRemaining, setExamTimeRemaining] = useState<number | null>(null);
   const [submittedExamResult, setSubmittedExamResult] = useState<{ examTitle: string; marks: number; maxMark: number; status: string; wrongQuestions: string[]; pdfUrl?: string } | null>(null);
+  const [showChat, setShowChat] = useState(false);
+  const [liveToken, setLiveToken] = useState<string | null>(null);
+  const [liveServerUrl, setLiveServerUrl] = useState<string | null>(null);
+  const [isJoiningLive, setIsJoiningLive] = useState(false);
 
   const { user: authUser } = useAuth();
 
@@ -196,10 +203,14 @@ const StudentZoneView: React.FC = () => {
 
     applicableExams.forEach(exam => {
       let isLive = false;
+      let examStartObj: Date | null = null;
+      
       if (exam.scheduledAt?.toDate) {
-        isLive = exam.scheduledAt.toDate() <= new Date();
+        examStartObj = exam.scheduledAt.toDate();
+        isLive = examStartObj <= new Date();
       } else if (exam.scheduledAt?.seconds) {
-        isLive = new Date(exam.scheduledAt.seconds * 1000) <= new Date();
+        examStartObj = new Date(exam.scheduledAt.seconds * 1000);
+        isLive = examStartObj <= new Date();
       } else if (exam.status === 'LIVE') {
         isLive = true;
       } else if (exam.date && exam.time) {
@@ -217,13 +228,21 @@ const StudentZoneView: React.FC = () => {
             month = parseInt(parts[1]) - 1;
             year = parseInt(parts[2]);
           }
-          const examStart = new Date(year, month, day, parseInt(timeParts[0]), parseInt(timeParts[1]));
-          isLive = examStart <= new Date() && exam.status !== 'CONDUCTED';
+          examStartObj = new Date(year, month, day, parseInt(timeParts[0]), parseInt(timeParts[1]));
+          isLive = examStartObj <= new Date() && exam.status !== 'CONDUCTED';
         }
       }
 
+      // Determine if the exam went live within the last 24 hours to prevent spam from old test exams
+      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+      let isRecentlyLive = isLive;
+      if (isLive && examStartObj) {
+        // Note: examStartObj must be in the past (since isLive is true), we check if it was < 24h ago
+        isRecentlyLive = (new Date().getTime() - examStartObj.getTime()) < ONE_DAY_MS;
+      }
+
       // EXAM_LIVE notification
-      if (isLive && exam.id && !notifiedExams.includes(exam.id)) {
+      if (isRecentlyLive && exam.id && !notifiedExams.includes(exam.id)) {
         const notifRef = doc(db, 'users', authUser.uid, 'notifications', `exam_live_${exam.id}`);
         getDoc(notifRef).then(docSnap => {
           if (!docSnap.exists()) {
@@ -389,7 +408,7 @@ const StudentZoneView: React.FC = () => {
   // Listen to All Students and Exam Results only when studentData is loaded or user is creator
   useEffect(() => {
     if (!authUser || !zoneId || !db) return;
-    if (!studentData && zone?.createdBy !== authUser.uid) return;
+    if (!studentData && zone?.createdBy !== authUser.uid && zone?.assistantTeacherId !== authUser.uid && authUser?.role !== 'THALA') return;
 
     // 6. Exam Results (My Results)
     // Submissions are stored under zones/{zoneId}/exams/{examId}/submissions/{uid}
@@ -414,21 +433,40 @@ const StudentZoneView: React.FC = () => {
     });
 
     // 7. All Students (for Student List tab)
-    const allStudentsQ = query(collection(db, 'zones', zoneId, 'students'));
-    const allStudentsUnsub = onSnapshot(allStudentsQ, (snapshot) => {
-      let studentsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      
-      // Strict batch isolation for peers
-      if (studentData?.batchId) {
-        studentsList = studentsList.filter(s => s.batchId === studentData.batchId);
-      } else {
-        studentsList = studentsList.filter(s => !s.batchId);
-      }
-      
-      setAllStudents(studentsList);
-    }, (error) => {
-      console.warn("Error loading students list:", error);
-    });
+    let allStudentsQ;
+    if (authUser?.role === 'THALA' || authUser?.isDevBypass) {
+      // Admins/Tutors can fetch all students
+      allStudentsQ = query(collection(db, 'zones', zoneId, 'students'));
+    } else if (studentData?.batchId) {
+      // Students can only fetch their own batch per Firestore security rules
+      allStudentsQ = query(collection(db, 'zones', zoneId, 'students'), where('batchId', '==', studentData.batchId));
+    } else {
+      // If student has no batch, they shouldn't fetch the whole collection (rules will deny)
+      allStudentsQ = null;
+    }
+
+    let allStudentsUnsub = () => {};
+    if (allStudentsQ) {
+      allStudentsUnsub = onSnapshot(allStudentsQ, (snapshot) => {
+        let studentsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+        
+        // Strict batch isolation for peers (client-side backup)
+        if (authUser?.role !== 'THALA' && !authUser?.isDevBypass) {
+          if (studentData?.batchId) {
+            studentsList = studentsList.filter(s => s.batchId === studentData.batchId);
+          } else {
+            studentsList = studentsList.filter(s => !s.batchId);
+          }
+        }
+        
+        setAllStudents(studentsList);
+      }, (error) => {
+        console.warn("Error loading students list:", error);
+      });
+    } else if (studentData) {
+      // Fallback: Just show themselves if they can't query others
+      setAllStudents([{ id: studentData.id || authUser.uid, ...studentData }]);
+    }
 
     return () => {
       unsubs.forEach(u => u());
@@ -455,7 +493,7 @@ const StudentZoneView: React.FC = () => {
       const isWhitelisted = !!whitelistEntry;
       
       // If we have studentData or are the creator, we are good.
-      if (studentData || zone.createdBy === authUser.uid) return;
+      if (studentData || zone.createdBy === authUser.uid || zone.assistantTeacherId === authUser.uid) return;
 
       const isFree = !zone.price || zone.price <= 0;
 
@@ -758,14 +796,16 @@ const StudentZoneView: React.FC = () => {
         completedAt: new Date().toISOString() 
       }]);
 
-      setSubmittedExamResult({
-        examTitle: activeExam.title,
-        marks: resMarks,
-        maxMark: activeExam.maxMark || 100,
-        status: resStatus,
-        wrongQuestions: wrongList,
-        pdfUrl: pdfUrl
-      });
+      if (activeExam.type === 'online-test') {
+        setSubmittedExamResult({
+          examTitle: activeExam.title,
+          marks: resMarks,
+          maxMark: activeExam.maxMark || 100,
+          status: resStatus,
+          wrongQuestions: wrongList,
+          pdfUrl: pdfUrl
+        });
+      }
     } catch (e) {
       console.error("Failed to save exam result via function", e);
       alert("Failed to submit exam result. Time window may have closed.");
@@ -807,9 +847,8 @@ const StudentZoneView: React.FC = () => {
       formData.append('file', file);
       formData.append('folder', `zones/${zoneId}/exams/submissions/${studentData.id}`);
 
-      const region = 'us-central1';
-      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'nunma-learning-zone';
-      const uploadUrl = `https://${region}-${projectId}.cloudfunctions.net/uploadFileToBunny`;
+      // Use direct Cloud Run URL for 2nd Gen functions to prevent CORS preflight redirect (302) issues
+      const uploadUrl = `https://uploadfiletobunny-xtu74uomna-uc.a.run.app`;
 
       const response = await fetch(uploadUrl, {
         method: 'POST',
@@ -877,7 +916,11 @@ const StudentZoneView: React.FC = () => {
     if (postExamTimer !== null && postExamTimer > 0) {
       const timerId = setInterval(() => {
         setPostExamTimer(prev => {
-          if (prev === null || prev <= 1) {
+          if (prev === null) {
+            clearInterval(timerId);
+            return null;
+          }
+          if (prev <= 1) {
             clearInterval(timerId);
             return 0;
           }
@@ -1253,10 +1296,33 @@ const StudentZoneView: React.FC = () => {
                 className="bg-[#c2f575]/10 border-[#c2f575]/20 text-[#c2f575]"
               />
               <button
-                onClick={() => navigate(`/classroom/${zoneId}`)}
-                className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-[1.75rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
+                onClick={async () => {
+                  setIsJoiningLive(true);
+                  try {
+                    const joinFunc = httpsCallable(functions, 'joinLiveSession');
+                    const result = await joinFunc({ zoneId });
+                    const { token, livekitUrl } = result.data as any;
+                    setLiveToken(token);
+                    setLiveServerUrl(livekitUrl);
+                    setActiveTab('content');
+                    setActiveContent({ id: 'live', type: 'live', title: 'Live Session' });
+                  } catch (error) {
+                    console.error('Failed to join live:', error);
+                    alert('Failed to connect to the live stream.');
+                  } finally {
+                    setIsJoiningLive(false);
+                  }
+                }}
+                disabled={isJoiningLive}
+                className="px-10 py-5 bg-[#c2f575] text-indigo-900 rounded-[1.75rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50"
               >
-                Join Live Classroom <ArrowRight size={16} />
+                {isJoiningLive ? 'Connecting...' : 'Join Live Stream In Viewer'} <ArrowRight size={16} />
+              </button>
+              <button
+                onClick={() => navigate(`/classroom/${zoneId}`)}
+                className="px-10 py-3 bg-transparent border border-[#c2f575] text-[#c2f575] rounded-[1.75rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:bg-[#c2f575]/10 active:scale-95 transition-all flex items-center gap-3"
+              >
+                Open Full Classroom
               </button>
             </div>
           )}
@@ -1278,11 +1344,14 @@ const StudentZoneView: React.FC = () => {
             </div>
           )}
           <div className="flex flex-row gap-2 md:gap-4 w-full">
+            <button onClick={() => setShowChat(true)} className="flex-1 bg-white/10 backdrop-blur-md p-3 md:p-4 rounded-2xl md:rounded-3xl flex items-center justify-center gap-1 md:gap-2 text-[10px] md:text-sm font-bold hover:bg-white/20 transition-all border border-white/10">
+              <MessageSquare size={16} className="md:w-5 md:h-5" /> Chat
+            </button>
             <button className="flex-1 bg-white/10 backdrop-blur-md p-3 md:p-4 rounded-2xl md:rounded-3xl flex items-center justify-center gap-1 md:gap-2 text-[10px] md:text-sm font-bold hover:bg-white/20 transition-all border border-white/10">
-              <Share2 size={16} className="md:w-5 md:h-5" /> Share Zone
+              <Share2 size={16} className="md:w-5 md:h-5" /> Share
             </button>
             <button onClick={handleLeaveZone} className="flex-1 bg-red-600 p-3 md:p-4 rounded-2xl md:rounded-3xl flex items-center justify-center gap-1 md:gap-2 text-[10px] md:text-sm font-bold text-white hover:bg-red-700 transition-all border border-red-600">
-              <LogOut size={16} className="md:w-5 md:h-5" /> Leave Zone
+              <LogOut size={16} className="md:w-5 md:h-5" /> Leave
             </button>
           </div>
         </div>
@@ -1305,7 +1374,7 @@ const StudentZoneView: React.FC = () => {
           {activeTab === 'content' ? (
             activeContent ? (
               <div
-                className="bg-white rounded-[1.5rem] md:rounded-[4rem] p-4 md:p-6 lg:p-10 border border-gray-100 shadow-xl md:shadow-2xl min-h-[500px] md:min-h-[600px] flex flex-col items-center justify-center text-center relative overflow-hidden group"
+                className="bg-transparent md:bg-white rounded-none md:rounded-[4rem] p-0 md:p-6 lg:p-10 border-none md:border md:border-gray-100 shadow-none md:shadow-2xl min-h-0 md:min-h-[600px] flex flex-col items-center justify-center text-center relative overflow-hidden group -mx-4 md:mx-0 pt-8 md:pt-6"
                 onContextMenu={(e) => e.preventDefault()}
                 style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
               >
@@ -1324,6 +1393,10 @@ const StudentZoneView: React.FC = () => {
                     />
                     <div className="absolute top-0 w-full h-14 bg-transparent z-10" title="Protected Content" />
                   </div>
+                ) : (activeContent.type === 'live' && liveToken && liveServerUrl) ? (
+                  <div className="w-full h-full min-h-[600px] rounded-[3rem] overflow-hidden bg-[#040413] shadow-inner relative flex flex-col items-center justify-center">
+                    <VideoStage token={liveToken} serverUrl={liveServerUrl} />
+                  </div>
                 ) : (
                   <>
                     <div className="w-32 h-32 bg-gray-50 rounded-[3rem] flex items-center justify-center text-indigo-900 mb-10 shadow-inner group-hover:bg-indigo-900 group-hover:text-[#c2f575] transition-all duration-700">
@@ -1335,7 +1408,7 @@ const StudentZoneView: React.FC = () => {
                     </p>
                   </>
                 )}
-                <div className="mt-8 md:mt-14 flex flex-col md:flex-row gap-4 md:gap-6 w-full">
+                <div className="mt-8 md:mt-14 flex flex-col md:flex-row gap-4 md:gap-6 w-full px-4 md:px-0 pb-8 md:pb-0">
                   <button onClick={() => setActiveContent(null)} className="w-full md:w-auto px-6 md:px-12 py-4 md:py-5 bg-gray-50 text-gray-400 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-white hover:shadow-md transition-all">Close Player</button>
                   {studentData?.completedSegments?.includes(activeContent.id) ? (
                     <button
@@ -2364,6 +2437,15 @@ const StudentZoneView: React.FC = () => {
             setShowExamInsightsModal(false);
             setSelectedExamForInsights(null);
           }}
+        />
+      )}
+      {/* Chat Sidebar Integration */}
+      {zoneId && (
+        <ChatSidebar 
+          zoneId={zoneId} 
+          sessionId="general" 
+          isOpen={showChat} 
+          onClose={() => setShowChat(false)} 
         />
       )}
     </div>

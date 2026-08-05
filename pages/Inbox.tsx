@@ -16,6 +16,8 @@ import {
   FileText, Camera, Mail, ArrowRight, UserPlus, Image as LucideImage, ArrowLeft
 } from 'lucide-react';
 
+const COMMON_EMOJIS = ['😀','😂','🥺','😭','😍','🥰','😊','🙏','✨','🔥','👍','❤️','🎉','💯','🙌','👀','🤔','😎','💪','🚀','👏','🥲','🥳','🤯','🤷','🤦','🫠','💀','🫶','✌️'];
+
 import PhotoAdjustModal from '../components/PhotoAdjustModal';
 
 interface Message {
@@ -59,6 +61,16 @@ const Inbox: React.FC = () => {
 
   const [activeCategory, setActiveCategory] = useState<'chat' | 'community' | 'collaboration'>(initialTab);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(initialChatId);
+
+  useEffect(() => {
+    if (selectedChatId) {
+      document.body.classList.add('chat-active');
+    } else {
+      document.body.classList.remove('chat-active');
+    }
+    return () => document.body.classList.remove('chat-active');
+  }, [selectedChatId]);
+
   const [messageText, setMessageText] = useState('');
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -69,6 +81,19 @@ const Inbox: React.FC = () => {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDetails, setNewGroupDetails] = useState('');
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
+
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -116,6 +141,7 @@ const Inbox: React.FC = () => {
       const chatData = await Promise.all(snapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
         let otherUser = undefined;
+        let zoneData = undefined;
 
         // If it's a 1:1 chat, try to resolve the other participant
         if (data.type === 'chat' && data.participants && data.participants.length === 2) {
@@ -142,13 +168,24 @@ const Inbox: React.FC = () => {
           }
         }
 
+        if (data.type === 'community' && data.zoneId) {
+          try {
+            const zoneSnap = await getDoc(doc(db, 'zones', data.zoneId));
+            if (zoneSnap.exists()) {
+              zoneData = zoneSnap.data();
+            }
+          } catch (e) {
+            console.error("Error fetching zone data", e);
+          }
+        }
+
         return {
           id: docSnap.id,
           ...data,
           otherUser,
           // Override name/avatar for 1:1 chats if we found the user
-          name: data.type === 'chat' && otherUser ? otherUser.name : data.name,
-          avatar: data.type === 'chat' && otherUser ? otherUser.avatar : data.avatar
+          name: data.type === 'chat' && otherUser ? otherUser.name : (data.type === 'community' && zoneData?.title ? zoneData.title : data.name),
+          avatar: data.type === 'chat' && otherUser ? otherUser.avatar : (data.type === 'community' && zoneData?.image ? zoneData.image : data.avatar)
         };
       }));
       setChats(chatData as Chat[]);
@@ -435,7 +472,7 @@ const Inbox: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-72px)] md:h-[calc(100vh-140px)] -m-4 md:m-0 w-[calc(100%+2rem)] md:w-auto flex bg-transparent md:bg-[#fbfbfb] rounded-none md:rounded-[4rem] border-none md:border md:border-gray-100 overflow-hidden shadow-none md:shadow-2xl animate-in fade-in zoom-in-95 duration-700 relative">
+    <div className="fixed inset-0 z-[40] md:static md:z-auto md:w-auto flex flex-col md:flex-row md:h-[calc(100vh-140px)] bg-transparent md:bg-[#fbfbfb] rounded-none md:rounded-[4rem] border-none md:border md:border-gray-100 overflow-hidden shadow-none md:shadow-2xl animate-in fade-in zoom-in-95 duration-700">
 
       {adjustingImage && (
         <PhotoAdjustModal
@@ -905,19 +942,34 @@ const Inbox: React.FC = () => {
                     placeholder="Message"
                     className="w-full bg-gray-100 md:bg-gray-50 border border-transparent md:border-gray-100 rounded-full md:rounded-[2.25rem] pl-4 pr-10 py-2.5 md:pl-8 md:pr-16 md:py-5 focus:outline-none focus:ring-2 md:focus:ring-4 focus:ring-[#c2f575]/10 font-medium md:font-bold text-gray-800 md:text-nunma-forest transition-all md:shadow-inner text-sm md:text-lg"
                   />
-                  <div className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2">
-                    <button className="text-gray-400 md:text-gray-300 hover:text-nunma-forest">
+                  <div className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2" ref={emojiPickerRef}>
+                    <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="text-gray-400 md:text-gray-300 hover:text-nunma-forest">
                       <Smile size={20} className="md:w-6 md:h-6" />
                     </button>
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-full right-0 mb-4 z-50 shadow-2xl rounded-2xl bg-white border border-gray-100 p-3 w-64 md:w-72 grid grid-cols-6 gap-2">
+                        {COMMON_EMOJIS.map(emoji => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => setMessageText(prev => prev + emoji)}
+                            className="text-xl md:text-2xl hover:bg-gray-50 rounded-lg p-1 transition-colors"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button
                   onClick={handleSendMessage}
+                  disabled={!messageText.trim()}
                   className={`w-10 h-10 md:w-16 md:h-16 shrink-0 rounded-full md:rounded-[2rem] flex items-center justify-center shadow-sm md:shadow-2xl transition-all active:scale-90
-                    ${messageText.trim() ? 'bg-[#128C7E] md:bg-[#c2f575] text-white md:text-nunma-forest shadow-[#128C7E]/20 md:shadow-[#c2f575]/20 md:scale-105' : 'bg-[#128C7E] md:bg-nunma-forest text-white shadow-[#128C7E]/20 md:shadow-nunma-forest/20'}
+                    ${messageText.trim() ? 'bg-[#128C7E] md:bg-[#c2f575] text-white md:text-nunma-forest shadow-[#128C7E]/20 md:shadow-[#c2f575]/20 md:scale-105' : 'bg-gray-300 md:bg-gray-200 text-gray-500 cursor-not-allowed'}
                   `}
                 >
-                  {messageText.trim() ? <Send size={18} strokeWidth={2.5} className="ml-1 md:w-7 md:h-7" /> : <Mic size={20} className="md:w-7 md:h-7" />}
+                  <Send size={18} strokeWidth={2.5} className="ml-1 md:w-7 md:h-7" />
                 </button>
               </div>
             </div>

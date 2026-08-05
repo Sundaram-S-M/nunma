@@ -93,7 +93,7 @@ export const BunnyVideoPlayer: React.FC<BunnyVideoPlayerProps> = ({ videoId, tit
     }, []);
 
     return (
-        <div className="w-full max-w-full aspect-video rounded-[2rem] overflow-hidden bg-black shadow-2xl">
+        <div className="w-full max-w-full aspect-video rounded-none md:rounded-[2rem] overflow-hidden bg-black shadow-none md:shadow-2xl">
             <iframe
                 ref={iframeRef}
                 src={iframeUrl}

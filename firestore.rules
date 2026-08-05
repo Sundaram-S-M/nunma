@@ -8,6 +8,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isCEO() {
+      return request.auth != null && request.auth.token.email == 'sundaramsm55@gmail.com';
+    }
+
     function getUserData(uid) {
       return get(/databases/$(database)/documents/users/$(uid)).data;
     }
@@ -20,7 +24,9 @@ service cloud.firestore {
       let zoneDoc = get(/databases/$(database)/documents/zones/$(zoneId));
       return request.auth != null && (
         request.auth.uid == zoneDoc.data.tutorId || 
-        request.auth.uid == zoneDoc.data.createdBy
+        request.auth.uid == zoneDoc.data.createdBy ||
+        ('coTutorUids' in zoneDoc.data && request.auth.uid in zoneDoc.data.coTutorUids) ||
+        ('coTutorRoles' in zoneDoc.data && request.auth.uid in zoneDoc.data.coTutorRoles)
       );
     }
 
@@ -337,6 +343,21 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/zones/$(zoneId)/students/$(request.auth.uid))
       );
       allow write: if isSignedIn() && isZoneCreator(zoneId);
+    }
+
+    // --- CEO DASHBOARD COLLECTIONS ---
+    match /platform_stats/{docId} {
+      allow read: if isCEO();
+    }
+    match /webhook_failures/{docId} {
+      allow read: if isCEO();
+    }
+    match /disputes/{docId} {
+      allow read: if isCEO();
+      allow write: if isCEO();
+    }
+    match /{path=**}/exam_results/{resultId} {
+      allow read: if isCEO();
     }
   }
 }

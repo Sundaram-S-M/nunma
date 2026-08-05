@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   MonitorPlay,
@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -108,6 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const [showAddonModal, setShowAddonModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const location = useLocation();
   const [isNavVisible, setIsNavVisible] = useState(true);
   const lastScrollY = React.useRef(0);
 
@@ -217,6 +219,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     { id: 'inbox',   icon: <InboxIcon size={16} />,         path: '/inbox',    label: 'Inbox'   },
     ...(role === UserRole.THALA && user?.onboardingCompleted
       ? [{ id: 'products', icon: <ShoppingBag size={16} />, path: '/products', label: 'Products' }]
+      : []),
+    ...(user?.email === 'sundaramsm55@gmail.com' 
+      ? [{ id: 'admin', icon: <ShieldAlert size={16} />, path: '/admin', label: 'Admin' }]
       : []),
   ];
 
@@ -454,7 +459,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
       </aside>
 
       {/* Mobile Bottom Nav Island */}
-      <nav className={`md:hidden fixed bottom-6 left-4 right-4 z-[50] flex justify-between items-center bg-nunma-forest shadow-[0_20px_40px_rgba(0,0,0,0.4)] rounded-full px-2 py-2 transition-transform duration-500 ${isNavVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
+      <nav id="global-mobile-nav" className={`md:hidden fixed bottom-6 left-4 right-4 z-[50] flex justify-between items-center bg-nunma-forest shadow-[0_20px_40px_rgba(0,0,0,0.4)] rounded-full px-2 py-2 transition-transform duration-500 ${isNavVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
         
         {navLinks.slice(0, 4).map(link => (
           <NavLink

@@ -35,6 +35,7 @@ export interface TutorProfileData {
   };
   kycStatus?: 'PENDING' | 'VERIFIED' | 'FAILED' | null;
   razorpay_account_id?: string;
+  razorpayAccountId?: string;
   current_tier?: 'STARTER' | 'STANDARD' | 'PREMIUM';
 }
 
@@ -67,6 +68,7 @@ export interface Zone {
   createdAt: string;
   students: number;
   image: string;
+  assistantTeacherId?: string; // Newly added for assigning an assistant teacher
   landingPageConfig?: LandingPageConfig;
   postSessionSurvey?: PostSessionSurveyConfig;
   batches?: Batch[];     // Array of batches within this zone (max 7)

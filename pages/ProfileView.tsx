@@ -215,14 +215,6 @@ const ProfileHeader = ({
             ) : (
               <div className="flex items-center justify-center gap-2 mb-1">
                 <h1 className="text-3xl font-black text-nunma-forest tracking-tighter">{profileUser.name}</h1>
-                {isMe && (
-                  <button 
-                    onClick={() => setIsEditing(true)}
-                    className="p-1.5 bg-gray-100 rounded-lg text-gray-400 hover:bg-gray-200 hover:text-nunma-forest transition-all"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                )}
               </div>
             )}
             
@@ -453,8 +445,9 @@ const StudentProfile = ({
               <div className="shrink-0 w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-900 shadow-sm"><Award size={28} /></div>
               <div className="flex-1">
                 {isEditing ? (
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
+                  <>
+                    <div className="hidden md:block space-y-3">
+                      <div className="flex justify-between">
                       <input value={edu.school} onChange={(e) => updateEdu(idx, 'school', e.target.value)} placeholder="School/University" className="text-xl font-black text-indigo-900 bg-transparent outline-none w-full border-b border-gray-200" />
                       <button onClick={() => removeEdu(idx)} className="text-gray-300 hover:text-red-500 ml-4"><X size={18} /></button>
                     </div>
@@ -464,6 +457,54 @@ const StudentProfile = ({
                       <input type="text" max="2099-12-31" onFocus={(e) => e.target.type = 'date'} onBlur={(e) => e.target.type = e.target.value ? 'date' : 'text'} value={edu.endDate} onChange={(e) => updateEdu(idx, 'endDate', e.target.value)} placeholder="Year Ended" className="text-xs font-black text-black placeholder-indigo-300 bg-transparent outline-none w-1/2 border-b border-gray-200" />
                     </div>
                   </div>
+
+                  {/* Mobile Specialized Experience */}
+                  <div className="md:hidden flex flex-col gap-4">
+                    <div className="flex justify-between items-center gap-3">
+                      <input 
+                        value={edu.school} 
+                        onChange={(e) => updateEdu(idx, 'school', e.target.value)} 
+                        placeholder="School/University" 
+                        className="text-lg font-black text-nunma-forest bg-white px-5 py-4 rounded-[1.5rem] outline-none w-full border-2 border-gray-100 focus:border-[#c2f575] transition-all shadow-sm placeholder-gray-300" 
+                      />
+                      <button onClick={() => removeEdu(idx)} className="w-12 h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><X size={20} /></button>
+                    </div>
+                    <input 
+                      value={edu.degree} 
+                      onChange={(e) => updateEdu(idx, 'degree', e.target.value)} 
+                      placeholder="Degree/Course" 
+                      className="text-base font-bold text-gray-600 bg-white px-5 py-4 rounded-[1.5rem] outline-none w-full border-2 border-gray-100 focus:border-[#c2f575] transition-all shadow-sm placeholder-gray-300" 
+                    />
+                    <div className="flex gap-3">
+                      <input 
+                        type="text" 
+                        inputMode="numeric" 
+                        pattern="\d{4}" 
+                        maxLength={4} 
+                        value={edu.startDate} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          if (val.length <= 4) updateEdu(idx, 'startDate', val);
+                        }} 
+                        placeholder="Start Year" 
+                        className="text-sm font-black text-center text-nunma-forest bg-white px-4 py-4 rounded-[1.5rem] outline-none w-1/2 border-2 border-gray-100 focus:border-[#c2f575] transition-all shadow-sm placeholder-gray-300" 
+                      />
+                      <input 
+                        type="text" 
+                        inputMode="numeric" 
+                        pattern="\d{4}" 
+                        maxLength={4} 
+                        value={edu.endDate} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          if (val.length <= 4) updateEdu(idx, 'endDate', val);
+                        }} 
+                        placeholder="End Year" 
+                        className="text-sm font-black text-center text-nunma-forest bg-white px-4 py-4 rounded-[1.5rem] outline-none w-1/2 border-2 border-gray-100 focus:border-[#c2f575] transition-all shadow-sm placeholder-gray-300" 
+                      />
+                    </div>
+                    </div>
+                  </>
                 ) : (
                   <>
                     <h4 className="text-xl font-black text-indigo-900 leading-tight">{edu.school}</h4>
@@ -751,7 +792,13 @@ const ProfileView: React.FC = () => {
       // 2. Zones (Created by this user)
       const qZones = query(collection(db, 'zones'), where('tutorId', '==', uid));
       const zSnap = await getDocs(qZones);
-      const zonesData = zSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      let zonesData = zSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // Filter out private zones if viewer is not the owner
+      if (uid !== currentUser?.uid) {
+        zonesData = zonesData.filter((zone: any) => zone.isPublic !== false);
+      }
+      
       setZones(zonesData);
 
       let studentsCount = 0;

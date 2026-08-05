@@ -189,7 +189,7 @@ const Workplace: React.FC = () => {
   };
 
   const { user } = useAuth();
-  const kycVerified = (user?.kycStatus === 'VERIFIED' && user?.razorpay_account_id) || user?.isDevBypass;
+  const kycVerified = (user?.kycStatus === 'VERIFIED' && (user?.razorpay_account_id || user?.razorpayAccountId)) || user?.isDevBypass;
   const hasAccess = user?.role === UserRole.THALA || user?.isWhitelisted === true;
 
   if (user && !hasAccess) {
@@ -212,7 +212,7 @@ const Workplace: React.FC = () => {
     );
   }
 
-  const isKycVerified = hasAccess;
+  const isKycVerified = kycVerified;
   const currentTier = ((user as any)?.current_tier || (user as any)?.tier || 'PREMIUM').toString().toUpperCase();
   const tierLimits: Record<string, number> = {
     'STARTER': 10,
@@ -236,14 +236,42 @@ const Workplace: React.FC = () => {
   useEffect(() => {
     if (!user || !user.uid || user.role !== UserRole.THALA) return;
 
-    // 1. Zones
-    const qZones = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
-    const unsubscribeZones = onSnapshot(qZones, (snapshot) => {
-      setZonesList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    // 1. Zones Owner
+    const qZonesOwner = query(collection(db, 'zones'), where('tutorId', '==', user.uid));
+    
+    // 1b. Zones Co-Tutor (fallback for unmigrated zones)
+    const qZonesCoTutor = query(collection(db, 'zones'));
+
+    let ownerZones: any[] = [];
+    let coTutorZones: any[] = [];
+
+    const updateCombinedZones = () => {
+      const combined = [...ownerZones, ...coTutorZones];
+      // deduplicate by id
+      const uniqueZones = Array.from(new Map(combined.map(item => [item.id, item])).values());
+      setZonesList(uniqueZones);
+    };
+
+    const unsubscribeZonesOwner = onSnapshot(qZonesOwner, (snapshot) => {
+      ownerZones = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      updateCombinedZones();
     },
     (error) => {
-      console.warn('Firestore error in zones listener:', error.code, error.message);
-      setZonesList([]);
+      console.warn('Firestore error in zones owner listener:', error);
+    });
+
+    const unsubscribeZonesCoTutor = onSnapshot(qZonesCoTutor, (snapshot) => {
+      coTutorZones = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(z => 
+          (z.coTutorUids && z.coTutorUids.includes(user.uid)) || 
+          (z.coTutors && z.coTutors.some((t: any) => t.uid === user.uid)) ||
+          (z.assistantTeacherId === user.uid)
+        );
+      updateCombinedZones();
+    },
+    (error) => {
+      console.warn('Firestore error in zones co-tutor listener:', error);
     });
 
     // 2. Products
@@ -264,7 +292,8 @@ const Workplace: React.FC = () => {
     // We'll move session fetching to a separate effect dependent on zonesList.
 
     return () => {
-      unsubscribeZones();
+      unsubscribeZonesOwner();
+      unsubscribeZonesCoTutor();
       unsubscribeProducts();
     };
   }, [user]);
@@ -503,7 +532,19 @@ const Workplace: React.FC = () => {
         {/* KYC Status Banner */}
         {user?.role === UserRole.THALA && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-700">
-            {isKycVerified ? (
+            {user?.tutorProfile?.isCoTutorOnly ? (
+              <div className="bg-[#c2f575]/10 border border-[#c2f575]/30 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-[#c2f575] rounded-xl flex items-center justify-center text-nunma-forest shadow-lg">
+                    <Check size={24} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black text-nunma-forest tracking-tight">Co-Tutor Active</h4>
+                    <p className="text-xs font-bold text-nunma-forest/60 uppercase tracking-widest">ASSIGNED TO ZONE RESPONSIBILITIES</p>
+                  </div>
+                </div>
+              </div>
+            ) : isKycVerified ? (
               <div className="bg-[#c2f575]/10 border border-[#c2f575]/30 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-[#c2f575] rounded-xl flex items-center justify-center text-nunma-forest shadow-lg">

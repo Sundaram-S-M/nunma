@@ -269,7 +269,7 @@ const Auth: React.FC = () => {
 
                   <div className="space-y-2">
                     <div className="flex justify-between items-center ml-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">Access Key</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">Password</label>
                       <button type="button" className="text-[10px] font-black text-indigo-400 uppercase tracking-widest hover:text-nunma-forest">Recovery</button>
                     </div>
                     <div className="relative group">
@@ -415,7 +415,7 @@ const Auth: React.FC = () => {
                 {step === 'password' && (
                   <form onSubmit={handleFinalizeSignUp} className="space-y-6 animate-in slide-in-from-right-4 duration-500">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Create Access Key</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Create Password</label>
                       <div className="relative group">
                         <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-nunma-forest" size={20} />
                         <input

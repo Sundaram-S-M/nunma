@@ -17,6 +17,7 @@ interface FirestoreZone {
   currency: string;
   image: string;
   students: number;
+  isPublic?: boolean;
 }
 
 const Explore: React.FC = () => {
@@ -37,7 +38,7 @@ const Explore: React.FC = () => {
           id: doc.id,
           ...doc.data()
         })) as FirestoreZone[];
-        setZones(zonesData);
+        setZones(zonesData.filter(zone => zone.isPublic !== false));
         setLoading(false);
       }, (error) => {
         console.error("Firestore error:", error);
@@ -169,11 +170,8 @@ const Explore: React.FC = () => {
               placeholder="Search zones, tutors..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 w-full px-2 py-4 text-lg font-bold text-white placeholder:text-white/40 placeholder:font-medium outline-none bg-transparent"
+              className="flex-1 w-full px-2 pr-6 py-4 text-lg font-bold text-white placeholder:text-white/40 placeholder:font-medium outline-none bg-transparent"
             />
-            <button className="bg-[#c2f575] p-4 rounded-[2rem] text-nunma-forest hover:bg-white transition-all transform hover:scale-[1.05] hover:rotate-3 shadow-[0_10px_20px_rgba(194,245,117,0.3)] flex-shrink-0">
-              <Filter size={20} className="fill-current" />
-            </button>
           </div>
         </div>
       </div>

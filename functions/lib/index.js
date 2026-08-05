@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onUserUpdatedPropagateName = exports.onUserCreatedProcessInvites = exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamDeploymentCreated = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
+exports.triggerAggregation = exports.aggregatePlatformStats = exports.updateKycStatus = exports.recoverWebhook = exports.denyAndUnfreeze = exports.approveRefund = exports.onUserUpdatedPropagateName = exports.onUserCreatedProcessInvites = exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamDeploymentCreated = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
@@ -777,7 +777,7 @@ exports.razorpayRouteWebhook = (0, https_1.onRequest)(async (req, res) => {
  */
 exports.razorpayWebhook = (0, https_1.onRequest)({ secrets: ["RAZORPAY_WEBHOOK_SECRET"], cors: true }, // Removed SMTP_PASS as it's not used here anymore
 async (req, res) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
     const db = admin.firestore();
     const signature = req.headers['x-razorpay-signature'];
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -846,14 +846,52 @@ async (req, res) => {
             res.status(200).send({ status: 'ok' });
             return;
         }
+        // Handle Subscription Charged for Platform Subscriptions via Payment Links
+        if (event === 'subscription.charged' || event === 'subscription.activated') {
+            const subscription = (_e = (_d = payload.payload) === null || _d === void 0 ? void 0 : _d.subscription) === null || _e === void 0 ? void 0 : _e.entity;
+            const payment = (_g = (_f = payload.payload) === null || _f === void 0 ? void 0 : _f.payment) === null || _g === void 0 ? void 0 : _g.entity;
+            const email = (payment === null || payment === void 0 ? void 0 : payment.email) || ((_h = subscription === null || subscription === void 0 ? void 0 : subscription.customer_details) === null || _h === void 0 ? void 0 : _h.email);
+            const amount = payment === null || payment === void 0 ? void 0 : payment.amount; // in paise
+            if (!email) {
+                functions.logger.warn("No email found in subscription payment payload.", payload);
+                res.status(200).send({ status: 'ignored', reason: 'no_email' });
+                return;
+            }
+            // Determine Tier based on amount (499900 = PREMIUM, 149900 = STANDARD)
+            let tier = 'STARTER';
+            if (amount >= 499900) {
+                tier = 'PREMIUM';
+            }
+            else if (amount >= 149900) {
+                tier = 'STANDARD';
+            }
+            else {
+                functions.logger.warn(`Unknown subscription amount: ${amount}`);
+            }
+            const usersSnapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+            if (usersSnapshot.empty) {
+                functions.logger.error(`Subscription fulfillment failed: User with email ${email} not found.`);
+                res.status(200).send({ status: 'error', message: 'user_not_found' });
+                return;
+            }
+            const userDoc = usersSnapshot.docs[0];
+            await userDoc.ref.update({
+                current_tier: tier,
+                subscriptionId: (subscription === null || subscription === void 0 ? void 0 : subscription.id) || null,
+                subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            functions.logger.info(`Successfully upgraded user ${userDoc.id} (${email}) to ${tier} via subscription.`);
+            res.status(200).send({ status: 'ok' });
+            return;
+        }
         // Only handle payment.captured for core fulfillment
         if (event !== 'payment.captured' && event !== 'order.paid') {
             functions.logger.info(`Ignoring Razorpay event type: ${event}`);
             res.status(200).send({ status: 'ignored', event });
             return;
         }
-        const payment = (_e = (_d = payload.payload) === null || _d === void 0 ? void 0 : _d.payment) === null || _e === void 0 ? void 0 : _e.entity;
-        const razorpayOrderId = (payment === null || payment === void 0 ? void 0 : payment.order_id) || ((_h = (_g = (_f = payload.payload) === null || _f === void 0 ? void 0 : _f.order) === null || _g === void 0 ? void 0 : _g.entity) === null || _h === void 0 ? void 0 : _h.id);
+        const payment = (_k = (_j = payload.payload) === null || _j === void 0 ? void 0 : _j.payment) === null || _k === void 0 ? void 0 : _k.entity;
+        const razorpayOrderId = (payment === null || payment === void 0 ? void 0 : payment.order_id) || ((_o = (_m = (_l = payload.payload) === null || _l === void 0 ? void 0 : _l.order) === null || _m === void 0 ? void 0 : _m.entity) === null || _o === void 0 ? void 0 : _o.id);
         const paymentId = payment === null || payment === void 0 ? void 0 : payment.id;
         if (!razorpayOrderId) {
             functions.logger.warn("No order_id found in Razorpay payload.", payload);
@@ -1734,7 +1772,7 @@ exports.submitExam = (0, https_1.onCall)({ cors: true }, async (request) => {
         const wrongQuestions = [];
         // Secure Scoring
         if (examData.type === 'online-mcq' || examData.type === 'online-test') {
-            if (examData.questions && answers) {
+            if (examData.questions && examData.questions.length > 0 && answers && !answerSheetUrl) {
                 let score = 0;
                 examData.questions.forEach((q, idx) => {
                     const studentAns = answers[q.id];
@@ -2771,11 +2809,14 @@ exports.onExamAssigned = (0, firestore_1.onDocumentCreated)({ document: "zones/{
         const tutorName = zoneData.tutorName || "Your Instructor";
         // Get all students
         const studentsSnap = await db.collection("zones").doc(zoneId).collection("students").get();
-        if (studentsSnap.empty)
-            return;
         const emails = [];
         studentsSnap.forEach(doc => {
             const data = doc.data();
+            // If exam is targeted to a specific batch, only notify students in that batch
+            if (examData.batchId && examData.batchId !== 'all') {
+                if (data.batchId !== examData.batchId)
+                    return;
+            }
             if (data.email)
                 emails.push(data.email);
         });
@@ -3188,6 +3229,112 @@ exports.onUserUpdatedPropagateName = (0, firestore_1.onDocumentUpdated)("users/{
     catch (error) {
         functions.logger.error("[onUserUpdatedPropagateName] Error propagating name change:", error);
         throw error;
+    }
+});
+// --- CEO DASHBOARD STUBS & AGGREGATION ---
+exports.approveRefund = (0, https_1.onCall)({ cors: true }, async (request) => {
+    // STUB: Actual Razorpay/Zoho logic will be implemented in the next PR
+    const db = admin.firestore();
+    const { disputeId } = request.data;
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can approve refunds.");
+    }
+    // Update dispute status
+    await db.collection("disputes").doc(disputeId).update({ status: "Resolved (Refunded)" });
+    return { success: true, message: "Refund approved (Stub)" };
+});
+exports.denyAndUnfreeze = (0, https_1.onCall)({ cors: true }, async (request) => {
+    // STUB: Actual Razorpay Route logic will be implemented in the next PR
+    const db = admin.firestore();
+    const { disputeId } = request.data;
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can deny refunds.");
+    }
+    // Update dispute status
+    await db.collection("disputes").doc(disputeId).update({ status: "Resolved (Denied)" });
+    return { success: true, message: "Refund denied and funds unfrozen (Stub)" };
+});
+exports.recoverWebhook = (0, https_1.onCall)({ cors: true }, async (request) => {
+    // STUB: Manual trigger to re-run stuck razorpayWebhook transactions
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can recover webhooks.");
+    }
+    return { success: true, message: "Webhook recovery triggered (Stub)" };
+});
+exports.updateKycStatus = (0, https_1.onCall)({ cors: true }, async (request) => {
+    // STUB: Toggle KYC status
+    const db = admin.firestore();
+    const { userId, status } = request.data;
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can update KYC.");
+    }
+    await db.collection("users").doc(userId).update({ kycStatus: status });
+    return { success: true, message: `KYC status updated to ${status}` };
+});
+async function calculateAndSavePlatformStats() {
+    const db = admin.firestore();
+    let tgv = 0;
+    let nunmaNetRevenue = 0;
+    let thalaCount = 0;
+    let studentCount = 0;
+    let totalUsers = 0;
+    let activeZones = 0;
+    // 1. Calculate TGV and Revenue
+    const ordersSnap = await db.collection("platform_orders").where("status", "==", "CAPTURED").get();
+    ordersSnap.forEach((doc) => {
+        const data = doc.data();
+        const amount = data.amount || 0;
+        const type = data.type;
+        if (type === "PLATFORM_SUBSCRIPTION") {
+            nunmaNetRevenue += amount;
+        }
+        else {
+            tgv += amount;
+            const commissionRate = data.commissionRate || 0.05;
+            nunmaNetRevenue += amount * commissionRate;
+        }
+    });
+    // 2. Count Users by Role
+    const usersSnap = await db.collection("users").get();
+    totalUsers = usersSnap.size;
+    usersSnap.forEach((doc) => {
+        const role = doc.data().role;
+        if (role === "THALA")
+            thalaCount++;
+        if (role === "STUDENT")
+            studentCount++;
+    });
+    // 3. Count Active Zones
+    const zonesSnap = await db.collection("zones").where("status", "==", "published").get();
+    activeZones = zonesSnap.size;
+    await db.collection("platform_stats").doc("latest").set({
+        tgv,
+        nunmaNetRevenue,
+        activeUserCount: { THALA: thalaCount, STUDENT: studentCount, TOTAL: totalUsers },
+        activeZones,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    });
+    functions.logger.info(`Aggregated Platform Stats: TGV=${tgv}, NetRev=${nunmaNetRevenue}, Users=${totalUsers}`);
+    return { tgv, nunmaNetRevenue, totalUsers };
+}
+exports.aggregatePlatformStats = (0, scheduler_1.onSchedule)("every 1 hours", async (event) => {
+    try {
+        await calculateAndSavePlatformStats();
+    }
+    catch (error) {
+        functions.logger.error("Error aggregating platform stats", error);
+    }
+});
+exports.triggerAggregation = (0, https_1.onCall)({ cors: true }, async (request) => {
+    if (!request.auth || request.auth.token.email !== 'sundaramsm55@gmail.com') {
+        throw new functions.https.HttpsError("permission-denied", "Only CEO can trigger aggregation.");
+    }
+    try {
+        const stats = await calculateAndSavePlatformStats();
+        return { success: true, message: "Stats aggregated", stats };
+    }
+    catch (error) {
+        throw new functions.https.HttpsError("internal", error.message);
     }
 });
 //# sourceMappingURL=index.js.map

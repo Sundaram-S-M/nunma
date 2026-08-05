@@ -10,6 +10,9 @@
     "test:master": "python scripts/with_server.py --server \"npm run dev\" 5173 -- python master_launch_test.py"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "@excalidraw/excalidraw": "^0.18.1",
     "@google-cloud/secret-manager": "^6.2.0",
     "@hookform/resolvers": "^5.2.2",
@@ -19,6 +22,7 @@
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.22.0",
     "@types/qrcode.react": "^1.0.5",
+    "emoji-picker-react": "^4.19.1",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
     "firebase": "^12.8.0",

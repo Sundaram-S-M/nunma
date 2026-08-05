@@ -33,6 +33,7 @@ const WhiteboardPage = React.lazy(() => import('./pages/WhiteboardPage'));
 const BlogList = React.lazy(() => import('./pages/BlogList'));
 const BlogDetail = React.lazy(() => import('./pages/BlogDetail'));
 const AnalyticsDashboard = React.lazy(() => import('./pages/AnalyticsDashboard'));
+const CeoDashboard = React.lazy(() => import('./pages/CeoDashboard'));
 const AnalyticsChat = React.lazy(() => import('./pages/AnalyticsChat.tsx'));
 const Payment = React.lazy(() => import('./pages/Payment'));
 const ZoneDetailView = React.lazy(() => import('./pages/ZoneDetailView'));
@@ -92,7 +93,7 @@ const AppContent: React.FC = () => {
 
   const role = user?.role || UserRole.STUDENT;
   const showOnboarding = isAuthenticated && role && (
-    (role === UserRole.THALA && user?.tutorProfile?.isComplete !== true) ||
+    (role === UserRole.THALA && user?.tutorProfile?.isComplete !== true && user?.kycStatus !== 'VERIFIED' && !(user as any)?.tutorId) ||
     (role === UserRole.STUDENT && user?.studentProfile?.isComplete !== true)
   );
 
@@ -138,6 +139,7 @@ const AppContent: React.FC = () => {
               <Route path="/onboarding" element={<OnboardingSystem />} />
               <Route path="/dashboard" element={<Dashboard role={role} />} />
               <Route path="/classroom" element={role === UserRole.STUDENT ? <Classroom /> : <Navigate to="/workplace" />} />
+              <Route path="/admin" element={<CeoDashboard />} />
               <Route path="/classroom/zone/:zoneId" element={role === UserRole.STUDENT ? <StudentZoneView /> : <Navigate to="/dashboard" />} />
               <Route path="/workplace" element={role === UserRole.THALA ? <Workplace /> : <Navigate to="/classroom" />} />
               <Route path="/workplace/manage/:zoneId" element={
