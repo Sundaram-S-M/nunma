@@ -26,7 +26,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.triggerAggregation = exports.aggregatePlatformStats = exports.updateKycStatus = exports.recoverWebhook = exports.denyAndUnfreeze = exports.approveRefund = exports.onUserUpdatedPropagateName = exports.onUserCreatedProcessInvites = exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamDeploymentCreated = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
+exports.aggregatePlatformStats = exports.updateKycStatus = exports.recoverWebhook = exports.denyAndUnfreeze = exports.approveRefund = exports.onUserUpdatedPropagateName = exports.onUserCreatedProcessInvites = exports.onVideoDocumentDeleted = exports.manageLiveTimer = exports.deleteBunnyVideo = exports.sendEnrollmentEmail = exports.onExamDeploymentCreated = exports.onExamAssigned = exports.onStudentLeftZone = exports.onStudentJoinedZone = exports.onZoneCreated = exports.monitorStuckInvoices = exports.processInvoicingQueue = exports.processWhitelist = exports.joinZoneByInvite = exports.revokeZoneInvite = exports.generateZoneInvite = exports.verifyOTPAndSignIn = exports.requestOTP = exports.registerIssuance = exports.submitExam = exports.submitGradedScript = exports.recordCheatViolation = exports.uploadExamScript = exports.proxyBunnyFile = exports.uploadFileToBunny = exports.deleteUserAccount = exports.serveSecurePdf = exports.bunnyWebhook = exports.syncVideoStorage = exports.razorpayWebhook = exports.razorpayRouteWebhook = exports.createRazorpayOrder = exports.createTutorLinkedAccount = exports.getBunnyPlaybackToken = exports.generateBunnyToken = exports.bunnyStreamWebhook = exports.createBunnyUploadSignature = exports.toggleStudentAudio = exports.getLiveKitToken = exports.generateLiveToken = exports.askZoneAnalytics = exports.processMCQUploads = exports.generateQuizDraft = exports.gradePdfSubmission = void 0;
+exports.triggerAggregation = void 0;
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
 const functions = __importStar(require("firebase-functions"));
@@ -53,6 +54,16 @@ Object.defineProperty(exports, "processMCQUploads", { enumerable: true, get: fun
 var askZoneAnalytics_1 = require("./ai/askZoneAnalytics");
 Object.defineProperty(exports, "askZoneAnalytics", { enumerable: true, get: function () { return askZoneAnalytics_1.askZoneAnalytics; } });
 // const db = admin.firestore(); // Moved inside function scopes for deployment stability
+// Helper to format Bunny pull zone URLs reliably without protocol duplication
+const getCleanPullZone = (rawPullZone) => {
+    if (!rawPullZone)
+        return "";
+    let clean = rawPullZone.trim();
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `https://${clean}`;
+    }
+    return clean.replace(/\/+$/, "");
+};
 // Global transporter helper for billing and OTP emails
 const getTransporter = () => {
     const host = process.env.SMTP_HOST;
@@ -1375,7 +1386,7 @@ exports.uploadFileToBunny = (0, https_1.onRequest)({ secrets: ["BUNNY_STORAGE_PA
             await db.collection("users").doc(uid).set({
                 usedStorageBytes: admin.firestore.FieldValue.increment(fileSize)
             }, { merge: true });
-            const fileUrl = `${pullZoneUrl}/${storagePath}`;
+            const fileUrl = `${getCleanPullZone(pullZoneUrl)}/${storagePath}`;
             res.status(200).json({ fileUrl, fileName, size: fileSize });
         }
         catch (err) {
@@ -1385,6 +1396,40 @@ exports.uploadFileToBunny = (0, https_1.onRequest)({ secrets: ["BUNNY_STORAGE_PA
     });
     // @ts-ignore
     bb.end(req.rawBody);
+});
+exports.proxyBunnyFile = (0, https_1.onRequest)({ secrets: ["BUNNY_PULL_ZONE_URL"], cors: true }, async (req, res) => {
+    var _a;
+    try {
+        const { fileUrl } = req.query;
+        if (!fileUrl) {
+            res.status(400).send('Missing fileUrl parameter');
+            return;
+        }
+        const rawPullZone = (_a = process.env.BUNNY_PULL_ZONE_URL) === null || _a === void 0 ? void 0 : _a.trim();
+        if (!rawPullZone) {
+            res.status(500).send('BUNNY_PULL_ZONE_URL missing');
+            return;
+        }
+        const cleanPullZone = getCleanPullZone(rawPullZone);
+        const domainHost = cleanPullZone.replace(/^https?:\/\//, '');
+        let targetUrlStr = fileUrl.toString().trim();
+        // Automatically clean up malformed duplicate protocols like https://https://
+        targetUrlStr = targetUrlStr.replace(/^(https?:\/\/)+/, 'https://');
+        if (!targetUrlStr.startsWith(cleanPullZone) && !targetUrlStr.includes(domainHost)) {
+            res.status(403).send('Forbidden: Invalid file origin');
+            return;
+        }
+        const response = await axios_1.default.get(targetUrlStr, {
+            responseType: 'arraybuffer'
+        });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.end(Buffer.from(response.data));
+    }
+    catch (error) {
+        functions.logger.error("Error proxying Bunny file:", error);
+        res.status(500).send('Error retrieving file');
+    }
 });
 // --- EXAM SUBMISSION LOGIC ---
 exports.uploadExamScript = (0, https_1.onCall)({
@@ -1468,7 +1513,7 @@ exports.uploadExamScript = (0, https_1.onCall)({
                 usedStorageBytes: admin.firestore.FieldValue.increment(fileSizeInBytes)
             });
         }
-        const answerSheetUrl = `${pullZoneUrl}/${storagePath}`;
+        const answerSheetUrl = `${getCleanPullZone(pullZoneUrl)}/${storagePath}`;
         // 9. Write Submission Record
         const submissionPayload = {
             studentUid: uid,
@@ -1585,8 +1630,8 @@ exports.recordCheatViolation = (0, https_1.onCall)({ secrets: ["BUNNY_API_KEY"],
         throw new functions.https.HttpsError("internal", error.message || "Failed to record violation due to a server error.");
     }
 });
-exports.submitGradedScript = (0, https_1.onCall)({ cors: true, secrets: [resendApiKey] }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+exports.submitGradedScript = (0, https_1.onCall)({ cors: true, secrets: [resendApiKey, "BUNNY_STORAGE_PASSWORD", "BUNNY_STORAGE_ZONE_NAME", "BUNNY_STORAGE_HOSTNAME", "BUNNY_PULL_ZONE_URL"] }, async (request) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
     try {
         const db = admin.firestore();
         if (!request.auth)
@@ -1615,22 +1660,28 @@ exports.submitGradedScript = (0, https_1.onCall)({ cors: true, secrets: [resendA
                 throw new functions.https.HttpsError("permission-denied", "You can only grade exams for your assigned subject.");
             }
         }
-        const bunnyApiKey = (_e = process.env.BUNNY_API_KEY) === null || _e === void 0 ? void 0 : _e.trim();
-        const storageZone = (_f = process.env.BUNNY_STORAGE_ZONE_NAME) === null || _f === void 0 ? void 0 : _f.trim();
-        const pullZone = (_g = process.env.BUNNY_PULL_ZONE_URL) === null || _g === void 0 ? void 0 : _g.trim();
-        if (!bunnyApiKey || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
+        const bunnyStoragePassword = ((_e = process.env.BUNNY_STORAGE_PASSWORD) === null || _e === void 0 ? void 0 : _e.trim()) || ((_f = process.env.BUNNY_API_KEY) === null || _f === void 0 ? void 0 : _f.trim());
+        const storageZone = (_g = process.env.BUNNY_STORAGE_ZONE_NAME) === null || _g === void 0 ? void 0 : _g.trim();
+        const hostname = ((_h = process.env.BUNNY_STORAGE_HOSTNAME) === null || _h === void 0 ? void 0 : _h.trim()) || "storage.bunnycdn.com";
+        const pullZone = (_j = process.env.BUNNY_PULL_ZONE_URL) === null || _j === void 0 ? void 0 : _j.trim();
+        if (!bunnyStoragePassword || !storageZone || !pullZone || !mergedPdf || !oldFileUrl) {
             throw new functions.https.HttpsError("internal", "Storage configuration missing or missing payload");
         }
+        const cleanPullZone = getCleanPullZone(pullZone);
+        const extractPath = (urlStr) => {
+            let s = urlStr.trim().replace(/^(https?:\/\/)+/, 'https://');
+            return s.replace(/^https?:\/\/[^\/]+\//, '');
+        };
         const base64Data = mergedPdf.replace(/^data:.*\/.*;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
         const newFileSizeInBytes = buffer.length;
         // Quota Check (Delta)
         let oldFileSizeInBytes = 0;
         try {
-            const oldPath = oldFileUrl.replace(`https://${pullZone}/`, '');
+            const oldPath = extractPath(oldFileUrl);
             // Get original file size to maintain exact quota diff
-            const res = await axios_1.default.head(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
-                headers: { 'AccessKey': bunnyApiKey }
+            const res = await axios_1.default.head(`https://${hostname}/${storageZone}/${oldPath}`, {
+                headers: { 'AccessKey': bunnyStoragePassword }
             });
             oldFileSizeInBytes = parseInt(res.headers['content-length'] || "0");
         }
@@ -1641,20 +1692,21 @@ exports.submitGradedScript = (0, https_1.onCall)({ cors: true, secrets: [resendA
         if (!quota.isAllowed) {
             throw new functions.https.HttpsError("resource-exhausted", "Quota exceeded during grading update.");
         }
-        const newFileName = `graded_${studentId}_exam.pdf`;
+        const timestamp = Date.now();
+        const newFileName = `graded_${studentId}_${timestamp}.pdf`;
         const storagePath = `exams/${zoneId}/${examId}/${newFileName}`;
         // Upload New
-        await axios_1.default.put(`https://storage.bunnycdn.com/${storageZone}/${storagePath}`, buffer, { headers: { 'AccessKey': bunnyApiKey, 'Content-Type': 'application/pdf' } });
+        await axios_1.default.put(`https://${hostname}/${storageZone}/${storagePath}`, buffer, { headers: { 'AccessKey': bunnyStoragePassword, 'Content-Type': 'application/pdf' } });
         // Delete Old
         try {
-            const oldPath = oldFileUrl.replace(`https://${pullZone}/`, '');
+            const oldPath = extractPath(oldFileUrl);
             // Get original file size to maintain exact quota diff
-            const respVal = await axios_1.default.head(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
-                headers: { 'AccessKey': bunnyApiKey }
+            const respVal = await axios_1.default.head(`https://${hostname}/${storageZone}/${oldPath}`, {
+                headers: { 'AccessKey': bunnyStoragePassword }
             });
             oldFileSizeInBytes = parseInt(respVal.headers['content-length'] || "0");
-            await axios_1.default.delete(`https://storage.bunnycdn.com/${storageZone}/${oldPath}`, {
-                headers: { 'AccessKey': bunnyApiKey }
+            await axios_1.default.delete(`https://${hostname}/${storageZone}/${oldPath}`, {
+                headers: { 'AccessKey': bunnyStoragePassword }
             });
         }
         catch (e) {
@@ -1665,7 +1717,7 @@ exports.submitGradedScript = (0, https_1.onCall)({ cors: true, secrets: [resendA
             usedStorageBytes: admin.firestore.FieldValue.increment(sizeDiff)
         });
         // Update DB
-        const newFileUrl = `https://${pullZone}/${storagePath}`;
+        const newFileUrl = `${cleanPullZone}/${storagePath}`;
         await db.collection('zones').doc(zoneId).collection('exams').doc(examId).collection('submissions').doc(studentId).set({
             status: "graded",
             score: score,
@@ -1686,10 +1738,10 @@ exports.submitGradedScript = (0, https_1.onCall)({ cors: true, secrets: [resendA
             const apiKey = resendApiKey.value();
             if (apiKey) {
                 const studentDoc = await db.collection('zones').doc(zoneId).collection('students').doc(studentId).get();
-                const studentEmail = (_h = studentDoc.data()) === null || _h === void 0 ? void 0 : _h.email;
-                const studentName = ((_j = studentDoc.data()) === null || _j === void 0 ? void 0 : _j.name) || "Student";
+                const studentEmail = (_k = studentDoc.data()) === null || _k === void 0 ? void 0 : _k.email;
+                const studentName = ((_l = studentDoc.data()) === null || _l === void 0 ? void 0 : _l.name) || "Student";
                 const examDoc = await db.collection('zones').doc(zoneId).collection('exams').doc(examId).get();
-                const examTitle = ((_k = examDoc.data()) === null || _k === void 0 ? void 0 : _k.title) || "Exam";
+                const examTitle = ((_m = examDoc.data()) === null || _m === void 0 ? void 0 : _m.title) || "Exam";
                 if (studentEmail) {
                     const resend = new resend_1.Resend(apiKey);
                     await resend.emails.send({
@@ -1788,6 +1840,9 @@ exports.submitExam = (0, https_1.onCall)({ cors: true }, async (request) => {
                 status = marks >= minMark ? 'passed' : 'failed';
             }
         }
+        if (answerSheetUrl && !isTerminatedByCheat) {
+            status = 'PENDING_GRADING';
+        }
         if (isTerminatedByCheat) {
             status = 'failed';
             marks = 0;
@@ -1796,13 +1851,15 @@ exports.submitExam = (0, https_1.onCall)({ cors: true }, async (request) => {
             examId,
             studentId: uid,
             studentName: request.auth.token.name || 'Student',
-            marks,
             status,
             answers: answers || {},
             wrongQuestions,
             cheatViolations: violationLogs || [],
             completedAt: admin.firestore.FieldValue.serverTimestamp()
         };
+        if (status !== 'PENDING_GRADING') {
+            submissionPayload.marks = marks;
+        }
         if (answerSheetUrl) {
             submissionPayload.answerSheetUrl = answerSheetUrl;
         }
@@ -2810,13 +2867,17 @@ exports.onExamAssigned = (0, firestore_1.onDocumentCreated)({ document: "zones/{
         // Get all students
         const studentsSnap = await db.collection("zones").doc(zoneId).collection("students").get();
         const emails = [];
+        functions.logger.info(`[onExamAssigned] Filtering students for exam ${event.params.examId}. Target batchId: ${examData.batchId}`);
         studentsSnap.forEach(doc => {
             const data = doc.data();
             // If exam is targeted to a specific batch, only notify students in that batch
             if (examData.batchId && examData.batchId !== 'all') {
-                if (data.batchId !== examData.batchId)
+                if (data.batchId !== examData.batchId) {
+                    functions.logger.info(`[onExamAssigned] Skipping student ${data.email} with batchId ${data.batchId} (expected ${examData.batchId})`);
                     return;
+                }
             }
+            functions.logger.info(`[onExamAssigned] Including student ${data.email} with batchId ${data.batchId}`);
             if (data.email)
                 emails.push(data.email);
         });
@@ -2880,17 +2941,23 @@ exports.onExamDeploymentCreated = (0, firestore_1.onDocumentCreated)({ document:
         if (studentsSnap.empty)
             return;
         const emails = [];
+        functions.logger.info(`[onExamDeploymentCreated] Filtering students for deployment ${event.params.deploymentId}. targetBatchIds: ${JSON.stringify(deploymentData.targetBatchIds)}, targetBatchForSubjects: ${deploymentData.targetBatchForSubjects}`);
         studentsSnap.forEach(doc => {
             const data = doc.data();
             // Filter by batch if specified
             if (deploymentData.targetBatchIds && deploymentData.targetBatchIds.length > 0) {
-                if (!deploymentData.targetBatchIds.includes(data.batchId))
+                if (!deploymentData.targetBatchIds.includes(data.batchId)) {
+                    functions.logger.info(`[onExamDeploymentCreated] Skipping student ${data.email} with batchId ${data.batchId} (not in targetBatchIds)`);
                     return;
+                }
             }
             else if (deploymentData.targetBatchForSubjects && deploymentData.targetBatchForSubjects !== 'all') {
-                if (data.batchId !== deploymentData.targetBatchForSubjects)
+                if (data.batchId !== deploymentData.targetBatchForSubjects) {
+                    functions.logger.info(`[onExamDeploymentCreated] Skipping student ${data.email} with batchId ${data.batchId} (does not match targetBatchForSubjects ${deploymentData.targetBatchForSubjects})`);
                     return;
+                }
             }
+            functions.logger.info(`[onExamDeploymentCreated] Including student ${data.email} with batchId ${data.batchId}`);
             if (data.email)
                 emails.push(data.email);
         });

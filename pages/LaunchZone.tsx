@@ -26,7 +26,7 @@ import {
 const ZONE_TYPES = [
   { id: 'Class Management', label: 'Class Management', icon: GraduationCap, description: 'Full system with exams & attendance.' },
   { id: 'Course', label: 'Course', icon: BookOpen, description: 'Focus on curriculum & modules.' },
-  { id: 'Workshop', label: 'Workshop', icon: Mic, description: 'Focus on live sessions & schedule.' },
+  { id: 'Workshop', label: 'Workshop', icon: Mic, description: 'Focus on live sessions & schedule.', comingSoon: true },
 ] as const;
 
 const DOMAINS = [
@@ -489,21 +489,56 @@ const LaunchZone: React.FC = () => {
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block ml-1">Zone Type</label>
                 <div className="grid grid-cols-1 gap-4">
-                  {ZONE_TYPES.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => setZoneType(t.id)}
-                      className={`flex items-center gap-6 p-6 rounded-[2rem] border-2 text-left transition-all ${zoneType === t.id ? 'bg-nunma-forest border-nunma-forest text-white shadow-xl scale-[1.02]' : 'bg-gray-50 border-gray-100 text-indigo-900 hover:border-[#c1e60d]'}`}
-                    >
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${zoneType === t.id ? 'bg-white/10 text-[#c1e60d]' : 'bg-white text-indigo-900 shadow-sm'}`}>
-                        <t.icon size={28} />
-                      </div>
-                      <div>
-                        <p className="font-black text-lg leading-none mb-1">{t.label}</p>
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${zoneType === t.id ? 'text-white/40' : 'text-gray-400'}`}>{t.description}</p>
-                      </div>
-                    </button>
-                  ))}
+                  {ZONE_TYPES.map(t => {
+                    const isComingSoon = (t as any).comingSoon;
+                    const isSelected = zoneType === t.id && !isComingSoon;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        disabled={isComingSoon}
+                        onClick={() => {
+                          if (!isComingSoon) {
+                            setZoneType(t.id);
+                          }
+                        }}
+                        className={`flex items-center justify-between p-6 rounded-[2rem] border-2 text-left transition-all ${
+                          isComingSoon
+                            ? 'bg-gray-50 border-gray-100 text-gray-400 opacity-65 cursor-not-allowed'
+                            : isSelected
+                              ? 'bg-nunma-forest border-nunma-forest text-white shadow-xl scale-[1.02]'
+                              : 'bg-gray-50 border-gray-100 text-indigo-900 hover:border-[#c1e60d]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-6">
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
+                            isComingSoon
+                              ? 'bg-gray-200 text-gray-400'
+                              : isSelected
+                                ? 'bg-white/10 text-[#c1e60d]'
+                                : 'bg-white text-indigo-900 shadow-sm'
+                          }`}>
+                            <t.icon size={28} />
+                          </div>
+                          <div>
+                            <p className="font-black text-lg leading-none mb-1">{t.label}</p>
+                            <p className={`text-[10px] font-bold uppercase tracking-widest ${
+                              isComingSoon
+                                ? 'text-gray-400'
+                                : isSelected
+                                  ? 'text-white/40'
+                                  : 'text-gray-400'
+                            }`}>{t.description}</p>
+                          </div>
+                        </div>
+                        {isComingSoon && (
+                          <span className="px-4 py-2 bg-amber-100 text-amber-800 text-[10px] font-black uppercase tracking-widest rounded-full border border-amber-200 shadow-sm">
+                            Coming Soon
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

@@ -30,7 +30,9 @@ import { collection, query, where, getDocs, doc, getDoc, setDoc, onSnapshot, ord
 import { db, functions } from '../utils/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { formatDate } from '../utils/dateUtils';
+import CertificateTemplate from '../components/CertificateTemplate';
 import CertificateOverlay from '../components/CertificateOverlay';
+import html2canvas from 'html2canvas';
 
 const MOCK_TEMPLATES = [
   { id: 't1', name: 'Minimal Professional', preview: 'https://images.unsplash.com/photo-1589330694653-ded6df03f754?auto=format&fit=crop&w=400&q=80' },
@@ -253,11 +255,13 @@ const CertificateEngine: React.FC = () => {
 
   const [signature1, setSignature1] = useState<string | null>(null);
   const [signature2, setSignature2] = useState<string | null>(null);
+  const [institutionLogo, setInstitutionLogo] = useState<string | null>(null);
   const [isIssuing, setIsIssuing] = useState(false);
   const [issuanceHistory, setIssuanceHistory] = useState<any[]>([]);
 
   const sig1InputRef = useRef<HTMLInputElement>(null);
   const sig2InputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch settings and zones
@@ -272,8 +276,9 @@ const CertificateEngine: React.FC = () => {
         if (data.palette) setPalette(data.palette);
         if (data.signature1) setSignature1(data.signature1);
         if (data.signature2) setSignature2(data.signature2);
+        if (data.institutionLogo) setInstitutionLogo(data.institutionLogo);
       } else {
-        setPalette(['#c2f575', '#052E16', '#02180b']);
+        setPalette(['#052E16', '#bbf7d0']);
       }
     };
 
@@ -305,6 +310,7 @@ const CertificateEngine: React.FC = () => {
         palette,
         signature1,
         signature2,
+        institutionLogo,
         updatedAt: new Date().toISOString()
       });
       alert('Global settings saved successfully!');
@@ -315,8 +321,8 @@ const CertificateEngine: React.FC = () => {
   };
 
   const addColorToPalette = (newColor: string) => {
-    if (palette.length >= 3) {
-      alert("Maximum 3 colors allowed in the palette.");
+    if (palette.length >= 2) {
+      alert("Maximum 2 colors allowed in the palette.");
       return;
     }
     if (!palette.includes(newColor)) {
@@ -478,15 +484,37 @@ const CertificateEngine: React.FC = () => {
     }
   };
 
-  const handleManualUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setManualFile(reader.result as string);
-        setModalStep(3);
+        setInstitutionLogo(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleManualUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setManualFile(url);
+    }
+  };
+
+  const handleDownloadMockup = async () => {
+    const node = document.getElementById('certificate-preview-node');
+    if (!node) return;
+    try {
+      const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: null });
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = 'certificate-reference-mockup.png';
+      link.href = dataUrl;
+      link.click();
+    } catch (e) {
+      console.error('Failed to capture certificate:', e);
     }
   };
 
@@ -557,7 +585,7 @@ const CertificateEngine: React.FC = () => {
                         </button>
                       </div>
                     ))}
-                    {palette.length < 3 && (
+                    {palette.length < 2 && (
                       <button
                         onClick={() => setShowAdvancedPicker(!showAdvancedPicker)}
                         className="w-12 h-12 rounded-full border-2 border-white shadow-xl flex items-center justify-center relative overflow-hidden transition-transform active:scale-90"
@@ -593,7 +621,18 @@ const CertificateEngine: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 block">Institution Logo</label>
+                    <div
+                      onClick={() => logoInputRef.current?.click()}
+                      className="h-32 bg-gray-50 border border-gray-100 rounded-[2rem] flex flex-col items-center justify-center border-dashed hover:border-nunma-forest transition-colors cursor-pointer overflow-hidden relative shadow-inner"
+                    >
+                      {institutionLogo ? <img src={institutionLogo} className="w-full h-full object-contain p-4" alt="Logo" /> : <><Camera className="text-gray-300 mb-2" size={24} /><span className="text-[9px] font-black text-gray-400 uppercase">Upload Logo</span></>}
+                      <input ref={logoInputRef} type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 block">Primary Signature</label>
                     <div
@@ -757,15 +796,15 @@ const CertificateEngine: React.FC = () => {
                       className="h-full min-h-[300px] border-4 border-dashed border-gray-100 bg-gray-50 rounded-[3rem] flex flex-col items-center justify-center cursor-pointer hover:border-nunma-forest hover:bg-white transition-all group overflow-hidden"
                     >
                       {manualFile ? (
-                        <div className="p-8 w-full h-full">
-                          <img src={manualFile} className="w-full h-full object-contain rounded-2xl" alt="Manual Template" />
-                          <p className="text-[10px] font-black text-center mt-4 text-gray-400 uppercase tracking-widest">Click to change template</p>
+                        <div className="p-8 w-full h-full flex flex-col items-center justify-center">
+                          <img src={manualFile} className="w-full h-full object-contain rounded-2xl" alt="Custom Template Background" />
+                          <p className="text-[10px] font-black text-center mt-4 text-gray-400 uppercase tracking-widest">Click to change background</p>
                         </div>
                       ) : (
                         <>
                           <Upload size={48} className="text-gray-300 mb-6 group-hover:scale-110 transition-transform" />
-                          <p className="text-nunma-forest font-black text-lg tracking-tight text-center px-6">Click to upload template (PNG/PPT Image)</p>
-                          <p className="text-gray-400 text-xs mt-2 uppercase font-bold tracking-widest">Supports Student Name & Zone Overlays</p>
+                          <p className="text-nunma-forest font-black text-lg tracking-tight text-center px-6">Click to upload Custom Background Template</p>
+                          <p className="text-gray-400 text-xs mt-2 uppercase font-bold tracking-widest">Supports Student Name Overlay (PNG/JPG)</p>
                         </>
                       )}
                       <input ref={uploadInputRef} type="file" className="hidden" accept="image/png,image/jpeg,image/svg+xml" onChange={handleManualUpload} />
@@ -790,49 +829,73 @@ const CertificateEngine: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="bg-indigo-50/50 p-8 rounded-[2.5rem] border border-indigo-100 flex items-center justify-between">
+                  <div className="bg-indigo-50/50 p-6 md:p-8 rounded-[2.5rem] border border-indigo-100 flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-6">
                       <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-nunma-forest shadow-sm"><FileText size={28} /></div>
                       <div>
-                        <p className="text-nunma-forest font-black tracking-tight">Need a standard template?</p>
-                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-1">Download our premium starter kit</p>
+                        <p className="text-nunma-forest font-black tracking-tight text-center md:text-left">Perfect your design?</p>
+                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-1 text-center md:text-left">Download reference or continue</p>
                       </div>
                     </div>
-                    <a href="#" className="flex items-center gap-2 bg-nunma-forest text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all">
-                      View Kit <ExternalLink size={14} className="text-[#c2f575]" />
-                    </a>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                      <button onClick={handleDownloadMockup} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-nunma-forest px-6 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 transition-all shadow-sm border border-gray-100">
+                        <Download size={14} className="text-nunma-forest" /> Download Mockup
+                      </button>
+                      <button onClick={() => setModalStep(3)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-nunma-forest text-white px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl">
+                        Continue to Issue <ArrowRight size={14} className="text-[#c2f575]" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
 
               {modalStep === 2 && issuanceMethod === 'template' && (
-                <div className="space-y-10 py-8 animate-in slide-in-from-right-4 relative">
-                  <button onClick={() => setModalStep(1)} className="flex items-center gap-2 text-nunma-forest font-black text-[10px] uppercase tracking-widest">
+                <div className="space-y-10 py-8 animate-in slide-in-from-right-4">
+                  <button onClick={() => setModalStep(1)} className="flex items-center gap-2 text-nunma-forest font-black text-[10px] uppercase tracking-widest hover:translate-x-[-4px] transition-transform">
                     <ChevronLeft size={16} /> Back
                   </button>
-                  <div className="grid grid-cols-2 gap-8 opacity-40 grayscale pointer-events-none">
-                    {MOCK_TEMPLATES.map(t => (
-                      <div
-                        key={t.id}
-                        className="group relative rounded-[2.5rem] overflow-hidden border-4 border-transparent"
-                      >
-                        <img src={t.preview} className="w-full aspect-[16/10] object-cover" alt={t.name} />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8">
-                          <h5 className="text-white font-black text-xl tracking-tight">{t.name}</h5>
-                        </div>
+
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Built-in Template (Selected)</label>
+                        <h4 className="text-2xl font-black text-nunma-forest tracking-tight">Modern Academic</h4>
                       </div>
-                    ))}
+                      <div className="bg-amber-50 border border-amber-100 px-4 py-2 rounded-xl flex items-center gap-2">
+                        <Zap size={16} className="text-amber-500" />
+                        <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Dynamic Auto-Fill Active</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 border border-gray-100 rounded-[3rem] p-4 md:p-8">
+                      <CertificateTemplate
+                        studentName="Sachin Sundar"
+                        courseName={selectedZone}
+                        tutorName={user?.name || "Course Director"}
+                        issueDate={new Date().toLocaleDateString()}
+                        logoUrl={institutionLogo || undefined}
+                        signatureUrl={signature1 || undefined}
+                        brandColorPrimary={palette[0] || '#052E16'}
+                        brandColorSecondary={palette[1] || '#bbf7d0'}
+                      />
+                    </div>
                   </div>
 
-                  {/* Coming Soon Overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center z-20 pt-20">
-                    <div className="bg-white/80 backdrop-blur-md p-10 rounded-[3rem] border border-gray-100 shadow-2xl text-center rotate-3 hover:rotate-0 transition-transform duration-500">
-                      <Sparkles size={48} className="text-[#c2f575] mx-auto mb-6" />
-                      <h4 className="text-3xl font-black text-nunma-forest mb-2 tracking-tighter">Library Coming Soon</h4>
-                      <p className="text-gray-400 font-medium max-w-xs mx-auto text-sm leading-relaxed">
-                        We are curating high-fidelity certificate templates tailored for your professional brand. Stay tuned!
-                      </p>
-                      <button onClick={() => setModalStep(1)} className="mt-8 px-10 py-4 bg-nunma-forest text-white rounded-2xl font-black uppercase text-[10px] tracking-widest">Return to Methods</button>
+                  <div className="bg-indigo-50/50 p-6 md:p-8 rounded-[2.5rem] border border-indigo-100 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-6">
+                      <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-nunma-forest shadow-sm"><FileText size={28} /></div>
+                      <div>
+                        <p className="text-nunma-forest font-black tracking-tight text-center md:text-left">Perfect your design?</p>
+                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-1 text-center md:text-left">Download reference or continue</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                      <button onClick={handleDownloadMockup} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-nunma-forest px-6 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 transition-all shadow-sm border border-gray-100">
+                        <Download size={14} className="text-nunma-forest" /> Download Mockup
+                      </button>
+                      <button onClick={() => setModalStep(3)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-nunma-forest text-white px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl">
+                        Continue to Issue <ArrowRight size={14} className="text-[#c2f575]" />
+                      </button>
                     </div>
                   </div>
                 </div>

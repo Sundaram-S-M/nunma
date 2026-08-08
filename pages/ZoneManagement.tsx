@@ -491,7 +491,9 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     );
 
     const now = new Date();
-    const durationMs = 2 * 60 * 60 * 1000; // Default 2 hours duration
+    const durationMins = typeof exam.duration === 'number' ? exam.duration : parseInt((exam.duration as any) || '120');
+    const uploadBufferMins = 15; // 15 mins upload buffer
+    const durationMs = (durationMins + uploadBufferMins) * 60 * 1000;
     const examEnd = new Date(examStart.getTime() + durationMs);
 
     if (now < examStart) return 'UPCOMING';
@@ -2437,30 +2439,7 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
     }
   };
 
-  useEffect(() => {
-    const addMissingVideo = async () => {
-      if (zoneId && chapters.length > 0) {
-        // Find Chapter 1 or just the first chapter
-        const chapter1 = chapters.find(c => c.title.toLowerCase().includes('chapter 1') || c.title.toLowerCase().includes('chapter- 1')) || chapters[0];
-        const videoId = "a260d121-5f9c-4801-ace4-6e5b5b019200";
-        if (chapter1 && !chapter1.segments?.find(s => s.type === 'video' && (s as any).videoId === videoId)) {
-          const newSeg: any = {
-            id: `s_fixed_${videoId}`,
-            title: "Part 1",
-            type: 'video',
-            videoId: videoId,
-            status: 'processing'
-          };
-          const updatedSegments = [...(chapter1.segments || []), newSeg];
-          await updateDoc(doc(db, 'zones', zoneId, 'chapters', chapter1.id), {
-            segments: updatedSegments
-          });
-          nunmaAlert("Restored Part 1 video to " + chapter1.title, "success");
-        }
-      }
-    };
-    addMissingVideo();
-  }, [zoneId, chapters]);
+
 
   if (!zone) {
     return (

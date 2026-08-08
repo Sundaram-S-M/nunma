@@ -20,6 +20,7 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
+import { getSafeAvatar } from '../utils/avatarUtils';
 
 interface ZoneData {
   id: string;
@@ -46,6 +47,7 @@ const ZoneDetailView: React.FC = () => {
   const { zoneId } = useParams<{ zoneId: string }>();
   const navigate = useNavigate();
   const [zone, setZone] = useState<ZoneData | null>(null);
+  const [tutorUser, setTutorUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('About');
   const [expandedSubjects, setExpandedSubjects] = useState<number[]>([]);
@@ -59,7 +61,14 @@ const ZoneDetailView: React.FC = () => {
         const docRef = doc(db, 'zones', zoneId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setZone({ id: docSnap.id, ...docSnap.data() } as ZoneData);
+          const zoneData = { id: docSnap.id, ...docSnap.data() } as ZoneData;
+          setZone(zoneData);
+          if (zoneData.tutorId) {
+            const tutorDoc = await getDoc(doc(db, 'users', zoneData.tutorId));
+            if (tutorDoc.exists()) {
+              setTutorUser(tutorDoc.data());
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching zone:", error);
@@ -393,7 +402,7 @@ const ZoneDetailView: React.FC = () => {
                 <div className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-sm flex flex-col items-center text-center space-y-6">
                   <div className="w-32 h-32 rounded-full overflow-hidden ring-4 ring-indigo-50 p-1">
                     <img 
-                      src={"/default-avatar.png"} 
+                      src={getSafeAvatar(tutorUser?.avatar)} 
                       className="w-full h-full object-cover rounded-full" 
                       alt={zone.tutorName} 
                     />
@@ -405,7 +414,7 @@ const ZoneDetailView: React.FC = () => {
                     </p>
                   </div>
                   <p className="text-gray-500 leading-relaxed">
-                    Creator of this zone. Reach out through the classroom once you enroll.
+                    {tutorUser?.bio || "Creator of this zone. Reach out through the classroom once you enroll."}
                   </p>
                 </div>
               </div>

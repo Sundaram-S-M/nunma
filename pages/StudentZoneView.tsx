@@ -883,7 +883,7 @@ const StudentZoneView: React.FC = () => {
         id: 'temp-' + Date.now(),
         examId: targetExam.id,
         studentId: authUser?.uid || 'anon',
-        status: 'ongoing',
+        status: 'PENDING_GRADING',
         cheatViolations: violationLogs,
         answerSheetUrl,
         completedAt: new Date().toISOString()

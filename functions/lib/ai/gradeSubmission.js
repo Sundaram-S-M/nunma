@@ -165,10 +165,13 @@ exports.gradePdfSubmission = (0, https_1.onCall)({
         });
         const gradingResult = JSON.parse(result.text || "{}");
         // 7. Persist Results & Check Exam Completion
-        await submissionRef.update(Object.assign(Object.assign({}, gradingResult), { status: "GRADED", gradedAt: admin.firestore.FieldValue.serverTimestamp() }));
-        // Check if all submissions are now GRADED
+        await submissionRef.update(Object.assign(Object.assign({}, gradingResult), { marks: gradingResult.totalMarks, status: "graded", gradedAt: admin.firestore.FieldValue.serverTimestamp() }));
+        // Check if all submissions are now graded
         const allSubmissions = await examRef.collection("submissions").get();
-        const allGraded = allSubmissions.docs.every(doc => doc.data().status === "GRADED");
+        const allGraded = allSubmissions.docs.every(doc => {
+            const statusVal = doc.data().status;
+            return statusVal === "graded" || statusVal === "GRADED";
+        });
         if (allGraded) {
             await examRef.update({
                 status: "COMPLETED",

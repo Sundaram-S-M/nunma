@@ -188,7 +188,7 @@ const AnalyticsDashboard: React.FC = () => {
 
   // 1. Enrollment Trends (Group by Week)
   const enrollmentTrends = () => {
-     const weeks: Record<string, number> = {};
+     const weeks: Record<string, { count: number, timestamp: number }> = {};
      students.forEach(s => {
         let date;
         if (s.joinedAt?.seconds) date = new Date(s.joinedAt.seconds * 1000);
@@ -196,13 +196,19 @@ const AnalyticsDashboard: React.FC = () => {
         else date = new Date();
         
         const weekStart = new Date(date);
+        weekStart.setHours(0, 0, 0, 0);
         weekStart.setDate(date.getDate() - date.getDay());
         const key = formatDate(weekStart);
-        weeks[key] = (weeks[key] || 0) + 1;
+        
+        if (!weeks[key]) {
+           weeks[key] = { count: 0, timestamp: weekStart.getTime() };
+        }
+        weeks[key].count += 1;
      });
-     // Sort by date would be better, but keys like "06 Apr" are tricky. 
-     // For now, return entries.
-     return Object.keys(weeks).map(key => ({ week: key, students: weeks[key] }));
+     
+     return Object.keys(weeks)
+       .map(key => ({ week: key, students: weeks[key].count, timestamp: weeks[key].timestamp }))
+       .sort((a, b) => a.timestamp - b.timestamp);
   };
 
   // 2. Exam Scores Distribution
@@ -220,6 +226,79 @@ const AnalyticsDashboard: React.FC = () => {
         sources[source]++;
      });
      return Object.keys(sources).map(key => ({ name: key, value: sources[key] }));
+  };
+
+  // 4. Subject-Wise Performance Breakdown
+  const subjectStats = () => {
+    const subs: Record<string, { totalExams: number, totalScore: number, totalGraded: number, passCount: number }> = {};
+    
+    exams.forEach(exam => {
+      const subject = exam.subject || 'Uncategorized';
+      if (!subs[subject]) subs[subject] = { totalExams: 0, totalScore: 0, totalGraded: 0, passCount: 0 };
+      
+      const examSubs = allSubmissions.filter(s => s.examId === exam.id && s.status === 'GRADED');
+      subs[subject].totalExams++;
+      
+      examSubs.forEach(s => {
+        subs[subject].totalGraded++;
+        subs[subject].totalScore += (s.percentageScore || 0);
+        // Assuming pass is >= 35% if no specific data is available
+        const isPass = s.status === 'passed' || (s.percentageScore !== undefined && s.percentageScore >= 35);
+        if (isPass) subs[subject].passCount++;
+      });
+    });
+
+    return Object.keys(subs).map(subject => {
+      const data = subs[subject];
+      const avg = data.totalGraded > 0 ? data.totalScore / data.totalGraded : 0;
+      const passRate = data.totalGraded > 0 ? (data.passCount / data.totalGraded) * 100 : 0;
+      return { subject, avg: parseFloat(avg.toFixed(1)), passRate: parseFloat(passRate.toFixed(1)), totalGraded: data.totalGraded };
+    }).sort((a, b) => b.avg - a.avg);
+  };
+
+  // 5. At-Risk Student Roster (Failure Matrix)
+  const getAtRiskStudents = () => {
+    const studentFailures: Record<string, Set<string>> = {};
+    
+    exams.forEach(exam => {
+      const subject = exam.subject || 'Uncategorized';
+      const examSubs = allSubmissions.filter(s => s.examId === exam.id && s.status === 'GRADED');
+      
+      examSubs.forEach(s => {
+        const isFail = s.status === 'failed' || (s.percentageScore !== undefined && s.percentageScore < 35);
+        if (isFail) {
+           if (!studentFailures[s.studentId]) studentFailures[s.studentId] = new Set();
+           studentFailures[s.studentId].add(subject);
+        }
+      });
+    });
+
+    return Object.keys(studentFailures)
+      .map(sid => {
+        const student = students.find(s => s.id === sid);
+        const failedSubjects = Array.from(studentFailures[sid]);
+        return {
+          id: sid,
+          name: student?.name || 'Unknown Student',
+          avatar: student?.avatar,
+          email: student?.email,
+          failureCount: failedSubjects.length,
+          failedSubjects
+        };
+      })
+      .filter(s => s.failureCount > 0)
+      .sort((a, b) => b.failureCount - a.failureCount);
+  };
+
+  const subjectData = subjectStats();
+  const atRiskStudents = getAtRiskStudents();
+
+  // Failure Matrix Metrics
+  const failureMatrix = {
+    safe: totalStudents - atRiskStudents.length, // 0 failures
+    mild: atRiskStudents.filter(s => s.failureCount === 1).length,
+    moderate: atRiskStudents.filter(s => s.failureCount === 2).length,
+    critical: atRiskStudents.filter(s => s.failureCount >= 3).length
   };
 
   const formatCurrency = (val: number) => val.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
@@ -363,6 +442,89 @@ const AnalyticsDashboard: React.FC = () => {
                 <Legend iconType="circle" wrapperStyle={{paddingTop: '20px'}} />
               </PieChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      {/* Advanced Academic Reports */}
+      <section className="reports-section">
+        <h2 className="section-title"><GraduationCap size={24} /> Subject-Wise Performance & Failure Matrix</h2>
+        <p className="section-subtitle">Identify struggling students and optimize subject-level instruction</p>
+        
+        <div className="reports-grid">
+          {/* Subject Performance */}
+          <div className="report-card subject-performance">
+            <h3>Subject Breakdown</h3>
+            <div className="subject-list">
+              {subjectData.length > 0 ? subjectData.map((sub, idx) => (
+                <div key={idx} className="subject-item">
+                  <div className="subject-info">
+                    <span className="subject-name">{sub.subject}</span>
+                    <span className="subject-meta">{sub.totalGraded} submissions graded</span>
+                  </div>
+                  <div className="subject-stats">
+                    <div className="stat-pill">
+                      <span className="stat-val">{sub.avg}%</span>
+                      <span className="stat-lbl">Avg Score</span>
+                    </div>
+                    <div className={`stat-pill ${sub.passRate >= 80 ? 'good' : sub.passRate >= 50 ? 'warning' : 'danger'}`}>
+                      <span className="stat-val">{sub.passRate}%</span>
+                      <span className="stat-lbl">Pass Rate</span>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <div className="empty-state">No subject grading data yet.</div>
+              )}
+            </div>
+          </div>
+
+          {/* Failure Matrix summary */}
+          <div className="report-card failure-matrix">
+            <h3>Failure Matrix (Student Count)</h3>
+            <div className="matrix-grid">
+              <div className="matrix-cell safe">
+                <div className="matrix-val">{failureMatrix.safe}</div>
+                <div className="matrix-lbl">0 Subjects Failed<br/>(Safe)</div>
+              </div>
+              <div className="matrix-cell mild">
+                <div className="matrix-val">{failureMatrix.mild}</div>
+                <div className="matrix-lbl">1 Subject Failed<br/>(Mild Risk)</div>
+              </div>
+              <div className="matrix-cell moderate">
+                <div className="matrix-val">{failureMatrix.moderate}</div>
+                <div className="matrix-lbl">2 Subjects Failed<br/>(Moderate Risk)</div>
+              </div>
+              <div className="matrix-cell critical">
+                <div className="matrix-val">{failureMatrix.critical}</div>
+                <div className="matrix-lbl">3+ Subjects Failed<br/>(Critical Risk)</div>
+              </div>
+            </div>
+          </div>
+
+          {/* At-Risk Roster */}
+          <div className="report-card at-risk-roster">
+            <h3>At-Risk Student Roster</h3>
+            <div className="roster-list">
+              {atRiskStudents.length > 0 ? atRiskStudents.map((student) => (
+                <div key={student.id} className="roster-item">
+                  <div className="roster-user">
+                    <img src={student.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${student.name}`} alt="" />
+                    <div>
+                      <p className="roster-name">{student.name}</p>
+                      <p className="roster-failed-count">Failed in {student.failureCount} {student.failureCount === 1 ? 'subject' : 'subjects'}</p>
+                    </div>
+                  </div>
+                  <div className="roster-subjects">
+                    {student.failedSubjects.map(sub => (
+                      <span key={sub} className="failed-sub-tag">{sub}</span>
+                    ))}
+                  </div>
+                </div>
+              )) : (
+                <div className="empty-state">No at-risk students found!</div>
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -586,9 +748,193 @@ const AnalyticsDashboard: React.FC = () => {
           line-height: 1.6;
         }
 
+        .reports-section {
+          margin-top: 4rem;
+        }
+
+        .section-title {
+          font-size: 2rem;
+          font-weight: 950;
+          color: #052E16;
+          margin: 0 0 0.5rem;
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          letter-spacing: -0.03em;
+        }
+
+        .section-subtitle {
+          color: #666;
+          font-size: 1.1rem;
+          font-weight: 600;
+          margin: 0 0 2rem;
+        }
+
+        .reports-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 2rem;
+        }
+
+        .report-card {
+          background: #fff;
+          border-radius: 2.5rem;
+          padding: 2.5rem;
+          border: 1px solid #eee;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+          display: flex;
+          flex-direction: column;
+        }
+        
+        .report-card.at-risk-roster {
+          grid-column: span 2;
+        }
+
+        .report-card h3 {
+          font-size: 1.25rem;
+          font-weight: 900;
+          margin: 0 0 1.5rem;
+          color: #052E16;
+          border-bottom: 2px solid #f9f9f9;
+          padding-bottom: 1rem;
+        }
+
+        .subject-list, .roster-list {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          max-height: 400px;
+          overflow-y: auto;
+          padding-right: 0.5rem;
+        }
+        
+        .subject-list::-webkit-scrollbar, .roster-list::-webkit-scrollbar {
+          width: 6px;
+        }
+        .subject-list::-webkit-scrollbar-thumb, .roster-list::-webkit-scrollbar-thumb {
+          background: #e2e8f0;
+          border-radius: 4px;
+        }
+
+        .subject-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1.25rem;
+          background: #fbfbfb;
+          border-radius: 1.5rem;
+          border: 1px solid #f0f0f0;
+          transition: all 0.3s ease;
+        }
+        .subject-item:hover {
+          border-color: #c2f575;
+          background: #fff;
+          box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+
+        .subject-info {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+        .subject-name {
+          font-weight: 800;
+          color: #052E16;
+          font-size: 1.1rem;
+        }
+        .subject-meta {
+          font-size: 0.8rem;
+          color: #888;
+          font-weight: 600;
+        }
+
+        .subject-stats {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .stat-pill {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          background: #fff;
+          padding: 0.5rem 1rem;
+          border-radius: 1rem;
+          border: 1px solid #eee;
+          min-width: 80px;
+        }
+        .stat-val { font-weight: 900; color: #052E16; font-size: 1.1rem; }
+        .stat-lbl { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: #888; font-weight: 800; margin-top: 0.2rem; }
+
+        .stat-pill.good { background: #ecfdf5; border-color: #a7f3d0; }
+        .stat-pill.good .stat-val { color: #059669; }
+        
+        .stat-pill.warning { background: #fffbeb; border-color: #fde68a; }
+        .stat-pill.warning .stat-val { color: #d97706; }
+
+        .stat-pill.danger { background: #fef2f2; border-color: #fecaca; }
+        .stat-pill.danger .stat-val { color: #dc2626; }
+
+        .matrix-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+          flex: 1;
+        }
+        
+        .matrix-cell {
+          border-radius: 1.5rem;
+          padding: 1.5rem;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          border: 1px solid transparent;
+        }
+        
+        .matrix-val { font-size: 2.5rem; font-weight: 950; margin-bottom: 0.5rem; }
+        .matrix-lbl { font-size: 0.8rem; font-weight: 700; color: #666; line-height: 1.4; }
+
+        .matrix-cell.safe { background: #f0fdf4; border-color: #dcfce7; color: #166534; }
+        .matrix-cell.mild { background: #fffbeb; border-color: #fef3c7; color: #92400e; }
+        .matrix-cell.moderate { background: #fff7ed; border-color: #ffedd5; color: #c2410c; }
+        .matrix-cell.critical { background: #fef2f2; border-color: #fee2e2; color: #991b1b; }
+
+        .roster-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1rem 1.5rem;
+          border: 1px solid #eee;
+          border-radius: 1.5rem;
+          background: #fff;
+        }
+        .roster-user {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+        .roster-user img {
+          width: 48px; height: 48px;
+          border-radius: 1rem;
+          object-fit: cover;
+        }
+        .roster-name { font-weight: 800; color: #052E16; font-size: 1.1rem; margin: 0 0 0.2rem; }
+        .roster-failed-count { font-size: 0.85rem; color: #ef4444; font-weight: 700; margin: 0; }
+        
+        .roster-subjects { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .failed-sub-tag {
+          font-size: 0.75rem; font-weight: 800; text-transform: uppercase;
+          letter-spacing: 0.05em; padding: 0.4rem 0.8rem;
+          background: #fef2f2; color: #dc2626; border-radius: 1rem; border: 1px solid #fecaca;
+        }
+        
+        .empty-state { text-align: center; color: #888; font-weight: 600; padding: 2rem; font-style: italic; }
+
         @media (max-width: 1200px) {
-           .charts-grid { grid-template-columns: 1fr; }
-           .chart-wrapper.pie-chart { grid-column: auto; }
+           .charts-grid, .reports-grid { grid-template-columns: 1fr; }
+           .chart-wrapper.pie-chart, .report-card.at-risk-roster { grid-column: auto; }
         }
 
         @media (max-width: 768px) {

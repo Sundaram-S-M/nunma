@@ -97,37 +97,8 @@ const WhiteboardPage: React.FC = () => {
 
 
 
-  const handleBack = () => {
-    if (isThala) {
-      navigate(`/workplace/manage/${zoneId}`);
-    } else {
-      navigate(`/classroom/zone/${zoneId}`);
-    }
-  };
-
   return (
     <div className="whiteboard-container">
-      <header className="top-bar">
-        <div className="top-bar-left">
-          <button className="back-btn" onClick={handleBack}>
-            <ArrowLeft size={20} />
-          </button>
-        </div>
-
-        <div className="top-bar-center">
-          <Monitor className="zone-icon" size={20} />
-          <h1 className="zone-title">{zone?.title}</h1>
-          <span className="label">Whiteboard</span>
-        </div>
-
-        <div className="top-bar-right">
-          {isThala ? (
-            <span className="badge badge-active">Session Active</span>
-          ) : (
-            <span className="badge badge-view">View Mode</span>
-          )}
-        </div>
-      </header>
 
       <main className="whiteboard-main relative">
         <div className="absolute inset-0">

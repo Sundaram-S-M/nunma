@@ -7,7 +7,6 @@ import {
   Mail,
   Briefcase,
   Layers,
-  Share2,
   ShoppingBag,
   PanelLeftClose,
   PanelLeft,
@@ -309,40 +308,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
             ))}
           </div>
 
-          {/* ── Tutor public page ──────────────────────── */}
-          {role === UserRole.THALA && (
-            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
-              <Link
-                to="/u/sundaram"
-                target="_blank"
-                title={!isOpen ? 'Public Page' : undefined}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  justifyContent: isOpen ? 'flex-start' : 'center',
-                  padding: isOpen ? '0.5rem 0.75rem' : '0.5rem',
-                  borderRadius: 8,
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  color: 'var(--nunma-navy)',
-                  background: 'var(--surface-active)',
-                  textDecoration: 'none',
-                  border: '1px solid var(--border)',
-                  transition: 'background 0.12s',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                }}
-              >
-                <Share2 size={14} style={{ flexShrink: 0 }} />
-                {isOpen && (
-                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                    Public Page
-                  </span>
-                )}
-              </Link>
-            </div>
-          )}
+
         </nav>
 
         {/* ── Storage widget ────────────────────────────── */}
