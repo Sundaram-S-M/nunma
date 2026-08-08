@@ -1,4 +1,5 @@
 import { initializeApp, getApp, getApps, FirebaseApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getFunctions, Functions } from "firebase/functions";
@@ -28,6 +29,14 @@ if (!getApps().length) {
     app = getApp();
 }
 
+let appCheck: any = null;
+if (app && typeof window !== 'undefined' && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+    appCheck = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+        isTokenAutoRefreshEnabled: true
+    });
+}
+
 let analytics: any = null;
 if (app && typeof window !== 'undefined') {
     import('firebase/analytics').then(({ getAnalytics, isSupported }) => {
@@ -40,4 +49,4 @@ if (app && typeof window !== 'undefined') {
 const auth: Auth | null = app ? getAuth(app) : null;
 const db: Firestore | null = app ? getFirestore(app) : null;
 const functions: Functions | null = app ? getFunctions(app) : null;
-export { app, analytics, auth, db, functions };
+export { app, analytics, auth, db, functions, appCheck };

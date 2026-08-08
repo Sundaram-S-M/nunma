@@ -51,7 +51,8 @@ export const generateQuizDraft = onCall(
     {
         secrets: ["GEMINI_API_KEY"],
         timeoutSeconds: 120,
-        cors: true
+        cors: true,
+        enforceAppCheck: true
     },
     async (request) => {
         // Internal Scope Initialization

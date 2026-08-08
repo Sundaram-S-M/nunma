@@ -11,8 +11,8 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        // Removed GEMINI_API_KEY to prevent client-side leakage.
+        // All AI requests must go through secure Cloud Functions.
       },
       resolve: {
         alias: {

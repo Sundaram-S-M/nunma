@@ -44,12 +44,12 @@ import {
 } from 'lucide-react';
 import LiveSessionStatus from '../components/LiveSessionStatus';
 import ChatSidebar from '../components/ChatSidebar';
-import VideoStage from '../components/VideoStage';
+const VideoStage = React.lazy(() => import('../components/VideoStage'));
 import { generateOpenBadgeVC, downloadVCAsJSON } from '../utils/vcUtils';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import { BunnyVideoPlayer } from '../components/BunnyVideoPlayer';
-import ExamInsights from '../components/ExamInsights';
+const ExamInsights = React.lazy(() => import('../components/ExamInsights'));
 
 const calculateExamEndState = (exam: any, now: Date) => {
   const durationMins = exam.duration || 30;
@@ -2430,14 +2430,16 @@ const StudentZoneView: React.FC = () => {
 
       {/* EXAM INSIGHTS MODAL */}
       {showExamInsightsModal && selectedExamForInsights && zoneId && (
-        <ExamInsights
-          zoneId={zoneId}
-          exam={selectedExamForInsights}
-          onClose={() => {
-            setShowExamInsightsModal(false);
-            setSelectedExamForInsights(null);
-          }}
-        />
+        <React.Suspense fallback={<div className="fixed inset-0 z-[9999] bg-nunma-forest/90 backdrop-blur-sm flex items-center justify-center text-white font-black uppercase tracking-widest animate-pulse">Loading AI Insights...</div>}>
+          <ExamInsights
+            zoneId={zoneId}
+            exam={selectedExamForInsights}
+            onClose={() => {
+              setShowExamInsightsModal(false);
+              setSelectedExamForInsights(null);
+            }}
+          />
+        </React.Suspense>
       )}
       {/* Chat Sidebar Integration */}
       {zoneId && (

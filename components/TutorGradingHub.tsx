@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../utils/firebase';
 import { X, Check, FileText, Edit3 } from 'lucide-react';
-import PdfAnnotator, { DrawingPath } from './PdfAnnotator';
+import type { DrawingPath } from './PdfAnnotator';
+const PdfAnnotator = React.lazy(() => import('./PdfAnnotator'));
 import { PDFDocument, rgb } from 'pdf-lib';
 
 interface TutorGradingHubProps {
@@ -198,7 +199,9 @@ const TutorGradingHub: React.FC<TutorGradingHubProps> = ({ zoneId, exam, student
                         </div>
                         <div className="flex-1 overflow-hidden relative">
                             {submission?.answerSheetUrl ? (
-                                <PdfAnnotator url={`https://proxybunnyfile-xtu74uomna-uc.a.run.app?fileUrl=${encodeURIComponent(submission.answerSheetUrl)}`} onPathsChange={setDrawingPaths} />
+                                <React.Suspense fallback={<div className="h-full flex items-center justify-center font-bold text-gray-400 animate-pulse">Loading PDF Engine...</div>}>
+                                    <PdfAnnotator url={`https://proxybunnyfile-xtu74uomna-uc.a.run.app?fileUrl=${encodeURIComponent(submission.answerSheetUrl)}`} onPathsChange={setDrawingPaths} />
+                                </React.Suspense>
                             ) : (
                                 <div className="h-full flex items-center justify-center text-gray-400 font-bold uppercase tracking-widest border-2 border-dashed border-gray-200 rounded-[2rem]">
                                     No Answer Script Uploaded

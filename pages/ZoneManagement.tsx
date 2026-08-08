@@ -72,7 +72,7 @@ import { saveAs } from 'file-saver';
 import PDFViewer from '../components/PDFViewer'; // Import added for grading
 import GradingHub from '../components/GradingHub';
 import ExamAnalytics from '../components/ExamAnalytics';
-import ExamInsights from '../components/ExamInsights';
+const ExamInsights = React.lazy(() => import('../components/ExamInsights'));
 import MCQBuilder, { MCQ, MCQOption } from '../components/MCQBuilder';
 import { QRCodeSVG } from 'qrcode.react';
 import ZoneCapacityMeter from '../components/ZoneCapacityMeter';
@@ -5864,14 +5864,16 @@ const asyncConfirm = async (msg: string): Promise<boolean> => {
         </div>
       )}
       {showInsightsModal && insightsExam && zoneId && (
-        <ExamInsights
-          exam={insightsExam}
-          zoneId={zoneId}
-          onClose={() => {
-            setShowInsightsModal(false);
-            setInsightsExam(null);
-          }}
-        />
+        <React.Suspense fallback={<div className="fixed inset-0 z-[9999] bg-nunma-forest/90 backdrop-blur-sm flex items-center justify-center text-white font-black uppercase tracking-widest animate-pulse">Loading AI Insights...</div>}>
+          <ExamInsights
+            exam={insightsExam}
+            zoneId={zoneId}
+            onClose={() => {
+              setShowInsightsModal(false);
+              setInsightsExam(null);
+            }}
+          />
+        </React.Suspense>
       )}
     </React.Fragment>
   );

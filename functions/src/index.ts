@@ -1,3 +1,10 @@
+import * as Sentry from "@sentry/node";
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || "",
+  tracesSampleRate: 0.1,
+  environment: "production",
+});
+
 import * as admin from "firebase-admin";
 admin.initializeApp();
 

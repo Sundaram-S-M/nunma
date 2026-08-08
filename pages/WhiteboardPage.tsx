@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { ArrowLeft, Monitor } from 'lucide-react';
 import { db } from '../utils/firebase';
 import { useAuth } from '../context/AuthContext';
-import WhiteboardStage from '../components/WhiteboardStage';
+const WhiteboardStage = React.lazy(() => import('../components/WhiteboardStage'));
 
 const WhiteboardPage: React.FC = () => {
   const { zoneId } = useParams<{ zoneId: string }>();
@@ -102,7 +102,9 @@ const WhiteboardPage: React.FC = () => {
 
       <main className="whiteboard-main relative">
         <div className="absolute inset-0">
-          <WhiteboardStage />
+          <React.Suspense fallback={<div className="whiteboard-loader"><div className="spinner"></div><p>Loading Whiteboard Component...</p></div>}>
+            <WhiteboardStage />
+          </React.Suspense>
         </div>
       </main>
 

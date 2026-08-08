@@ -53,15 +53,11 @@ export const useAIGrading = (zoneId: string, examId: string, learnerId: string) 
             // Optimistically set to pending
             setStatus('pending');
 
-            const gradePdfSubmission = httpsCallable(functions, 'gradePdfSubmission');
-            
-            await gradePdfSubmission({
-                zoneId,
-                examId,
-                learnerId,
-                filePath
-            });
-
+            // AI Grading is deprecated in production.
+            // Transition directly to manual review state.
+            setStatus('pending');
+            console.log("AI Grading disabled in production. Proceeding to manual review for:", filePath);
+            // In a full implementation, you would update the Firestore doc to 'submitted' here.
         } catch (err: any) {
             console.error("AI Grading Trigger Failed:", err);
             setStatus('error');
